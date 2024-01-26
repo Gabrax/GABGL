@@ -160,12 +160,17 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\Renderer\Engine.cpp" />
-    <ClCompile Include="src\Renderer\Main.cpp" />
+    <ClCompile Include="src\Core\Inputs.cpp" />
+    <ClCompile Include="src\Engine.cpp" />
+    <ClCompile Include="src\Main.cpp" />
     <ClCompile Include="vendor\glad\src\glad.c" />
+    <ClCompile Include="src\Core\Window.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\Renderer\Engine.h" />
+    <ClInclude Include="src\Core\Input.h" />
+    <ClInclude Include="src\Core\ControllerASCII.h" />
+    <ClInclude Include="src\Engine.h" />
+    <ClInclude Include="src\Core\Window.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
