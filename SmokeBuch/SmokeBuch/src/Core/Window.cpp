@@ -130,6 +130,7 @@ void Window::Init(int width, int height) {
 	glfwSetErrorCallback([](int error, const char* description) {
         std::cout << "GLFW Error (" << std::to_string(error) << "): " << description << "\n";
 	});
+    
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
@@ -163,7 +164,7 @@ void Window::Init(int width, int height) {
     }
     if (_window == NULL) {
         std::cout << "Failed to create GLFW window" << std::endl;
-        glfwTerminate();
+        Cleanup();
         return;
     }
     glfwMakeContextCurrent(_window);
@@ -185,19 +186,18 @@ void Window::Init(int width, int height) {
     int flags;
     glGetIntegerv(GL_CONTEXT_FLAGS, &flags);
     if (flags & GL_CONTEXT_FLAG_DEBUG_BIT) {
-        //std::cout << "Debug GL context enabled\n";
+        std::cout << "Debug GL context enabled\n";
         glEnable(GL_DEBUG_OUTPUT);
         glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS); // makes sure errors are displayed synchronously
         glDebugMessageCallback(glDebugOutput, nullptr);
     } else {
         std::cout << "Debug GL context not available\n";
     }    
-    glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    ShowCursor();
 
     // Clear screen to black
     glClear(GL_COLOR_BUFFER_BIT);
-    glfwSwapBuffers(_window);
-    glfwPollEvents();
+    SwapBuffersPollEvents();
 }
 
 void Window::ProcessInput() {
@@ -273,18 +273,18 @@ void Window::ForceCloseWindow() {
     _forceCloseWindow = true;
 }
 
-// Callbacks
+
 
 void processInput(GLFWwindow* window) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 }
 
-void framebuffer_size_callback(GLFWwindow* /*window*/, int width, int height) {
+void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
 }
 
-void window_focus_callback(GLFWwindow* /*window*/, int focused) {
+void window_focus_callback(GLFWwindow* window, int focused) {
     if (focused){
         Window::_windowHasFocus = true;
     }
@@ -293,6 +293,6 @@ void window_focus_callback(GLFWwindow* /*window*/, int focused) {
     }
 }
 
-void scroll_callback(GLFWwindow* /*window*/, double /*xoffset*/, double yoffset) {
+void scroll_callback(GLFWwindow* window, double /*xoffset*/, double yoffset) {
     Window::_scrollWheelYOffset = (int)yoffset;
 }

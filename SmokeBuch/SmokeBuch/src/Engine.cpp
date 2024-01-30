@@ -1,6 +1,8 @@
 #include "Engine.h"
 #include "Core/Window.h"
 #include "Core/Input.h"
+#include "Renderer/Renderer.h"
+
 
 void Engine::Run()
 {	
@@ -17,9 +19,12 @@ void Engine::Run()
 			return;
 		}
 		
+		Renderer::Render();
+
 		Window::ProcessInput();
 		Input::Update();
 		Window::SwapBuffersPollEvents();
+
 
 		
 	}

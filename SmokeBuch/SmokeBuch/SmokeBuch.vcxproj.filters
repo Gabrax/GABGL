@@ -30,6 +30,9 @@
     <ClCompile Include="src\Core\Inputs.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\Renderer\Renderer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Engine.h">
@@ -44,5 +47,61 @@
     <ClInclude Include="src\Core\Input.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\Renderer\Renderer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="res\shaders\animated_quad.frag" />
+    <None Include="res\shaders\animated_quad.vert" />
+    <None Include="res\shaders\blur.frag" />
+    <None Include="res\shaders\blurHorizontal.vert" />
+    <None Include="res\shaders\blurVertical.vert" />
+    <None Include="res\shaders\bullet_decals.frag" />
+    <None Include="res\shaders\bullet_decals.vert" />
+    <None Include="res\shaders\calculate_inidrect_dispatch_size.comp" />
+    <None Include="res\shaders\composite.frag" />
+    <None Include="res\shaders\composite.vert" />
+    <None Include="res\shaders\compute.comp" />
+    <None Include="res\shaders\debug_view_point_cloud.frag" />
+    <None Include="res\shaders\debug_view_point_cloud.vert" />
+    <None Include="res\shaders\debug_view_propogation_grid.frag" />
+    <None Include="res\shaders\debug_view_propogation_grid.vert" />
+    <None Include="res\shaders\depth_of_field.frag" />
+    <None Include="res\shaders\depth_of_field.vert" />
+    <None Include="res\shaders\editor_solid_color.frag" />
+    <None Include="res\shaders\editor_solid_color.vert" />
+    <None Include="res\shaders\editor_textured.frag" />
+    <None Include="res\shaders\editor_textured.vert" />
+    <None Include="res\shaders\fxaa.frag" />
+    <None Include="res\shaders\fxaa.vert" />
+    <None Include="res\shaders\geometry - Copy.vert" />
+    <None Include="res\shaders\geometry.frag" />
+    <None Include="res\shaders\geometry.vert" />
+    <None Include="res\shaders\geometry_instanced.frag" />
+    <None Include="res\shaders\geometry_instanced.vert" />
+    <None Include="res\shaders\glass.frag" />
+    <None Include="res\shaders\glass.vert" />
+    <None Include="res\shaders\glass_composite.frag" />
+    <None Include="res\shaders\glass_composite.vert" />
+    <None Include="res\shaders\lighting.frag" />
+    <None Include="res\shaders\lighting.vert" />
+    <None Include="res\shaders\point_cloud.comp" />
+    <None Include="res\shaders\propogate_light.comp" />
+    <None Include="res\shaders\propogation_list.comp" />
+    <None Include="res\shaders\shadowmap.frag" />
+    <None Include="res\shaders\shadowmap.geom" />
+    <None Include="res\shaders\shadowmap.vert" />
+    <None Include="res\shaders\skybox.frag" />
+    <None Include="res\shaders\skybox.vert" />
+    <None Include="res\shaders\solid_color.frag" />
+    <None Include="res\shaders\solid_color.vert" />
+    <None Include="res\shaders\test.comp" />
+    <None Include="res\shaders\ui.frag" />
+    <None Include="res\shaders\ui.vert" />
+    <None Include="res\shaders\voxelize.frag" />
+    <None Include="res\shaders\voxelize.vert" />
+    <None Include="res\shaders\Basic.vert" />
+    <None Include="res\shaders\Basic.frag" />
   </ItemGroup>
 </Project>
