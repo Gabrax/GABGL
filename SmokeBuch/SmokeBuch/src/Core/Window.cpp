@@ -2,7 +2,8 @@
 #include <iostream>
 #include <string>
 
-namespace Window {
+namespace Window
+{
     inline GLFWwindow* _window;
     inline GLFWmonitor* _monitor;
     inline const GLFWvidmode* _mode;
@@ -20,10 +21,6 @@ namespace Window {
     inline enum WindowMode _windowMode = WINDOWED;// FULLSCREEN;
 }
 
-void framebuffer_size_callback(GLFWwindow* window, int width, int height);
-void processInput(GLFWwindow* window);
-void window_focus_callback(GLFWwindow* window, int focused);
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 
 GLenum glCheckError_(const char* file, int line) {
     GLenum errorCode;
@@ -80,28 +77,34 @@ void APIENTRY glDebugOutput(GLenum source, GLenum type, unsigned int id, GLenum 
     std::cout << std::endl;
 }
 
-void Window::ToggleFullscreen() {
+void Window::ToggleFullscreen()
+{
     if (_windowMode == WINDOWED)
         SetWindowMode(FULLSCREEN);
     else
         SetWindowMode(WINDOWED);
 }
 
-int Window::GetScrollWheelYOffset() {
+int Window::GetScrollWheelYOffset()
+{
     return _scrollWheelYOffset;
 }
 
-void Window::ResetScrollWheelYOffset() {
+void Window::ResetScrollWheelYOffset()
+{
     _scrollWheelYOffset = 0;
 }
 
-void Window::CreateWindow(WindowMode windowMode) {
-    if (windowMode == WINDOWED) {
+void Window::CreateWindow(WindowMode windowMode)
+{
+    if (windowMode == WINDOWED)
+    {
         _currentWidth = _windowedWidth;
         _currentHeight = _windowedHeight;
         _window = glfwCreateWindow(_windowedWidth, _windowedHeight, "JD", NULL, NULL);
     }
-    else if (windowMode == FULLSCREEN) {
+    else if (windowMode == FULLSCREEN)
+    {
         _currentWidth = _fullscreenWidth;
         _currentHeight = _fullscreenHeight;
         _window = glfwCreateWindow(_fullscreenWidth, _fullscreenHeight, "GAB", _monitor, NULL);
@@ -109,13 +112,16 @@ void Window::CreateWindow(WindowMode windowMode) {
     _windowMode = windowMode;
 }
 
-void Window::SetWindowMode(WindowMode windowMode) {
-    if (windowMode == WINDOWED) {
+void Window::SetWindowMode(WindowMode windowMode)
+{
+    if (windowMode == WINDOWED)
+    {
         _currentWidth = _windowedWidth;
         _currentHeight = _windowedHeight;
         glfwSetWindowMonitor(_window, nullptr, 0, 0, _windowedWidth, _windowedHeight, 0);
     } 
-    else if (windowMode == FULLSCREEN) {
+    else if (windowMode == FULLSCREEN)
+    {
         _currentWidth = _fullscreenWidth;
         _currentHeight = _fullscreenHeight;
         glfwSetWindowMonitor(_window, _monitor, 0, 0, _fullscreenWidth, _fullscreenHeight, _mode->refreshRate);
@@ -124,10 +130,12 @@ void Window::SetWindowMode(WindowMode windowMode) {
 }
 
 
-void Window::Init(int width, int height) {
+void Window::Init(int width, int height)
+{
 
     glfwInit();
-	glfwSetErrorCallback([](int error, const char* description) {
+	glfwSetErrorCallback([](int error, const char* description)
+    {
         std::cout << "GLFW Error (" << std::to_string(error) << "): " << description << "\n";
 	});
     
@@ -147,22 +155,26 @@ void Window::Init(int width, int height) {
     _fullscreenHeight = _mode->height;
     _windowedWidth = width;
     _windowedHeight = height;
-	if (_windowedWidth > _fullscreenWidth || _windowedHeight > _fullscreenHeight) {
+	if (_windowedWidth > _fullscreenWidth || _windowedHeight > _fullscreenHeight)
+    {
 		_windowedWidth = _fullscreenWidth * 0.75f;
 		_windowedHeight = _fullscreenHeight * 0.75f;
 	}
-    if (_windowMode == FULLSCREEN) {
+    if (_windowMode == FULLSCREEN)
+    {
         _currentWidth = _fullscreenWidth;
         _currentHeight = _fullscreenHeight;
         _window = glfwCreateWindow(_fullscreenWidth, _fullscreenHeight, "JD", _monitor, NULL);
     } 
-    else {
+    else
+    {
         _currentWidth = _windowedWidth;
         _currentHeight = _windowedHeight;
         _window = glfwCreateWindow(_windowedWidth, _windowedHeight, "GAB", NULL, NULL);
 		glfwSetWindowPos(_window, 0, 0);
     }
-    if (_window == NULL) {
+    if (_window == NULL)
+    {
         std::cout << "Failed to create GLFW window" << std::endl;
         Cleanup();
         return;
@@ -185,114 +197,140 @@ void Window::Init(int width, int height) {
 
     int flags;
     glGetIntegerv(GL_CONTEXT_FLAGS, &flags);
-    if (flags & GL_CONTEXT_FLAG_DEBUG_BIT) {
+    if (flags & GL_CONTEXT_FLAG_DEBUG_BIT)
+    {
         std::cout << "Debug GL context enabled\n";
         glEnable(GL_DEBUG_OUTPUT);
         glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS); // makes sure errors are displayed synchronously
         glDebugMessageCallback(glDebugOutput, nullptr);
-    } else {
+    } 
+    else
+    {
         std::cout << "Debug GL context not available\n";
     }    
-    ShowCursor();
+    HideCursor();
 
     // Clear screen to black
     glClear(GL_COLOR_BUFFER_BIT);
     SwapBuffersPollEvents();
 }
 
-void Window::ProcessInput() {
+void Window::ProcessInput()
+{
     processInput(_window);
 }
 
-void Window::SwapBuffersPollEvents() {
+void Window::SwapBuffersPollEvents()
+{
     glfwSwapBuffers(_window);
     glfwPollEvents();
 }
 
-void Window::Cleanup() {
+void Window::Cleanup()
+{
     glfwTerminate();
 }
 
-bool Window::WindowIsOpen() {
+bool Window::WindowIsOpen()
+{
     return !glfwWindowShouldClose(_window);
 }
 
-int Window::GetWindowWidth() {
+int Window::GetWindowWidth()
+{
     return _currentWidth;
 }
 
-int Window::GetWindowHeight() {
+int Window::GetWindowHeight()
+{
     return _currentHeight;
 }
 
-int Window::GetCursorX() {
+int Window::GetCursorX()
+{
     double xpos, ypos;
     glfwGetCursorPos(_window, &xpos, &ypos);
     return int(xpos);
 }
 
-int Window::GetCursorY() {
+int Window::GetCursorY()
+{
     double xpos, ypos;
     glfwGetCursorPos(_window, &xpos, &ypos);
     return int(ypos);
 }
 
-void Window::DisableCursor() {
+void Window::DisableCursor()
+{
     glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 }
 
-void Window::HideCursor() {
+void Window::HideCursor()
+{
     glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
 }
 
-void Window::ShowCursor() {
+void Window::ShowCursor()
+{
     glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 }
 
-GLFWwindow* Window::GetWindowPtr() {
+GLFWwindow* Window::GetWindowPtr()
+{
     return _window;
 }
 
-int Window::GetCursorScreenX() {
+int Window::GetCursorScreenX()
+{
     return _mouseScreenX;
 }
 
-int Window::GetCursorScreenY() {
+int Window::GetCursorScreenY()
+{
     return _mouseScreenY;
 }
 
-bool Window::WindowHasFocus() {
+bool Window::WindowHasFocus()
+{
     return _windowHasFocus;
 }
 
-bool Window::WindowHasNotBeenForceClosed() {
+bool Window::WindowHasNotBeenForceClosed()
+{
     return !_forceCloseWindow;
 }
 
-void Window::ForceCloseWindow() {
+void Window::ForceCloseWindow()
+{
     _forceCloseWindow = true;
 }
 
 
 
-void processInput(GLFWwindow* window) {
+void Window::processInput(GLFWwindow* window)
+{
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 }
 
-void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
+void Window::framebuffer_size_callback(GLFWwindow* window, int width, int height)
+{
     glViewport(0, 0, width, height);
 }
 
-void window_focus_callback(GLFWwindow* window, int focused) {
-    if (focused){
+void Window::window_focus_callback(GLFWwindow* window, int focused)
+{
+    if (focused)
+    {
         Window::_windowHasFocus = true;
     }
-    else{
+    else
+    {
         Window::_windowHasFocus = false;
     }
 }
 
-void scroll_callback(GLFWwindow* window, double /*xoffset*/, double yoffset) {
+void Window::scroll_callback(GLFWwindow* window, double /*xoffset*/, double yoffset)
+{
     Window::_scrollWheelYOffset = (int)yoffset;
 }
