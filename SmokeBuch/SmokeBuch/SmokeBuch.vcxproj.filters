@@ -36,6 +36,9 @@
     <ClCompile Include="src\Renderer\Shader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\Renderer\stb_image.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Engine.h">
@@ -54,6 +57,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\Renderer\Shader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Renderer\stb_image.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -109,5 +115,16 @@
     <None Include="res\shaders\voxelize.vert" />
     <None Include="res\shaders\Basic.vert" />
     <None Include="res\shaders\Basic.frag" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="res\textures\angel.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\textures\cool.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\textures\awesomeface.png">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>
