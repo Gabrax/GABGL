@@ -235,6 +235,7 @@
     <Image Include="res\textures\angel.jpg" />
     <Image Include="res\textures\awesomeface.png" />
     <Image Include="res\textures\cool.jpg" />
+    <Image Include="res\textures\wirus.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
