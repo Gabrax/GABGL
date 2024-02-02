@@ -212,8 +212,8 @@ void Renderer::Render()
     }
     
 
-
-    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);        //wifreframe mode
+    
+     
     
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);

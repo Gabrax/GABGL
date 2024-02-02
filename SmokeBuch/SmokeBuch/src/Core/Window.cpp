@@ -19,6 +19,7 @@ namespace Window
     inline bool _forceCloseWindow = false;
     inline int _scrollWheelYOffset = 0;
     inline enum WindowMode _windowMode = WINDOWED;// FULLSCREEN;
+    inline enum RenderMode _renderMode = WIREFRAME;
 }
 
 
@@ -85,6 +86,19 @@ void Window::ToggleFullscreen()
         SetWindowMode(WINDOWED);
 }
 
+void Window::ToggleWireframe()
+{
+    
+    if (_renderMode == NORMAL)
+    {
+        SetRenderMode(WIREFRAME);
+    }
+    else 
+    {
+        SetRenderMode(NORMAL);
+    }
+}
+
 int Window::GetScrollWheelYOffset()
 {
     return _scrollWheelYOffset;
@@ -127,6 +141,19 @@ void Window::SetWindowMode(WindowMode windowMode)
         glfwSetWindowMonitor(_window, _monitor, 0, 0, _fullscreenWidth, _fullscreenHeight, _mode->refreshRate);
     }
     _windowMode = windowMode;
+}
+
+void Window::SetRenderMode(RenderMode renderMode)
+{
+    if (renderMode == WIREFRAME)
+    {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    }
+    else if (renderMode == NORMAL)
+    {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    }
+    _renderMode = renderMode;
 }
 
 

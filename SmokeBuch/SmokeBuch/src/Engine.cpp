@@ -18,6 +18,10 @@ void Engine::Run()
 		{
 			Window::ToggleFullscreen();
 		}
+		if (Input::KeyPressed(GLFW_KEY_H))
+		{
+			Window::ToggleWireframe();
+		}
 		   
 		
 

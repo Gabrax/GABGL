@@ -25,9 +25,12 @@ namespace Window
 	void ForceCloseWindow();
 
 	enum WindowMode { WINDOWED, FULLSCREEN };
+	enum RenderMode { WIREFRAME, NORMAL };
 	void CreateWindow(WindowMode windowMode);
 	void SetWindowMode(WindowMode windowMode);
+	void SetRenderMode(RenderMode renderMode);
 	void ToggleFullscreen();
+	void ToggleWireframe();
 	int GetScrollWheelYOffset();
 	void ResetScrollWheelYOffset();
 	void processInput(GLFWwindow* window);
