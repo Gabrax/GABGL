@@ -12,21 +12,21 @@ void Engine::Run()
 	while (Window::WindowIsOpen())
 	{
 
-		if (Input::KeyPressed(GLFW_KEY_F)) {
-			Window::ToggleFullscreen();
-		}
-		if (Input::KeyPressed(GLFW_KEY_ESCAPE)) {
-			return;
-		}
+		if(Input::KeyPressed(GLFW_KEY_F))
+		   Window::ToggleFullscreen();
 		
+
 		Renderer::Render();
 
 		Window::ProcessInput();
 		Input::Update();
 		Window::SwapBuffersPollEvents();
 
-
 		
+
+
+		glClear(GL_COLOR_BUFFER_BIT);
 	}
 
+	
 }

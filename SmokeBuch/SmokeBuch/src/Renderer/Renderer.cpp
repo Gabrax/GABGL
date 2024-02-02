@@ -3,6 +3,10 @@
 #include "Renderer.h"
 #include "Shader.h"
 #include "stb_image.h"
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/glm.hpp>
 #include <iostream>
 #include <string>
 #include <fstream>
@@ -26,9 +30,7 @@ void Renderer::Render()
         1, 2, 3  // second triangle
     };
 
-
     
-
     
     unsigned int VBO, VAO, EBO;
     glGenVertexArrays(1, &VAO);
@@ -110,12 +112,25 @@ void Renderer::Render()
     //float timeValue = glfwGetTime();
     //float greenValue = (sin(timeValue) / 2.0f) + 0.5f;
     //int vertexColorLocation = glGetUniformLocation(shaderProgram, "vertexColor");
-    
+
+
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture1);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, texture2);
+
+
+    glm::mat4 trans = glm::mat4(1.0f);
+    trans = glm::rotate(trans, (float)glfwGetTime(), glm::vec3(0.0f, 0.0f, 1.0f));
+    trans = glm::translate(trans, glm::vec3(0.5f, 0.5f, 0.0f));
+    trans = glm::scale(trans, glm::vec3(0.5, 0.5, 0.5));
+
+    
+    
+
     Shader::Use();
+    unsigned int transformLoc = glGetUniformLocation(Shader::ID, "transform");
+    glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans));
     Shader::setInt("Texture1", 0);
     Shader::setInt("Texture2", 1);
     //glUniform4f(vertexColorLocation, 0.0f, greenValue, 0.0f, 1.0f);
@@ -123,9 +138,10 @@ void Renderer::Render()
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT,0);
     
     //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
+    
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
     glDeleteBuffers(1, &EBO);
+    
     
 }
