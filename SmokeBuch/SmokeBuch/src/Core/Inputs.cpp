@@ -93,34 +93,7 @@ void Input::Update()
         _preventRightMouseHoldTillNextClick = false;
 }
 
-void Input::mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
-{
-    float lastX = 800 / 2.0f;
-    float lastY = 600 / 2.0f;
-    bool firstMouse = true;
 
-    float xpos = static_cast<float>(xposIn);
-    float ypos = static_cast<float>(yposIn);
-
-    if (firstMouse)
-    {
-        lastX = xpos;
-        lastY = ypos;
-        firstMouse = false;
-    }
-
-    float xoffset = xpos - lastX;
-    float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
-    lastX = xpos;
-    lastY = ypos;
-
-    _camera.ProcessMouseMovement(xoffset, yoffset);
-}
-
-void Input::scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
-{
-    _camera.ProcessMouseScroll(static_cast<float>(yoffset));
-}
 
 bool Input::KeyPressed(unsigned int keycode)
 {

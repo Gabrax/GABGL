@@ -14,14 +14,23 @@
 #include <fstream>
 #include <sstream>
 
+
+Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
+
 float deltaTime = 0.0f;	// time between current frame and last frame
 float lastFrame = 0.0f;
+float lastX = 800 / 2.0f;
+float lastY = 600 / 2.0f;
+bool firstMouse = true;
+
+GLFWwindow* _window;
 
 void Renderer::Render()
 {
-    Camera camera(glm::vec3(0.0f,0.0f,3.0f));
+    
 
     Shader::CreateShader("res/shaders/Basic.vert", "res/shaders/Basic.frag");
+    Keyboard();
 
     float vertices[] = {
         -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
@@ -175,10 +184,6 @@ void Renderer::Render()
 
 
     
-    float currentFrame = static_cast<float>(glfwGetTime());
-    deltaTime = currentFrame - lastFrame;
-    lastFrame = currentFrame;
-    
 
     Shader::Use();
     Shader::setInt("Texture1", 0);
@@ -198,7 +203,12 @@ void Renderer::Render()
     //view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
     
     
-    Shader::Use();
+    float currentFrame = static_cast<float>(glfwGetTime());
+    deltaTime = currentFrame - lastFrame;
+    lastFrame = currentFrame;
+
+
+    
     glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), 800.0f / 600.0f, 0.1f, 100.0f);
     Shader::setMat4("projection", projection);
 
@@ -228,3 +238,50 @@ void Renderer::Render()
     
 }
 
+void Renderer::Keyboard()
+{
+    if (Input::KeyPressed(GLFW_KEY_W))
+    {
+        camera.ProcessKeyboard(FORWARD, deltaTime);
+        std::cout << "W\n";
+    }
+    if (Input::KeyPressed(GLFW_KEY_S))
+    {
+        camera.ProcessKeyboard(BACKWARD, deltaTime);
+    }
+    if (Input::KeyPressed(GLFW_KEY_A))
+    {
+        camera.ProcessKeyboard(LEFT, deltaTime);
+    }
+    if (Input::KeyPressed(GLFW_KEY_D))
+    {
+        camera.ProcessKeyboard(RIGHT, deltaTime);
+    }
+}
+
+void Renderer::mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
+{
+   
+
+    float xpos = static_cast<float>(xposIn);
+    float ypos = static_cast<float>(yposIn);
+
+    if (firstMouse)
+    {
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
+
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
+    lastX = xpos;
+    lastY = ypos;
+
+    camera.ProcessMouseMovement(xoffset, yoffset);
+}
+
+void Renderer::scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    camera.ProcessMouseScroll(static_cast<float>(yoffset));
+}

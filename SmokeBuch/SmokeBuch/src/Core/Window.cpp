@@ -1,6 +1,7 @@
 #include "Window.h"
 #include "Camera.h"
 #include "Input.h"
+#include "../Renderer/Renderer.h"
 #include <iostream>
 #include <string>
 
@@ -214,8 +215,8 @@ void Window::Init(int  width, int height)
     glfwMakeContextCurrent(_window);
     glfwSetFramebufferSizeCallback(_window, framebuffer_size_callback);
     glfwSetWindowFocusCallback(_window, window_focus_callback);
-    glfwSetCursorPosCallback(_window, Input::mouse_callback);
-    glfwSetScrollCallback(_window, Input::scroll_callback);
+    glfwSetCursorPosCallback(_window, Renderer::mouse_callback);
+    glfwSetScrollCallback(_window, Renderer::scroll_callback);
     DisableCursor();
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
@@ -348,25 +349,6 @@ void Window::processInput(GLFWwindow* window)
     {
         glfwSetWindowShouldClose(window, true);
     }
-    //camera movement
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-    {
-        _CAMERA.ProcessKeyboard(FORWARD, 1.0f);
-        std::cout << "W\n";
-    }
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-    {
-        _CAMERA.ProcessKeyboard(BACKWARD, 1.0f);
-    }
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-    {
-        _CAMERA.ProcessKeyboard(LEFT, 1.0f);
-    }
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-    {
-        _CAMERA.ProcessKeyboard(RIGHT, 1.0f);
-    }
-
 }
 
 void Window::framebuffer_size_callback(GLFWwindow* window, int width, int height)
@@ -386,7 +368,3 @@ void Window::window_focus_callback(GLFWwindow* window, int focused)
     }
 }
 
-void Window::scroll_callback(GLFWwindow* window, double /*xoffset*/, double yoffset)
-{
-    Window::_scrollWheelYOffset = (int)yoffset;
-}
