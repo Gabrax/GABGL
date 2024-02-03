@@ -120,6 +120,7 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -170,6 +171,7 @@
     <ClCompile Include="src\Core\Window.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\Core\Camera.h" />
     <ClInclude Include="src\Core\Input.h" />
     <ClInclude Include="src\Core\ControllerASCII.h" />
     <ClInclude Include="src\Engine.h" />
@@ -235,6 +237,8 @@
     <Image Include="res\textures\angel.jpg" />
     <Image Include="res\textures\awesomeface.png" />
     <Image Include="res\textures\cool.jpg" />
+    <Image Include="res\textures\ui\CrosshairDot.png" />
+    <Image Include="res\textures\ui\CrosshairSquare.png" />
     <Image Include="res\textures\wirus.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

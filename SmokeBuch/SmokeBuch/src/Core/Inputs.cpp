@@ -1,5 +1,6 @@
 #include "Input.h"
 #include "Window.h"
+#include "Camera.h"
 
 bool _keyPressed[372];
 bool _keyDown[372];
@@ -20,7 +21,10 @@ bool _leftMouseDownLastFrame = false;
 bool _rightMouseDownLastFrame = false;
 bool _preventRightMouseHoldTillNextClick = false;
 
-void Input::Init() {
+Camera _camera;
+
+void Input::Init()
+{
     double x, y;
     GLFWwindow* window = Window::GetWindowPtr();
     glfwGetCursorPos(window, &x, &y);
@@ -30,7 +34,8 @@ void Input::Init() {
     _mouseY = y;
 }
 
-void Input::Update() {
+void Input::Update()
+{
 
     GLFWwindow* window = Window::GetWindowPtr();
 
@@ -88,58 +93,101 @@ void Input::Update() {
         _preventRightMouseHoldTillNextClick = false;
 }
 
-bool Input::KeyPressed(unsigned int keycode) {
+void Input::mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
+{
+    float lastX = 800 / 2.0f;
+    float lastY = 600 / 2.0f;
+    bool firstMouse = true;
+
+    float xpos = static_cast<float>(xposIn);
+    float ypos = static_cast<float>(yposIn);
+
+    if (firstMouse)
+    {
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
+
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
+    lastX = xpos;
+    lastY = ypos;
+
+    _camera.ProcessMouseMovement(xoffset, yoffset);
+}
+
+void Input::scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    _camera.ProcessMouseScroll(static_cast<float>(yoffset));
+}
+
+bool Input::KeyPressed(unsigned int keycode)
+{
     return _keyPressed[keycode];
 }
 
-bool Input::KeyDown(unsigned int keycode) {
+bool Input::KeyDown(unsigned int keycode)
+{
     return _keyDown[keycode];
 }
 
-float Input::GetMouseOffsetX() {
+float Input::GetMouseOffsetX()
+{
     return (float)_mouseOffsetX;
 }
 
-float Input::GetMouseOffsetY() {
+float Input::GetMouseOffsetY()
+{
     return (float)_mouseOffsetY;
 }
 
-bool Input::LeftMouseDown() {
+bool Input::LeftMouseDown()
+{
     return _leftMouseDown;
 }
 
-bool Input::RightMouseDown() {
+bool Input::RightMouseDown()
+{
     return _rightMouseDown && !_preventRightMouseHoldTillNextClick;
 }
 
-bool Input::LeftMousePressed() {
+bool Input::LeftMousePressed()
+{
     return _leftMousePressed;
 }
 
-bool Input::RightMousePressed() {
+bool Input::RightMousePressed()
+{
     return _rightMousePressed;
 }
 
-bool Input::MouseWheelDown() {
+bool Input::MouseWheelDown()
+{
     return _mouseWheelDown;
 }
 
-int Input::GetMouseWheelValue() {
+int Input::GetMouseWheelValue()
+{
     return _mouseWheelValue;
 }
 
-bool Input::MouseWheelUp() {
+bool Input::MouseWheelUp()
+{
     return _mouseWheelUp;
 }
 
-void Input::PreventRightMouseHold() {
+void Input::PreventRightMouseHold()
+{
     _preventRightMouseHoldTillNextClick = true;
 }
 
-int Input::GetMouseX() {
+int Input::GetMouseX()
+{
     return (int)_mouseX;
 }
 
-int Input::GetMouseY() {
+int Input::GetMouseY()
+{
     return (int)_mouseY;
 }

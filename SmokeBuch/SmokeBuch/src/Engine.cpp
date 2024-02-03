@@ -11,8 +11,14 @@ void Engine::Run()
 
 	glEnable(GL_DEPTH_TEST);
 
-	while (Window::WindowIsOpen())
+	while (Window::WindowIsOpen() && Window::WindowHasNotBeenForceClosed())
 	{
+
+		   
+		
+
+		Renderer::Render();
+
 
 		if (Input::KeyPressed(GLFW_KEY_F))
 		{
@@ -22,12 +28,6 @@ void Engine::Run()
 		{
 			Window::ToggleWireframe();
 		}
-		   
-		
-
-		Renderer::Render();
-
-
 
 		
 

@@ -3,6 +3,4 @@
 namespace Renderer
 {
 	void Render();
-    
-	
 }

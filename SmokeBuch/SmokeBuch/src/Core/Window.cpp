@@ -1,6 +1,10 @@
 #include "Window.h"
+#include "Camera.h"
+#include "Input.h"
 #include <iostream>
 #include <string>
+
+Camera _CAMERA;
 
 namespace Window
 {
@@ -206,10 +210,14 @@ void Window::Init(int  width, int height)
         Cleanup();
         return;
     }
+
     glfwMakeContextCurrent(_window);
     glfwSetFramebufferSizeCallback(_window, framebuffer_size_callback);
-    glfwSetWindowFocusCallback(_window, window_focus_callback); 
-    glfwSetScrollCallback(_window, scroll_callback);
+    glfwSetWindowFocusCallback(_window, window_focus_callback);
+    glfwSetCursorPosCallback(_window, Input::mouse_callback);
+    glfwSetScrollCallback(_window, Input::scroll_callback);
+    DisableCursor();
+
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         std::cout << "Failed to initialize GLAD" << std::endl;
         return;
@@ -235,7 +243,6 @@ void Window::Init(int  width, int height)
     {
         std::cout << "Debug GL context not available\n";
     }    
-    ShowCursor();
 
     // Clear screen to black
     glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
@@ -338,8 +345,28 @@ void Window::ForceCloseWindow()
 void Window::processInput(GLFWwindow* window)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+    {
         glfwSetWindowShouldClose(window, true);
-    
+    }
+    //camera movement
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+    {
+        _CAMERA.ProcessKeyboard(FORWARD, 1.0f);
+        std::cout << "W\n";
+    }
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+    {
+        _CAMERA.ProcessKeyboard(BACKWARD, 1.0f);
+    }
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+    {
+        _CAMERA.ProcessKeyboard(LEFT, 1.0f);
+    }
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+    {
+        _CAMERA.ProcessKeyboard(RIGHT, 1.0f);
+    }
+
 }
 
 void Window::framebuffer_size_callback(GLFWwindow* window, int width, int height)

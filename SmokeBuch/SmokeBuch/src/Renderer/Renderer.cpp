@@ -3,19 +3,24 @@
 #include "Renderer.h"
 #include "Shader.h"
 #include "stb_image.h"
+#include "../Core/Window.h"
+#include "../Core/Input.h"
+#include "../Core/Camera.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <glm/glm.hpp>
 #include <iostream>
 #include <string>
 #include <fstream>
 #include <sstream>
 
-
+float deltaTime = 0.0f;	// time between current frame and last frame
+float lastFrame = 0.0f;
 
 void Renderer::Render()
 {
+    Camera camera(glm::vec3(0.0f,0.0f,3.0f));
+
     Shader::CreateShader("res/shaders/Basic.vert", "res/shaders/Basic.frag");
 
     float vertices[] = {
@@ -120,10 +125,10 @@ void Renderer::Render()
     // load and generate the texture
     int width, height, nrChannels;
     stbi_set_flip_vertically_on_load(true);
-    unsigned char* data = stbi_load("res/textures/wirus.png", &width, &height, &nrChannels, 0);
+    unsigned char* data = stbi_load("res/textures/angel.jpg", &width, &height, &nrChannels, 0);
     if (data)
     {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
         glGenerateMipmap(GL_TEXTURE_2D);
     }
     
@@ -170,10 +175,14 @@ void Renderer::Render()
 
 
     
-    
+    float currentFrame = static_cast<float>(glfwGetTime());
+    deltaTime = currentFrame - lastFrame;
+    lastFrame = currentFrame;
     
 
     Shader::Use();
+    Shader::setInt("Texture1", 0);
+    Shader::setInt("Texture2", 1);
     //unsigned int transformLoc = glGetUniformLocation(Shader::ID, "transform");
     //glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(model));
 
@@ -182,25 +191,24 @@ void Renderer::Render()
     //trans = glm::translate(trans, glm::vec3(0.5f, 0.5f, 0.0f));
     //model = glm::scale(model, glm::vec3(0.5, 0.5, 0.5));
 
-    glm::mat4 view = glm::mat4(1.0f);
+
+
+    //glm::mat4 view = glm::mat4(1.0f);
     // note that we're translating the scene in the reverse direction of where we want to move
-    view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
-
-    glm::mat4 projection = glm::mat4(1.0f);
-    projection = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
-
-
-    //Shader::setMat4("model", model);
-    Shader::setMat4("view", view);
+    //view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
+    
+    
+    Shader::Use();
+    glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), 800.0f / 600.0f, 0.1f, 100.0f);
     Shader::setMat4("projection", projection);
 
+    glm::mat4 view = camera.GetViewMatrix();
+    Shader::setMat4("view", view);
 
-    Shader::setInt("Texture1", 0);
-    //Shader::setInt("Texture2", 1);
     //glUniform4f(vertexColorLocation, 0.0f, greenValue, 0.0f, 1.0f);
     //glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT,0); // call this when indices specified
     glBindVertexArray(VAO);
-    for (unsigned int i = 1; i <= 10; i++)
+    for (unsigned int i = 0; i < 10; i++)
     {
         glm::mat4 model = glm::mat4(1.0f);
         model = glm::translate(model, cubePositions[i]);
@@ -209,11 +217,9 @@ void Renderer::Render()
         Shader::setMat4("model", model);
 
         glDrawArrays(GL_TRIANGLES, 0, 36);
-    }
-    
+    }  
 
     
-     
     
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
@@ -221,3 +227,4 @@ void Renderer::Render()
     
     
 }
+
