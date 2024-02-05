@@ -23,7 +23,6 @@ float lastX = 800 / 2.0f;
 float lastY = 600 / 2.0f;
 bool firstMouse = true;
 
-GLFWwindow* _window;
 
 void Renderer::Render()
 {
@@ -240,22 +239,29 @@ void Renderer::Render()
 
 void Renderer::Keyboard()
 {
-    if (Input::KeyPressed(GLFW_KEY_W))
+    if (Input::KeyDown(GLFW_KEY_W))
     {
         camera.ProcessKeyboard(FORWARD, deltaTime);
-        std::cout << "W\n";
     }
-    if (Input::KeyPressed(GLFW_KEY_S))
+    if (Input::KeyDown(GLFW_KEY_S))
     {
         camera.ProcessKeyboard(BACKWARD, deltaTime);
     }
-    if (Input::KeyPressed(GLFW_KEY_A))
+    if (Input::KeyDown(GLFW_KEY_A))
     {
         camera.ProcessKeyboard(LEFT, deltaTime);
     }
-    if (Input::KeyPressed(GLFW_KEY_D))
+    if (Input::KeyDown(GLFW_KEY_D))
     {
         camera.ProcessKeyboard(RIGHT, deltaTime);
+    }
+    if (Input::KeyDown(GLFW_KEY_SPACE))
+    {
+        camera.ProcessKeyboard(UP, deltaTime);
+    }
+    if (Input::KeyDown(GLFW_KEY_LEFT_SHIFT))
+    {
+        camera.ProcessKeyboard(DOWN, deltaTime);
     }
 }
 
