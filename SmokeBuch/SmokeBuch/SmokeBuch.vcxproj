@@ -194,7 +194,6 @@
     <Image Include="res\textures\matrix.jpg" />
     <Image Include="res\textures\ui\CrosshairDot.png" />
     <Image Include="res\textures\ui\CrosshairSquare.png" />
-    <Image Include="res\textures\wirus.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

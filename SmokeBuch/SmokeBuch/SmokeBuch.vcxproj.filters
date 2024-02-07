@@ -79,9 +79,6 @@
     <Image Include="res\textures\awesomeface.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="res\textures\wirus.png">
-      <Filter>Resource Files</Filter>
-    </Image>
     <Image Include="res\textures\ui\CrosshairSquare.png">
       <Filter>Resource Files</Filter>
     </Image>

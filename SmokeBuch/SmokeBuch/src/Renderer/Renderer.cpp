@@ -15,14 +15,14 @@
 #include <sstream>
 
 
-Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
+Camera camera(glm::vec3(0.0f, 0.0f, 6.0f));
 
 float deltaTime = 0.0f;	// time between current frame and last frame
 float lastFrame = 0.0f;
 float lastX = 800 / 2.0f;
 float lastY = 600 / 2.0f;
 bool firstMouse = true;
-glm::vec3 lightPos(0.0, 1.0f, 0.0f);
+glm::vec3 lightPos(0.0, 1.0f, -5.0f);
 
 
 void Renderer::Render()
@@ -138,6 +138,13 @@ void Renderer::Render()
         glm::vec3(-1.3f,  1.0f, -1.5f)
     };
 
+    glm::vec3 pointLightPositions[] = {
+        glm::vec3(0.7f,  0.2f,  2.0f),
+        glm::vec3(2.3f, -3.3f, -4.0f),
+        glm::vec3(-4.0f,  2.0f, -12.0f),
+        glm::vec3(0.0f,  0.0f, -3.0f)
+    };
+
     
     
     unsigned int VBO, VAO, EBO;
@@ -222,14 +229,67 @@ void Renderer::Render()
     
     Cube.setVec3("light.position", lightPos);
     Cube.setVec3("viewPos", camera.Position);
+    Cube.setFloat("material.shininess", 50.0f);
 
-    // light properties
+
+    // directional light
+    Cube.setVec3("dirLight.direction", -0.2f, -1.0f, -0.3f);
+    Cube.setVec3("dirLight.ambient", 0.05f, 0.05f, 0.05f);
+    Cube.setVec3("dirLight.diffuse", 0.4f, 0.4f, 0.4f);
+    Cube.setVec3("dirLight.specular", 0.5f, 0.5f, 0.5f);
+    // point light 1
+    Cube.setVec3("pointLights[0].position", pointLightPositions[0]);
+    Cube.setVec3("pointLights[0].ambient", 0.05f, 0.05f, 0.05f);
+    Cube.setVec3("pointLights[0].diffuse", 0.0f, 1.0f, 1.0f);
+    Cube.setVec3("pointLights[0].specular", 1.0f, 1.0f, 1.0f);
+    Cube.setFloat("pointLights[0].constant", 1.0f);
+    Cube.setFloat("pointLights[0].linear", 0.09f);
+    Cube.setFloat("pointLights[0].quadratic", 0.032f);
+    // point light 2
+    Cube.setVec3("pointLights[1].position", pointLightPositions[1]);
+    Cube.setVec3("pointLights[1].ambient", 0.05f, 0.05f, 0.05f);
+    Cube.setVec3("pointLights[1].diffuse", 0.0f, 1.0f, 0.0f);
+    Cube.setVec3("pointLights[1].specular", 1.0f, 1.0f, 1.0f);
+    Cube.setFloat("pointLights[1].constant", 1.0f);
+    Cube.setFloat("pointLights[1].linear", 0.09f);
+    Cube.setFloat("pointLights[1].quadratic", 0.032f);
+    // point light 3
+    Cube.setVec3("pointLights[2].position", pointLightPositions[2]);
+    Cube.setVec3("pointLights[2].ambient", 0.05f, 0.05f, 0.05f);
+    Cube.setVec3("pointLights[2].diffuse", 1.0f, 0.0f, 0.0f);
+    Cube.setVec3("pointLights[2].specular", 1.0f, 1.0f, 1.0f);
+    Cube.setFloat("pointLights[2].constant", 1.0f);
+    Cube.setFloat("pointLights[2].linear", 0.09f);
+    Cube.setFloat("pointLights[2].quadratic", 0.032f);
+    // point light 4
+    Cube.setVec3("pointLights[3].position", pointLightPositions[3]);
+    Cube.setVec3("pointLights[3].ambient", 0.05f, 0.05f, 0.05f);
+    Cube.setVec3("pointLights[3].diffuse", 0.8f, 0.8f, 0.8f);
+    Cube.setVec3("pointLights[3].specular", 1.0f, 1.0f, 1.0f);
+    Cube.setFloat("pointLights[3].constant", 1.0f);
+    Cube.setFloat("pointLights[3].linear", 0.09f);
+    Cube.setFloat("pointLights[3].quadratic", 0.032f);
+    // spotLight
+    Cube.setVec3("spotLight.position", camera.Position);
+    Cube.setVec3("spotLight.direction", camera.Front);
+    Cube.setVec3("spotLight.ambient", 0.0f, 0.0f, 0.0f);
+    Cube.setVec3("spotLight.diffuse", 1.0f, 1.0f, 1.0f);
+    Cube.setVec3("spotLight.specular", 1.0f, 1.0f, 1.0f);
+    Cube.setFloat("spotLight.constant", 1.0f);
+    Cube.setFloat("spotLight.linear", 0.09f);
+    Cube.setFloat("spotLight.quadratic", 0.032f);
+    Cube.setFloat("spotLight.cutOff", glm::cos(glm::radians(12.5f)));
+    Cube.setFloat("spotLight.outerCutOff", glm::cos(glm::radians(15.0f)));
+    /*// light properties
     Cube.setVec3("light.ambient", 0.2f, 0.2f, 0.2f);
     Cube.setVec3("light.diffuse", 0.5f, 0.5f, 0.5f);
     Cube.setVec3("light.specular", 1.0f, 1.0f, 1.0f);
+    Cube.setFloat("light.constant", 1.0f);
+    Cube.setFloat("light.linear", 0.09f);
+    Cube.setFloat("light.quadratic", 0.032f);
+    Cube.setFloat("pointLights[0].constant", 1.0f);
+    //Cube.setVec3("light.direction", -0.2f, -1.0f, -0.3f);*/
 
-    // material properties
-    Cube.setFloat("material.shininess", 100.0f);
 
     
     glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), 800.0f / 600.0f, 0.1f, 100.0f);
@@ -245,16 +305,19 @@ void Renderer::Render()
         glm::mat4 model = glm::mat4(1.0f);
         model = glm::translate(model, cubePositions[i]);
         float angle = 20.0f * i;
-        model = glm::rotate(model, (float)glfwGetTime() * glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+        //model = glm::rotate(model, (float)glfwGetTime() * glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
         Cube.setMat4("model", model);
 
         glDrawArrays(GL_TRIANGLES, 0, 36);
     }  
   
-    //lightPos.z = 5.0f * sin(glfwGetTime()) * 2.0f;
+
+
+
+    //lightPos.z = 1.0f * sin(glfwGetTime()) * 2.0f;
     //lightPos.x = 5.0f * sin(glfwGetTime() / 2.0f) * 1.0f;
     //light source
-    Light.Use();
+    /*Light.Use();
     Light.setMat4("projection", projection);
     Light.setMat4("view", view);
     glm::mat4 model2 = glm::mat4(1.0f);
@@ -262,7 +325,22 @@ void Renderer::Render()
     model2 = glm::scale(model2, glm::vec3(0.2f));
     Light.setMat4("model", model2);
     glBindVertexArray(lightVAO);
-    glDrawArrays(GL_TRIANGLES, 0, 36);
+    glDrawArrays(GL_TRIANGLES, 0, 36);*/
+
+    Light.Use();
+    Light.setMat4("projection", projection);
+    Light.setMat4("view", view);
+
+    glBindVertexArray(lightVAO);
+    for (unsigned int i = 0; i < 4; i++)
+    {
+        glm::mat4 model2 = glm::mat4(1.0f);
+        //pointLightPositions[i].z = 1.0f * sin(glfwGetTime()) * 2.0f;
+        model2 = glm::translate(model2, pointLightPositions[i]);
+        model2 = glm::scale(model2, glm::vec3(0.2f)); // Make it a smaller cube
+        Light.setMat4("model", model2);
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+    }
     
 
     
