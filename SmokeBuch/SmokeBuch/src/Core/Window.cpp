@@ -1,7 +1,8 @@
 #include "Window.h"
 #include "Camera.h"
 #include "Input.h"
-#include "../Renderer/Renderer.h"
+//#include "../Renderer/Renderer.h"
+#include "../Engine.h"
 #include <iostream>
 #include <string>
 
@@ -25,6 +26,10 @@ namespace Window
     inline int _scrollWheelYOffset = 0;
     inline enum WindowMode _windowMode = WINDOWED;// FULLSCREEN;
     inline enum RenderMode _renderMode = WIREFRAME;
+    inline double prevTime = 0.0;
+    inline double crntTime = 0.0;
+    inline double timeDiff;
+    unsigned int counter = 0;
 }
 
 
@@ -170,7 +175,7 @@ void Window::Init(int  width, int height)
     {
         std::cout << "GLFW Error (" << std::to_string(error) << "): " << description << "\n";
 	});
-    
+
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
@@ -215,8 +220,8 @@ void Window::Init(int  width, int height)
     glfwMakeContextCurrent(_window);
     glfwSetFramebufferSizeCallback(_window, framebuffer_size_callback);
     glfwSetWindowFocusCallback(_window, window_focus_callback);
-    glfwSetCursorPosCallback(_window, Renderer::mouse_callback);
-    glfwSetScrollCallback(_window, Renderer::scroll_callback);
+    glfwSetCursorPosCallback(_window, Engine::mouse_callback);
+    glfwSetScrollCallback(_window, Engine::scroll_callback);
     DisableCursor();
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
@@ -249,6 +254,22 @@ void Window::Init(int  width, int height)
     //glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
     //glClear(GL_COLOR_BUFFER_BIT);
     
+}
+
+void Window::ShowFPS()
+{
+    crntTime = glfwGetTime();
+    timeDiff = crntTime - prevTime;
+    counter++;
+    if (timeDiff >= 1.0 / 30.0)
+    {
+        std::string FPS = std::to_string((1.0 / timeDiff) * counter);
+        std::string ms = std::to_string((timeDiff / counter) * 1000);
+        std::string newTitle = "OpenGL - " + FPS + "FPS / " + ms + "ms";
+        glfwSetWindowTitle(_window, newTitle.c_str());
+        prevTime = crntTime;
+        counter = 0;
+    }
 }
 
 void Window::ProcessInput()

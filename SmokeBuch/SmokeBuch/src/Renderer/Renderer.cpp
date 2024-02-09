@@ -6,6 +6,7 @@
 #include "../Core/Window.h"
 #include "../Core/Input.h"
 #include "../Core/Camera.h"
+#include "Model.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -14,23 +15,18 @@
 #include <fstream>
 #include <sstream>
 
-
+//camera properties
 Camera camera(glm::vec3(0.0f, 0.0f, 6.0f));
-
-float deltaTime = 0.0f;	// time between current frame and last frame
+float deltaTime = 0.0f;	
 float lastFrame = 0.0f;
 float lastX = 800 / 2.0f;
 float lastY = 600 / 2.0f;
 bool firstMouse = true;
-glm::vec3 lightPos(0.0, 1.0f, -5.0f);
+
+//glm::vec3 lightPos(0.0, 1.0f, -5.0f);
 
 
-void Renderer::Render()
-{
-    Shader Cube("res/shaders/Basic.vert", "res/shaders/Basic.frag");
-    Shader Light("res/shaders/LightSource.vert", "res/shaders/LightSource.frag");
-    Keyboard();
-    
+
     float vertices[] = {
         // positions          // normals           // texture coords
         -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  0.0f, 0.0f,
@@ -76,50 +72,6 @@ void Renderer::Render()
         -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,  0.0f, 1.0f
     };
 
-   /*float vertices[] = {
-        -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-         0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-         0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-         0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-        -0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-
-        -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-         0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-         0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-         0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-        -0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-
-        -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-        -0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-        -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-        -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-        -0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-        -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-
-         0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-         0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-         0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-         0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-         0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-         0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-
-        -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-         0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-         0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-         0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-
-        -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
-         0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
-         0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-         0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-        -0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-        -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
-    };*/
-
     /*unsigned int indices[] = {
         0, 1, 3, // first triangle
         1, 2, 3  // second triangle
@@ -145,8 +97,15 @@ void Renderer::Render()
         glm::vec3(0.0f,  0.0f, -3.0f)
     };
 
-    
-    
+void Renderer::Render()
+{
+    Window::ShowFPS();
+    Shader Cube("res/shaders/Basic.vert", "res/shaders/Basic.frag");
+    Shader Light("res/shaders/LightSource.vert", "res/shaders/LightSource.frag");
+    Shader _model("res/shaders/Model.vert", "res/shaders/Model.frag");
+    Model _Model("res/models/backpack/backpack.obj");
+    Keyboard();
+
     unsigned int VBO, VAO, EBO;
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
@@ -183,7 +142,10 @@ void Renderer::Render()
     glEnableVertexAttribArray(0);
 
 
-
+    float currentFrame = static_cast<float>(glfwGetTime());
+    deltaTime = currentFrame - lastFrame;
+    lastFrame = currentFrame;
+    
 
     stbi_set_flip_vertically_on_load(true);
     unsigned int texture0, texture1, texture2;
@@ -201,34 +163,18 @@ void Renderer::Render()
     glBindTexture(GL_TEXTURE_2D, texture2);
 
 
-    float currentFrame = static_cast<float>(glfwGetTime());
-    deltaTime = currentFrame - lastFrame;
-    lastFrame = currentFrame;
-    
+
     // cube model
     Cube.Use();
     Cube.setInt("material.diffuse", 0);
     Cube.setInt("material.specular", 1);
     Cube.setInt("material.emission", 2);
     glUniform1f(glGetUniformLocation(Cube.ID, "time"), glfwGetTime());
-    //Cube.setInt("Texture2", 1);
-    //unsigned int transformLoc = glGetUniformLocation(Shader::ID, "transform");
-    //glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(model));
-
-    //glm::mat4 model = glm::mat4(1.0f);
-    //model = glm::rotate(model, (float)glfwGetTime() * glm::radians(-55.0f), glm::vec3(5.0f, 1.0f, 0.0f));
-    //trans = glm::translate(trans, glm::vec3(0.5f, 0.5f, 0.0f));
-    //model = glm::scale(model, glm::vec3(0.5, 0.5, 0.5));
-
-
-
-    //glm::mat4 view = glm::mat4(1.0f);
-    // note that we're translating the scene in the reverse direction of where we want to move
-    //view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
     
     
-    Cube.setVec3("light.position", lightPos);
-    Cube.setVec3("viewPos", camera.Position);
+    
+   // Cube.setVec3("light.position", lightPos);
+    //Cube.setVec3("viewPos", camera.Position);
     Cube.setFloat("material.shininess", 50.0f);
 
 
@@ -280,21 +226,12 @@ void Renderer::Render()
     Cube.setFloat("spotLight.quadratic", 0.032f);
     Cube.setFloat("spotLight.cutOff", glm::cos(glm::radians(12.5f)));
     Cube.setFloat("spotLight.outerCutOff", glm::cos(glm::radians(15.0f)));
-    /*// light properties
-    Cube.setVec3("light.ambient", 0.2f, 0.2f, 0.2f);
-    Cube.setVec3("light.diffuse", 0.5f, 0.5f, 0.5f);
-    Cube.setVec3("light.specular", 1.0f, 1.0f, 1.0f);
-    Cube.setFloat("light.constant", 1.0f);
-    Cube.setFloat("light.linear", 0.09f);
-    Cube.setFloat("light.quadratic", 0.032f);
-    Cube.setFloat("pointLights[0].constant", 1.0f);
-    //Cube.setVec3("light.direction", -0.2f, -1.0f, -0.3f);*/
 
 
-    
+
     glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), 800.0f / 600.0f, 0.1f, 100.0f);
-    Cube.setMat4("projection", projection);
     glm::mat4 view = camera.GetViewMatrix();
+    Cube.setMat4("projection", projection);
     Cube.setMat4("view", view);
 
     //glUniform4f(vertexColorLocation, 0.0f, greenValue, 0.0f, 1.0f);
@@ -305,28 +242,18 @@ void Renderer::Render()
         glm::mat4 model = glm::mat4(1.0f);
         model = glm::translate(model, cubePositions[i]);
         float angle = 20.0f * i;
-        //model = glm::rotate(model, (float)glfwGetTime() * glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+        model = glm::rotate(model, (float)glfwGetTime() * glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
         Cube.setMat4("model", model);
 
         glDrawArrays(GL_TRIANGLES, 0, 36);
-    }  
-  
+    }
 
 
 
+
+    //light source
     //lightPos.z = 1.0f * sin(glfwGetTime()) * 2.0f;
     //lightPos.x = 5.0f * sin(glfwGetTime() / 2.0f) * 1.0f;
-    //light source
-    /*Light.Use();
-    Light.setMat4("projection", projection);
-    Light.setMat4("view", view);
-    glm::mat4 model2 = glm::mat4(1.0f);
-    model2 = glm::translate(model2, lightPos);
-    model2 = glm::scale(model2, glm::vec3(0.2f));
-    Light.setMat4("model", model2);
-    glBindVertexArray(lightVAO);
-    glDrawArrays(GL_TRIANGLES, 0, 36);*/
-
     Light.Use();
     Light.setMat4("projection", projection);
     Light.setMat4("view", view);
@@ -337,20 +264,37 @@ void Renderer::Render()
         glm::mat4 model2 = glm::mat4(1.0f);
         //pointLightPositions[i].z = 1.0f * sin(glfwGetTime()) * 2.0f;
         model2 = glm::translate(model2, pointLightPositions[i]);
-        model2 = glm::scale(model2, glm::vec3(0.2f)); // Make it a smaller cube
+        model2 = glm::scale(model2, glm::vec3(0.2f));
         Light.setMat4("model", model2);
         glDrawArrays(GL_TRIANGLES, 0, 36);
-    }
-    
 
-    
-    
-    glDeleteVertexArrays(1, &VAO);
-    glDeleteBuffers(1, &VBO);
-    glDeleteBuffers(1, &EBO);
-    
-    
+
+    }
+
+
+   /*//model
+    _model.Use();
+    _model.setMat4("projection", projection);
+    _model.setMat4("view", view);
+    glm::mat4 model3 = glm::mat4(1.0f);
+    model3 = glm::translate(model3, glm::vec3(0.0f, 0.0f, 3.0f));
+    model3 = glm::scale(model3, glm::vec3(0.2f, 0.2f, 0.2f));
+    _model.setMat4("model", model3);
+    _Model.Draw(_model);*/
+
+
+   glDeleteVertexArrays(1, &VAO);
+   glDeleteBuffers(1, &VBO);
+   glDeleteBuffers(1, &EBO);
+
 }
+
+void Load()
+{
+
+}
+
+
 
 unsigned int Renderer::loadTexture(const char* path)
 {

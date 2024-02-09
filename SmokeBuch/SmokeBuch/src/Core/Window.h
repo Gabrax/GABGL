@@ -6,6 +6,7 @@
 namespace Window
 {
 	void Init(int width, int height);
+	void ShowFPS();
 	void ProcessInput();
 	void SwapBuffersPollEvents();
 	void Cleanup();
