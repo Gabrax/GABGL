@@ -103,7 +103,7 @@ void Renderer::Render()
     Shader Cube("res/shaders/Basic.vert", "res/shaders/Basic.frag");
     Shader Light("res/shaders/LightSource.vert", "res/shaders/LightSource.frag");
     Shader _model("res/shaders/Model.vert", "res/shaders/Model.frag");
-    Model _Model("res/models/backpack/backpack.obj");
+    Model _Model("res/models/backpack/GlockAmmoBox.obj");
     Keyboard();
 
     unsigned int VBO, VAO, EBO;

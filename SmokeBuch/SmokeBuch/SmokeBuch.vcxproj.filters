@@ -70,6 +70,8 @@
     <None Include="res\shaders\LightSource.vert" />
     <None Include="res\shaders\Model.frag" />
     <None Include="res\shaders\Model.vert" />
+    <None Include="res\shaders\CubeMap.vert" />
+    <None Include="res\shaders\CubeMap.frag" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\textures\angel.jpg">

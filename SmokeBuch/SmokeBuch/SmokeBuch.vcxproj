@@ -182,6 +182,8 @@
   <ItemGroup>
     <None Include="res\shaders\Basic.frag" />
     <None Include="res\shaders\Basic.vert" />
+    <None Include="res\shaders\CubeMap.frag" />
+    <None Include="res\shaders\CubeMap.vert" />
     <None Include="res\shaders\LightSource.frag" />
     <None Include="res\shaders\LightSource.vert" />
     <None Include="res\shaders\Model.frag" />
