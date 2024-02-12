@@ -31,7 +31,7 @@ bool firstMouse = true;
 
 
 
-void Keyboard();
+void CameraMovement();
 unsigned int loadTexture(const char* path);
 unsigned int loadCubemap(vector<std::string> faces);
 
@@ -177,6 +177,7 @@ void Engine::Run()
         stbi_set_flip_vertically_on_load(true);
 
     Shader Cube("res/shaders/Basic.vert", "res/shaders/Basic.frag");
+    //Shader _model("res/shaders/Basic.vert", "res/shaders/Basic.frag");
     Shader Light("res/shaders/LightSource.vert", "res/shaders/LightSource.frag");
     Shader CubeMap("res/shaders/CubeMap.vert", "res/shaders/CubeMap.frag");
     Shader _model("res/shaders/Model.vert", "res/shaders/Model.frag");
@@ -185,7 +186,7 @@ void Engine::Run()
 	while (Window::WindowIsOpen() && Window::WindowHasNotBeenForceClosed())
 	{
         Window::ShowFPS();
-        Keyboard();
+        CameraMovement();
         
         unsigned int VBO, VAO, EBO;
         glGenVertexArrays(1, &VAO);
@@ -252,10 +253,10 @@ void Engine::Run()
 
 
         // directional light
-        Cube.setVec3("dirLight.direction", -0.2f, -1.0f, -0.3f);
-        Cube.setVec3("dirLight.ambient", 0.05f, 0.05f, 0.05f);
-        Cube.setVec3("dirLight.diffuse", 0.4f, 0.4f, 0.4f);
-        Cube.setVec3("dirLight.specular", 0.5f, 0.5f, 0.5f);
+        //Cube.setVec3("dirLight.direction", -0.2f, -1.0f, -0.3f);
+        //Cube.setVec3("dirLight.ambient", 0.05f, 0.05f, 0.05f);
+        //Cube.setVec3("dirLight.diffuse", 0.4f, 0.4f, 0.4f);
+        //Cube.setVec3("dirLight.specular", 0.5f, 0.5f, 0.5f);
         // point light 1
         Cube.setVec3("pointLights[0].position", pointLightPositions[0]);
         Cube.setVec3("pointLights[0].ambient", 0.05f, 0.05f, 0.05f);
@@ -289,8 +290,8 @@ void Engine::Run()
         Cube.setFloat("pointLights[3].linear", 0.09f);
         Cube.setFloat("pointLights[3].quadratic", 0.032f);
         // spotLight
-        Cube.setVec3("spotLight.position", camera.Position);
-        Cube.setVec3("spotLight.direction", camera.Front);
+        //Cube.setVec3("spotLight.position", camera.Position);
+        //Cube.setVec3("spotLight.direction", camera.Front);
         Cube.setVec3("spotLight.ambient", 0.0f, 0.0f, 0.0f);
         Cube.setVec3("spotLight.diffuse", 1.0f, 1.0f, 1.0f);
         Cube.setVec3("spotLight.specular", 1.0f, 1.0f, 1.0f);
@@ -327,7 +328,7 @@ void Engine::Run()
             glm::mat4 model = glm::mat4(1.0f);
             model = glm::translate(model, cubePositions[i]);
             float angle = 20.0f * i;
-            model = glm::rotate(model, (float)glfwGetTime() * glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+            //model = glm::rotate(model, (float)glfwGetTime() * glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
             Cube.setMat4("model", model);
 
             glDrawArrays(GL_TRIANGLES, 0, 36);
@@ -347,7 +348,7 @@ void Engine::Run()
         for (unsigned int i = 0; i < 4; i++)
         {
             glm::mat4 model2 = glm::mat4(1.0f);
-            //pointLightPositions[i].z = 1.0f * sin(glfwGetTime()) * 2.0f;
+            pointLightPositions[i].y = 1.0f * sin(glfwGetTime()) * 2.0f;
             model2 = glm::translate(model2, pointLightPositions[i]);
             model2 = glm::scale(model2, glm::vec3(0.2f));
             Light.setMat4("model", model2);
@@ -479,7 +480,7 @@ unsigned int loadCubemap(vector<std::string> faces)
     return textureID;
 }
 
-void Keyboard()
+void CameraMovement()
 {
     if (Input::KeyDown(GLFW_KEY_W))
     {
