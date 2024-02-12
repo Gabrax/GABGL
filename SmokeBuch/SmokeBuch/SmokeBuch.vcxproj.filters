@@ -72,6 +72,8 @@
     <None Include="res\shaders\Model.vert" />
     <None Include="res\shaders\CubeMap.vert" />
     <None Include="res\shaders\CubeMap.frag" />
+    <None Include="res\shaders\Text.frag" />
+    <None Include="res\shaders\Text.vert" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\textures\angel.jpg">
@@ -96,6 +98,9 @@
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="res\textures\matrix.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="..\..\..\..\..\Desktop\ExportedFont.bmp">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

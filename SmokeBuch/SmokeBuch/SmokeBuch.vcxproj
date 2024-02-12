@@ -116,7 +116,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <AdditionalIncludeDirectories>vendor\compressonator\include;vendor\tracy\public;vendor\tinyobj;vendor\GLFW\include;vendor\glm;vendor\glad\include;vendor\stb_image;vendor\fmod\include;vendor\assimp\include;vendor\rapidjson\include;vendor\physx\include;vendor\thread_pool\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>vendor\freetype\include;vendor\compressonator\include;vendor\tracy\public;vendor\tinyobj;vendor\GLFW\include;vendor\glm;vendor\glad\include;vendor\stb_image;vendor\fmod\include;vendor\assimp\include;vendor\rapidjson\include;vendor\physx\include;vendor\thread_pool\include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
@@ -125,9 +125,9 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>vendor\GLFW\lib\Release;vendor\fmod\lib;vendor\physx\lib\Debug;vendor\assimp\lib;vendor\compressonator\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>vendor\freetype\lib;vendor\GLFW\lib\Release;vendor\fmod\lib;vendor\physx\lib\Debug;vendor\assimp\lib;vendor\compressonator\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <TreatLinkerWarningAsErrors>false</TreatLinkerWarningAsErrors>
-      <AdditionalDependencies>glfw3.lib;fmod_vc.lib;assimp-vc143-mtd.lib;Compressonator_MD_DLL.lib;PhysX_64.lib;PhysXCommon_64.lib;PhysXCooking_64.lib;PhysXExtensions_static_64.lib;PhysXFoundation_64.lib;PhysXTask_static_64.lib;PhysXPvdSDK_static_64.lib;PVDRuntime_64.lib;PhysXCharacterKinematic_static_64.lib;/NODEFAULTLIB:MSVCRT;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>glfw3.lib;freetype.lib;fmod_vc.lib;assimp-vc143-mtd.lib;Compressonator_MD_DLL.lib;PhysX_64.lib;PhysXCommon_64.lib;PhysXCooking_64.lib;PhysXExtensions_static_64.lib;PhysXFoundation_64.lib;PhysXTask_static_64.lib;PhysXPvdSDK_static_64.lib;PVDRuntime_64.lib;PhysXCharacterKinematic_static_64.lib;/NODEFAULTLIB:MSVCRT;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>copy /Y "$(ProjectDir)vendor\dll\fmod.dll" "$(TargetDir)fmod.dll"</Command>
@@ -142,7 +142,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <AdditionalIncludeDirectories>vendor\compressonator\include;vendor\tracy\public;vendor\tinyobj;vendor\GLFW\include;vendor\glm;vendor\glad\include;vendor\stb_image;vendor\fmod\include;vendor\assimp\include;vendor\rapidjson\include;vendor\physx\include;vendor\thread_pool\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>vendor\freetype\include;vendor\compressonator\include;vendor\tracy\public;vendor\tinyobj;vendor\GLFW\include;vendor\glm;vendor\glad\include;vendor\stb_image;vendor\fmod\include;vendor\assimp\include;vendor\rapidjson\include;vendor\physx\include;vendor\thread_pool\include</AdditionalIncludeDirectories>
       <DebugInformationFormat>None</DebugInformationFormat>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
@@ -152,9 +152,9 @@
       <EnableCOMDATFolding>false</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>vendor\compressonator\lib;vendor\GLFW\lib\Release;vendor\fmod\lib;vendor\assimp\lib;vendor\physx\lib\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>vendor\freetype\lib;vendor\compressonator\lib;vendor\GLFW\lib\Release;vendor\fmod\lib;vendor\assimp\lib;vendor\physx\lib\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <TreatLinkerWarningAsErrors>false</TreatLinkerWarningAsErrors>
-      <AdditionalDependencies>glfw3.lib;fmod_vc.lib;assimp-vc143-mtd.lib;Compressonator_MD_DLL.lib;PhysX_64.lib;PhysXCommon_64.lib;PhysXCooking_64.lib;PhysXFoundation_64.lib;PhysXTask_static_64.lib;PhysXPvdSDK_static_64.lib;PVDRuntime_64.lib;PhysXExtensions_static_64.lib;PhysXCharacterKinematic_static_64.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>glfw3.lib;freetype.lib;fmod_vc.lib;assimp-vc143-mtd.lib;Compressonator_MD_DLL.lib;PhysX_64.lib;PhysXCommon_64.lib;PhysXCooking_64.lib;PhysXFoundation_64.lib;PhysXTask_static_64.lib;PhysXPvdSDK_static_64.lib;PVDRuntime_64.lib;PhysXExtensions_static_64.lib;PhysXCharacterKinematic_static_64.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>copy /Y "$(ProjectDir)vendor\dll\fmod.dll" "$(TargetDir)fmod.dll"</Command>
@@ -188,8 +188,11 @@
     <None Include="res\shaders\LightSource.vert" />
     <None Include="res\shaders\Model.frag" />
     <None Include="res\shaders\Model.vert" />
+    <None Include="res\shaders\Text.frag" />
+    <None Include="res\shaders\Text.vert" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="..\..\..\..\..\Desktop\ExportedFont.bmp" />
     <Image Include="res\textures\angel.jpg" />
     <Image Include="res\textures\awesomeface.png" />
     <Image Include="res\textures\container2.png" />
