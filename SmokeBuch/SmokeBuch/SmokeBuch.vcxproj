@@ -169,6 +169,7 @@
     <ClCompile Include="src\Core\Window.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\Core\Audio.h" />
     <ClInclude Include="src\Core\Camera.h" />
     <ClInclude Include="src\Core\Input.h" />
     <ClInclude Include="src\Core\ControllerASCII.h" />
@@ -192,7 +193,6 @@
     <None Include="res\shaders\Text.vert" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="..\..\..\..\..\Desktop\ExportedFont.bmp" />
     <Image Include="res\textures\angel.jpg" />
     <Image Include="res\textures\awesomeface.png" />
     <Image Include="res\textures\container2.png" />
@@ -201,6 +201,11 @@
     <Image Include="res\textures\matrix.jpg" />
     <Image Include="res\textures\ui\CrosshairDot.png" />
     <Image Include="res\textures\ui\CrosshairSquare.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Media Include="res\audio\nujabes.wav" />
+    <Media Include="res\audio\RE_Beep.wav" />
+    <Media Include="res\audio\SELECT.wav" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

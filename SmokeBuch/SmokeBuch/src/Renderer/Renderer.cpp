@@ -106,25 +106,19 @@ void Renderer::Render()
     Model _Model("res/models/backpack/GlockAmmoBox.obj");
     Keyboard();
 
+    //cube 
     unsigned int VBO, VAO, EBO;
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
-    glGenBuffers(1, &EBO);
-
+    //glGenBuffers(1, &EBO);
     glBindVertexArray(VAO);
-
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
     //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     //glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
     // position attribute
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
-    // color attribute
-    //glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
-    //glEnableVertexAttribArray(1);
     // texture coord attribute
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
@@ -141,20 +135,17 @@ void Renderer::Render()
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
-
+    //time per frame
     float currentFrame = static_cast<float>(glfwGetTime());
     deltaTime = currentFrame - lastFrame;
     lastFrame = currentFrame;
     
-
+    //textures 
     stbi_set_flip_vertically_on_load(true);
     unsigned int texture0, texture1, texture2;
     texture0 = loadTexture("res/textures/angel.jpg");
     texture1 = loadTexture("res/textures/container2_specular.png");
     texture2 = loadTexture("res/textures/matrix.jpg");
-
-
-
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture0);
     glActiveTexture(GL_TEXTURE1);
@@ -228,14 +219,15 @@ void Renderer::Render()
     Cube.setFloat("spotLight.outerCutOff", glm::cos(glm::radians(15.0f)));
 
 
-
+    //setting camera to view the cubes
     glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), 800.0f / 600.0f, 0.1f, 100.0f);
     glm::mat4 view = camera.GetViewMatrix();
     Cube.setMat4("projection", projection);
     Cube.setMat4("view", view);
 
-    //glUniform4f(vertexColorLocation, 0.0f, greenValue, 0.0f, 1.0f);
     //glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT,0); // call this when indices specified
+
+    //draw cubes
     glBindVertexArray(VAO);
     for (unsigned int i = 0; i < 10; i++)
     {
@@ -254,10 +246,11 @@ void Renderer::Render()
     //light source
     //lightPos.z = 1.0f * sin(glfwGetTime()) * 2.0f;
     //lightPos.x = 5.0f * sin(glfwGetTime() / 2.0f) * 1.0f;
+
     Light.Use();
     Light.setMat4("projection", projection);
     Light.setMat4("view", view);
-
+    //draw light source
     glBindVertexArray(lightVAO);
     for (unsigned int i = 0; i < 4; i++)
     {

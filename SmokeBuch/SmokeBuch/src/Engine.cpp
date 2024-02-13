@@ -3,17 +3,18 @@
 #include "Core/Input.h"
 //#include "Renderer/Renderer.h"
 
-#include "Renderer/Shader.h"
-#include "Core/Camera.h"
 #include "glad/glad.h"
 #include "GLFW/glfw3.h"
 #include "stb_image.h"
-#include "Renderer/Model.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <freetype/freetype.h>
 #include FT_FREETYPE_H
+#include "Renderer/Shader.h"
+#include "Core/Camera.h"
+#include "Renderer/Model.h"
+#include "Core/Audio.h"
 #include <iostream>
 #include <string>
 #include <fstream>
@@ -58,6 +59,8 @@ void Engine::Run()
 {	
 
     Window::Init(1920 * 1.5f, 1080 * 1.5f);
+    Audio::Init();
+    Audio::PlayAudio("nujabes.wav", 0.005f);
     glfwSwapInterval(0);
     
 
@@ -484,7 +487,7 @@ void Engine::Run()
          glDepthFunc(GL_LESS); // set depth function back to default
 
          
-
+         //text rendering
          glEnable(GL_CULL_FACE);
          glEnable(GL_BLEND);
          glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -516,18 +519,21 @@ void Engine::Run()
 		if (Input::KeyPressed(GLFW_KEY_F))
 		{
 			Window::ToggleFullscreen();
+            Audio::PlayAudio("SELECT.wav", 0.5f);
 		}
 		if (Input::KeyPressed(GLFW_KEY_H))
 		{
 			Window::ToggleWireframe();
+            Audio::PlayAudio("RE_Beep.wav", 0.5f);
 		}
-
+        
 		
 
 
 		Window::ProcessInput();
 		Input::Update();
 		Window::SwapBuffersPollEvents();
+        Audio::Update();
 		
 
         glDeleteVertexArrays(1, &VAO);
