@@ -77,6 +77,11 @@
     <None Include="res\shaders\CubeMap.frag" />
     <None Include="res\shaders\Text.frag" />
     <None Include="res\shaders\Text.vert" />
+    <None Include="res\shaders\Model.geom" />
+    <None Include="res\shaders\asteroids.frag" />
+    <None Include="res\shaders\asteroids.vert" />
+    <None Include="res\shaders\planet.frag" />
+    <None Include="res\shaders\planet.vert" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\textures\angel.jpg">

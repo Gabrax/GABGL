@@ -113,7 +113,7 @@
 #define GAB_KEY_KP_ADD             334
 #define GAB_KEY_KP_ENTER           335
 #define GAB_KEY_KP_EQUAL           336
-#define GAB_KEY_LEFT_SHIFT         16//340
+#define GAB_KEY_LEFT_SHIFT         340 //16
 #define GAB_KEY_LEFT_CONTROL       17//341
 #define GAB_KEY_LEFT_ALT           342
 #define GAB_KEY_LEFT_SUPER         343

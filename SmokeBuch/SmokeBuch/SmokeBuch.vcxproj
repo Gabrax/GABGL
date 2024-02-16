@@ -181,6 +181,8 @@
     <ClInclude Include="src\Renderer\stb_image.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="res\shaders\asteroids.frag" />
+    <None Include="res\shaders\asteroids.vert" />
     <None Include="res\shaders\Basic.frag" />
     <None Include="res\shaders\Basic.vert" />
     <None Include="res\shaders\CubeMap.frag" />
@@ -188,7 +190,10 @@
     <None Include="res\shaders\LightSource.frag" />
     <None Include="res\shaders\LightSource.vert" />
     <None Include="res\shaders\Model.frag" />
+    <None Include="res\shaders\Model.geom" />
     <None Include="res\shaders\Model.vert" />
+    <None Include="res\shaders\planet.frag" />
+    <None Include="res\shaders\planet.vert" />
     <None Include="res\shaders\Text.frag" />
     <None Include="res\shaders\Text.vert" />
   </ItemGroup>

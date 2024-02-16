@@ -197,13 +197,17 @@ void Engine::Run()
         stbi_set_flip_vertically_on_load(true);
 
     Shader Cube("res/shaders/Basic.vert", "res/shaders/Basic.frag");
-    //Shader _model("res/shaders/Basic.vert", "res/shaders/Basic.frag");
     Shader Light("res/shaders/LightSource.vert", "res/shaders/LightSource.frag");
     Shader CubeMap("res/shaders/CubeMap.vert", "res/shaders/CubeMap.frag");
-    Shader _model("res/shaders/Model.vert", "res/shaders/Model.frag");
-    Model _Model("res/models/backpack/backpack.obj");
+    Shader _BPshader("res/shaders/Model.vert", "res/shaders/Model.frag","res/shaders/Model.geom");
     Shader _text("res/shaders/Text.vert", "res/shaders/Text.frag");
-    
+    Shader _asteroidsShader("res/shaders/asteroids.vert", "res/shaders/asteroids.frag");
+    Shader _planetShader("res/shaders/planet.vert", "res/shaders/planet.frag");
+
+
+    Model _BPmodel("res/models/backpack/backpack.obj");
+    Model _asteroids("res/models/asteroid/rock.obj");
+    Model _planet("res/models/planet/planet.obj");
 
         // FreeType
         // --------
@@ -280,6 +284,7 @@ void Engine::Run()
         FT_Done_Face(face);
         FT_Done_FreeType(ft);
 
+
         glGenVertexArrays(1, &textVAO);
         glGenBuffers(1, &textVBO);
         glBindVertexArray(textVAO);
@@ -291,12 +296,82 @@ void Engine::Run()
         glBindVertexArray(0);
 
         
+        unsigned int texture0, texture1, texture2;
+        texture0 = loadTexture("res/textures/angel.jpg");
+        texture1 = loadTexture("res/textures/container2_specular.png");
+        texture2 = loadTexture("res/textures/matrix.jpg");
+
+        unsigned int amount = 100000;
+        glm::mat4* modelMatrices;
+        modelMatrices = new glm::mat4[amount];
+        srand(static_cast<unsigned int>(glfwGetTime())); // initialize random seed
+        float radius = 150.0;
+        float offset = 25.0f;
+        for (unsigned int i = 0; i < amount; i++)
+        {
+            glm::mat4 model = glm::mat4(1.0f);
+            // 1. translation: displace along circle with 'radius' in range [-offset, offset]
+            float angle = (float)i / (float)amount * 360.0f;
+            float displacement = (rand() % (int)(2 * offset * 100)) / 100.0f - offset;
+            float x = sin(angle) * radius + displacement;
+            displacement = (rand() % (int)(2 * offset * 100)) / 100.0f - offset;
+            float y = displacement * 0.4f; // keep height of asteroid field smaller compared to width of x and z
+            displacement = (rand() % (int)(2 * offset * 100)) / 100.0f - offset;
+            float z = cos(angle) * radius + displacement;
+            model = glm::translate(model, glm::vec3(x, y, z));
+
+            // 2. scale: Scale between 0.05 and 0.25f
+            float scale = static_cast<float>((rand() % 20) / 100.0 + 0.05);
+            model = glm::scale(model, glm::vec3(scale));
+
+            // 3. rotation: add random rotation around a (semi)randomly picked rotation axis vector
+            float rotAngle = static_cast<float>((rand() % 360));
+            model = glm::rotate(model, rotAngle, glm::vec3(0.4f, 0.6f, 0.8f));
+
+            // 4. now add to list of matrices
+            modelMatrices[i] = model;
+        }
+
+        // configure instanced array
+        // -------------------------
+        unsigned int buffer;
+        glGenBuffers(1, &buffer);
+        glBindBuffer(GL_ARRAY_BUFFER, buffer);
+        glBufferData(GL_ARRAY_BUFFER, amount * sizeof(glm::mat4), &modelMatrices[0], GL_STATIC_DRAW);
+
+        // set transformation matrices as an instance vertex attribute (with divisor 1)
+        // note: we're cheating a little by taking the, now publicly declared, VAO of the model's mesh(es) and adding new vertexAttribPointers
+        // normally you'd want to do this in a more organized fashion, but for learning purposes this will do.
+        // -----------------------------------------------------------------------------------------------------------------------------------
+        for (unsigned int i = 0; i < _asteroids.meshes.size(); i++)
+        {
+            unsigned int VAO = _asteroids.meshes[i].VAO;
+            glBindVertexArray(VAO);
+            // set attribute pointers for matrix (4 times vec4)
+            glEnableVertexAttribArray(3);
+            glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)0);
+            glEnableVertexAttribArray(4);
+            glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(sizeof(glm::vec4)));
+            glEnableVertexAttribArray(5);
+            glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(2 * sizeof(glm::vec4)));
+            glEnableVertexAttribArray(6);
+            glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(3 * sizeof(glm::vec4)));
+
+            glVertexAttribDivisor(3, 1);
+            glVertexAttribDivisor(4, 1);
+            glVertexAttribDivisor(5, 1);
+            glVertexAttribDivisor(6, 1);
+
+            glBindVertexArray(0);
+        }
+        
 
 	while (Window::WindowIsOpen() && Window::WindowHasNotBeenForceClosed())
 	{
         Window::ShowFPS();
         CameraMovement();
         
+       
         glGenVertexArrays(1, &VAO);
         glGenBuffers(1, &VBO);
         glGenBuffers(1, &EBO);
@@ -331,15 +406,16 @@ void Engine::Run()
         glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-       
-         
+
+
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texture0);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, texture1);
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_2D, texture2);
         
-        unsigned int texture0, texture1, texture2;
-        texture0 = loadTexture("res/textures/angel.jpg");
-        texture1 = loadTexture("res/textures/container2_specular.png");
-        texture2 = loadTexture("res/textures/matrix.jpg");
-
-
 
 
         // cube model
@@ -419,12 +495,6 @@ void Engine::Run()
         glm::mat4 model = glm::mat4(1.0f);
         Cube.setMat4("model", model);
 
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, texture0);
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, texture1);
-        glActiveTexture(GL_TEXTURE2);
-        glBindTexture(GL_TEXTURE_2D, texture2);
         //glGenTextures(1, &textureID);
         //glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
 
@@ -441,6 +511,7 @@ void Engine::Run()
 
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
+        // cube model
 
 
 
@@ -462,17 +533,21 @@ void Engine::Run()
             Light.setMat4("model", model2);
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
+        //light source
 
-        //model
-         _model.Use();
-         _model.setMat4("projection", projection);
-         _model.setMat4("view", view);
+          //model
+         _BPshader.Use();
          glm::mat4 model3 = glm::mat4(1.0f);
          model3 = glm::translate(model3, glm::vec3(0.0f, 1.0f, 0.0f));
          model3 = glm::scale(model3, glm::vec3(0.2f, 0.2f, 0.2f));
-         _model.setMat4("model", model3);
-         _Model.Draw(_model);
+         _BPshader.setMat4("projection", projection);
+         _BPshader.setMat4("view", view);
+         _BPshader.setMat4("model", model3);
+         _BPshader.setFloat("time", glfwGetTime() * 0.5f);
+         _BPmodel.Draw(_BPshader);
+         //model
 
+         //cube map
          glDepthFunc(GL_LEQUAL);  // change depth function so depth test passes when values are equal to depth buffer's content
          CubeMap.Use();
          CubeMap.setInt("skybox", 0);
@@ -484,7 +559,38 @@ void Engine::Run()
          glBindTexture(GL_TEXTURE_CUBE_MAP, Cubemap);
          glDrawArrays(GL_TRIANGLES, 0, 36);
          glBindVertexArray(0);
-         glDepthFunc(GL_LESS); // set depth function back to default
+         glDepthFunc(GL_LESS); 
+         //cube map
+
+         //saturn wannabe
+         _planetShader.Use();
+         glm::mat4 Planetprojection = glm::perspective(glm::radians(45.0f), (float)800 / (float)600, 0.1f, 1000.0f);
+         view = camera.GetViewMatrix();
+         _planetShader.setMat4("view", view);
+         _planetShader.setMat4("projection", Planetprojection);
+
+         glm::mat4 model4 = glm::mat4(1.0f);
+         model4 = glm::translate(model4, glm::vec3(0.0f, -3.0f, 0.0f));
+         model4 = glm::scale(model4, glm::vec3(1.0f, 1.0f, 1.0f));
+         _planetShader.setMat4("model", model4);
+         _planet.Draw(_planetShader);
+         //saturn wannabe
+
+         //asteroids
+         _asteroidsShader.Use();
+         _asteroidsShader.setMat4("view", view);
+         _asteroidsShader.setMat4("projection", Planetprojection);
+         _asteroidsShader.setInt("texture_diffuse1", 0);
+         glActiveTexture(GL_TEXTURE0);
+         glBindTexture(GL_TEXTURE_2D, _asteroids.textures_loaded[0].id);
+         for (unsigned int i = 0; i < _asteroids.meshes.size(); i++)
+         {
+             glBindVertexArray(_asteroids.meshes[i].VAO);
+             glDrawElementsInstanced(GL_TRIANGLES, static_cast<unsigned int>(_asteroids.meshes[i].indices.size()), GL_UNSIGNED_INT, 0, amount);
+             glBindVertexArray(0);
+         }
+         //asteroids
+
 
          
          //text rendering
@@ -496,22 +602,20 @@ void Engine::Run()
          projection = glm::ortho(0.0f, static_cast<float>(800.0f), 0.0f, static_cast<float>(600.0f));
          glUniformMatrix4fv(glGetUniformLocation(_text.ID, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
 
-
          crntTime = glfwGetTime();
          timeDiff = crntTime - prevTime;
          counter++;
-         if (timeDiff >= 1.0 / 120.0)
+         if (timeDiff >= 1.0 / 6000.0)
          {
              std::string FPS = std::to_string((1.0 / timeDiff) * counter);
              RenderText(_text, "FPS :" + FPS, 25.0f, 500.0f, 0.5f, glm::vec3(0.0f, 0.0f, 0.0f));
              prevTime = crntTime;
              counter = 0;
          }
-
-
          RenderText(_text, "suck deez nuts", 650.0f, 570.0f, 0.5f, glm::vec3(0.0f, 0.0f, 0.0f));
          glEnable(GL_DEPTH_TEST);
          glDisable(GL_CULL_FACE);
+         //text rendering
 
 		
 
@@ -524,7 +628,7 @@ void Engine::Run()
 		if (Input::KeyPressed(GLFW_KEY_H))
 		{
 			Window::ToggleWireframe();
-            Audio::PlayAudio("RE_Beep.wav", 0.5f);
+            Audio::PlayAudio("RE_Beep.wav", 0.05f);
 		}
         
 		
@@ -538,7 +642,7 @@ void Engine::Run()
 
         glDeleteVertexArrays(1, &VAO);
         glDeleteBuffers(1, &VBO);
-        glDeleteBuffers(1, &EBO);
+        //glDeleteBuffers(1, &EBO);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	}
     
@@ -662,27 +766,27 @@ unsigned int loadCubemap(vector<std::string> faces)
 
 void CameraMovement()
 {
-    if (Input::KeyDown(GLFW_KEY_W))
+    if (Input::KeyDown(GAB_KEY_W))
     {
         camera.ProcessKeyboard(FORWARD, deltaTime);
     }
-    if (Input::KeyDown(GLFW_KEY_S))
+    if (Input::KeyDown(GAB_KEY_S))
     {
         camera.ProcessKeyboard(BACKWARD, deltaTime);
     }
-    if (Input::KeyDown(GLFW_KEY_A))
+    if (Input::KeyDown(GAB_KEY_A))
     {
         camera.ProcessKeyboard(LEFT, deltaTime);
     }
-    if (Input::KeyDown(GLFW_KEY_D))
+    if (Input::KeyDown(GAB_KEY_D))
     {
         camera.ProcessKeyboard(RIGHT, deltaTime);
     }
-    if (Input::KeyDown(GLFW_KEY_SPACE))
+    if (Input::KeyDown(GAB_KEY_SPACE))
     {
         camera.ProcessKeyboard(UP, deltaTime);
     }
-    if (Input::KeyDown(GLFW_KEY_LEFT_SHIFT))
+    if (Input::KeyDown(GAB_KEY_LEFT_SHIFT))
     {
         camera.ProcessKeyboard(DOWN, deltaTime);
     }
