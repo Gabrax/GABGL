@@ -65,6 +65,7 @@ void Engine::Run()
     
 
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_MULTISAMPLE);
     
 
         float vertices[] = {
@@ -301,11 +302,11 @@ void Engine::Run()
         texture1 = loadTexture("res/textures/container2_specular.png");
         texture2 = loadTexture("res/textures/matrix.jpg");
 
-        unsigned int amount = 100000;
+        unsigned int amount = 50000;
         glm::mat4* modelMatrices;
         modelMatrices = new glm::mat4[amount];
         srand(static_cast<unsigned int>(glfwGetTime())); // initialize random seed
-        float radius = 150.0;
+        float radius = 75.0;
         float offset = 25.0f;
         for (unsigned int i = 0; i < amount; i++)
         {
@@ -570,7 +571,7 @@ void Engine::Run()
          _planetShader.setMat4("projection", Planetprojection);
 
          glm::mat4 model4 = glm::mat4(1.0f);
-         model4 = glm::translate(model4, glm::vec3(0.0f, -3.0f, 0.0f));
+         model4 = glm::translate(model4, glm::vec3(0.0f, -5.0f, 0.0f));
          model4 = glm::scale(model4, glm::vec3(1.0f, 1.0f, 1.0f));
          _planetShader.setMat4("model", model4);
          _planet.Draw(_planetShader);

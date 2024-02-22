@@ -181,6 +181,7 @@ void Window::Init(int  width, int height)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, true);    
+    glfwWindowHint(GLFW_SAMPLES, 4);
     // Resolution and window size
     _monitor = glfwGetPrimaryMonitor();
     _mode = glfwGetVideoMode(_monitor);
