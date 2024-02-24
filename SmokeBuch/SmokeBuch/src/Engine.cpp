@@ -193,22 +193,35 @@ void Engine::Run()
              1.0f, -1.0f,  1.0f
         };
 
+        float Crosshairvertices[] = {
+             // Positions           // Texture Coordinates
+            -0.5f, -0.5f, 0.0f,    0.0f, 0.0f,
+             0.5f, -0.5f, 0.0f,    1.0f, 0.0f,
+             0.5f,  0.5f, 0.0f,    1.0f, 1.0f,
+            -0.5f,  0.5f, 0.0f,    0.0f, 1.0f
+        };
+        unsigned int Crosshairindices[] = {  // note that we start from 0!
+            0, 1, 2,   // first triangle
+            2, 3, 0    // second triangle
+        };
+
         stbi_set_flip_vertically_on_load(false);
         unsigned int Cubemap = loadCubemap(SkyboxFaces);
         stbi_set_flip_vertically_on_load(true);
 
-    Shader Cube("res/shaders/Basic.vert", "res/shaders/Basic.frag");
-    Shader Light("res/shaders/LightSource.vert", "res/shaders/LightSource.frag");
-    Shader CubeMap("res/shaders/CubeMap.vert", "res/shaders/CubeMap.frag");
-    Shader _BPshader("res/shaders/Model.vert", "res/shaders/Model.frag","res/shaders/Model.geom");
-    Shader _text("res/shaders/Text.vert", "res/shaders/Text.frag");
-    Shader _asteroidsShader("res/shaders/asteroids.vert", "res/shaders/asteroids.frag");
-    Shader _planetShader("res/shaders/planet.vert", "res/shaders/planet.frag");
+        Shader Cube("res/shaders/Basic.vert", "res/shaders/Basic.frag");
+        Shader Light("res/shaders/LightSource.vert", "res/shaders/LightSource.frag");
+        Shader CubeMap("res/shaders/CubeMap.vert", "res/shaders/CubeMap.frag");
+        Shader _BPshader("res/shaders/Model.vert", "res/shaders/Model.frag","res/shaders/Model.geom");
+        Shader _text("res/shaders/Text.vert", "res/shaders/Text.frag");
+        Shader _Crosshair("res/shaders/Crosshair.vert", "res/shaders/Crosshair.frag");
+        Shader _asteroidsShader("res/shaders/asteroids.vert", "res/shaders/asteroids.frag");
+        Shader _planetShader("res/shaders/planet.vert", "res/shaders/planet.frag");
 
 
-    Model _BPmodel("res/models/backpack/backpack.obj");
-    Model _asteroids("res/models/asteroid/rock.obj");
-    Model _planet("res/models/planet/planet.obj");
+        Model _BPmodel("res/models/backpack/backpack.obj");
+        Model _asteroids("res/models/asteroid/rock.obj");
+        Model _planet("res/models/planet/planet.obj");
 
         // FreeType
         // --------
@@ -296,11 +309,32 @@ void Engine::Run()
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
 
+        unsigned int CrossVAO, CrossVBO, CrossEBO;
+        glGenVertexArrays(1, &CrossVAO);
+        glGenBuffers(1, &CrossVBO);
+        glGenBuffers(1, &CrossEBO);
+        glBindVertexArray(CrossVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, CrossVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(Crosshairvertices), Crosshairvertices, GL_STATIC_DRAW);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, CrossEBO);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(Crosshairindices), Crosshairindices, GL_STATIC_DRAW);
+
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+        glEnableVertexAttribArray(1);
+        //glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+       // glEnableVertexAttribArray(2);
+
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+
         
-        unsigned int texture0, texture1, texture2;
+        unsigned int texture0, texture1, texture2, CrossImage;
         texture0 = loadTexture("res/textures/angel.jpg");
         texture1 = loadTexture("res/textures/container2_specular.png");
         texture2 = loadTexture("res/textures/matrix.jpg");
+        CrossImage = loadTexture("res/textures/ui/crosshair.png");
 
         unsigned int amount = 50000;
         glm::mat4* modelMatrices;
@@ -383,7 +417,6 @@ void Engine::Run()
         //glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
         glEnableVertexAttribArray(0);
-        // texture coord attribute
         glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
         glEnableVertexAttribArray(1);
         glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
@@ -393,9 +426,7 @@ void Engine::Run()
         unsigned int lightVAO;
         glGenVertexArrays(1, &lightVAO);
         glBindVertexArray(lightVAO);
-        // we only need to bind to the VBO, the container's VBO's data already contains the data.
         glBindBuffer(GL_ARRAY_BUFFER, VBO);
-        // set the vertex attribute 
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
         glEnableVertexAttribArray(0);
 
@@ -408,7 +439,8 @@ void Engine::Run()
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 
-
+        
+        
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, texture0);
@@ -593,6 +625,7 @@ void Engine::Run()
          //asteroids
 
 
+
          
          //text rendering
          glEnable(GL_CULL_FACE);
@@ -600,8 +633,8 @@ void Engine::Run()
          glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
          glDisable(GL_DEPTH_TEST);
          _text.Use();
-         projection = glm::ortho(0.0f, static_cast<float>(800.0f), 0.0f, static_cast<float>(600.0f));
-         glUniformMatrix4fv(glGetUniformLocation(_text.ID, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+         glm::mat4 UIprojection = glm::ortho(0.0f, static_cast<float>(800.0f), 0.0f, static_cast<float>(600.0f));
+         _text.setMat4("projection", UIprojection);
 
          crntTime = glfwGetTime();
          timeDiff = crntTime - prevTime;
@@ -613,20 +646,32 @@ void Engine::Run()
              prevTime = crntTime;
              counter = 0;
          }
-         RenderText(_text, "suck deez nuts", 650.0f, 570.0f, 0.5f, glm::vec3(0.0f, 0.0f, 0.0f));
+         RenderText(_text, "OpenGL project", 650.0f, 570.0f, 0.5f, glm::vec3(0.0f, 0.0f, 0.0f));
+
+         
+         glActiveTexture(GL_TEXTURE0);
+         glBindTexture(GL_TEXTURE_2D, CrossImage);
+         
+         _Crosshair.Use();
+         _Crosshair.setMat4("projection", UIprojection);
+         _Crosshair.setInt("texture1", 0);
+         glBindVertexArray(CrossVAO);
+         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
          glEnable(GL_DEPTH_TEST);
          glDisable(GL_CULL_FACE);
          //text rendering
 
-		
+        
+         
 
 
-		if (Input::KeyPressed(GLFW_KEY_F))
+		if (Input::KeyPressed(GAB_KEY_F))
 		{
 			Window::ToggleFullscreen();
             Audio::PlayAudio("SELECT.wav", 0.5f);
 		}
-		if (Input::KeyPressed(GLFW_KEY_H))
+		if (Input::KeyPressed(GAB_KEY_H))
 		{
 			Window::ToggleWireframe();
             Audio::PlayAudio("RE_Beep.wav", 0.05f);
@@ -643,7 +688,7 @@ void Engine::Run()
 
         glDeleteVertexArrays(1, &VAO);
         glDeleteBuffers(1, &VBO);
-        //glDeleteBuffers(1, &EBO);
+        glDeleteBuffers(1, &EBO);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	}
     

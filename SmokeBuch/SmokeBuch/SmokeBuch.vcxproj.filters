@@ -82,6 +82,8 @@
     <None Include="res\shaders\asteroids.vert" />
     <None Include="res\shaders\planet.frag" />
     <None Include="res\shaders\planet.vert" />
+    <None Include="res\shaders\Crosshair.frag" />
+    <None Include="res\shaders\Crosshair.vert" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\textures\angel.jpg">
@@ -106,6 +108,9 @@
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="res\textures\matrix.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\textures\ui\crosshair.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

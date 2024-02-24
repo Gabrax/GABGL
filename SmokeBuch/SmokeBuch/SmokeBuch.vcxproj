@@ -185,6 +185,8 @@
     <None Include="res\shaders\asteroids.vert" />
     <None Include="res\shaders\Basic.frag" />
     <None Include="res\shaders\Basic.vert" />
+    <None Include="res\shaders\Crosshair.frag" />
+    <None Include="res\shaders\Crosshair.vert" />
     <None Include="res\shaders\CubeMap.frag" />
     <None Include="res\shaders\CubeMap.vert" />
     <None Include="res\shaders\LightSource.frag" />
@@ -204,6 +206,7 @@
     <Image Include="res\textures\container2_specular.png" />
     <Image Include="res\textures\cool.jpg" />
     <Image Include="res\textures\matrix.jpg" />
+    <Image Include="res\textures\ui\crosshair.png" />
     <Image Include="res\textures\ui\CrosshairDot.png" />
     <Image Include="res\textures\ui\CrosshairSquare.png" />
   </ItemGroup>
