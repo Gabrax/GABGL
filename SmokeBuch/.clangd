@@ -1,0 +1,21 @@
+CompileFlags:
+  Add:
+    - "-DENGINE"
+    - "-ferror-limit=0"
+    - "-std=c++20"
+
+    - "-I../vendor"
+    - "-I../vendor/Include"
+
+    - "-Wno-switch"
+    - "-Wno-writable-strings"
+    - "-Wno-sign-compare"
+    - "-Wno-deprecated-declarations"
+    - "-Wno-format-security"
+
+---
+
+If:
+  PathExclude: src/game\..*
+CompileFlags:
+  Add: "-include main.cpp"
