@@ -25,10 +25,11 @@ set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
-add_subdirectory(thirdparty/glfw-3.3.2)           # Window opener
+add_subdirectory(thirdparty/glfw-3.3.2)          # Window opener
 add_subdirectory(thirdparty/glad)                # OpenGL loader
 add_subdirectory(thirdparty/stb_image)           # Loading images
 add_subdirectory(thirdparty/stb_truetype)        # Loading TTF files
+add_subdirectory(thirdparty/assimp)           	 # Model loader
 # add_subdirectory(thirdparty/enet-1.3.17)       # Networking
 add_subdirectory(thirdparty/raudio)              # Audio
 add_subdirectory(thirdparty/glm)                 # Math
@@ -75,4 +76,4 @@ target_include_directories("${CMAKE_PROJECT_NAME}" PUBLIC "${CMAKE_CURRENT_SOURC
 # Target link libraries
 # enet not working yet on Linux for some reason
 target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw 
-    glad stb_image stb_truetype gl2d raudio imgui)
+    glad stb_image stb_truetype gl2d raudio imgui assimp)
