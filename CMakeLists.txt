@@ -29,7 +29,7 @@ add_subdirectory(thirdparty/glfw-3.3.2)          # Window opener
 add_subdirectory(thirdparty/glad)                # OpenGL loader
 add_subdirectory(thirdparty/stb_image)           # Loading images
 add_subdirectory(thirdparty/stb_truetype)        # Loading TTF files
-add_subdirectory(thirdparty/assimp)           	 # Model loader
+add_subdirectory(thirdparty/assimp)        	 # AssetLoader
 # add_subdirectory(thirdparty/enet-1.3.17)       # Networking
 add_subdirectory(thirdparty/raudio)              # Audio
 add_subdirectory(thirdparty/glm)                 # Math

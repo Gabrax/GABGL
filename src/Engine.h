@@ -11,6 +11,9 @@
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
 #include "imguiThemes.h"
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
 
 static void error_callback(int error, const char *description)
 {
@@ -20,6 +23,9 @@ static void error_callback(int error, const char *description)
 namespace Engine {
 
   inline void Run() {
+  	
+  	Assimp::Importer importer;
+  	
     glfwSetErrorCallback(error_callback);
 
     if (!glfwInit())
