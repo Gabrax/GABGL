@@ -3,6 +3,9 @@
 #include <GLFW/glfw3.h>
 #include "stb_image.h"
 #include "Shader.h"
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 namespace Cube{
 
@@ -55,7 +58,7 @@ namespace Cube{
         -0.5f,  0.5f, -0.5f,  0.0f, 1.0f
     };
 
-    unsigned int VBO, VAO;
+    inline unsigned int VBO, VAO;
 
     inline void BindandLoad(){
         glGenVertexArrays(1, &VAO);
@@ -75,9 +78,24 @@ namespace Cube{
     }
 
     inline void Render(){
-        Shader& shader = GetShader();
-        shader.Use(); 
-        glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 36);
+        // Shader& shader = GetShader();
+        // shader.Use();
+
+        // glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)(1920 * 0.75f) / (float)(1920 * 0.75f), 0.1f, 100.0f);
+        // shader.setMat4("projection", projection);
+
+        // // camera/view transformation
+        // glm::mat4 view = camera.GetViewMatrix();
+        // shader.setMat4("view", view);
+
+        // glBindVertexArray(VAO);
+
+        // glm::mat4 model = glm::mat4(1.0f); // make sure to initialize matrix to identity matrix first
+        // model = glm::translate(model, glm::vec3(0,0,0));
+        // float angle = 20.0f;
+        // model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+        // shader.setMat4("model", model);
+
+        // glDrawArrays(GL_TRIANGLES, 0, 36);
     }
 }

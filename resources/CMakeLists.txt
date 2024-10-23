@@ -2,6 +2,7 @@
 file(GLOB SHADER_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/*.frag"
     "${CMAKE_CURRENT_SOURCE_DIR}/*.vert"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.png"
 )
 
 # Copy all shader files to the destination directory

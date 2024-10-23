@@ -1,13 +1,12 @@
 #include "window.h"
 //#include "engine.h"
-#include "Camera.h"
 #include "stb_image.h"
 
 
 #include <iostream>
 #include <string>
 
-Camera _CAMERA;
+//Camera _CAMERA;
 
 namespace Window
 {
@@ -284,7 +283,7 @@ void Window::ShowFPS()
     if (timeDiff >= 1.0 / 30.0)
     {
         std::string FPS = std::to_string(static_cast<int>((1.0 / timeDiff) * counter));
-        std::string newTitle = "Tic Tac Toe - " + FPS + "FPS";
+        std::string newTitle = "OpenGL - " + FPS + "FPS";
         glfwSetWindowTitle(_window, newTitle.c_str());
         prevTime = crntTime;
         counter = 0;
@@ -389,6 +388,41 @@ void Window::processInput(GLFWwindow* window)
     {
         glfwSetWindowShouldClose(window, true);
     }
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        camera.ProcessKeyboard(FORWARD, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        camera.ProcessKeyboard(BACKWARD, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        camera.ProcessKeyboard(LEFT, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        camera.ProcessKeyboard(RIGHT, deltaTime);
+}
+void Window::mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
+{
+    float xpos = static_cast<float>(xposIn);
+    float ypos = static_cast<float>(yposIn);
+
+    if (firstMouse)
+    {
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
+
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
+
+    lastX = xpos;
+    lastY = ypos;
+
+    camera.ProcessMouseMovement(xoffset, yoffset);
+}
+
+// glfw: whenever the mouse scroll wheel scrolls, this callback is called
+// ----------------------------------------------------------------------
+void Window::scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    camera.ProcessMouseScroll(static_cast<float>(yoffset));
 }
 
 void Window::framebuffer_size_callback(GLFWwindow* window, int width, int height)

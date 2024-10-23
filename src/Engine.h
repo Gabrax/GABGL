@@ -6,37 +6,18 @@
 #include "Window.h"
 #include "Input.h"
 #include "Cube.h"
+#include "Camera.h"
 
 namespace Engine {
 
-  inline void Run() {
+  void Run();
 
-  	Window::Init((int)(1920 * 0.75f),(int)(1920 * 0.75f));
-    stbi_set_flip_vertically_on_load(true);
-
-    glEnable(GL_DEPTH_TEST);
-    
+  inline void BindandLoad(){
     Cube::BindandLoad();
+  }
 
-    while (Window::WindowIsOpen() && Window::WindowHasNotBeenForceClosed()){  
-        Window::ShowFPS();
-
-        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        Cube::Render();
-
-        if (Input::KeyPressed(KEY_F)){
-          Window::ToggleFullscreen();   
-        }
-        if (Input::KeyPressed(KEY_H)){
-			    Window::ToggleWireframe();
-        }
-
-        Window::ProcessInput();
-        Input::Update();
-        Window::SwapBuffersPollEvents();
-    }
+  inline void Render(){
+     Cube::Render();
   }
 }
 
