@@ -7,8 +7,5 @@ extern "C" {
 
 #include "Engine.h"
 
-int main(){
-
-  Engine::Run();
-}
+int main() { Engine::Run(); }
 

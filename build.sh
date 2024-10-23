@@ -16,6 +16,7 @@ if [ -f "CMakeCache.txt" ]; then
 else
     echo "Configuring the project with CMake..."
     cmake .. || { echo "CMake configuration failed"; exit 1; }
+    # cmake -G "Ninja" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ .. || { echo "CMake configuration failed"; exit 1; }
 fi
 
 echo "Building the project..."

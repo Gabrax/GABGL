@@ -8,6 +8,9 @@ set(CMAKE_CXX_STANDARD 17)
 # DELETE THE OUT FOLDER AFTER CHANGING THIS BECAUSE VISUAL STUDIO DOESN'T SEEM TO RECOGNIZE THIS CHANGE AND REBUILD!
 option(PRODUCTION_BUILD "Make this a production build" OFF)
 
+# Set this to false if u dont use clangd
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Release>:Release>")
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
@@ -77,3 +80,5 @@ target_include_directories("${CMAKE_PROJECT_NAME}" PUBLIC "${CMAKE_CURRENT_SOURC
 # enet not working yet on Linux for some reason
 target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw 
     glad stb_image stb_truetype gl2d raudio imgui assimp)
+
+add_subdirectory(resources)
