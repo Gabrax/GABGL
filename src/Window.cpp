@@ -1,12 +1,7 @@
-#include "window.h"
-//#include "engine.h"
+#include "Window.h"
 #include "stb_image.h"
-
-
 #include <iostream>
 #include <string>
-
-//Camera _CAMERA;
 
 namespace Window
 {
@@ -95,10 +90,8 @@ void Window::ToggleFullscreen()
 {
     if (_windowMode == WINDOWED){
         SetWindowMode(FULLSCREEN);
-        glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     }else{
         SetWindowMode(WINDOWED);
-        glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
     }
 }
 
@@ -131,7 +124,7 @@ void Window::CreateWindow(WindowMode windowMode)
     {
         _currentWidth = _windowedWidth;
         _currentHeight = _windowedHeight;
-        _window = glfwCreateWindow(_windowedWidth, _windowedHeight, "TicTacToe", NULL, NULL);
+        _window = glfwCreateWindow(_windowedWidth, _windowedHeight, "OpenGL", NULL, NULL);
         glfwSetWindowPos(_window, 100, 100);
         if (_mode != NULL) {
                 int xpos = (_mode->width - _currentWidth) / 2;
@@ -143,7 +136,7 @@ void Window::CreateWindow(WindowMode windowMode)
     {
         _currentWidth = _fullscreenWidth;
         _currentHeight = _fullscreenHeight;
-        _window = glfwCreateWindow(_fullscreenWidth, _fullscreenHeight, "TicTacToe", _monitor, NULL);
+        _window = glfwCreateWindow(_fullscreenWidth, _fullscreenHeight, "OpenGL", _monitor, NULL);
     }
     _windowMode = windowMode;
 }
@@ -154,6 +147,8 @@ void Window::SetWindowMode(WindowMode windowMode)
     {
         _currentWidth = _windowedWidth;
         _currentHeight = _windowedHeight;
+        _lastX = _currentWidth / 2.0f;
+        _lastY = _currentHeight / 2.0f;
         glfwSetWindowMonitor(_window, nullptr, 0, 0, _windowedWidth, _windowedHeight, 0);
         if (_mode != NULL) {
                 int xpos = (_mode->width - _currentWidth) / 2;
@@ -165,6 +160,8 @@ void Window::SetWindowMode(WindowMode windowMode)
     {
         _currentWidth = _fullscreenWidth;
         _currentHeight = _fullscreenHeight;
+        _lastX = _currentWidth / 2.0f;
+        _lastY = _currentHeight / 2.0f;
         glfwSetWindowMonitor(_window, _monitor, 0, 0, _fullscreenWidth, _fullscreenHeight, _mode->refreshRate);
     }
     _windowMode = windowMode;
@@ -184,7 +181,7 @@ void Window::SetRenderMode(RenderMode renderMode)
 }
 
 
-void Window::Init(int  width, int height)
+void Window::Init(int width, int height)
 {
 
     glfwInit();
@@ -239,8 +236,10 @@ void Window::Init(int  width, int height)
     glfwMakeContextCurrent(_window);
     glfwSwapInterval(1);
     glfwSetFramebufferSizeCallback(_window, framebuffer_size_callback);
+    glfwSetCursorPosCallback(_window, mouse_callback);
+    glfwSetScrollCallback(_window, scroll_callback);
+    glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     
-    //DisableCursor();
     glfwSetWindowFocusCallback(_window, window_focus_callback);
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
@@ -380,49 +379,46 @@ void Window::ForceCloseWindow()
     _forceCloseWindow = true;
 }
 
-
-
 void Window::processInput(GLFWwindow* window)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-    {
         glfwSetWindowShouldClose(window, true);
-    }
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        camera.ProcessKeyboard(FORWARD, deltaTime);
+        _camera.ProcessKeyboard(FORWARD, _deltaTime);
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        camera.ProcessKeyboard(BACKWARD, deltaTime);
+        _camera.ProcessKeyboard(BACKWARD, _deltaTime);
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        camera.ProcessKeyboard(LEFT, deltaTime);
+        _camera.ProcessKeyboard(LEFT, _deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        camera.ProcessKeyboard(RIGHT, deltaTime);
+        _camera.ProcessKeyboard(RIGHT, _deltaTime);
 }
+
 void Window::mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 {
     float xpos = static_cast<float>(xposIn);
     float ypos = static_cast<float>(yposIn);
 
-    if (firstMouse)
+    if (_firstMouse)
     {
-        lastX = xpos;
-        lastY = ypos;
-        firstMouse = false;
+        _lastX = xpos;
+        _lastY = ypos;
+        _firstMouse = false;
     }
 
-    float xoffset = xpos - lastX;
-    float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
+    float xoffset = xpos - _lastX;
+    float yoffset = _lastY - ypos; // reversed since y-coordinates go from bottom to top
 
-    lastX = xpos;
-    lastY = ypos;
+    _lastX = xpos;
+    _lastY = ypos;
 
-    camera.ProcessMouseMovement(xoffset, yoffset);
+    _camera.ProcessMouseMovement(xoffset, yoffset);
 }
 
 // glfw: whenever the mouse scroll wheel scrolls, this callback is called
 // ----------------------------------------------------------------------
 void Window::scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
-    camera.ProcessMouseScroll(static_cast<float>(yoffset));
+    _camera.ProcessMouseScroll(static_cast<float>(yoffset));
 }
 
 void Window::framebuffer_size_callback(GLFWwindow* window, int width, int height)
@@ -435,11 +431,11 @@ void Window::window_focus_callback(GLFWwindow* window, int focused)
     if (focused)
     {
         Window::_windowHasFocus = true;
-        //glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     }
     else
     {
         Window::_windowHasFocus = false;
-        //glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
     }
 }

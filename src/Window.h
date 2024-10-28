@@ -42,13 +42,12 @@ namespace Window
 	void window_focus_callback(GLFWwindow* window, int focused);
 
 	// camera
-    inline Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
-    inline float lastX = (1920 * 0.75f) / 2.0f;
-    inline float lastY = (1920 * 0.75f) / 2.0f;
-    inline bool firstMouse = true;
+    inline Camera _camera(glm::vec3(0.0f, 0.0f, 5.0f));
+    inline float _lastX = (1920 * 0.75f) / 2.0f;
+    inline float _lastY = (1920 * 0.75f) / 2.0f;
+    inline bool _firstMouse = true;
 
     // timing
-    inline float deltaTime = 0.0f;	// time between current frame and last frame
-    inline float lastFrame = 0.0f;
-	
+    inline float _deltaTime = 0.0f;	// time between current frame and last frame
+    inline float _lastFrame = 0.0f;
 }

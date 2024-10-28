@@ -28,16 +28,16 @@ set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
-add_subdirectory(thirdparty/glfw-3.3.2)          # Window opener
-add_subdirectory(thirdparty/glad)                # OpenGL loader
-add_subdirectory(thirdparty/stb_image)           # Loading images
-add_subdirectory(thirdparty/stb_truetype)        # Loading TTF files
-add_subdirectory(thirdparty/assimp)        	 # AssetLoader
+add_subdirectory(vendor/glfw-3.3.2)          # Window opener
+add_subdirectory(vendor/glad)                # OpenGL loader
+add_subdirectory(vendor/stb_image)           # Loading images
+add_subdirectory(vendor/stb_truetype)        # Loading TTF files
+add_subdirectory(vendor/assimp)        	 # AssetLoader
 # add_subdirectory(thirdparty/enet-1.3.17)       # Networking
-add_subdirectory(thirdparty/raudio)              # Audio
-add_subdirectory(thirdparty/glm)                 # Math
-add_subdirectory(thirdparty/imgui-docking)       # UI
-add_subdirectory(thirdparty/gl2d)                # Rendering
+add_subdirectory(vendor/raudio)              # Audio
+add_subdirectory(vendor/glm)                 # Math
+add_subdirectory(vendor/imgui-docking)       # UI
+add_subdirectory(vendor/gl2d)                # Rendering
 
 # MY_SOURCES is defined to be a list of all the source files for my game
 # DON'T ADD THE SOURCES BY HAND, they are already added with this macro
@@ -74,7 +74,7 @@ if(MSVC) # If using the VS compiler...
     # set_property(TARGET "${CMAKE_PROJECT_NAME}" PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Release>:Release>")
 endif()
 
-target_include_directories("${CMAKE_PROJECT_NAME}" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+target_include_directories("${CMAKE_PROJECT_NAME}" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/utility/")
 
 # Target link libraries
 # enet not working yet on Linux for some reason
