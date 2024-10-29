@@ -29,7 +29,6 @@ namespace Window
     inline int windowPosY = (_windowedHeight - _windowedHeight) / 2;
 }
 
-
 GLenum glCheckError_(const char* file, int line) {
     GLenum errorCode;
     while ((errorCode = glGetError()) != GL_NO_ERROR)
@@ -49,6 +48,7 @@ GLenum glCheckError_(const char* file, int line) {
     }
     return errorCode;
 }
+
 #define glCheckError() glCheckError_(__FILE__, __LINE__)
 
 void APIENTRY glDebugOutput(GLenum source, GLenum type, unsigned int id, GLenum severity, GLsizei length, const char* message, const void* userParam) {
@@ -147,8 +147,7 @@ void Window::SetWindowMode(WindowMode windowMode)
     {
         _currentWidth = _windowedWidth;
         _currentHeight = _windowedHeight;
-        _lastX = _currentWidth / 2.0f;
-        _lastY = _currentHeight / 2.0f;
+        
         glfwSetWindowMonitor(_window, nullptr, 0, 0, _windowedWidth, _windowedHeight, 0);
         if (_mode != NULL) {
                 int xpos = (_mode->width - _currentWidth) / 2;
@@ -160,8 +159,7 @@ void Window::SetWindowMode(WindowMode windowMode)
     {
         _currentWidth = _fullscreenWidth;
         _currentHeight = _fullscreenHeight;
-        _lastX = _currentWidth / 2.0f;
-        _lastY = _currentHeight / 2.0f;
+        
         glfwSetWindowMonitor(_window, _monitor, 0, 0, _fullscreenWidth, _fullscreenHeight, _mode->refreshRate);
     }
     _windowMode = windowMode;
@@ -221,13 +219,13 @@ void Window::Init(int width, int height)
     
     if (_window == NULL)
     {
-        std::cout << "Failed to create GLFW window" << std::endl;
+        std::cout << "Failed to create GLFW window" << '\n';
         Cleanup();
         return;
     }
 
     GLFWimage images[1];
-    images[0].pixels = stbi_load("Resources/icon.png", &images[0].width, &images[0].height, 0, 4); // Ensure the image is in RGBA format
+    images[0].pixels = stbi_load("resources/Opengllogo.png", &images[0].width, &images[0].height, 0, 4); // Ensure the image is in RGBA format
     if (images[0].pixels) {
         glfwSetWindowIcon(_window, 1, images);
         stbi_image_free(images[0].pixels); // Free the image memory
@@ -269,9 +267,15 @@ void Window::Init(int width, int height)
     }    
 
     
-    glClearColor(0.0f, 0.0f, 0.1f, 0.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
     
+    glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+}
+
+void Window::DeltaTime()
+{
+    float currentFrame = static_cast<float>(glfwGetTime());
+    _deltaTime = currentFrame - _lastFrame;
+    _lastFrame = currentFrame;
 }
 
 void Window::ShowFPS()
@@ -391,6 +395,10 @@ void Window::processInput(GLFWwindow* window)
         _camera.ProcessKeyboard(LEFT, _deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
         _camera.ProcessKeyboard(RIGHT, _deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+        _camera.ProcessKeyboard(UP, _deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
+        _camera.ProcessKeyboard(DOWN, _deltaTime);    
 }
 
 void Window::mouse_callback(GLFWwindow* window, double xposIn, double yposIn)

@@ -10,7 +10,6 @@ void Engine::Run(){
     glEnable(GL_DEPTH_TEST);
     
     Cube cube;
-    cube.BindandLoad();
     
     glm::vec3 cubePositions[] = {
         glm::vec3( 0.0f,  0.0f,  0.0f),
@@ -25,28 +24,21 @@ void Engine::Run(){
         glm::vec3(-1.3f,  1.0f, -1.5f)
     };
     
-
     while (Window::WindowIsOpen() && Window::WindowHasNotBeenForceClosed()){  
         Window::ShowFPS();
-
-        float currentFrame = static_cast<float>(glfwGetTime());
-        Window::_deltaTime = currentFrame - Window::_lastFrame;
-        Window::_lastFrame = currentFrame;
-
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        Window::DeltaTime();
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        cube.SetupCameraUniforms(Window::_camera, static_cast<float>(Window::width / Window::height));
 
         for(int i = 0; i < 10; i++){
             cube.Render(Window::_camera, cubePositions[i]);
         }
 
-        if (Input::KeyPressed(KEY_F)){
-          Window::ToggleFullscreen();   
-        }
-        if (Input::KeyPressed(KEY_H)){
-			Window::ToggleWireframe();
-        }
+        if (Input::KeyPressed(KEY_F)) Window::ToggleFullscreen();   
+    
+        if (Input::KeyPressed(KEY_H)) Window::ToggleWireframe();
+        
 
         Window::ProcessInput();
         Input::Update();

@@ -1,6 +1,5 @@
 #include "Input.h"
 #include "Window.h"
-#include "Camera.h"
 
 bool _keyPressed[372];
 bool _keyDown[372];
@@ -20,8 +19,6 @@ bool _rightMousePressed = false;
 bool _leftMouseDownLastFrame = false;
 bool _rightMouseDownLastFrame = false;
 bool _preventRightMouseHoldTillNextClick = false;
-
-Camera _camera;
 
 void Input::Init()
 {

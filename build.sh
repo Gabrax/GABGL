@@ -20,16 +20,17 @@ else
 fi
 
 echo "Building the project..."
-cmake --build . --config Release || { echo "Build failed"; exit 1; }
+cmake --build . || { echo "Build failed"; exit 1; }
 echo "Build completed successfully."
 
 echo "Searching for mygame.exe in the build directory..."
 if mygame_path=$(find . -type f -name "mygame.exe" -print -quit); then
     echo "Executable mygame.exe found at: $mygame_path"
     
-    # Run the executable
+    # Run the executable with the working directory set to the location of mygame.exe
     echo "Running mygame.exe..."
-    "$mygame_path" || { echo "Failed to run mygame.exe"; exit 1; }
+    exe_dir=$(dirname "$mygame_path")
+    (cd "$exe_dir" && "./$(basename "$mygame_path")") || { echo "Failed to run mygame.exe"; exit 1; }
 else
     echo "Executable mygame.exe not found."
 fi

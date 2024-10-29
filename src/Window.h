@@ -6,6 +6,8 @@
 
 namespace Window
 {
+	inline int width = 1920 * 0.75f;
+	inline int height = 1920 * 0.75f;
 	void Init(int width, int height);
 	void ShowFPS();
 	void ProcessInput();
@@ -40,11 +42,12 @@ namespace Window
 	void processInput(GLFWwindow* window);
 	void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 	void window_focus_callback(GLFWwindow* window, int focused);
+	void DeltaTime();
 
 	// camera
     inline Camera _camera(glm::vec3(0.0f, 0.0f, 5.0f));
-    inline float _lastX = (1920 * 0.75f) / 2.0f;
-    inline float _lastY = (1920 * 0.75f) / 2.0f;
+    inline float _lastX = static_cast<float>(width) / 2.0f;
+    inline float _lastY = static_cast<float>(height) / 2.0f;
     inline bool _firstMouse = true;
 
     // timing
