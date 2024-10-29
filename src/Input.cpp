@@ -1,24 +1,27 @@
 #include "Input.h"
 #include "Window.h"
 
-bool _keyPressed[372];
-bool _keyDown[372];
-bool _keyDownLastFrame[372];
-double _mouseX = 0;
-double _mouseY = 0;
-double _mouseOffsetX = 0;
-double _mouseOffsetY = 0;
-int _mouseWheelValue = 0;
-int _sensitivity = 100;
-bool _mouseWheelUp = false;
-bool _mouseWheelDown = false;
-bool _leftMouseDown = false;
-bool _rightMouseDown = false;
-bool _leftMousePressed = false;
-bool _rightMousePressed = false;
-bool _leftMouseDownLastFrame = false;
-bool _rightMouseDownLastFrame = false;
-bool _preventRightMouseHoldTillNextClick = false;
+namespace Input
+{
+    bool _keyPressed[372];
+    bool _keyDown[372];
+    bool _keyDownLastFrame[372];
+    double _mouseX = 0;
+    double _mouseY = 0;
+    double _mouseOffsetX = 0;
+    double _mouseOffsetY = 0;
+    int _mouseWheelValue = 0;
+    int _sensitivity = 100;
+    bool _mouseWheelUp = false;
+    bool _mouseWheelDown = false;
+    bool _leftMouseDown = false;
+    bool _rightMouseDown = false;
+    bool _leftMousePressed = false;
+    bool _rightMousePressed = false;
+    bool _leftMouseDownLastFrame = false;
+    bool _rightMouseDownLastFrame = false;
+    bool _preventRightMouseHoldTillNextClick = false;
+}
 
 void Input::Init()
 {
@@ -33,7 +36,6 @@ void Input::Init()
 
 void Input::Update()
 {
-
     GLFWwindow* window = Window::GetWindowPtr();
 
     // Wheel

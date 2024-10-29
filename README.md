@@ -22,6 +22,7 @@ sh build.sh
 - stb_truetype
 - Assimp
 - ENET
+- [glText](https://github.com/vallentin/glText)
 
 ## 💬 IMPORTANT!
   To ship the game: 

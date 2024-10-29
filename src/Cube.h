@@ -51,15 +51,15 @@ struct Cube{
     }
 
     inline void Render(Camera& camera, const glm::vec3& position, const glm::vec3& scale = glm::vec3(1.0f)){
-    glm::mat4 model = glm::mat4(1.0f); 
-    model = glm::translate(model, position);
-    model = glm::scale(model, scale);  
-    float angle = 20.0f * glfwGetTime();
-    model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
-    _shader.setMat4("model", model);
+        glm::mat4 model = glm::mat4(1.0f); 
+        model = glm::translate(model, position);
+        model = glm::scale(model, scale);  
+        float angle = 20.0f * glfwGetTime();
+        model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+        _shader.setMat4("model", model);
 
-    glDrawArrays(GL_TRIANGLES, 0, 36);
-}
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+    }
 
 private:
 
