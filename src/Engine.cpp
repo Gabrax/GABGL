@@ -1,4 +1,5 @@
 #include "Engine.h"
+#include "LoadModel.h"
 #include "Cube.h"
 #define GLT_IMPLEMENTATION
 #include "gltext.h"
@@ -11,9 +12,9 @@ void Engine::Run(){
     stbi_set_flip_vertically_on_load(true);
 
     glEnable(GL_DEPTH_TEST);
-    //glEnable(GL_CULL_FACE);
     
     Cube cube;
+    LoadModel model("resources/backpack/backpack.obj");
     
     glm::vec3 cubePositions[] = {
         glm::vec3( 0.0f,  0.0f,  0.0f),
@@ -31,7 +32,10 @@ void Engine::Run(){
     gltInit();
 
     GLTtext *text1 = gltCreateText();
-    gltSetText(text1, "CamPos: (0.0, 0.0, 0.0)"); 
+    gltSetText(text1, "CamPos: (0.0, 0.0, 0.0)");
+
+    GLTtext *text2 = gltCreateText();
+    gltSetText(text2, "CamRot: (0.0, 0.0)");  
     
     while (Window::WindowIsOpen() && Window::WindowHasNotBeenForceClosed()){  
         Window::ShowFPS();
@@ -39,21 +43,30 @@ void Engine::Run(){
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         cube.SetupCameraUniforms(Window::_camera, static_cast<float>(Window::width / Window::height));
+        model.SetupCameraUniforms(Window::_camera, static_cast<float>(Window::width / Window::height));
 
         for(int i = 0; i < 10; i++){
             cube.Render(Window::_camera, cubePositions[i]);
         }
+        model.Render(Window::_camera, glm::vec3(0.0f,2.0f,0.0f),glm::vec3(0.5f));
 
-        // Update the camera position text
         glm::vec3 cameraPosition = Window::_camera.Position;  
-        std::ostringstream oss;
-        oss << "CamPos: (" 
-            << std::fixed << std::setprecision(2) 
+        std::ostringstream ossPos;
+        ossPos << "CamPos: ("
+            << std::fixed << std::setprecision(2)
             << cameraPosition.x << ", "
             << cameraPosition.y << ", "
             << cameraPosition.z << ")";
+        gltSetText(text1, ossPos.str().c_str());  
 
-        gltSetText(text1, oss.str().c_str());  
+        float cameraPitch = Window::_camera.Pitch;
+        float cameraYaw = Window::_camera.Yaw;
+        std::ostringstream ossRot;
+        ossRot << "CamRot: ("
+            << std::fixed << std::setprecision(2)
+            << cameraPitch << ", "
+            << cameraYaw << ")";
+        gltSetText(text2, ossRot.str().c_str());  
 
         glDepthMask(GL_FALSE);
             glEnable(GL_BLEND);
@@ -62,7 +75,8 @@ void Engine::Run(){
                 // Draw text
                 gltBeginDraw();
                     gltColor(1.0f, 1.0f, 1.0f, 1.0f);
-                    gltDrawText2D(text1, 0.0f, 0.0f, 2.0f); 
+                    gltDrawText2D(text1, 0.0f, 0.0f, 2.0f);
+                    gltDrawText2D(text2, 0.0f, 40.0f, 2.0f);  
                 gltEndDraw();
 
             // Disable blending for 3D rendering

@@ -1,4 +1,5 @@
 #pragma once
+
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
@@ -6,9 +7,10 @@
 #include <glm/gtc/type_ptr.hpp>
 #include "Shader.h"
 #include "Texture.h"
+#include "Window.h"
 
 struct Cube{
-    Cube() : _shader("resources/camera.vert","resources/camera.frag") {
+    Cube() : _shader("resources/model.vert","resources/model.frag") {
         BindandLoad();
     }
 
@@ -54,7 +56,7 @@ struct Cube{
         glm::mat4 model = glm::mat4(1.0f); 
         model = glm::translate(model, position);
         model = glm::scale(model, scale);  
-        float angle = 20.0f * glfwGetTime();
+        float angle = 20.0f * (glfwGetTime() * 5.0f);
         model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
         _shader.setMat4("model", model);
 

@@ -1,7 +1,7 @@
 #pragma once 
 
 #include <iostream>
-#include <gl2d/gl2d.h>
+//#include <gl2d/gl2d.h>
 
 #include "Window.h"
 #include "Input.h"
