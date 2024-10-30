@@ -10,7 +10,7 @@
 #include "Window.h"
 
 struct Cube{
-    Cube() : _shader("resources/model.vert","resources/model.frag") {
+    Cube() : _shader("resources/camera.vert","resources/camera.frag") {
         BindandLoad();
     }
 
@@ -36,7 +36,7 @@ struct Cube{
         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
         glEnableVertexAttribArray(1);
 
-        _texture = loadTexture("resources/awesomeface.png");
+        _texture = loadTexture("resources/diamond.jpg");
     }
 
     inline void SetupCameraUniforms(Camera& camera, float aspectRatio){

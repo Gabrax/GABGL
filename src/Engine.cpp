@@ -43,11 +43,11 @@ void Engine::Run(){
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         cube.SetupCameraUniforms(Window::_camera, static_cast<float>(Window::width / Window::height));
-        model.SetupCameraUniforms(Window::_camera, static_cast<float>(Window::width / Window::height));
 
         for(int i = 0; i < 10; i++){
             cube.Render(Window::_camera, cubePositions[i]);
         }
+        model.SetupCameraUniforms(Window::_camera, static_cast<float>(Window::width / Window::height));
         model.Render(Window::_camera, glm::vec3(0.0f,2.0f,0.0f),glm::vec3(0.5f));
 
         glm::vec3 cameraPosition = Window::_camera.Position;  
