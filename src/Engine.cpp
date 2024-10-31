@@ -13,11 +13,12 @@ void Engine::Run(){
     stbi_set_flip_vertically_on_load(true);
 
     glEnable(GL_DEPTH_TEST);
-    
+    glEnable(GL_CULL_FACE);
+    glFrontFace(GL_CW); 
+
     Cube cube;
     LoadModel model("resources/backpack/backpack.obj");
     Skybox sky;
-    
     
     glm::vec3 cubePositions[] = {
         glm::vec3( 0.0f,  0.0f,  0.0f),
@@ -45,13 +46,21 @@ void Engine::Run(){
         Window::DeltaTime();
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        cube.SetupCameraUniforms(Window::_camera, static_cast<float>(Window::width / Window::height));
+        glEnable(GL_CULL_FACE);
+            glCullFace(GL_BACK);     
 
-        for(int i = 0; i < 10; i++){
-            cube.Render(Window::_camera, cubePositions[i]);
-        }
-        model.SetupCameraUniforms(Window::_camera, static_cast<float>(Window::width / Window::height));
-        model.Render(Window::_camera, glm::vec3(0.0f,2.0f,0.0f),glm::vec3(0.5f));
+            cube.SetupCameraUniforms(Window::_camera, static_cast<float>(Window::width / Window::height));
+            for(int i = 0; i < 10; i++){
+                cube.Render(Window::_camera, cubePositions[i]);
+            }
+
+            glCullFace(GL_FRONT);     
+
+            model.SetupCameraUniforms(Window::_camera, static_cast<float>(Window::width / Window::height));
+            model.Render(Window::_camera, glm::vec3(0.0f,2.0f,0.0f),glm::vec3(0.5f));
+
+        glDisable(GL_CULL_FACE);
+
         sky.Render(Window::_camera, static_cast<float>(Window::width / Window::height));
 
         glm::vec3 cameraPosition = Window::_camera.Position;  
