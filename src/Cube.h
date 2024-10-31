@@ -11,7 +11,7 @@
 
 struct Cube{
     Cube() : _shader("resources/camera.vert","resources/camera.frag") {
-        BindandLoad();
+        Bake();
     }
 
     ~Cube(){
@@ -20,7 +20,7 @@ struct Cube{
         glDeleteTextures(1, &_texture);
     }
 
-    inline void BindandLoad(){
+    inline void Bake(){
         glGenVertexArrays(1, &_VAO);
         glGenBuffers(1, &_VBO);
 

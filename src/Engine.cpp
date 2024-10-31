@@ -1,6 +1,7 @@
 #include "Engine.h"
 #include "LoadModel.h"
 #include "Cube.h"
+#include "Skybox.h"
 #define GLT_IMPLEMENTATION
 #include "gltext.h"
 #include <sstream>  
@@ -15,6 +16,8 @@ void Engine::Run(){
     
     Cube cube;
     LoadModel model("resources/backpack/backpack.obj");
+    Skybox sky;
+    
     
     glm::vec3 cubePositions[] = {
         glm::vec3( 0.0f,  0.0f,  0.0f),
@@ -49,6 +52,7 @@ void Engine::Run(){
         }
         model.SetupCameraUniforms(Window::_camera, static_cast<float>(Window::width / Window::height));
         model.Render(Window::_camera, glm::vec3(0.0f,2.0f,0.0f),glm::vec3(0.5f));
+        sky.Render(Window::_camera, static_cast<float>(Window::width / Window::height));
 
         glm::vec3 cameraPosition = Window::_camera.Position;  
         std::ostringstream ossPos;
