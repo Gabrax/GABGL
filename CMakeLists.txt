@@ -81,4 +81,4 @@ endif()
 target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw 
     glad stb_image stb_truetype gl2d raudio imgui assimp)
 
-add_subdirectory(resources)
+#add_subdirectory(resources)

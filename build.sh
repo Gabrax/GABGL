@@ -1,36 +1,46 @@
 #!/bin/bash
 
+
+RED="\e[31m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+RESET="\e[0m"
+
 BUILD_DIR="build"
+ROOT_DIR=$(pwd)
 
 if [ -d "$BUILD_DIR" ]; then
-    echo "Build directory exists."
+    echo -e "${GREEN}Build directory exists.${RESET}"
 else
-    echo "Build directory does not exist. Creating it now..."
+    echo -e "${YELLOW}Build directory does not exist. Creating it now...${RESET}"
     mkdir -p "$BUILD_DIR"
 fi
 
-cd "$BUILD_DIR" || { echo "Failed to navigate to build directory"; exit 1; }
+cd "$BUILD_DIR" || { echo -e "${RED}Failed to navigate to build directory${RESET}"; exit 1; }
 
 if [ -f "CMakeCache.txt" ]; then
-    echo "Project is already configured."
+    echo -e "${GREEN}Project is already configured.${RESET}"
 else
-    echo "Configuring the project with CMake..."
-    cmake .. || { echo "CMake configuration failed"; exit 1; }
-    # cmake -G "Ninja" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ .. || { echo "CMake configuration failed"; exit 1; }
+    echo -e "${YELLOW}Configuring the project with CMake...${RESET}"
+    cmake .. || { echo -e "${RED}CMake configuration failed${RESET}"; exit 1; }
+    # cmake -G "Ninja" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ .. || { echo -e "${RED}CMake configuration failed${RESET}"; exit 1; }
 fi
 
-echo "Building the project..."
-cmake --build . || { echo "Build failed"; exit 1; }
-echo "Build completed successfully."
+echo -e "${YELLOW}Building the project...${RESET}"
+cmake --build . || { echo -e "${RED}Build failed${RESET}"; exit 1; }
+echo -e "${GREEN}Build completed successfully.${RESET}"
 
-echo "Searching for mygame.exe in the build directory..."
+echo -e "${YELLOW}Searching for mygame.exe in the build directory...${RESET}"
 if mygame_path=$(find . -type f -name "mygame.exe" -print -quit); then
-    echo "Executable mygame.exe found at: $mygame_path"
+    echo -e "${GREEN}Executable mygame.exe found at: $mygame_path${RESET}"
     
-    # Run the executable with the working directory set to the location of mygame.exe
-    echo "Running mygame.exe..."
-    exe_dir=$(dirname "$mygame_path")
-    (cd "$exe_dir" && "./$(basename "$mygame_path")") || { echo "Failed to run mygame.exe"; exit 1; }
+    # Move the executable to the root directory
+    echo -e "${YELLOW}Moving mygame.exe to the root directory...${RESET}"
+    mv "$mygame_path" "$ROOT_DIR" || { echo -e "${RED}Failed to move mygame.exe${RESET}"; exit 1; }
+
+    # Run the executable from the root directory
+    echo -e "${YELLOW}Running mygame.exe from the root directory...${RESET}"
+    (cd "$ROOT_DIR" && "./mygame.exe") || { echo -e "${RED}Failed to run mygame.exe${RESET}"; exit 1; }
 else
-    echo "Executable mygame.exe not found."
+    echo -e "${RED}Executable mygame.exe not found.${RESET}"
 fi
