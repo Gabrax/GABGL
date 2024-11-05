@@ -2,6 +2,7 @@
 #include "LoadModel.h"
 #include "Cube.h"
 #include "Skybox.h"
+#include "Util.h"
 #define GLT_IMPLEMENTATION
 #include "gltext.h"
 #include <sstream>  
@@ -16,6 +17,7 @@ void Engine::Run(){
     glEnable(GL_CULL_FACE);
     glFrontFace(GL_CW); 
 
+    Util::BakeShaders();
     Cube cube;
     LoadModel model("resources/backpack/backpack.obj");
     Skybox sky;
@@ -99,6 +101,8 @@ void Engine::Run(){
         if (Input::KeyPressed(KEY_F)) Window::ToggleFullscreen();   
     
         if (Input::KeyPressed(KEY_H)) Window::ToggleWireframe();
+
+        if (Input::KeyPressed(KEY_R)) Util::HotReloadShaders();
         
 
         Window::ProcessInput();

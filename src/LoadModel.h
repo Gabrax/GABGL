@@ -5,12 +5,12 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include "Shader.h"
 #include "Model.h"
 #include "Window.h"
+#include "Util.h"
 
 struct LoadModel{
-    LoadModel(const char* modelpath) : _shader("resources/model.vert","resources/model.frag"),loadmodel(modelpath) {}
+    LoadModel(const char* modelpath) : loadmodel(modelpath) {}
 
     ~LoadModel() = default;
 
@@ -35,6 +35,6 @@ struct LoadModel{
     }
 
 private:
-    Shader _shader;
+    Shader& _shader = g_shaders.model;
     Model loadmodel;
 };

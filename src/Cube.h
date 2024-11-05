@@ -5,12 +5,12 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include "Shader.h"
-#include "Texture.h"
+#include "LoadTexture.h"
 #include "Window.h"
+#include "Util.h"
 
 struct Cube{
-    Cube() : _shader("resources/camera.vert","resources/camera.frag") {
+    Cube(){
         Bake();
     }
 
@@ -67,7 +67,7 @@ private:
 
     unsigned int _VBO, _VAO;
     unsigned int _texture;
-    Shader _shader;
+    Shader& _shader = g_shaders.cube;
 
     float vertices[180] = {
         // Back face

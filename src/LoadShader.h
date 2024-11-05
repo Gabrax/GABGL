@@ -7,14 +7,11 @@
 #include <sstream>
 #include <iostream>
 
-class Shader
-{
+class Shader {
 public:
     unsigned int ID;
-    // constructor generates the shader on the fly
-    // ------------------------------------------------------------------------
-    Shader(const char* vertexPath, const char* fragmentPath, const char* geometryPath = nullptr)
-    {
+
+    inline void Load(const char* vertexPath, const char* fragmentPath, const char* geometryPath = nullptr){
         // 1. retrieve the vertex/fragment source code from filePath
         std::string vertexCode;
         std::string fragmentCode;
@@ -92,7 +89,6 @@ public:
         glDeleteShader(fragment);
         if (geometryPath != nullptr)
             glDeleteShader(geometry);
-
     }
     // activate the shader
     // ------------------------------------------------------------------------

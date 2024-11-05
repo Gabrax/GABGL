@@ -5,14 +5,13 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include "Shader.h"
 #include "stb_image.h"
 #include "Window.h"
 #include <vector>
 #include <string>
 
 struct Skybox{
-    Skybox() : _shader("resources/skybox.vert","resources/skybox.frag") {
+    Skybox() {
         Bake();
     }
 
@@ -65,7 +64,7 @@ private:
 
     unsigned int _VBO, _VAO;
     unsigned int _texture;
-    Shader _shader;
+    Shader& _shader = g_shaders.skybox;
     // loads a cubemap texture from 6 individual texture faces
     // order:
     // +X (right)
