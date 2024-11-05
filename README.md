@@ -4,8 +4,12 @@
 
 Easy startup for OpenGL crossplatform development with C++
 
-To build and run project, use the build.sh in root directory
+To build and run project, use the build script in root directory
 
+- Only Windows
+```bash
+./build.bat
+```
 - Windows & Linux & MacOS
 ```bash
 sh build.sh
