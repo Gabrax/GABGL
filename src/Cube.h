@@ -10,8 +10,9 @@
 #include "Util.h"
 
 struct Cube{
-    Cube(){
+    Cube(const char* texturepath){
         Bake();
+        _texture = loadTexture(texturepath);
     }
 
     ~Cube(){
@@ -35,8 +36,6 @@ struct Cube{
         // texture coord attribute
         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
         glEnableVertexAttribArray(1);
-
-        _texture = loadTexture("resources/diamond.jpg");
     }
 
     inline void SetupCameraUniforms(Camera& camera, float aspectRatio){

@@ -5,8 +5,11 @@
 #include "Util.h"
 #define GLT_IMPLEMENTATION
 #include "gltext.h"
+#include "raudio.h"
 #include <sstream>  
 #include <iomanip>
+#include "DAE/Animator.h"
+#include "DAE/DAEloader.h"
 
 void Engine::Run(){
 
@@ -15,31 +18,25 @@ void Engine::Run(){
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
-    glFrontFace(GL_CW); 
+    glFrontFace(GL_CW);
 
     Util::BakeShaders();
-    Cube cube;
-    LoadModel model("resources/backpack/backpack.obj");
+    Cube cube("res/diamond.jpg");
+    LoadOBJ model("res/map/obj/objHouse.obj");
+    LoadDAE guy("res/guy/guy.dae");
     Skybox sky;
-    
-    glm::vec3 cubePositions[] = {
-        glm::vec3( 0.0f,  0.0f,  0.0f),
-        glm::vec3( 2.0f,  5.0f, -15.0f),
-        glm::vec3(-1.5f, -2.2f, -2.5f),
-        glm::vec3(-3.8f, -2.0f, -12.3f),
-        glm::vec3( 2.4f, -0.4f, -3.5f),
-        glm::vec3(-1.7f,  3.0f, -7.5f),
-        glm::vec3( 1.3f, -2.0f, -2.5f),
-        glm::vec3( 1.5f,  2.0f, -2.5f),
-        glm::vec3( 1.5f,  0.2f, -1.5f),
-        glm::vec3(-1.3f,  1.0f, -1.5f)
-    };
+
+    InitAudioDevice();
+    Sound fullscreen = LoadSound("res/audio/select1.wav");
+    SetSoundVolume(fullscreen, 0.5f);
+    Sound switchmode = LoadSound("res/audio/select2.wav");
+    SetSoundVolume(switchmode, 0.5f);
+    Sound hotload = LoadSound("res/audio/select3.wav");
+    SetSoundVolume(hotload, 0.5f); 
 
     gltInit();
-
     GLTtext *text1 = gltCreateText();
     gltSetText(text1, "CamPos: (0.0, 0.0, 0.0)");
-
     GLTtext *text2 = gltCreateText();
     gltSetText(text2, "CamRot: (0.0, 0.0)");  
     
@@ -49,17 +46,18 @@ void Engine::Run(){
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glEnable(GL_CULL_FACE);
+
             glCullFace(GL_BACK);     
 
             cube.SetupCameraUniforms(Window::_camera, static_cast<float>(Window::width / Window::height));
-            for(int i = 0; i < 10; i++){
-                cube.Render(Window::_camera, cubePositions[i]);
-            }
-
+            cube.Render(Window::_camera, glm::vec3(-2.0f,3.0f,8.0f));
+            
             glCullFace(GL_FRONT);     
 
             model.SetupCameraUniforms(Window::_camera, static_cast<float>(Window::width / Window::height));
-            model.Render(Window::_camera, glm::vec3(0.0f,2.0f,0.0f),glm::vec3(0.5f));
+            model.Render(Window::_camera, glm::vec3(0.0f,0.0f,0.0f),glm::vec3(50.0f));
+            guy.SetupCameraUniforms(Window::_camera, static_cast<float>(Window::width / Window::height),Window::_deltaTime);
+            guy.Render(Window::_camera, glm::vec3(0.0f,0.50f,3.0f),glm::vec3(1.0f));
 
         glDisable(GL_CULL_FACE);
 
@@ -87,7 +85,6 @@ void Engine::Run(){
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-                // Draw text
                 gltBeginDraw();
                     gltColor(1.0f, 1.0f, 1.0f, 1.0f);
                     gltDrawText2D(text1, 0.0f, 0.0f, 2.0f);
@@ -98,11 +95,20 @@ void Engine::Run(){
             glDisable(GL_BLEND);
         glDepthMask(GL_TRUE);
 
-        if (Input::KeyPressed(KEY_F)) Window::ToggleFullscreen();   
+        if (Input::KeyPressed(KEY_F)){
+            Window::ToggleFullscreen();
+            PlaySound(fullscreen);  
+        }    
     
-        if (Input::KeyPressed(KEY_H)) Window::ToggleWireframe();
+        if (Input::KeyPressed(KEY_H)){
+            Window::ToggleWireframe();
+            PlaySound(switchmode);
+        } 
 
-        if (Input::KeyPressed(KEY_R)) Util::HotReloadShaders();
+        if (Input::KeyPressed(KEY_R)){
+            Util::HotReloadShaders();
+            PlaySound(hotload);
+        } 
         
 
         Window::ProcessInput();

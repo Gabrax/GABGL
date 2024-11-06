@@ -192,8 +192,13 @@ void Window::Init(int width, int height)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    #ifdef __APPLE__
+	    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    #endif
+
     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, true);    
-    glfwWindowHint(GLFW_SAMPLES, 4);
+    glfwWindowHint(GLFW_SAMPLES, 8);
 
 
     // Resolution and window size
@@ -225,7 +230,7 @@ void Window::Init(int width, int height)
     }
 
     GLFWimage images[1];
-    images[0].pixels = stbi_load("resources/Opengllogo.png", &images[0].width, &images[0].height, 0, 4); // Ensure the image is in RGBA format
+    images[0].pixels = stbi_load("res/Opengllogo.png", &images[0].width, &images[0].height, 0, 4); // Ensure the image is in RGBA format
     if (images[0].pixels) {
         glfwSetWindowIcon(_window, 1, images);
         stbi_image_free(images[0].pixels); // Free the image memory
@@ -256,7 +261,7 @@ void Window::Init(int width, int height)
     glGetIntegerv(GL_CONTEXT_FLAGS, &flags);
     if (flags & GL_CONTEXT_FLAG_DEBUG_BIT)
     {
-        std::cout << "Debug GL context enabled\n";
+        std::cout << "Debug GL context enabled\n\n";
         glEnable(GL_DEBUG_OUTPUT);
         glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS); // makes sure errors are displayed synchronously
         glDebugMessageCallback(glDebugOutput, nullptr);

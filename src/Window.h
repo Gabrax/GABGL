@@ -45,7 +45,7 @@ namespace Window
 	void DeltaTime();
 
 	// camera
-    inline Camera _camera(glm::vec3(0.0f, 0.0f, 5.0f));
+    inline Camera _camera(glm::vec3(15.61f, 3.98f, 16.21f));
     inline float _lastX = static_cast<float>(width) / 2.0f;
     inline float _lastY = static_cast<float>(height) / 2.0f;
     inline bool _firstMouse = true;

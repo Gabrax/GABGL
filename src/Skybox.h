@@ -32,12 +32,12 @@ struct Skybox{
 
         std::vector<std::string> faces
         {
-            "resources/skybox/right.jpg",
-            "resources/skybox/left.jpg",
-            "resources/skybox/top.jpg",
-            "resources/skybox/bottom.jpg",
-            "resources/skybox/front.jpg",
-            "resources/skybox/back.jpg"
+            "res/skybox/NightSky_Right.png",
+            "res/skybox/NightSky_Left.png",
+            "res/skybox/NightSky_Top.png",
+            "res/skybox/NightSky_Bottom.png",
+            "res/skybox/NightSky_Front.png",
+            "res/skybox/NightSky_Back.png"
         };
         stbi_set_flip_vertically_on_load(false);
         _texture = loadCubemap(faces);
@@ -74,35 +74,34 @@ private:
     // +Z (front) 
     // -Z (back)
     // -------------------------------------------------------
-    unsigned int loadCubemap(std::vector<std::string> faces)
-    {
+    unsigned int loadCubemap(std::vector<std::string> faces) {
         unsigned int textureID;
         glGenTextures(1, &textureID);
         glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
 
         int width, height, nrChannels;
-        for (unsigned int i = 0; i < faces.size(); i++)
-        {
+        for (unsigned int i = 0; i < faces.size(); i++) {
             unsigned char *data = stbi_load(faces[i].c_str(), &width, &height, &nrChannels, 0);
-            if (data)
-            {
-                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+            if (data) {
+                GLenum format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
+                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
                 stbi_image_free(data);
-            }
-            else
-            {
+            } else {
                 std::cout << "Cubemap texture failed to load at path: " << faces[i] << std::endl;
                 stbi_image_free(data);
             }
         }
-        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+        glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
 
         return textureID;
     }
+
 
     float vertices[108] = {
         // positions          

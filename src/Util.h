@@ -6,13 +6,15 @@ struct Shaders {
     Shader cube;
     Shader model;
     Shader skybox;
+    Shader animated;
 } g_shaders;
 
 namespace Util{
     inline void BakeShaders(){
-        g_shaders.cube.Load("resources/camera.vert","resources/camera.frag");
-        g_shaders.model.Load("resources/model.vert","resources/model.frag");
-        g_shaders.skybox.Load("resources/skybox.vert","resources/skybox.frag");
+        g_shaders.cube.Load("res/shaders/camera.vert","res/shaders/camera.frag");
+        g_shaders.model.Load("res/shaders/model.vert","res/shaders/model.frag");
+        g_shaders.skybox.Load("res/shaders/skybox.vert","res/shaders/skybox.frag");
+        g_shaders.animated.Load("res/shaders/anim_model.vert","res/shaders/anim_model.frag");
     }
 
     inline void HotReloadShaders(){
