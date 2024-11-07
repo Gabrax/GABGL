@@ -30,7 +30,7 @@ struct LoadOBJ{
         _shader.setFloat("light.quadratic", 0.032f);
 
         // material properties
-        _shader.setFloat("material.shininess", 32.0f);
+        _shader.setFloat("material.shininess", 5.0f);
         
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), aspectRatio, 0.1f, 100.0f);
         _shader.setMat4("projection", projection);
@@ -77,7 +77,7 @@ struct LoadDAE {
         _shader.setFloat("light.quadratic", 0.032f);
 
         // material properties
-        _shader.setFloat("material.shininess", 32.0f);
+        _shader.setFloat("material.shininess", 5.0f);
 
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), aspectRatio, 0.1f, 100.0f);
         _shader.setMat4("projection", projection);

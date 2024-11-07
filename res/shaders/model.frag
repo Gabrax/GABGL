@@ -32,11 +32,22 @@ uniform vec3 viewPos;  // Camera position
 uniform Material material;
 uniform Light light;
 
+// Gamma correction parameters
+const float gamma = 2.2;
+
+float gammaCorrection(float value) {
+    return pow(value, 1.0 / gamma);
+}
+
+vec3 gammaCorrection(vec3 value) {
+    return pow(value, vec3(1.0 / gamma));
+}
+
 void main()
 {
     // 1. Ambient lighting
     vec3 ambient = light.ambient * texture(material.diffuse, fs_in.TexCoords).rgb;
-    
+
     // 2. Normal mapping: get perturbed normal
     vec3 normal = texture(material.normalMap, fs_in.TexCoords).rgb;
     normal = normalize(normal * 2.0 - 1.0);  // Transform to range [-1, 1]
@@ -46,7 +57,7 @@ void main()
     vec3 lightDir = normalize(fs_in.TBN_FragPos * (light.position - fs_in.FragPos));
     float diff = max(dot(perturbedNormal, lightDir), 0.0);
     vec3 diffuse = light.diffuse * diff * texture(material.diffuse, fs_in.TexCoords).rgb;
-    
+
     // 4. Specular lighting (Blinn-Phong) with normal mapping
     vec3 viewDir = normalize(viewPos - fs_in.FragPos);
     vec3 halfwayDir = normalize(lightDir + viewDir);  // Blinn-Phong halfway vector
@@ -63,5 +74,10 @@ void main()
     
     // Final color computation
     vec3 result = ambient + diffuse + specular;
+
+    // Gamma correction: apply to the final color before outputting
+    result = gammaCorrection(result);  // Apply gamma correction to the final color
+
+    // Output the final color
     FragColor = vec4(result, 1.0);
 }

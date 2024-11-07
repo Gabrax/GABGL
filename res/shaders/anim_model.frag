@@ -31,6 +31,17 @@ uniform vec3 viewPos;  // Camera position
 uniform Material material;
 uniform Light light;
 
+// Gamma correction parameters
+const float gamma = 2.2;
+
+float gammaCorrection(float value) {
+    return pow(value, 1.0 / gamma);
+}
+
+vec3 gammaCorrection(vec3 value) {
+    return pow(value, vec3(1.0 / gamma));
+}
+
 void main()
 {
     // 1. Ambient lighting
@@ -62,5 +73,10 @@ void main()
     
     // Final color computation
     vec3 result = ambient + diffuse + specular;
+
+    // Apply gamma correction: convert linear result to sRGB
+    result = gammaCorrection(result);
+
+    // Output the final color
     FragColor = vec4(result, 1.0);
 }
