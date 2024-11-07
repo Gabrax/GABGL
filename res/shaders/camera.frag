@@ -29,29 +29,30 @@ uniform Light light;
 
 void main()
 {
-    // ambient
+    // 1. Ambient lighting
     vec3 ambient = light.ambient * texture(material.diffuse, TexCoords).rgb;
-  	
-    // diffuse 
+    
+    // 2. Diffuse lighting
     vec3 norm = normalize(Normal);
     vec3 lightDir = normalize(light.position - FragPos);
     float diff = max(dot(norm, lightDir), 0.0);
-    vec3 diffuse = light.diffuse * diff * texture(material.diffuse, TexCoords).rgb;  
+    vec3 diffuse = light.diffuse * diff * texture(material.diffuse, TexCoords).rgb;
     
-    // specular
+    // 3. Specular lighting (Blinn-Phong)
     vec3 viewDir = normalize(viewPos - FragPos);
-    vec3 reflectDir = reflect(-lightDir, norm);  
-    float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
-    vec3 specular = light.specular * (spec * material.specular);  
+    vec3 halfwayDir = normalize(lightDir + viewDir);  // Blinn-Phong halfway vector
+    float spec = pow(max(dot(norm, halfwayDir), 0.0), material.shininess);
+    vec3 specular = light.specular * (spec * material.specular);
 
-	// Point light logic
+    // Point light attenuation
     float distance    = length(light.position - FragPos);
     float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * (distance * distance));    
 
     ambient  *= attenuation;  
     diffuse   *= attenuation;
     specular *= attenuation; 
-        
+    
+    // Final color computation
     vec3 result = ambient + diffuse + specular;
     FragColor = vec4(result, 1.0);
 } 
