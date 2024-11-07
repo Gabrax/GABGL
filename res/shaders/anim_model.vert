@@ -17,25 +17,34 @@ const int MAX_BONE_INFLUENCE = 4;
 uniform mat4 finalBonesMatrices[MAX_BONES];
 
 out vec2 TexCoords;
+out vec3 FragPos;
+out vec3 Normal;
 
 void main()
 {
+    // Skinning transformation
     vec4 totalPosition = vec4(0.0f);
-    for(int i = 0 ; i < MAX_BONE_INFLUENCE ; i++)
+    for(int i = 0; i < MAX_BONE_INFLUENCE; i++)
     {
         if(boneIds[i] == -1) 
             continue;
-        if(boneIds[i] >=MAX_BONES) 
+        if(boneIds[i] >= MAX_BONES) 
         {
-            totalPosition = vec4(pos,1.0f);
+            totalPosition = vec4(pos, 1.0f);
             break;
         }
-        vec4 localPosition = finalBonesMatrices[boneIds[i]] * vec4(pos,1.0f);
+        vec4 localPosition = finalBonesMatrices[boneIds[i]] * vec4(pos, 1.0f);
         totalPosition += localPosition * weights[i];
-        vec3 localNormal = mat3(finalBonesMatrices[boneIds[i]]) * norm;
-   }
-	
-    mat4 viewModel = view * model;
-    gl_Position =  projection * viewModel * totalPosition;
-	TexCoords = tex;
+    }
+
+    // Calculate transformed position and normal for lighting
+    FragPos = vec3(model * totalPosition);
+    Normal = mat3(transpose(inverse(model))) * norm;  
+
+
+    // Final transformation
+    gl_Position = projection * view * model * totalPosition;
+    // Set output texture coordinates
+    TexCoords = tex;
 }
+

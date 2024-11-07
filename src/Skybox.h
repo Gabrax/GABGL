@@ -103,7 +103,7 @@ private:
     }
 
 
-    float vertices[108] = {
+    GLfloat vertices[108] = {
         // positions          
         -1.0f,  1.0f, -1.0f,
         -1.0f, -1.0f, -1.0f,

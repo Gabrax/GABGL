@@ -2,6 +2,7 @@
 #include "LoadModel.h"
 #include "Cube.h"
 #include "Skybox.h"
+#include "Light.h"
 #include "Util.h"
 #define GLT_IMPLEMENTATION
 #include "gltext.h"
@@ -22,8 +23,10 @@ void Engine::Run(){
 
     Util::BakeShaders();
     Cube cube("res/diamond.jpg");
-    LoadOBJ model("res/map/obj/objHouse.obj");
+    LoadOBJ house("res/map/objHouse.obj");
+    LoadOBJ backpack("res/backpack/backpack.obj");
     LoadDAE guy("res/guy/guy.dae");
+    Light light;
     Skybox sky;
 
     InitAudioDevice();
@@ -45,18 +48,20 @@ void Engine::Run(){
         Window::DeltaTime();
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glEnable(GL_CULL_FACE);
-
-            glCullFace(GL_BACK);     
-
-            cube.SetupCameraUniforms(Window::_camera, static_cast<float>(Window::width / Window::height));
+            cube.SetupCameraUniforms(Window::_camera, static_cast<float>(Window::width / Window::height),light.getLight());
             cube.Render(Window::_camera, glm::vec3(-2.0f,3.0f,8.0f));
-            
+        glEnable(GL_CULL_FACE);    
+
+            light.SetupCameraUniforms(Window::_camera, static_cast<float>(Window::width / Window::height));
+            light.Render(Window::_camera, glm::vec3(-2.0f,6.0f,8.0f),glm::vec3(0.5f));
+
             glCullFace(GL_FRONT);     
 
-            model.SetupCameraUniforms(Window::_camera, static_cast<float>(Window::width / Window::height));
-            model.Render(Window::_camera, glm::vec3(0.0f,0.0f,0.0f),glm::vec3(50.0f));
-            guy.SetupCameraUniforms(Window::_camera, static_cast<float>(Window::width / Window::height),Window::_deltaTime);
+            house.SetupCameraUniforms(Window::_camera, static_cast<float>(Window::width / Window::height),light.getLight());
+            house.Render(Window::_camera, glm::vec3(0.0f,0.0f,0.0f),glm::vec3(50.0f));
+            backpack.SetupCameraUniforms(Window::_camera, static_cast<float>(Window::width / Window::height),light.getLight());
+            backpack.Render(Window::_camera, glm::vec3(-2.0f,3.0f,10.0f),glm::vec3(0.25f),90.0f);
+            guy.SetupCameraUniforms(Window::_camera, static_cast<float>(Window::width / Window::height),Window::_deltaTime,light.getLight());
             guy.Render(Window::_camera, glm::vec3(0.0f,0.50f,3.0f),glm::vec3(1.0f));
 
         glDisable(GL_CULL_FACE);
