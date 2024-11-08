@@ -7,5 +7,5 @@ extern "C" {
 
 #include "Engine.h"
 
-int main() { Engine::Run(); }
+void main() { Engine::Run(); }
 

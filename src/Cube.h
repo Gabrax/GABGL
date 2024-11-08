@@ -6,13 +6,13 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include "LoadTexture.h"
-#include "Window.h"
 #include "Util.h"
 
 struct Cube{
     Cube(const char* texturepath){
         Bake();
         _texture = loadTexture(texturepath);
+        puts("Cube loaded");
     }
 
     ~Cube(){
@@ -40,10 +40,10 @@ struct Cube{
         _shader.setInt("material.diffuse", 0);
     }
 
-    inline void SetupCameraUniforms(Camera& camera, float aspectRatio, glm::vec3 lightPos){
+    inline void Render(const glm::vec3& position, const glm::vec3& scale = glm::vec3(1.0f), const glm::vec3& lightPos = glm::vec3(0.0f)){ 
         _shader.Use();
         _shader.setVec3("light.position", lightPos);
-        _shader.setVec3("viewPos", camera.Position);
+        _shader.setVec3("viewPos", this->camera.Position);
 
         // light properties
         _shader.setVec3("light.ambient", 0.2f, 0.2f, 0.2f);
@@ -56,15 +56,12 @@ struct Cube{
         // material properties
         _shader.setFloat("material.shininess", 32.0f);
 
-        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), aspectRatio, 0.1f, 100.0f);
+        glm::mat4 projection = glm::perspective(glm::radians(this->camera.Zoom), Window::_aspectRatio, 0.1f, 100.0f);
         _shader.setMat4("projection", projection);
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, _texture);
-        _shader.setMat4("view", camera.GetViewMatrix());
-    }
-
-    inline void Render(Camera& camera, const glm::vec3& position, const glm::vec3& scale = glm::vec3(1.0f)){ 
+        _shader.setMat4("view", this->camera.GetViewMatrix());
         glm::mat4 model = glm::mat4(1.0f); 
         model = glm::translate(model, position);
         model = glm::scale(model, scale);  
@@ -80,7 +77,8 @@ private:
 
     unsigned int _VBO, _VAO;
     unsigned int _texture;
-    Shader& _shader = g_shaders.cube;
+    Camera& camera = Window::_camera;
+    Shader& _shader = g_shaders.cube; 
 
     GLfloat vertices[288] = {
         -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f,

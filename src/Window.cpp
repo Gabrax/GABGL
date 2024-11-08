@@ -3,31 +3,6 @@
 #include <iostream>
 #include <string>
 
-namespace Window
-{
-    inline GLFWwindow* _window;
-    inline GLFWmonitor* _monitor;
-    inline const GLFWvidmode* _mode;
-    inline int _currentWidth = 0;
-    inline int _currentHeight = 0;
-    inline int _windowedWidth = 0;
-    inline int _windowedHeight = 0;
-    inline int _fullscreenWidth = 0;
-    inline int _fullscreenHeight = 0;
-    inline int _mouseScreenX = 0;
-    inline int _mouseScreenY = 0;
-    inline int _windowHasFocus = true;
-    inline bool _forceCloseWindow = false;
-    inline int _scrollWheelYOffset = 0;
-    inline enum WindowMode _windowMode = WINDOWED;// FULLSCREEN;
-    inline enum RenderMode _renderMode = WIREFRAME;
-    inline double prevTime = 0.0;
-    inline double crntTime = 0.0;
-    inline double timeDiff;
-    inline unsigned int counter = 0;
-    inline int windowPosX = (_windowedWidth - _windowedWidth) / 2;
-    inline int windowPosY = (_windowedHeight - _windowedHeight) / 2;
-}
 
 GLenum glCheckError_(const char* file, int line) {
     GLenum errorCode;
@@ -273,7 +248,7 @@ void Window::Init(int width, int height)
 
     
     
-    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
 void Window::DeltaTime()

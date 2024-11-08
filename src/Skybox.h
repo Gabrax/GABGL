@@ -13,6 +13,7 @@
 struct Skybox{
     Skybox() {
         Bake();
+        puts("Skybox loaded");
     }
 
     ~Skybox(){

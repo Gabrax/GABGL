@@ -6,11 +6,13 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include "LoadTexture.h"
-#include "Window.h"
 #include "Util.h"
 
 struct Light{
-    Light() { Bake(); }
+    Light() { 
+        Bake();
+        puts("Light loaded"); 
+    }
 
     ~Light(){
         glDeleteBuffers(1, &_VBO);
@@ -38,18 +40,15 @@ struct Light{
         glEnableVertexAttribArray(1);
     }
 
-    inline void SetupCameraUniforms(Camera& camera, float aspectRatio){
+    inline void Render(const glm::vec3& initialPosition, const glm::vec3& scale = glm::vec3(1.0f)){ 
         _shader.Use();
-        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), aspectRatio, 0.1f, 100.0f);
+        glm::mat4 projection = glm::perspective(glm::radians(this->camera.Zoom), Window::_aspectRatio, 0.1f, 100.0f);
         _shader.setMat4("projection", projection);
         _shader.setVec4("lightColor",lightColor);
 
-        glm::mat4 view = camera.GetViewMatrix();
-        _shader.setMat4("view", view);
+        _shader.setMat4("view", this->camera.GetViewMatrix());
+        
         glBindVertexArray(_VAO);
-    }
-
-    inline void Render(Camera& camera, const glm::vec3& initialPosition, const glm::vec3& scale = glm::vec3(1.0f)){ 
         glm::mat4 model = glm::mat4(1.0f); 
         
         float zOffset = sin(glfwGetTime()) * 5.0f; // Adjust the amplitude (2.0f here) as needed
@@ -65,6 +64,7 @@ struct Light{
 private:
 
     unsigned int _VBO, _VAO;
+    Camera& camera = Window::_camera;
     Shader& _shader = g_shaders.light;
     glm::vec4 lightColor = glm::vec4(0.0f,0.0f,1.0f,1.0f);
     glm::vec3 position = glm::vec3(0.0f, 0.0f, 0.0f);
