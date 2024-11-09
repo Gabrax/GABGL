@@ -4,8 +4,9 @@
 #include "Cube.h"
 #include "Skybox.h"
 #include "Light.h"
-#include "LoadText.h"
 #include "raudio.h"
+#include "Input.h"
+#include "LoadText.h"
 #include <sstream>  
 #include <iomanip>
 #include "Util.h"
@@ -28,7 +29,6 @@ void Engine::Run(){
     Light light;
     Skybox sky;
     
-    InitAudioDevice();
     Sound fullscreen = LoadSound("res/audio/select1.wav");
     SetSoundVolume(fullscreen, 0.5f);
     Sound switchmode = LoadSound("res/audio/select2.wav");
@@ -36,6 +36,7 @@ void Engine::Run(){
     Sound hotload = LoadSound("res/audio/select3.wav");
     SetSoundVolume(hotload, 0.5f); 
 
+    InitAudioDevice();
     gltInit();
     TextRenderer textRenderer(2);  
     
@@ -58,11 +59,11 @@ void Engine::Run(){
 
         glDisable(GL_CULL_FACE);
 
-        sky.Render(Window::_camera, Window::_aspectRatio);  
+        sky.Render();
 
         textRenderer.renderText(0, "CamPos: ",Window::_camera.Position.x , Window::_camera.Position.y, Window::_camera.Position.z);
         textRenderer.renderText(1, "CamRot: ",Window::_camera.Yaw, Window::_camera.Pitch);
-        textRenderer.drawTexts();  
+        textRenderer.drawTexts(); 
 
         if (Input::KeyPressed(KEY_F)){
             Window::ToggleFullscreen();

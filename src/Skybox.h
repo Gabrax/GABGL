@@ -6,7 +6,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include "stb_image.h"
-#include "Window.h"
+#include "Util.h"
 #include <vector>
 #include <string>
 
@@ -45,11 +45,11 @@ struct Skybox{
         stbi_set_flip_vertically_on_load(true);
     }
 
-    inline void Render(Camera& camera, float aspectRatio){
+    inline void Render(){
         glDepthFunc(GL_LEQUAL);  // change depth function so depth test passes when values are equal to depth buffer's content
         _shader.Use();
-        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), aspectRatio, 0.1f, 100.0f);
-        glm::mat4 view = glm::mat4(glm::mat3(camera.GetViewMatrix())); // remove translation from the view matrix
+        glm::mat4 projection = glm::perspective(glm::radians(this->_camera.Zoom), Window::_aspectRatio, 0.1f, 100.0f);
+        glm::mat4 view = glm::mat4(glm::mat3(this->_camera.GetViewMatrix())); // remove translation from the view matrix
         _shader.setMat4("view", view);
         _shader.setMat4("projection", projection);
         // skybox cube
@@ -65,6 +65,7 @@ private:
 
     unsigned int _VBO, _VAO;
     unsigned int _texture;
+    Camera& _camera = Window::_camera;
     Shader& _shader = g_shaders.skybox;
     // loads a cubemap texture from 6 individual texture faces
     // order:

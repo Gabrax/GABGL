@@ -1,5 +1,8 @@
 #include "Window.h"
 #include "stb_image.h"
+#include "LoadText.h"
+#include "raudio.h"
+#include "Input.h"
 #include <iostream>
 #include <string>
 
@@ -244,11 +247,15 @@ void Window::Init(int width, int height)
     else
     {
         std::cout << "Debug GL context not available\n";
-    }    
-
-    
-    
+    } 
+       
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    
+    // Init subsystems
+    Input::Init();
+    InitAudioDevice();
+    gltInit();
+
 }
 
 void Window::DeltaTime()

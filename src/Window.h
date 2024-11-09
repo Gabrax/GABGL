@@ -4,9 +4,7 @@
 #include "Camera.h"
 
 
-namespace Window
-{
-
+namespace Window {
 	void Init(int width, int height);
 	void ShowFPS();
 	void ProcessInput();
@@ -49,8 +47,8 @@ namespace Window
     inline const GLFWvidmode* _mode;
     inline int _currentWidth = 0;
     inline int _currentHeight = 0;
-    inline int _windowedWidth = 1444;
-    inline int _windowedHeight = 1444;
+    inline int _windowedWidth = 1920 * 1.5f;
+    inline int _windowedHeight = 1080 * 1.5f;
     inline int _fullscreenWidth = 0;
     inline int _fullscreenHeight = 0;
     inline int _mouseScreenX = 0;

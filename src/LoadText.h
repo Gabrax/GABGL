@@ -52,6 +52,7 @@ struct TextRenderer {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
         gltBeginDraw();
+        gltColor(1.0f, 1.0f, 1.0f, 1.0f);  // Set text color to white
         float yOffset = 0.0f;
         for (GLTtext* text : texts) {
             gltDrawText2D(text, 0.0f, yOffset, 2.0f);
