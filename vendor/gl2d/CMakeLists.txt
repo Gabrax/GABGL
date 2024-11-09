@@ -1,8 +1,0 @@
-cmake_minimum_required(VERSION 3.5)
-project(gl2d)
-
-cmake_policy(SET CMP0069 NEW)
-add_library(gl2d)
-target_sources(gl2d PRIVATE "src/gl2d.cpp" "src/gl2dParticleSystem.cpp")
-target_include_directories(gl2d PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
-target_link_libraries(gl2d PUBLIC glm glad stb_image stb_truetype)

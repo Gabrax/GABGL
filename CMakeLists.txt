@@ -36,7 +36,14 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build Assimp as a static library" FORCE)
 set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "Disable Assimp tools" FORCE)
 set(ASSIMP_INSTALL OFF CACHE BOOL "Disable Assimp installation" FORCE)
 
-FetchContent_MakeAvailable(assimp)
+# FreeType
+FetchContent_Declare(
+    freetype
+    GIT_REPOSITORY https://github.com/freetype/freetype.git
+    GIT_TAG VER-2-12-1
+)
+
+FetchContent_MakeAvailable(assimp freetype)
 
 # GLFW and other third-party dependencies
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
@@ -48,11 +55,12 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 add_subdirectory(vendor/glfw-3.3.2)          # Window opener
 add_subdirectory(vendor/glad)                # OpenGL loader
 add_subdirectory(vendor/stb_image)           # Loading images
-add_subdirectory(vendor/stb_truetype)        # Loading TTF files
 add_subdirectory(vendor/raudio)              # Audio
 add_subdirectory(vendor/glm)                 # Math
 add_subdirectory(vendor/imgui-docking)       # UI
-add_subdirectory(vendor/gl2d)                # Rendering
+set(RAPIDJSON_BUILD_EXAMPLES OFF CACHE BOOL "Disable RapidJSON examples" FORCE)
+set(RAPIDJSON_BUILD_TESTS OFF CACHE BOOL "Disable RapidJSON tests" FORCE)
+add_subdirectory(vendor/rapidjson)           # JSON Parser
 
 # MY_SOURCES is defined to be a list of all the source files for my game
 file(GLOB_RECURSE MY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
@@ -80,6 +88,4 @@ if(MSVC)
 endif()
 
 # Target link libraries
-target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image stb_truetype gl2d raudio imgui assimp)
-
-# add_subdirectory(resources)
+target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image freetype raudio imgui assimp)
