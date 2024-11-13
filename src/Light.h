@@ -5,7 +5,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include "LoadTexture.h"
 #include "Renderer.h"
 
 struct Light{
@@ -21,6 +20,9 @@ struct Light{
 
     glm::vec3 getLight(){
         return position;
+    }
+    glm::vec4 getLightColor(){
+        return lightColor;
     }
 
     inline void Bake(){
@@ -40,7 +42,7 @@ struct Light{
         glEnableVertexAttribArray(1);
     }
 
-    inline void Render(const glm::vec3& initialPosition, const glm::vec3& scale = glm::vec3(1.0f)){ 
+    inline void Render(const glm::vec3& initialPosition, const glm::vec3& scale = glm::vec3(1.0f),float rotation = 0.0f){ 
         _shader.Use();
         glm::mat4 projection = glm::perspective(glm::radians(this->camera.Zoom), Window::_aspectRatio, 0.1f, 100.0f);
         _shader.setMat4("projection", projection);
@@ -51,11 +53,12 @@ struct Light{
         glBindVertexArray(_VAO);
         glm::mat4 model = glm::mat4(1.0f); 
         
-        float zOffset = sin(glfwGetTime()) * 5.0f; // Adjust the amplitude (2.0f here) as needed
-        position = initialPosition + glm::vec3(0.0f, 0.0f, zOffset);
+        /*float zOffset = sin(glfwGetTime()) * 5.0f; // Adjust the amplitude (2.0f here) as needed*/
+        /*position = initialPosition + glm::vec3(0.0f, 0.0f, zOffset);*/
         
-        model = glm::translate(model, position);
-        model = glm::scale(model, scale);  
+        model = glm::translate(model, initialPosition);
+        model = glm::scale(model, scale);
+        model = glm::rotate(model, glm::radians(rotation), glm::vec3(0.0f, 1.0f, 0.0f));
         
         _shader.setMat4("model", model);
         glDrawArrays(GL_TRIANGLES, 0, 36);
@@ -63,7 +66,7 @@ struct Light{
 
 private:
 
-    unsigned int _VBO, _VAO;
+    GLuint _VBO, _VAO;
     Camera& camera = Window::_camera;
     Shader& _shader = Renderer::g_shaders.light;
     glm::vec4 lightColor = glm::vec4(0.0f,0.0f,1.0f,1.0f);

@@ -17,9 +17,9 @@ struct LoadOBJ{
 
     ~LoadOBJ() = default;
 
-    inline void Render(const glm::vec3& position, const glm::vec3& scale = glm::vec3(1.0f), const glm::vec3& lightPos = glm::vec3(0.0f),const float rotation = 0.0f){
+    inline void Render(const glm::vec3& position, const glm::vec3& scale = glm::vec3(1.0f), const float rotation = 0.0f){
         _shader.Use();
-        _shader.setVec3("light.position", lightPos);
+        /*_shader.setVec3("light.position", lightPos);*/
         _shader.setVec3("viewPos", this->camera.Position);
 
         // light properties
@@ -61,11 +61,11 @@ struct LoadDAE {
 
     ~LoadDAE() = default;
 
-    inline void Render(const glm::vec3& position, const glm::vec3& scale = glm::vec3(1.0f), const glm::vec3& lightPos = glm::vec3(0.0f), const float rotation = 0.0f) {
+    inline void Render(const glm::vec3& position, const glm::vec3& scale = glm::vec3(1.0f), const float rotation = 0.0f) {
         animator.UpdateAnimation(Window::_deltaTime);
         
         _shader.Use();
-        _shader.setVec3("light.position", lightPos);
+        /*_shader.setVec3("light.position", lightPos);*/
         _shader.setVec3("viewPos", this->camera.Position);
 
         // light properties

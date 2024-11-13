@@ -1,9 +1,9 @@
 #include "Engine.h"
 #include "Input.h"
 #include "LoadModel.h"
-#include "Cube.h"
 #include "Skybox.h"
-#include "Light.h"
+#include "LightManager.h"
+#include "glm/fwd.hpp"
 #include "raudio.h"
 #include "Input.h"
 #include "LoadText.h"
@@ -15,24 +15,25 @@ void Engine::Run(){
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
-    glCullFace(GL_BACK);
+    glCullFace(GL_FRONT);
     glFrontFace(GL_CW);
 
     Renderer::BakeShaders();
 
-    Cube cube("res/diamond.jpg");
     LoadOBJ house("res/map/objHouse.obj");
     LoadOBJ backpack("res/backpack/backpack.obj");
+    LoadOBJ creeper("res/cube/Creeper.obj");
     LoadDAE guy("res/guy/guy.dae");
-    Light light;
     Skybox sky;
-    
+    LightManager lightmanager;
+    lightmanager.AddLight(glm::vec3(0.0f,5.0f,5.0f), glm::vec4(1.0f),glm::vec3(0.5f)); 
+    lightmanager.AddLight(glm::vec3(0.0f,5.0f,10.0f), glm::vec4(1.0f),glm::vec3(0.5f));
     Sound fullscreen = LoadSound("res/audio/select1.wav");
     SetSoundVolume(fullscreen, 0.5f);
     Sound switchmode = LoadSound("res/audio/select2.wav");
     SetSoundVolume(switchmode, 0.5f);
     Sound hotload = LoadSound("res/audio/select3.wav");
-    SetSoundVolume(hotload, 0.5f); 
+    SetSoundVolume(hotload, 0.5f);
 
     InitAudioDevice();
     gltInit();
@@ -44,15 +45,13 @@ void Engine::Run(){
         Window::DeltaTime();
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-            cube.Render(glm::vec3(-2.0f,3.0f,8.0f), glm::vec3(1.0f), light.getLight());
-            
-            light.Render(glm::vec3(-2.0f,6.0f,8.0f), glm::vec3(0.5f));
+            lightmanager.RenderLights();
 
-            glCullFace(GL_FRONT);     
+            creeper.Render(glm::vec3(-2.0f,3.0f,8.0f), glm::vec3(1.0f));
+            house.Render(glm::vec3(0.0f,0.0f,0.0f), glm::vec3(50.0f));
+            backpack.Render(glm::vec3(-2.0f,3.0f,10.0f), glm::vec3(0.25f), 90.0f);
 
-            house.Render(glm::vec3(0.0f,0.0f,0.0f), glm::vec3(50.0f), light.getLight());
-            backpack.Render(glm::vec3(-2.0f,3.0f,10.0f), glm::vec3(0.25f), light.getLight(), 90.0f);
-            guy.Render(glm::vec3(0.0f,0.50f,3.0f), glm::vec3(1.0f), light.getLight());
+            guy.Render(glm::vec3(0.0f,0.50f,3.0f), glm::vec3(1.0f));
 
         glDisable(GL_CULL_FACE);
 
