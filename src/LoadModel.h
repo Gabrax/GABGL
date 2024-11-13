@@ -6,7 +6,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include "OBJ/OBJloader.h"
-#include "Util.h"
+#include "Renderer.h"
 #include "DAE/Animator.h"
 #include "DAE/DAEloader.h"
 
@@ -24,14 +24,14 @@ struct LoadOBJ{
 
         // light properties
         _shader.setVec3("light.ambient", 0.2f, 0.2f, 0.2f);
-        _shader.setVec3("light.diffuse", 0.5f, 0.5f, 0.5f);
-        _shader.setVec3("light.specular", 1.0f, 1.0f, 1.0f);
+        _shader.setVec3("light.diffuse", 0.1f, 0.1f, 0.1f);
+        _shader.setVec3("light.specular", 1.5f, 1.5f, 1.5f);
         _shader.setFloat("light.constant", 1.0f);
         _shader.setFloat("light.linear", 0.09f);
         _shader.setFloat("light.quadratic", 0.032f);
 
         // material properties
-        _shader.setFloat("material.shininess", 5.0f);
+        _shader.setFloat("material.shininess", 32.0f);
         
         glm::mat4 projection = glm::perspective(glm::radians(this->camera.Zoom), Window::_aspectRatio, 0.1f, 100.0f);
         _shader.setMat4("projection", projection);
@@ -47,7 +47,7 @@ struct LoadOBJ{
 
 private:
     Camera& camera = Window::_camera;
-    Shader& _shader = g_shaders.model;
+    Shader& _shader = Renderer::g_shaders.model;
     OBJ loadmodel;
 };
 
@@ -70,7 +70,7 @@ struct LoadDAE {
 
         // light properties
         _shader.setVec3("light.ambient", 0.2f, 0.2f, 0.2f);
-        _shader.setVec3("light.diffuse", 0.5f, 0.5f, 0.5f);
+        _shader.setVec3("light.diffuse", 0.1f, 0.1f, 0.1f);
         _shader.setVec3("light.specular", 1.0f, 1.0f, 1.0f);
         _shader.setFloat("light.constant", 1.0f);
         _shader.setFloat("light.linear", 0.09f);
@@ -99,7 +99,7 @@ struct LoadDAE {
 
 private:
     Camera& camera = Window::_camera;
-    Shader& _shader = g_shaders.animated;
+    Shader& _shader = Renderer::g_shaders.animated;
     DAE loadmodel;
     Animation danceAnimation;
     Animator animator;

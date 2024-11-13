@@ -44,7 +44,7 @@ if [ -f "CMakeCache.txt" ]; then
     echo -e "${GREEN}[*] Project is already configured${RESET}"
 else
     echo -e "${YELLOW}[*] Configuring the project with CMake...${RESET}"
-    cmake .. || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
+    cmake -Wno-dev .. || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
 fi
 
 # Build the project

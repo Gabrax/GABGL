@@ -1,4 +1,3 @@
-# Version 1.0.0
 cmake_minimum_required(VERSION 3.5)
 
 include(FetchContent)
@@ -55,6 +54,7 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 add_subdirectory(vendor/glfw-3.3.2)          # Window opener
 add_subdirectory(vendor/glad)                # OpenGL loader
 add_subdirectory(vendor/stb_image)           # Loading images
+add_subdirectory(vendor/glText)              # easy drawing text
 add_subdirectory(vendor/raudio)              # Audio
 add_subdirectory(vendor/glm)                 # Math
 add_subdirectory(vendor/imgui-docking)       # UI
@@ -88,4 +88,4 @@ if(MSVC)
 endif()
 
 # Target link libraries
-target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image freetype raudio imgui assimp)
+target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image freetype raudio imgui assimp glText)

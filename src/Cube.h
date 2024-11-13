@@ -6,7 +6,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include "LoadTexture.h"
-#include "Util.h"
+#include "Renderer.h"
 
 struct Cube{
     Cube(const char* texturepath){
@@ -75,10 +75,10 @@ struct Cube{
 
 private:
 
-    unsigned int _VBO, _VAO;
-    unsigned int _texture;
+    GLuint _VBO, _VAO;
+    GLuint _texture;
     Camera& camera = Window::_camera;
-    Shader& _shader = g_shaders.cube; 
+    Shader& _shader = Renderer::g_shaders.cube; 
 
     GLfloat vertices[288] = {
         -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f,

@@ -6,7 +6,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include "stb_image.h"
-#include "Util.h"
+#include "Renderer.h"
 #include <vector>
 #include <string>
 
@@ -66,7 +66,7 @@ private:
     unsigned int _VBO, _VAO;
     unsigned int _texture;
     Camera& _camera = Window::_camera;
-    Shader& _shader = g_shaders.skybox;
+    Shader& _shader = Renderer::g_shaders.skybox;
     // loads a cubemap texture from 6 individual texture faces
     // order:
     // +X (right)

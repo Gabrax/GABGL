@@ -6,7 +6,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include "LoadTexture.h"
-#include "Util.h"
+#include "Renderer.h"
 
 struct Light{
     Light() { 
@@ -65,7 +65,7 @@ private:
 
     unsigned int _VBO, _VAO;
     Camera& camera = Window::_camera;
-    Shader& _shader = g_shaders.light;
+    Shader& _shader = Renderer::g_shaders.light;
     glm::vec4 lightColor = glm::vec4(0.0f,0.0f,1.0f,1.0f);
     glm::vec3 position = glm::vec3(0.0f, 0.0f, 0.0f);
 

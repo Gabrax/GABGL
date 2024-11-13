@@ -8,7 +8,8 @@ namespace Window {
 	void Init(int width, int height);
 	void ShowFPS();
 	void ProcessInput();
-	void SwapBuffersPollEvents();
+	void BeginFrame();
+	void EndFrame();
 	void Cleanup();
 	bool WindowIsOpen();
 	int GetWindowWidth();

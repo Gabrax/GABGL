@@ -7,9 +7,9 @@
 #include <sstream>
 #include <iostream>
 
-class Shader {
-public:
-    unsigned int ID;
+struct Shader {
+    
+    GLuint ID;
 
     inline void Load(const char* vertexPath, const char* fragmentPath, const char* geometryPath = nullptr){
         // 1. retrieve the vertex/fragment source code from filePath
@@ -55,7 +55,7 @@ public:
         const char* vShaderCode = vertexCode.c_str();
         const char* fShaderCode = fragmentCode.c_str();
         // 2. compile shaders
-        unsigned int vertex, fragment;
+        GLuint vertex, fragment;
         // vertex shader
         vertex = glCreateShader(GL_VERTEX_SHADER);
         glShaderSource(vertex, 1, &vShaderCode, NULL);

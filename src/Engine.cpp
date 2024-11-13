@@ -7,9 +7,6 @@
 #include "raudio.h"
 #include "Input.h"
 #include "LoadText.h"
-#include <sstream>  
-#include <iomanip>
-#include "Util.h"
 
 void Engine::Run(){
 
@@ -18,9 +15,10 @@ void Engine::Run(){
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
     glFrontFace(GL_CW);
 
-    Util::BakeShaders();
+    Renderer::BakeShaders();
 
     Cube cube("res/diamond.jpg");
     LoadOBJ house("res/map/objHouse.obj");
@@ -40,14 +38,13 @@ void Engine::Run(){
     gltInit();
     TextRenderer textRenderer(2);  
     
-    while (Window::WindowIsOpen() && Window::WindowHasNotBeenForceClosed()){  
+    while (Window::WindowIsOpen() && Window::WindowHasNotBeenForceClosed()){
+        Window::BeginFrame();  
         Window::ShowFPS();
         Window::DeltaTime();
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
             cube.Render(glm::vec3(-2.0f,3.0f,8.0f), glm::vec3(1.0f), light.getLight());
-
-        glEnable(GL_CULL_FACE);    
             
             light.Render(glm::vec3(-2.0f,6.0f,8.0f), glm::vec3(0.5f));
 
@@ -76,12 +73,12 @@ void Engine::Run(){
         } 
 
         if (Input::KeyPressed(KEY_R)){
-            Util::HotReloadShaders();
+            Renderer::HotReloadShaders();
             PlaySound(hotload);
         } 
         
         Window::ProcessInput();
         Input::Update();
-        Window::SwapBuffersPollEvents();
+        Window::EndFrame();
     }
 }

@@ -1,7 +1,5 @@
 #include "Window.h"
 #include "stb_image.h"
-#include "LoadText.h"
-#include "raudio.h"
 #include "Input.h"
 #include <iostream>
 #include <string>
@@ -191,27 +189,24 @@ void Window::Init(int width, int height)
     _windowedWidth = width;
     _windowedHeight = height;
 
-	if (_windowedWidth > _fullscreenWidth || _windowedHeight > _fullscreenHeight)
-    {
+	if (_windowedWidth > _fullscreenWidth || _windowedHeight > _fullscreenHeight){
 		_windowedWidth = static_cast<int>(_fullscreenWidth * 0.75f);
 		_windowedHeight = static_cast<int>(_fullscreenHeight * 0.75f);
 	}
-
     CreateWindow(WINDOWED);
     
     
-    if (_window == NULL)
-    {
+    if (_window == NULL){
         std::cout << "Failed to create GLFW window" << '\n';
         Cleanup();
         return;
     }
 
     GLFWimage images[1];
-    images[0].pixels = stbi_load("res/Opengllogo.png", &images[0].width, &images[0].height, 0, 4); // Ensure the image is in RGBA format
+    images[0].pixels = stbi_load("res/Opengllogo.png", &images[0].width, &images[0].height, 0, 4); 
     if (images[0].pixels) {
         glfwSetWindowIcon(_window, 1, images);
-        stbi_image_free(images[0].pixels); // Free the image memory
+        stbi_image_free(images[0].pixels); 
     }
 
     glfwMakeContextCurrent(_window);
@@ -220,7 +215,6 @@ void Window::Init(int width, int height)
     glfwSetCursorPosCallback(_window, mouse_callback);
     glfwSetScrollCallback(_window, scroll_callback);
     glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    
     glfwSetWindowFocusCallback(_window, window_focus_callback);
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
@@ -249,13 +243,9 @@ void Window::Init(int width, int height)
         std::cout << "Debug GL context not available\n";
     } 
        
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     // Init subsystems
     Input::Init();
-    InitAudioDevice();
-    gltInit();
-
 }
 
 void Window::DeltaTime()
@@ -285,9 +275,13 @@ void Window::ProcessInput()
     processInput(_window);
 }
 
-void Window::SwapBuffersPollEvents()
+void Window::EndFrame()
 {
     glfwSwapBuffers(_window);
+}
+
+void Window::BeginFrame()
+{
     glfwPollEvents();
 }
 
