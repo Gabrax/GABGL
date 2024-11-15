@@ -36,8 +36,8 @@ public:
 
         // Update buffer data (you could use glMapBufferRange for performance gains with large data)
         if (data != nullptr) {
-            glNamedBufferSubData(handle, 0, (GLsizeiptr)size, data);
-        }
+          glNamedBufferSubData(handle, 0, (GLsizeiptr)size, data);
+        } 
     }
 
     // Clean up the buffer when done

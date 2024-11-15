@@ -29,7 +29,7 @@ in VS_OUT{
 // SSBO for storing light positions, bound to binding point 0
 layout(std430, binding = 3) buffer LightPositions {
     int numLights;      // Number of lights
-    vec3 positions[100];  // Array of light positions
+    vec3 positions[10];  // Array of light positions
 };
 
 
@@ -49,45 +49,50 @@ vec3 gammaCorrection(vec3 value) {
 }
 
 void main() {
-    vec3 result = vec3(0.0);
+    vec3 totalAmbient = vec3(0.0);
+    vec3 totalDiffuse = vec3(0.0);
+    vec3 totalSpecular = vec3(0.0);
 
-    // Loop over all lights
     for (int i = 0; i < numLights; i++) {
-        vec3 lightPos = positions[i];  // Access the light position from the SSBO
+        vec3 lightPos = positions[i].xyz;  // Access the light position from the SSBO
 
-        // Ambient lighting
+        // Calculate ambient lighting
         vec3 ambient = light.ambient * texture(material.diffuse, fs_in.TexCoords).rgb;
 
         // Normal mapping: get perturbed normal
         vec3 normal = texture(material.normalMap, fs_in.TexCoords).rgb;
         normal = normalize(normal * 2.0 - 1.0);  // Transform to range [-1, 1]
-        vec3 perturbedNormal = normalize(fs_in.TBN * (normal * 2.0 - 1.0));  // Transform to world space
+        vec3 perturbedNormal = normalize(fs_in.TBN * normal);  // Convert to world space
 
-        // Diffuse lighting with normal mapping
-        vec3 lightDir = normalize(fs_in.TBN_FragPos * (lightPos - fs_in.FragPos));
+        // Calculate light direction for the current light position
+        vec3 lightDir = normalize(lightPos - fs_in.FragPos);
         float diff = max(dot(perturbedNormal, lightDir), 0.0);
         vec3 diffuse = light.diffuse * diff * texture(material.diffuse, fs_in.TexCoords).rgb;
 
-        // Specular lighting (Blinn-Phong) with normal mapping
+        // Specular lighting (Blinn-Phong)
         vec3 viewDir = normalize(viewPos - fs_in.FragPos);
         vec3 halfwayDir = normalize(lightDir + viewDir);  // Blinn-Phong halfway vector
         float spec = pow(max(dot(perturbedNormal, halfwayDir), 0.0), material.shininess);
         vec3 specular = light.specular * (spec * material.specular);
 
-        // Point light attenuation
+        // Calculate attenuation based on distance to light source
         float distance = length(lightPos - fs_in.FragPos);
         float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * (distance * distance));
 
+        // Apply attenuation to each light's contribution
         ambient  *= attenuation;
         diffuse  *= attenuation;
         specular *= attenuation;
 
-        // Add light contribution to the result
-        result += ambient + diffuse + specular;
+        // Accumulate each light’s isolated effect to the totals
+        totalAmbient  += ambient;
+        totalDiffuse  += diffuse;
+        totalSpecular += specular;
     }
 
-    // Gamma correction: apply to the final color before outputting
-    result = gammaCorrection(result);  // Apply gamma correction to the final color
+    // Combine all lighting components and apply gamma correction
+    vec3 result = totalAmbient + totalDiffuse + totalSpecular;
+    result = gammaCorrection(result);
 
     // Output the final color
     FragColor = vec4(result, 1.0);

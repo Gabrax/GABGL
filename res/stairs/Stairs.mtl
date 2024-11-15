@@ -1,0 +1,32 @@
+newmtl lambert5SG
+illum 4
+Kd 0.00 0.00 0.00
+Ka 0.00 0.00 0.00
+Tf 1.00 1.00 1.00
+map_Kd Wall2.jpg
+bump  -bm 0.3 brck49Lb.jpg
+Ni 1.00
+newmtl lambert6SG
+illum 4
+Kd 0.00 0.00 0.00
+Ka 0.00 0.00 0.00
+Tf 1.00 1.00 1.00
+map_Kd a3.jpg
+bump  -bm 0.2 a3.jpg
+Ni 1.00
+newmtl lambert7SG
+illum 4
+Kd 0.00 0.00 0.00
+Ka 0.00 0.00 0.00
+Tf 1.00 1.00 1.00
+map_Kd WOOD05L2.JPG
+bump  -bm 0.2 WOOD05LB.JPG
+Ni 1.00
+newmtl p3SG
+illum 4
+Kd 0.00 0.00 0.00
+Ka 0.00 0.00 0.00
+Tf 1.00 1.00 1.00
+map_Kd a3.jpg
+bump  -bm 0.2 a3.jpg
+Ni 1.00

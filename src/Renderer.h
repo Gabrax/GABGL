@@ -9,6 +9,7 @@ namespace Renderer {
         Shader skybox;
         Shader animated;
         Shader light;
+        Shader mainFB;
     };
     extern Shaders g_shaders;
 
