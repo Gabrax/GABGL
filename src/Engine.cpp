@@ -40,7 +40,6 @@ void Engine::Run() {
     TextRenderer textRenderer(2);
 
     Framebuffer framebuffer;
-    framebuffer.initFB(Window::_windowedWidth, Window::_windowedHeight);
 
     while (Window::WindowIsOpen() && Window::WindowHasNotBeenForceClosed()) {
         Window::BeginFrame();

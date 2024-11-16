@@ -1,8 +1,8 @@
 OpenGL sandbox with C++ for learning purposes 
 
-Feel free to use this as a template
-
-To build and run project, just use the build script in root directory for your OS 
+To build and run project, just use the build script in root directory for your OS. 
+For first time build, you can specify compiler (msvc, clang, gcc). Without specifying cmake will detect default compiler.
+Then you can use script without argument, compiler is remembered in cache.
 
 - Only Windows
 ```batch

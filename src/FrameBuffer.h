@@ -13,11 +13,11 @@ struct Framebuffer
   }
 
   ~Framebuffer(){
-    if (_VAO) glDeleteVertexArrays(1, &_VAO);
-    if (_VBO) glDeleteBuffers(1, &_VBO);
-    if (_FBO) glDeleteFramebuffers(1, &_FBO);
-    if (_RBO) glDeleteRenderbuffers(1, &_RBO);
-    if (_texture) glDeleteTextures(1, &_texture);
+    glDeleteVertexArrays(1, &_VAO);
+    glDeleteBuffers(1, &_VBO);
+    glDeleteFramebuffers(1, &_FBO);
+    glDeleteRenderbuffers(1, &_RBO);
+    glDeleteTextures(1, &_texture);
   }
 
   void initQuad(){
@@ -35,17 +35,12 @@ struct Framebuffer
     glEnableVertexAttribArray(1); // Texture coordinate attribute
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
 
-    glBindVertexArray(0);
-  }
-
-  void initFB(int width, int height){
-
     glGenFramebuffers(1, &_FBO);
     glBindFramebuffer(GL_FRAMEBUFFER, _FBO);
 
     glGenTextures(1, &_texture);
     glBindTexture(GL_TEXTURE_2D, _texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, Window::_windowedWidth, Window::_windowedHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
@@ -53,14 +48,14 @@ struct Framebuffer
 
     glGenRenderbuffers(1, &_RBO);
     glBindRenderbuffer(GL_RENDERBUFFER, _RBO);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, Window::_windowedWidth, Window::_windowedHeight);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, _RBO);
 
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
         std::cerr << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
     }
 
-    glBindFramebuffer(GL_FRAMEBUFFER, 0); 
+    glBindFramebuffer(GL_FRAMEBUFFER, 0); glBindVertexArray(0);
   }
 
   void render(){

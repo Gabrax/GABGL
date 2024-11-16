@@ -10,6 +10,9 @@ GREEN="\e[32m"
 YELLOW="\e[33m"
 RESET="\e[0m"
 
+# Set the compiler based on the argument
+COMPILER=$1
+
 if [[ "$OS" == "Linux" || "$OS" == "Darwin" ]]; then
     # Linux or macOS
     EXE_EXTENSION=""
@@ -24,7 +27,6 @@ else
     echo -e "${RED}Unsupported OS: $OS${RESET}"
     exit 1
 fi
-
 
 BUILD_DIR="build"
 ROOT_DIR=$(pwd)
@@ -44,7 +46,23 @@ if [ -f "CMakeCache.txt" ]; then
     echo -e "${GREEN}[*] Project is already configured${RESET}"
 else
     echo -e "${YELLOW}[*] Configuring the project with CMake...${RESET}"
-    cmake -G "Ninja" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -Wno-dev .. || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
+    
+    # If no compiler is specified, run cmake with the default system compiler
+    if [ -z "$COMPILER" ]; then
+        cmake .. || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
+    elif [ "$COMPILER" == "msvc" ]; then
+        echo -e "${YELLOW}[*] Using MSVC Compiler${RESET}"
+        cmake -G "Visual Studio 17 2022" .. || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
+    elif [ "$COMPILER" == "clang" ]; then
+        echo -e "${YELLOW}[*] Using Clang Compiler${RESET}"
+        cmake -G "Ninja" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -Wno-dev .. || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
+    elif [ "$COMPILER" == "gcc" ]; then
+        echo -e "${YELLOW}[*] Using GCC Compiler${RESET}"
+        cmake -G "Unix Makefiles" -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -Wno-dev .. || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
+    else
+        echo -e "${RED}[*] Unsupported compiler: $COMPILER${RESET}"
+        exit 1
+    fi
 fi
 
 # Build the project

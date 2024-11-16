@@ -10,7 +10,7 @@ option(PRODUCTION_BUILD "Make this a production build" OFF)
 # Set this to false if you don’t use clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Compiler settings for Clang and MSVC
+# Compiler settings for Clang, MSVC, and GCC
 if(MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Release>:Release>")
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
@@ -20,14 +20,24 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     # Example Clang-specific options
     add_compile_options(
         -Wall -Wextra -Wpedantic            # Warnings
-        -Wno-unused-parameter                # Disable some warnings
-        -ferror-limit=0                      # Show all errors
-        -std=c++17                           # Use C++17
+        -Wno-unused-parameter              # Disable some warnings
+        -ferror-limit=0                    # Show all errors
+        -std=c++17                         # Use C++17
     )
     # Use libc++ if building on macOS or if needed for your platform
     if(APPLE)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
     endif()
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    # GCC-specific options
+    add_compile_options(
+        -Wall -Wextra -Wpedantic            # Warnings
+        -Wno-unused-parameter              # Disable some warnings
+        -std=c++17                         # Use C++17
+        -fexceptions                       # Enable exceptions
+    )
+    # Optional optimizations for GCC
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -march=native -mtune=native")
 endif()
 
 project(mygame)

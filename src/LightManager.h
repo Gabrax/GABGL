@@ -6,12 +6,13 @@
 #include <memory>
 #include "Light.h"
 #include "LoadSSBO.h" 
+#include "glad/glad.h"
 
 struct LightManager {
 
 
     LightManager() {
-        ssbo.PreAllocate(sizeof(glm::vec3) * maxLights + sizeof(int)); 
+        ssbo.PreAllocate(sizeof(glm::vec3) * maxLights + sizeof(int32_t)); 
         numLights = 0; 
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, ssbo.GetHandle());
     }
@@ -22,11 +23,11 @@ struct LightManager {
             positions.emplace_back(lightPair.second.position);
         }
 
-        std::vector<uint8_t> buffer;
-        buffer.resize(sizeof(int) + positions.size() * sizeof(glm::vec3));
+        std::vector<int8_t> buffer;
+        buffer.resize(sizeof(int32_t) + positions.size() * sizeof(glm::vec3));
 
-        std::memcpy(buffer.data(), &numLights, sizeof(int));
-        std::memcpy(buffer.data() + sizeof(int), positions.data(), positions.size() * sizeof(glm::vec3));
+        std::memcpy(buffer.data(), &numLights, sizeof(int32_t));
+        std::memcpy(buffer.data() + sizeof(int32_t), positions.data(), positions.size() * sizeof(glm::vec3));
 
         ssbo.Update(buffer.size(), buffer.data());
 
@@ -34,13 +35,13 @@ struct LightManager {
 
 
         //DEBUG//
-        std::vector<uint8_t> debugBuffer(buffer.size());
+        std::vector<int8_t> debugBuffer(buffer.size());
         glGetNamedBufferSubData(ssbo.GetHandle(), 0, buffer.size(), debugBuffer.data()); // Retrieve SSBO data
 
         int* numLightsPtr = reinterpret_cast<int*>(debugBuffer.data());
         std::cout << "numLights: " << *numLightsPtr << std::endl;
 
-        glm::vec3* positionsPtr = reinterpret_cast<glm::vec3*>(debugBuffer.data() + sizeof(int));
+        glm::vec3* positionsPtr = reinterpret_cast<glm::vec3*>(debugBuffer.data() + sizeof(int32_t));
         for (size_t i = 0; i < (*numLightsPtr); ++i) {
             std::cout << "positions[" << i << "]: "
                       << positionsPtr[i].x << ", "
@@ -85,6 +86,6 @@ private:
 
     std::vector<std::pair<std::unique_ptr<Light>, LightData>> lights; 
     SSBO ssbo;
-    int numLights;  
-    const size_t maxLights = 10; 
+    int32_t numLights;  
+    const uint32_t maxLights = 10; 
 };
