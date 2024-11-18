@@ -11,6 +11,7 @@ struct Material {
 
 // Light structure to hold properties like ambient, diffuse, etc.
 struct Light {
+    vec3 position;
     vec3 ambient;
     vec3 diffuse;
     vec3 specular;

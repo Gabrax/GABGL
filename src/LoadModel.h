@@ -9,6 +9,7 @@
 #include "Renderer.h"
 #include "DAE/Animator.h"
 #include "DAE/DAEloader.h"
+#include "Window.h"
 
 struct LoadOBJ{
     LoadOBJ(const char* modelpath) : loadmodel(modelpath) {
@@ -33,7 +34,7 @@ struct LoadOBJ{
         // material properties
         _shader.setFloat("material.shininess", 32.0f);
         
-        glm::mat4 projection = glm::perspective(glm::radians(this->camera.Zoom), Window::_aspectRatio, 0.1f, 100.0f);
+        glm::mat4 projection = glm::perspective(glm::radians(this->camera.Zoom), Window::getAspectRatio(), 0.1f, 100.0f);
         _shader.setMat4("projection", projection);
 
         _shader.setMat4("view", this->camera.GetViewMatrix());
@@ -62,7 +63,7 @@ struct LoadDAE {
     ~LoadDAE() = default;
 
     inline void Render(const glm::vec3& position, const glm::vec3& scale = glm::vec3(1.0f), const float rotation = 0.0f) {
-        animator.UpdateAnimation(Window::_deltaTime);
+        animator.UpdateAnimation(Window::getDeltaTime());
         
         _shader.Use();
         /*_shader.setVec3("light.position", lightPos);*/
@@ -79,7 +80,7 @@ struct LoadDAE {
         // material properties
         _shader.setFloat("material.shininess", 5.0f);
 
-        glm::mat4 projection = glm::perspective(glm::radians(this->camera.Zoom), Window::_aspectRatio, 0.1f, 100.0f);
+        glm::mat4 projection = glm::perspective(glm::radians(this->camera.Zoom), Window::getAspectRatio(), 0.1f, 100.0f);
         _shader.setMat4("projection", projection);
 
         glm::mat4 view = this->camera.GetViewMatrix();

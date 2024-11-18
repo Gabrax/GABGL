@@ -6,6 +6,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include "Renderer.h"
+#include "Window.h"
 
 struct Light{
     Light() { 
@@ -21,7 +22,8 @@ struct Light{
     glm::vec3 getLight(){
         return position;
     }
-    glm::vec4 getLightColor(){
+    glm::vec4 setLightColor(const glm::vec4& color){
+        lightColor = color;
         return lightColor;
     }
 
@@ -44,11 +46,11 @@ struct Light{
 
     inline void Render(const glm::vec3& initialPosition, const glm::vec3& scale = glm::vec3(1.0f),float rotation = 0.0f){ 
         _shader.Use();
-        glm::mat4 projection = glm::perspective(glm::radians(this->camera.Zoom), Window::_aspectRatio, 0.1f, 100.0f);
+        glm::mat4 projection = glm::perspective(glm::radians(this->_camera.Zoom), Window::getAspectRatio(), 0.1f, 100.0f);
         _shader.setMat4("projection", projection);
         _shader.setVec4("lightColor",lightColor);
 
-        _shader.setMat4("view", this->camera.GetViewMatrix());
+        _shader.setMat4("view", this->_camera.GetViewMatrix());
         
         glBindVertexArray(_VAO);
         glm::mat4 model = glm::mat4(1.0f); 
@@ -67,9 +69,9 @@ struct Light{
 private:
 
     GLuint _VBO, _VAO;
-    Camera& camera = Window::_camera;
+    Camera& _camera = Window::_camera;
     Shader& _shader = Renderer::g_shaders.light;
-    glm::vec4 lightColor = glm::vec4(0.0f,0.0f,1.0f,1.0f);
+    glm::vec4 lightColor;
     glm::vec3 position = glm::vec3(0.0f, 0.0f, 0.0f);
 
     GLfloat vertices[180] = {

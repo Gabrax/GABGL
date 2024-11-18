@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include "Window.h"
 #include "stb_image.h"
 #include "Renderer.h"
 #include <vector>
@@ -48,7 +49,7 @@ struct Skybox{
     inline void Render(){
         glDepthFunc(GL_LEQUAL);  // change depth function so depth test passes when values are equal to depth buffer's content
         _shader.Use();
-        glm::mat4 projection = glm::perspective(glm::radians(this->_camera.Zoom), Window::_aspectRatio, 0.1f, 100.0f);
+        glm::mat4 projection = glm::perspective(glm::radians(this->_camera.Zoom), Window::getAspectRatio(), 0.1f, 100.0f);
         glm::mat4 view = glm::mat4(glm::mat3(this->_camera.GetViewMatrix())); // remove translation from the view matrix
         _shader.setMat4("view", view);
         _shader.setMat4("projection", projection);

@@ -7,7 +7,6 @@
 #include "gltext.h"
 #include <sstream>
 #include <iomanip>
-#include <string>
 #include <vector>
 
 
@@ -17,6 +16,7 @@ struct TextRenderer {
 
     // Constructor to initialize a specified number of GLTtext objects
     TextRenderer(size_t count = 1) {
+        gltInit();
         for (size_t i = 0; i < count; ++i) {
             GLTtext* text = gltCreateText();
             gltSetText(text, "");

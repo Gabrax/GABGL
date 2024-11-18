@@ -1,9 +1,44 @@
-#include "Window.h"
-#include "stb_image.h"
-#include "Input.h"
 #include <iostream>
 #include <string>
 
+
+#include "Input.h"
+#include "Window.h"
+#include "stb_image.h"
+#include "gltext.h"
+#include "Renderer.h"
+
+
+namespace Window {
+
+	// window attributes
+	inline GLFWwindow* _window;
+  inline GLFWmonitor* _monitor;
+  inline const GLFWvidmode* _mode;
+  inline int _currentWidth = 0;
+  inline int _currentHeight = 0;
+  inline int _windowedWidth = 1920 * 1.5f;
+  inline int _windowedHeight = 1080 * 1.5f;
+  inline int _fullscreenWidth = 0;
+  inline int _fullscreenHeight = 0;
+  inline int _mouseScreenX = 0;
+  inline int _mouseScreenY = 0;
+  inline int _windowHasFocus = true;
+  inline bool _forceCloseWindow = false;
+  inline int _scrollWheelYOffset = 0;
+  inline enum WindowMode _windowMode = WINDOWED;// FULLSCREEN;
+  inline enum RenderMode _renderMode = WIREFRAME;
+  inline double prevTime = 0.0;
+  inline double crntTime = 0.0;
+  inline double timeDiff;
+  inline unsigned int counter = 0;
+  inline int windowPosX = (_windowedWidth - _windowedWidth) / 2;
+  inline int windowPosY = (_windowedHeight - _windowedHeight) / 2;
+
+  // timing
+  inline float _deltaTime = 0.0f;	// time between current frame and last frame
+  inline float _lastFrame = 0.0f;
+}
 
 GLenum glCheckError_(const char* file, int line) {
     GLenum errorCode;
@@ -155,14 +190,14 @@ void Window::SetRenderMode(RenderMode renderMode)
 }
 
 
-void Window::Init(int width, int height)
+void Window::Init()
 {
 
     glfwInit();
-	glfwSetErrorCallback([](int error, const char* description)
-    {
-        std::cout << "GLFW Error (" << std::to_string(error) << "): " << description << "\n";
-	});
+    glfwSetErrorCallback([](int error, const char* description)
+      {
+          std::cout << "GLFW Error (" << std::to_string(error) << "): " << description << "\n";
+    });
 
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -186,17 +221,17 @@ void Window::Init(int width, int height)
     glfwWindowHint(GLFW_REFRESH_RATE, _mode->refreshRate);
     _fullscreenWidth = _mode->width;
     _fullscreenHeight = _mode->height;
-    _windowedWidth = width;
-    _windowedHeight = height;
+    /*_windowedWidth = width;*/
+    /*_windowedHeight = height;*/
 
-	if (_windowedWidth > _fullscreenWidth || _windowedHeight > _fullscreenHeight){
-		_windowedWidth = static_cast<int>(_fullscreenWidth * 0.75f);
-		_windowedHeight = static_cast<int>(_fullscreenHeight * 0.75f);
-	}
+    if (_windowedWidth > _fullscreenWidth || _windowedHeight > _fullscreenHeight){
+      _windowedWidth = static_cast<int>(_fullscreenWidth * 0.75f);
+      _windowedHeight = static_cast<int>(_fullscreenHeight * 0.75f);
+    }
     CreateWindow(WINDOWED);
     
     
-    if (_window == NULL){
+    if (_window == nullptr){
         std::cout << "Failed to create GLFW window" << '\n';
         Cleanup();
         return;
@@ -231,21 +266,25 @@ void Window::Init(int width, int height)
 
     int flags;
     glGetIntegerv(GL_CONTEXT_FLAGS, &flags);
-    if (flags & GL_CONTEXT_FLAG_DEBUG_BIT)
-    {
+    if (flags & GL_CONTEXT_FLAG_DEBUG_BIT) {
         std::cout << "Debug GL context enabled\n\n";
         glEnable(GL_DEBUG_OUTPUT);
         glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS); // makes sure errors are displayed synchronously
         glDebugMessageCallback(glDebugOutput, nullptr);
-    } 
-    else
-    {
+    } else {
         std::cout << "Debug GL context not available\n";
     } 
        
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     // Init subsystems
     Input::Init();
+    InitAudioDevice();
+
+    Renderer::g_sounds.fullscreen = LoadSound("res/audio/select1.wav");
+    SetSoundVolume(Renderer::g_sounds.fullscreen, 0.5f);
+    Renderer::g_sounds.switchmode = LoadSound("res/audio/select2.wav");
+    SetSoundVolume(Renderer::g_sounds.switchmode, 0.5f);
+
 }
 
 void Window::DeltaTime()
@@ -253,6 +292,11 @@ void Window::DeltaTime()
     float currentFrame = static_cast<float>(glfwGetTime());
     _deltaTime = currentFrame - _lastFrame;
     _lastFrame = currentFrame;
+}
+
+float Window::getDeltaTime()
+{
+  return _deltaTime;
 }
 
 void Window::ShowFPS()
@@ -270,19 +314,23 @@ void Window::ShowFPS()
     }
 }
 
-void Window::ProcessInput()
-{
-    processInput(_window);
-}
-
 void Window::EndFrame()
 {
+    Input::Update();
+    processInput(_window);
     glfwSwapBuffers(_window);
 }
 
 void Window::BeginFrame()
 {
+    ShowFPS();
+    DeltaTime();
     glfwPollEvents();
+}
+
+float Window::getAspectRatio()
+{
+  return static_cast<float>(_windowedWidth) / static_cast<float>(_windowedHeight);
 }
 
 void Window::Cleanup()
@@ -319,6 +367,16 @@ int Window::GetCursorY()
     return int(ypos);
 }
 
+int Window::GetCursorScreenX()
+{
+    return _mouseScreenX;
+}
+
+int Window::GetCursorScreenY()
+{
+    return _mouseScreenY;
+}
+
 void Window::DisableCursor()
 {
     glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -337,16 +395,6 @@ void Window::ShowCursor()
 GLFWwindow* Window::GetWindowPtr()
 {
     return _window;
-}
-
-int Window::GetCursorScreenX()
-{
-    return _mouseScreenX;
-}
-
-int Window::GetCursorScreenY()
-{
-    return _mouseScreenY;
 }
 
 bool Window::WindowHasFocus()
@@ -379,7 +427,17 @@ void Window::processInput(GLFWwindow* window)
     if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
         _camera.ProcessKeyboard(UP, _deltaTime);
     if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
-        _camera.ProcessKeyboard(DOWN, _deltaTime);    
+        _camera.ProcessKeyboard(DOWN, _deltaTime);
+
+    if (Input::KeyPressed(KEY_F)) {
+        ToggleFullscreen();
+        PlaySound(Renderer::g_sounds.fullscreen);
+    }
+
+    if (Input::KeyPressed(KEY_H)) {
+        ToggleWireframe();
+        PlaySound(Renderer::g_sounds.switchmode);
+    }
 }
 
 void Window::mouse_callback(GLFWwindow* window, double xposIn, double yposIn)

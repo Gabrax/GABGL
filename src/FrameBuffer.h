@@ -40,7 +40,7 @@ struct Framebuffer
 
     glGenTextures(1, &_texture);
     glBindTexture(GL_TEXTURE_2D, _texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, Window::_windowedWidth, Window::_windowedHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, Window::GetWindowWidth(), Window::GetWindowHeight(), 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
@@ -48,7 +48,7 @@ struct Framebuffer
 
     glGenRenderbuffers(1, &_RBO);
     glBindRenderbuffer(GL_RENDERBUFFER, _RBO);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, Window::_windowedWidth, Window::_windowedHeight);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, Window::GetWindowWidth(), Window::GetWindowHeight());
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, _RBO);
 
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
@@ -66,8 +66,8 @@ struct Framebuffer
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, _texture);
     _shader.setInt("screenTexture", 0);
-    _shader.setFloat("renderWidth", Window::_currentWidth);
-    _shader.setFloat("renderHeight", Window::_currentHeight);
+    _shader.setFloat("renderWidth", Window::GetWindowWidth());
+    _shader.setFloat("renderHeight", Window::GetWindowHeight());
 
     glBindVertexArray(_VAO);
     glDrawArrays(GL_TRIANGLES, 0, 6);
