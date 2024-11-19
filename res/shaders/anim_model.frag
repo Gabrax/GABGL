@@ -29,7 +29,7 @@ in VS_OUT{
 // SSBO for storing light positions, bound to binding point 0
 layout(std430, binding = 3) buffer LightPositions {
     int numLights;      // Number of lights
-    vec3 positions[10];  // Array of light positions
+    vec4 positions[10];  // Array of light positions
 };
 
 

@@ -26,7 +26,7 @@ struct LoadOBJ{
         // light properties
         _shader.setVec3("light.ambient", 0.2f, 0.2f, 0.2f);
         _shader.setVec3("light.diffuse", 0.1f, 0.1f, 0.1f);
-        _shader.setVec3("light.specular", 1.5f, 1.5f, 1.5f);
+        _shader.setVec3("light.specular", 1.0f, 1.0f, 1.0f);
         _shader.setFloat("light.constant", 1.0f);
         _shader.setFloat("light.linear", 0.09f);
         _shader.setFloat("light.quadratic", 0.032f);

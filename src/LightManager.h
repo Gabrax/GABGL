@@ -28,66 +28,82 @@ struct LightManager {
     };
 
     LightManager() {
-        ssbo.PreAllocate(sizeof(glm::vec3) * maxLights + sizeof(int32_t)); 
+        ssbo.PreAllocate(sizeof(glm::vec4) * maxLights + sizeof(int32_t)); 
         numLights = 0; 
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, ssbo.GetHandle());
     }
 
-    void UpdateLightPositionsInSSBO() {
-        std::vector<glm::vec3> positions;
-        for (const auto& lightPair : lights) {
-            positions.emplace_back(lightPair.second.position);
+    void UpdateLightDataInSSBO() {
+        // Align `numLights` to 16 bytes for std430 layout
+        const size_t numLightsOffset = 16; // First element starts aligned
+        const size_t positionsOffset = numLightsOffset; // `vec4` starts immediately after
+
+        // Calculate buffer size: padded `numLights` + positions
+        size_t bufferSize = positionsOffset + (numLights * sizeof(glm::vec4));
+
+        // Resize buffer
+        std::vector<int8_t> buffer(bufferSize);
+
+        // Copy `numLights` (aligned to 16 bytes)
+        std::memcpy(buffer.data(), &numLights, sizeof(int32_t));
+
+        // Copy positions to the buffer
+        for (size_t i = 0; i < lights.size(); ++i) {
+            glm::vec4 positionWithW(
+                lights[i].second.position.x,
+                lights[i].second.position.y,
+                lights[i].second.position.z,
+                1.0f
+            );
+            std::memcpy(buffer.data() + positionsOffset + (i * sizeof(glm::vec4)), &positionWithW, sizeof(glm::vec4));
         }
 
-        std::vector<int8_t> buffer;
-        buffer.resize(sizeof(int32_t) + positions.size() * sizeof(glm::vec3));
+        ssbo.Update(bufferSize, buffer.data());
 
-        std::memcpy(buffer.data(), &numLights, sizeof(int32_t));
-        std::memcpy(buffer.data() + sizeof(int32_t), positions.data(), positions.size() * sizeof(glm::vec3));
-
-        ssbo.Update(buffer.size(), buffer.data());
-
+        // Synchronize data with GPU
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
+        // DEBUG // 
+        std::vector<int8_t> debugBuffer(bufferSize);
+        glGetNamedBufferSubData(ssbo.GetHandle(), 0, bufferSize, debugBuffer.data());
 
-        //DEBUG//
-        std::vector<int8_t> debugBuffer(buffer.size());
-        glGetNamedBufferSubData(ssbo.GetHandle(), 0, buffer.size(), debugBuffer.data()); // Retrieve SSBO data
+        int* debugNumLights = reinterpret_cast<int*>(debugBuffer.data());
+        std::cout << "numLights: " << *debugNumLights << std::endl;
 
-        int* numLightsPtr = reinterpret_cast<int*>(debugBuffer.data());
-        std::cout << "numLights: " << *numLightsPtr << std::endl;
-
-        glm::vec3* positionsPtr = reinterpret_cast<glm::vec3*>(debugBuffer.data() + sizeof(int32_t));
-        for (size_t i = 0; i < (*numLightsPtr); ++i) {
+        glm::vec4* debugPositions = reinterpret_cast<glm::vec4*>(debugBuffer.data() + positionsOffset);
+        for (size_t i = 0; i < *debugNumLights; ++i) {
             std::cout << "positions[" << i << "]: "
-                      << positionsPtr[i].x << ", "
-                      << positionsPtr[i].y << ", "
-                      << positionsPtr[i].z << std::endl;
+                      << debugPositions[i].x << ", "
+                      << debugPositions[i].y << ", "
+                      << debugPositions[i].z << ", "
+                      << debugPositions[i].w << std::endl;
         }
-        //DEBUG//
+        // DEBUG //
     }
 
     void AddLight(const Color& color, const glm::vec3& position, const glm::vec3& scale = glm::vec3(1.0f), const float& rotation = 0.0f) {
 
         if (numLights >= maxLights) {
-            std::cout << "Max number of lights reached!" << std::endl;
+            std::cout << "Max number of lights reached!" << '\n';
             return;
         }
 
         std::unique_ptr<Light> newLight = std::make_unique<Light>();
         newLight->setLightColor(GetColor(color)); // Set the light color using the enum
 
-        LightData lightData = { position, scale, rotation };
+        glm::vec4 positionWithW(position, 1.0f);
+        LightData lightData = { positionWithW, scale, rotation };
+
         lights.push_back({ std::move(newLight), lightData });
         numLights++; 
-        UpdateLightPositionsInSSBO();
+        UpdateLightDataInSSBO();
     }
 
     void RemoveLight(int index) {
         if (index >= 0 && index < lights.size()) {
             lights.erase(lights.begin() + index);
             numLights--; 
-            UpdateLightPositionsInSSBO();
+            UpdateLightDataInSSBO();
         }
     }
 
@@ -113,7 +129,7 @@ private:
     }
 
     struct LightData {
-      glm::vec3 position;
+      glm::vec4 position;
       glm::vec3 scale;
       float rotation;
     };
