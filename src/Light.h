@@ -14,7 +14,7 @@ struct Light{
         puts("Light loaded"); 
     }
 
-    ~Light(){
+    ~Light() noexcept {
         glDeleteBuffers(1, &_VBO);
         glDeleteVertexArrays(1, &_VAO);
     }
