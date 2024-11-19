@@ -25,9 +25,9 @@ void Engine::Run() {
     LoadDAE guy("res/guy/guy.dae");
     Skybox sky;
     LightManager lightmanager;
-    lightmanager.AddLight(RED, glm::vec3(0.0f, 5.0f, 10.0f), glm::vec3(0.5f));
+    lightmanager.AddLight(RED, glm::vec3(-2.0f, 5.0f, 10.0f), glm::vec3(0.5f));
     lightmanager.AddLight(BLUE, glm::vec3(17.0f, 5.0f, -10.0f), glm::vec3(0.5f));
-    lightmanager.AddLight(GREEN, glm::vec3(-10.0f, 5.0f, -15.0f), glm::vec3(0.5f));
+    lightmanager.AddLight(GREEN, glm::vec3(-12.0f, 5.0f, -1.0f), glm::vec3(0.5f));
 
     Light light;
 
@@ -41,15 +41,13 @@ void Engine::Run() {
 
         Window::BeginFrame();
 
-        glBindFramebuffer(GL_FRAMEBUFFER, mainFB.getFBO()); 
+        glBindFramebuffer(GL_FRAMEBUFFER, mainFB.getFBO());
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glEnable(GL_CULL_FACE);
         glCullFace(GL_FRONT);
         glFrontFace(GL_CW);
-if (Input::KeyPressed(KEY_BACKSPACE)) {
-            lightmanager.AddLight(RED, test, glm::vec3(0.5f));
-        }
+
         lightmanager.RenderLights();
 
         stairs.Render(glm::vec3(1.0f, 0.5f, 2.0f), glm::vec3(1.1f));
@@ -78,6 +76,9 @@ if (Input::KeyPressed(KEY_BACKSPACE)) {
             test.x -= 5.0f;
         }
         
+        if (Input::KeyPressed(KEY_BACKSPACE)) {
+            lightmanager.AddLight(RED, test, glm::vec3(0.5f));
+        }
 
         if (Input::KeyPressed(KEY_R)) {
             Renderer::HotReloadShaders();

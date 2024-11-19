@@ -16,7 +16,7 @@ struct LoadOBJ{
         puts("OBJ loaded");
     }
 
-    ~LoadOBJ() = default;
+    ~LoadOBJ() noexcept = default;
 
     inline void Render(const glm::vec3& position, const glm::vec3& scale = glm::vec3(1.0f), const float rotation = 0.0f){
         _shader.Use();
@@ -55,12 +55,12 @@ private:
 struct LoadDAE {
     LoadDAE(const char* modelpath) 
         : loadmodel(modelpath), 
-          danceAnimation(modelpath, &loadmodel),
-          animator(&danceAnimation) {
+          animation(modelpath, &loadmodel),
+          animator(&animation) {
             puts("DAE loaded");
           }
 
-    ~LoadDAE() = default;
+    ~LoadDAE() noexcept = default;
 
     inline void Render(const glm::vec3& position, const glm::vec3& scale = glm::vec3(1.0f), const float rotation = 0.0f) {
         animator.UpdateAnimation(Window::getDeltaTime());
@@ -102,6 +102,6 @@ private:
     Camera& camera = Window::_camera;
     Shader& _shader = Renderer::g_shaders.animated;
     DAE loadmodel;
-    Animation danceAnimation;
+    Animation animation;
     Animator animator;
 };

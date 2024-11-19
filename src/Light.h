@@ -55,9 +55,6 @@ struct Light{
         glBindVertexArray(_VAO);
         glm::mat4 model = glm::mat4(1.0f); 
         
-        /*float zOffset = sin(glfwGetTime()) * 5.0f; // Adjust the amplitude (2.0f here) as needed*/
-        /*position = initialPosition + glm::vec3(0.0f, 0.0f, zOffset);*/
-        
         model = glm::translate(model, initialPosition);
         model = glm::scale(model, scale);
         model = glm::rotate(model, glm::radians(rotation), glm::vec3(0.0f, 1.0f, 0.0f));

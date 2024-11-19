@@ -26,7 +26,7 @@ in VS_OUT{
     mat3 TBN;
 } fs_in;
 
-// SSBO for storing light positions, bound to binding point 0
+// SSBO for storing light positions
 layout(std430, binding = 3) buffer LightPositions {
     int numLights;      // Number of lights
     vec4 positions[10];  // Array of light positions

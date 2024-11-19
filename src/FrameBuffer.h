@@ -1,6 +1,7 @@
 #pragma once
 
 
+#include "Input.h"
 #include "Window.h"
 #include "glad/glad.h"
 #include "Renderer.h"
@@ -52,7 +53,7 @@ struct Framebuffer
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, _RBO);
 
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-        std::cerr << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
+        std::cerr << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << '\n';
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0); glBindVertexArray(0);
@@ -73,15 +74,37 @@ struct Framebuffer
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glBindVertexArray(0);
 
-    glEnable(GL_DEPTH_TEST); 
+    glEnable(GL_DEPTH_TEST);
+
+    if(Input::KeyPressed(KEY_F)){
+      resize(Window::GetWindowWidth(),Window::GetWindowHeight());
+    }
   }
 
-  GLuint getFBO(){
+  GLuint getFBO() const {
     return _FBO;
   }
 
 
 private:
+
+  void resize(int newWidth, int newHeight) {
+    glBindFramebuffer(GL_FRAMEBUFFER, _FBO);
+
+    // Resize texture
+    glBindTexture(GL_TEXTURE_2D, _texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, newWidth, newHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+
+    // Resize renderbuffer
+    glBindRenderbuffer(GL_RENDERBUFFER, _RBO);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, newWidth, newHeight);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+      std::cerr << "ERROR::FRAMEBUFFER:: Framebuffer is not complete after resizing!" << '\n';
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  }
 
   Shader& _shader = Renderer::g_shaders.mainFB;
   GLuint _VAO, _VBO, _FBO, _RBO, _texture;

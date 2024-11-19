@@ -1,5 +1,4 @@
-#ifndef MESH_H
-#define MESH_H
+#pragma once
 
 #include <glad/glad.h> // holds all OpenGL type declarations
 
@@ -57,7 +56,7 @@ public:
     }
 
     // render the mesh
-    void Draw(Shader &shader) 
+    void Draw(Shader& shader) 
     {
         // bind appropriate textures
         unsigned int diffuseNr  = 1;
@@ -143,4 +142,3 @@ private:
         glBindVertexArray(0);
     }
 };
-#endif

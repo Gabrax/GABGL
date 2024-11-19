@@ -328,7 +328,7 @@ void Window::BeginFrame()
     glfwPollEvents();
 }
 
-float Window::getAspectRatio()
+float Window::getAspectRatio()  
 {
   return static_cast<float>(_windowedWidth) / static_cast<float>(_windowedHeight);
 }
@@ -351,6 +351,26 @@ int Window::GetWindowWidth()
 int Window::GetWindowHeight()
 {
     return _currentHeight;
+}
+
+int Window::GetWindowedWidth()
+{
+  return _windowedWidth;
+}
+
+int Window::GetWindowedHeight()
+{
+  return _windowedHeight;
+}
+
+int Window::GetFullscreenWidth()
+{
+  return _fullscreenWidth;
+}
+
+int Window::GetFullscreenHeight()
+{
+ return _fullscreenHeight;
 }
 
 int Window::GetCursorX()

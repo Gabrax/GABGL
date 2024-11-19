@@ -83,16 +83,17 @@ struct LightManager {
 
     void AddLight(const Color& color, const glm::vec3& position, const glm::vec3& scale = glm::vec3(1.0f), const float& rotation = 0.0f) {
 
-        if (numLights >= maxLights) {
+        if (numLights == maxLights - 1) {
             std::cout << "Max number of lights reached!" << '\n';
             return;
         }
 
         std::unique_ptr<Light> newLight = std::make_unique<Light>();
-        newLight->setLightColor(GetColor(color)); // Set the light color using the enum
+        newLight->setLightColor(GetColor(color));
+        glm::vec4 lightColor = GetColor(color);
 
         glm::vec4 positionWithW(position, 1.0f);
-        LightData lightData = { positionWithW, scale, rotation };
+        LightData lightData = { positionWithW, scale, rotation, lightColor };
 
         lights.push_back({ std::move(newLight), lightData });
         numLights++; 
@@ -132,6 +133,7 @@ private:
       glm::vec4 position;
       glm::vec3 scale;
       float rotation;
+      glm::vec4 color;
     };
 
     std::vector<std::pair<std::unique_ptr<Light>, LightData>> lights; 
