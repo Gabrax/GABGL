@@ -11,6 +11,7 @@
 #include "FrameBuffer.h"
 
 void Engine::Run() {
+
     Window::Init();
     stbi_set_flip_vertically_on_load(true);
 
@@ -25,13 +26,11 @@ void Engine::Run() {
     LoadDAE guy("res/guy/guy.dae");
     Skybox sky;
     LightManager lightmanager;
-    lightmanager.AddLight(RED, glm::vec3(-2.0f, 5.0f, 10.0f), glm::vec3(0.5f));
-    lightmanager.AddLight(BLUE, glm::vec3(17.0f, 5.0f, -10.0f), glm::vec3(0.5f));
-    lightmanager.AddLight(GREEN, glm::vec3(-12.0f, 5.0f, -1.0f), glm::vec3(0.5f));
+    lightmanager.AddLight(Color::Red, glm::vec3(-2.0f, 5.0f, 10.0f), glm::vec3(0.5f));
+    lightmanager.AddLight(Color::Blue, glm::vec3(17.0f, 5.0f, -10.0f), glm::vec3(0.5f));
+    lightmanager.AddLight(Color::Green, glm::vec3(-12.0f, 5.0f, -1.0f), glm::vec3(0.5f));
 
-    Light light;
-
-    TextRenderer textRenderer(3);
+    TextRenderer textRenderer;
 
     Framebuffer mainFB;
 
@@ -64,9 +63,9 @@ void Engine::Run() {
 
         mainFB.render();
 
-        textRenderer.renderText(0, "CamPos: ", Window::_camera.Position.x, Window::_camera.Position.y, Window::_camera.Position.z);
-        textRenderer.renderText(1, "CamRot: ", Window::_camera.Yaw, Window::_camera.Pitch);
-                textRenderer.renderText(2, ": ", test.x);
+        textRenderer.renderText("CamPos: ", Window::_camera.Position.x, Window::_camera.Position.y, Window::_camera.Position.z);
+        textRenderer.renderText("CamRot: ", Window::_camera.Yaw, Window::_camera.Pitch);
+        textRenderer.renderText(": ", test.x);
         textRenderer.drawTexts();
 
         if (Input::KeyDown(KEY_UP)) {
@@ -77,7 +76,7 @@ void Engine::Run() {
         }
         
         if (Input::KeyPressed(KEY_BACKSPACE)) {
-            lightmanager.AddLight(RED, test, glm::vec3(0.5f));
+            lightmanager.AddLight(Color::Red, test, glm::vec3(0.5f));
         }
 
         if (Input::KeyPressed(KEY_R)) {

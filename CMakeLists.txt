@@ -78,6 +78,7 @@ add_subdirectory(vendor/glText)              # Easy drawing text
 add_subdirectory(vendor/raudio)              # Audio
 add_subdirectory(vendor/glm)                 # Math
 add_subdirectory(vendor/imgui-docking)       # UI
+add_subdirectory(vendor/tinyobj)             # obj loader
 set(RAPIDJSON_BUILD_EXAMPLES OFF CACHE BOOL "Disable RapidJSON examples" FORCE)
 set(RAPIDJSON_BUILD_TESTS OFF CACHE BOOL "Disable RapidJSON tests" FORCE)
 add_subdirectory(vendor/rapidjson)           # JSON Parser
@@ -111,4 +112,4 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 endif()
 
 # Target link libraries
-target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp glText)
+target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp glText tinyOBJ)

@@ -7,7 +7,6 @@ namespace Renderer {
 
     struct Shaders 
     {
-      Shader cube;
       Shader model;
       Shader skybox;
       Shader animated;
@@ -27,4 +26,10 @@ namespace Renderer {
     void Initialize();
     void BakeShaders();
     void HotReloadShaders();
+    
+    namespace Scene {
+      void Init();
+      void Render();
+    }
+    
 }

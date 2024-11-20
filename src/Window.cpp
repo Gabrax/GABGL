@@ -490,7 +490,9 @@ void Window::scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 
 void Window::framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
-    glViewport(0, 0, width, height);
+    if (width > 0 && height > 0) {
+        glViewport(0, 0, width, height);  // Only update the viewport if width and height are valid
+    }
 }
 
 void Window::window_focus_callback(GLFWwindow* window, int focused)

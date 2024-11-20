@@ -3,6 +3,10 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <iostream>
+#include <stdexcept>
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
 #define GLT_IMPLEMENTATION
 #include "gltext.h"
 #include <sstream>
@@ -11,38 +15,44 @@
 
 
 struct TextRenderer {
+    std::vector<GLTtext*> texts; // Store all text objects
+    size_t nextIndex = 0;        // Tracks the next available index
 
-    std::vector<GLTtext*> texts;
-
-    // Constructor to initialize a specified number of GLTtext objects
-    TextRenderer(size_t count = 1) {
-        gltInit();
-        for (size_t i = 0; i < count; ++i) {
-            GLTtext* text = gltCreateText();
-            gltSetText(text, "");
-            texts.push_back(text);
+    // Constructor: Initialize GLT
+    TextRenderer() {
+        if (!gltInit()) {
+            throw std::runtime_error("Failed to initialize glText!");
         }
     }
 
-    // Destructor to free allocated GLTtext objects
+    // Destructor: Free allocated GLTtext objects
     ~TextRenderer() {
         for (auto text : texts) {
-            gltDeleteText(text);
+            if (text) {
+                gltDeleteText(text);
+            }
         }
+        gltTerminate();
     }
 
-    // Template function to set and render text with optional arguments
+    // Template function to add or update text dynamically
     template<typename... Args>
-    void renderText(size_t index, const char* prefix, Args... args) {
-        if (index >= texts.size()) return;  // Ensure index is in range
+    void renderText(const char* prefix, Args... args) {
+        // Ensure the vector has enough room for the current index
+        if (nextIndex >= texts.size()) {
+            texts.push_back(gltCreateText()); // Create new text object if needed
+        }
 
+        // Construct the text
         std::ostringstream oss;
         oss << prefix;
-        
-        // Using fold expression to insert each argument into the stream
         ((oss << std::fixed << std::setprecision(2) << args << " "), ...);
 
-        gltSetText(texts[index], oss.str().c_str());
+        // Update the text at the current index
+        gltSetText(texts[nextIndex], oss.str().c_str());
+
+        // Increment the index for the next text
+        nextIndex++;
     }
 
     // Function to render all stored GLTtext objects on screen
@@ -53,14 +63,20 @@ struct TextRenderer {
 
         gltBeginDraw();
         gltColor(1.0f, 1.0f, 1.0f, 1.0f);  // Set text color to white
+
         float yOffset = 0.0f;
-        for (GLTtext* text : texts) {
-            gltDrawText2D(text, 0.0f, yOffset, 2.0f);
-            yOffset += 40.0f;  // Adjust vertical spacing as needed
+        for (size_t i = 0; i < nextIndex; ++i) { // Only render up to `nextIndex`
+            if (texts[i]) {
+                gltDrawText2D(texts[i], 0.0f, yOffset, 2.0f);
+                yOffset += 40.0f;  // Adjust vertical spacing as needed
+            }
         }
         gltEndDraw();
 
         glDisable(GL_BLEND);
         glDepthMask(GL_TRUE);
+
+        // Reset index for the next frame
+        nextIndex = 0;
     }
 };

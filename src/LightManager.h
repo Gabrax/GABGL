@@ -8,24 +8,20 @@
 #include "LoadSSBO.h" 
 #include "glad/glad.h"
 
-#define RED     LightManager::Color::Red
-#define GREEN   LightManager::Color::Green
-#define BLUE    LightManager::Color::Blue
-#define YELLOW  LightManager::Color::Yellow
-#define WHITE   LightManager::Color::White
-#define PURPLE  LightManager::Color::Purple
+
+
+enum class Color
+{
+  Red,
+  Green,
+  Blue,
+  Yellow,
+  White,
+  Purple
+};
 
 struct LightManager {
 
-    enum Color
-    {
-      Red,
-      Green,
-      Blue,
-      Yellow,
-      White,
-      Purple
-    };
 
     LightManager() {
         // Pre-allocate SSBOs for positions and colors
@@ -141,7 +137,8 @@ private:
         }
     }
 
-    struct LightData {
+    struct LightData 
+    {
         glm::vec4 position;
         glm::vec3 scale;
         float rotation;

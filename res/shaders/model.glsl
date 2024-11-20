@@ -1,3 +1,42 @@
+#type VERTEX
+#version 330 core
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec3 aNormal;
+layout (location = 2) in vec2 aTexCoords;
+layout (location = 3) in vec3 tangent;
+layout (location = 4) in vec3 bitangent;
+
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
+
+out VS_OUT{
+    vec2 TexCoords;
+    vec3 Normal;
+    vec3 FragPos;
+    vec3 TBN_FragPos;
+    mat3 TBN;
+} vs_out;
+
+void main()
+{
+    vs_out.FragPos = vec3(model * vec4(aPos, 1.0));
+    vs_out.Normal = mat3(transpose(inverse(model))) * aNormal;  
+
+    // Tangent space matrix (TBN)
+    vec3 T = normalize(mat3(model) * tangent);
+    vec3 B = normalize(mat3(model) * bitangent);
+    vec3 N = normalize(mat3(model) * aNormal);
+    vs_out.TBN = mat3(T, B, N);
+
+    // Tangent-space position for fragment shader
+    vs_out.TBN_FragPos = vs_out.TBN * vs_out.FragPos;
+
+    gl_Position = projection * view * vec4(vs_out.FragPos, 1.0);
+    vs_out.TexCoords = aTexCoords;
+}
+
+#type FRAGMENT
 #version 430 core
 
 out vec4 FragColor;
@@ -9,7 +48,9 @@ struct Material {
     float shininess;
 };
 
+// Light structure to hold properties like ambient, diffuse, etc.
 struct Light {
+    vec3 position;
     vec3 ambient;
     vec3 diffuse;
     vec3 specular;
@@ -19,30 +60,31 @@ struct Light {
     float quadratic;
 };
 
-in VS_OUT{
+in VS_OUT {
     vec2 TexCoords;
+    vec3 Normal;
     vec3 FragPos;
     vec3 TBN_FragPos;
     mat3 TBN;
 } fs_in;
 
-// SSBO storing light positions
+// SSBO for storing light positions
 layout(std430, binding = 3) buffer LightPositions {
     int numLights;      // Number of lights
     vec4 positions[10];  // Array of light positions
 };
-// SSBO storing light colors
+
 layout(std430, binding = 4) buffer LightColors {
     vec4 colors[10];  // Array of lights colors
 };
 
 uniform vec3 viewPos;  // Camera position
 uniform Material material;
-uniform Light light;
+uniform Light light;    // Shared light properties for all lights
 
-// Gamma correction parameters
 const float gamma = 2.2;
 
+// Gamma correction function
 float gammaCorrection(float value) {
     return pow(value, 1.0 / gamma);
 }
@@ -59,7 +101,7 @@ vec3 toneMappingACES(vec3 color) {
     const float d = 0.59;
     const float e = 0.14;
 
-    // ACES tone mapping curve
+// ACES tone mapping curve
     return clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0, 1.0);
 }
 
@@ -116,11 +158,13 @@ void main() {
         totalSpecular += specular;
     }
 
-    // Combine all lighting components and apply gamma correction
+    // Combine all lighting components
     vec3 result = totalAmbient + totalDiffuse + totalSpecular;
 
+    // Apply tone mapping
     result = toneMappingACES(result);
 
+    // Apply gamma correction
     result = gammaCorrection(result);
 
     // Output the final color
