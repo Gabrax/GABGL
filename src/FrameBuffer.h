@@ -1,10 +1,11 @@
 #pragma once
 
 
-#include "Input.h"
+#include "Input/Input.h"
 #include "Window.h"
 #include "glad/glad.h"
 #include "Renderer.h"
+#include "Bloom.h"
 
 struct Framebuffer
 {
@@ -22,19 +23,6 @@ struct Framebuffer
   }
 
   void initQuad(){
-
-    glGenVertexArrays(1, &_VAO);
-    glGenBuffers(1, &_VBO);
-
-    glBindVertexArray(_VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, _VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
-
-    glEnableVertexAttribArray(0); // Position attribute
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-
-    glEnableVertexAttribArray(1); // Texture coordinate attribute
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
 
     glGenFramebuffers(1, &_FBO);
     glBindFramebuffer(GL_FRAMEBUFFER, _FBO);
@@ -59,7 +47,7 @@ struct Framebuffer
     glBindFramebuffer(GL_FRAMEBUFFER, 0); glBindVertexArray(0);
   }
 
-  void render(){
+  void render(BloomRenderer& bloom){
 
     glDisable(GL_DEPTH_TEST); 
     _shader.Use();  
@@ -67,12 +55,13 @@ struct Framebuffer
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, _texture);
     _shader.setInt("screenTexture", 0);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, bloom.BloomTexture());
+    _shader.setInt("screenTexture2", 1);
     _shader.setFloat("renderWidth", Window::GetWindowWidth());
     _shader.setFloat("renderHeight", Window::GetWindowHeight());
 
-    glBindVertexArray(_VAO);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-    glBindVertexArray(0);
+    renderQuad();
 
     glEnable(GL_DEPTH_TEST);
 
@@ -107,16 +96,33 @@ private:
   }
 
   Shader& _shader = Renderer::g_shaders.mainFB;
-  GLuint _VAO, _VBO, _FBO, _RBO, _texture;
-  GLfloat quadVertices[24] = {
-        // positions   // texCoords
-    -1.0f,  1.0f,  0.0f, 1.0f,
-    -1.0f, -1.0f,  0.0f, 0.0f,
-     1.0f, -1.0f,  1.0f, 0.0f,
+  GLuint _VAO = 0, _VBO, _FBO, _RBO, _texture;
+  void renderQuad()
+  {
+    if (_VAO == 0)
+    {
+        GLfloat quadVertices[20] = {
+            // positions        // texture Coords
+            -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+             1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+             1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+        };
+        // setup plane VAO
+        glGenVertexArrays(1, &_VAO);
+        glGenBuffers(1, &_VBO);
+        glBindVertexArray(_VAO);
+        glBindBuffer(GL_ARRAY_BUFFER, _VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    }
+    glBindVertexArray(_VAO);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glBindVertexArray(0);
+  }
 
-    -1.0f,  1.0f,  0.0f, 1.0f,
-     1.0f, -1.0f,  1.0f, 0.0f,
-     1.0f,  1.0f,  1.0f, 1.0f
-  };
 
 };

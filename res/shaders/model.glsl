@@ -39,7 +39,8 @@ void main()
 #type FRAGMENT
 #version 430 core
 
-out vec4 FragColor;
+layout (location = 0) out vec4 FragColor;
+layout (location = 1) out vec4 BrightColor;
 
 struct Material {
     sampler2D diffuse;
@@ -105,68 +106,150 @@ vec3 toneMappingACES(vec3 color) {
     return clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0, 1.0);
 }
 
-void main() {
-    vec3 totalAmbient = vec3(0.0);
-    vec3 totalDiffuse = vec3(0.0);
-    vec3 totalSpecular = vec3(0.0);
 
-    // Define ratios for ambient, diffuse, and specular
-    const float ambientRatio = 0.3;
-    const float diffuseRatio = 0.6;
-    const float specularRatio = 0.1;
+void main() {           
+    // Sample diffuse color and normalize the interpolated normal
+    vec3 color = texture(material.diffuse, fs_in.TexCoords).rgb;
+    vec3 normal = normalize(fs_in.Normal);
+
+    // Ambient lighting
+    vec3 ambient = 0.0 * color;
+
+    // Initialize lighting components
+    vec3 lighting = vec3(0.0);
+
+    // View direction
+    vec3 viewDir = normalize(viewPos - fs_in.FragPos);
 
     for (int i = 0; i < numLights; i++) {
-        vec3 lightPos = positions[i].xyz;  // Access the light position from the SSBO
+        // Calculate light direction and attenuation
+        vec3 lightDir = normalize(positions[i].xyz - fs_in.FragPos);
 
-        // Split color into ambient, diffuse, and specular components
-        vec3 lightColor = colors[i].rgb;
-        vec3 ambientColor = lightColor * ambientRatio;
-        vec3 diffuseColor = lightColor * diffuseRatio;
-        vec3 specularColor = lightColor * specularRatio;
+        // Diffuse lighting
+        float diff = max(dot(lightDir, normal), 0.0);
+        vec3 result = colors[i].rgb * diff * color;
 
-        // Calculate ambient lighting
-        vec3 ambient = ambientColor * texture(material.diffuse, fs_in.TexCoords).rgb;
+        float distance = length(fs_in.FragPos - positions[i].xyz);
+        // Combine diffuse and specular, applying attenuation
+        result *= 3.0 / (distance * distance);
 
-        // Normal mapping: get perturbed normal
-        vec3 normal = texture(material.normalMap, fs_in.TexCoords).rgb;
-        normal = normalize(normal * 2.0 - 1.0);  // Transform to range [-1, 1]
-        vec3 perturbedNormal = normalize(fs_in.TBN * normal);  // Convert to world space
-
-        // Calculate light direction for the current light position
-        vec3 lightDir = normalize(lightPos - fs_in.FragPos);
-        float diff = max(dot(perturbedNormal, lightDir), 0.0);
-        vec3 diffuse = diffuseColor * diff * texture(material.diffuse, fs_in.TexCoords).rgb;
-
-        // Specular lighting (Blinn-Phong)
-        vec3 viewDir = normalize(viewPos - fs_in.FragPos);
-        vec3 halfwayDir = normalize(lightDir + viewDir);  // Blinn-Phong halfway vector
-        float spec = pow(max(dot(perturbedNormal, halfwayDir), 0.0), material.shininess);
-        vec3 specular = specularColor * (spec * material.specular);
-
-        // Calculate attenuation based on distance to light source
-        float distance = length(lightPos - fs_in.FragPos);
-        float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * (distance * distance));
-
-        // Apply attenuation to each light's contribution
-        ambient  *= attenuation;
-        diffuse  *= attenuation;
-        specular *= attenuation;
-
-        // Accumulate each light’s isolated effect to the totals
-        totalAmbient  += ambient;
-        totalDiffuse  += diffuse;
-        totalSpecular += specular;
+        // Accumulate lighting
+        lighting += result;
     }
 
-    // Combine all lighting components
-    vec3 result = totalAmbient + totalDiffuse + totalSpecular;
+    // Combine ambient and lighting
+    vec3 result = ambient + lighting;
 
-    // Apply tone mapping
+    // Apply tone mapping (ACES)
     result = toneMappingACES(result);
 
-    // Apply gamma correction
-    result = gammaCorrection(result);
+    // // Apply gamma correction
+    // result = gammaCorrection(result);
+
+    // Determine bloom threshold color
+    float brightness = dot(result, vec3(0.2126, 0.7152, 0.0722)); // Luminance calculation
+    if (brightness > 1.0)
+        BrightColor = vec4(result, 1.0);
+    else
+        BrightColor = vec4(0.0, 0.0, 0.0, 1.0);
 
     // Output the final color
     FragColor = vec4(result, 1.0);
 }
+
+// void main() {
+//     vec3 totalAmbient = vec3(0.0);
+//     vec3 totalDiffuse = vec3(0.0);
+//     vec3 totalSpecular = vec3(0.0);
+//
+//     // Define ratios for ambient, diffuse, and specular
+//     const float ambientRatio = 0.3;
+//     const float diffuseRatio = 0.6;
+//     const float specularRatio = 0.1;
+//
+//     for (int i = 0; i < numLights; i++) {
+//         vec3 lightPos = positions[i].xyz;  // Access the light position from the SSBO
+//
+//         // Split color into ambient, diffuse, and specular components
+//         vec3 lightColor = colors[i].rgb;
+//         vec3 ambientColor = lightColor * ambientRatio;
+//         vec3 diffuseColor = lightColor * diffuseRatio;
+//         vec3 specularColor = lightColor * specularRatio;
+//
+//         // Calculate ambient lighting
+//         vec3 ambient = ambientColor * texture(material.diffuse, fs_in.TexCoords).rgb;
+//
+//         // Normal mapping: get perturbed normal
+//         vec3 normal = texture(material.normalMap, fs_in.TexCoords).rgb;
+//         normal = normalize(normal * 2.0 - 1.0);  // Transform to range [-1, 1]
+//         vec3 perturbedNormal = normalize(fs_in.TBN * normal);  // Convert to world space
+//
+//         // Calculate light direction for the current light position
+//         vec3 lightDir = normalize(lightPos - fs_in.FragPos);
+//         float diff = max(dot(perturbedNormal, lightDir), 0.0);
+//         vec3 diffuse = diffuseColor * diff * texture(material.diffuse, fs_in.TexCoords).rgb;
+//
+//         // Specular lighting (Blinn-Phong)
+//         vec3 viewDir = normalize(viewPos - fs_in.FragPos);
+//         vec3 halfwayDir = normalize(lightDir + viewDir);  // Blinn-Phong halfway vector
+//         float spec = pow(max(dot(perturbedNormal, halfwayDir), 0.0), material.shininess);
+//         vec3 specular = specularColor * (spec * material.specular);
+//
+//         // Calculate attenuation based on distance to light source
+//         float distance = length(lightPos - fs_in.FragPos);
+//         float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * (distance * distance));
+//
+//         // Apply attenuation to each light's contribution
+//         ambient  *= attenuation;
+//         diffuse  *= attenuation;
+//         specular *= attenuation;
+//
+//         // Accumulate each light’s isolated effect to the totals
+//         totalAmbient  += ambient;
+//         totalDiffuse  += diffuse;
+//         totalSpecular += specular;
+//     }
+//
+//     // Combine all lighting components
+//     vec3 result = totalAmbient + totalDiffuse + totalSpecular;
+//
+//     // Apply tone mapping
+//     result = toneMappingACES(result);
+//
+//     // Apply gamma correction
+//     result = gammaCorrection(result);
+//
+//     // Output the final color
+//     FragColor = vec4(result, 1.0);
+// }
+
+// void main()
+// {           
+//     vec3 color = texture(diffuseTexture, fs_in.TexCoords).rgb;
+//     vec3 normal = normalize(fs_in.Normal);
+//     // ambient
+//     vec3 ambient = 0.0 * color;
+//     // lighting
+//     vec3 lighting = vec3(0.0);
+//     vec3 viewDir = normalize(viewPos - fs_in.FragPos);
+//     for(int i = 0; i < numLights; i++)
+//     {
+//         // diffuse
+//         vec3 lightDir = normalize(positions[i].xyz - fs_in.FragPos);
+//         float diff = max(dot(lightDir, normal), 0.0);
+//         vec3 result = lights[i].Color * diff * color;      
+//         // attenuation (use quadratic as we have gamma correction)
+//         float distance = length(fs_in.FragPos - positions[i].xyz);
+//         result *= 3.0 / (distance * distance);
+//         lighting += result;
+//
+//     }
+//     vec3 result = ambient + lighting;
+//     // check whether result is higher than some threshold, if so, output as bloom threshold color
+//     float brightness = dot(result, vec3(0.2126, 0.7152, 0.0722));
+//     if(brightness > 1.0)
+//         BrightColor = vec4(result, 1.0);
+//     else
+//         BrightColor = vec4(0.0, 0.0, 0.0, 1.0);
+//     FragColor = vec4(result, 1.0);
+// }

@@ -1,5 +1,5 @@
 #include "Input.h"
-#include "Window.h"
+#include "../Window.h"
 
 namespace Input
 {

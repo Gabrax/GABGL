@@ -9,6 +9,12 @@
 #include <unordered_map>
 
 struct Shader {
+
+    ~Shader() = default;
+
+    void Delete(){
+      this->~Shader();
+    }
     
     void Load(const char* fullshader)
     {

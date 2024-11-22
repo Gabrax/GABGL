@@ -11,7 +11,6 @@
 struct Light{
     Light() { 
         Bake();
-        puts("Light loaded"); 
     }
 
     ~Light() noexcept {
@@ -42,6 +41,8 @@ struct Light{
         // texture coord attribute
         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
         glEnableVertexAttribArray(1);
+
+        puts("Light loaded");
     }
 
     inline void Render(const glm::vec3& initialPosition, const glm::vec3& scale = glm::vec3(1.0f),float rotation = 0.0f){ 

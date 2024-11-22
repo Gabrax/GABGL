@@ -24,7 +24,6 @@ void main()
     
     gl_Position = projection * view * model * vec4(aPos, 1.0);
 }
- 
 
 #type FRAGMENT
 #version 330 core
@@ -37,26 +36,14 @@ in VS_OUT {
     vec2 TexCoords;
 } fs_in;
 
-uniform vec4 lightColor;
-
-// Gamma correction parameters
-const float gamma = 2.2;
-
-float gammaCorrection(float value) {
-    return pow(value, 1.0 / gamma);
-}
-
-vec3 gammaCorrection(vec3 value) {
-    return pow(value, vec3(1.0 / gamma));
-}
+uniform vec3 lightColor;
 
 void main()
 {           
-    FragColor = vec4(lightColor.rgb, 1.0);
+    FragColor = vec4(lightColor, 1.0);
     float brightness = dot(FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
-    if(brightness < 1.0)
+    if(brightness > 1.0)
         BrightColor = vec4(FragColor.rgb, 1.0);
 	else
 		BrightColor = vec4(0.0, 0.0, 0.0, 1.0);
 }
-

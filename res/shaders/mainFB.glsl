@@ -17,7 +17,8 @@ out vec4 FragColor;
 
 in vec2 TexCoords;
 
-uniform sampler2D screenTexture;
+uniform sampler2D screenTexture;  // Main scene texture
+uniform sampler2D screenTexture2; // Bloom texture
 
 uniform float renderWidth;
 uniform float renderHeight;

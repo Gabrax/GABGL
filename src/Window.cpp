@@ -2,7 +2,7 @@
 #include <string>
 
 
-#include "Input.h"
+#include "Input/Input.h"
 #include "Window.h"
 #include "stb_image.h"
 #include "gltext.h"

@@ -14,10 +14,13 @@ void Renderer::Initialize()
 void Renderer::BakeShaders()
 {
   g_shaders.model.Load("res/shaders/model.glsl");
-  g_shaders.skybox.Load("res/shaders/skybox.glsl");
   g_shaders.animated.Load("res/shaders/anim_model.glsl");
+  g_shaders.skybox.Load("res/shaders/skybox.glsl");
   g_shaders.light.Load("res/shaders/light.glsl");
   g_shaders.mainFB.Load("res/shaders/mainFB.glsl");
+  g_shaders.bloom_downsample.Load("res/shaders/bloom_downsample.glsl");
+  g_shaders.bloom_upsample.Load("res/shaders/bloom_upsample.glsl");
+  g_shaders.bloom_final.Load("res/shaders/bloom_final.glsl");
 }
 
 void Renderer::HotReloadShaders()

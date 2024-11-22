@@ -12,6 +12,9 @@ namespace Renderer {
       Shader animated;
       Shader light;
       Shader mainFB;
+      Shader bloom_downsample;
+      Shader bloom_upsample;
+      Shader bloom_final;
     };
     extern Shaders g_shaders;
 

@@ -188,7 +188,7 @@ void main() {
 
     result = toneMappingACES(result);
 
-    result = gammaCorrection(result);
+    // result = gammaCorrection(result);
 
     // Output the final color
     FragColor = vec4(result, 1.0);
