@@ -30,7 +30,7 @@ void Engine::Run() {
     lightmanager.AddLight(Color::Blue, glm::vec3(17.0f, 5.0f, -10.0f), glm::vec3(0.5f));
     lightmanager.AddLight(Color::Green, glm::vec3(-12.0f, 5.0f, -1.0f), glm::vec3(0.5f));
 
-    /*TextRenderer textRenderer;*/
+    TextRenderer textRenderer;
 
     Framebuffer mainFB;
 
@@ -43,15 +43,8 @@ void Engine::Run() {
 
         Window::BeginFrame();
 
-
-        glBindFramebuffer(GL_FRAMEBUFFER, bloom.getFBO());
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        lightmanager.RenderLights(); // Render lights to bloom FBO
-
-        bloom.RenderBloomTexture(0.005f);
-
-        /*glBindFramebuffer(GL_FRAMEBUFFER, mainFB.getFBO());*/
+        mainFB.Bind(); 
+        glEnable(GL_DEPTH_TEST);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glEnable(GL_CULL_FACE);
@@ -66,15 +59,24 @@ void Engine::Run() {
         glDisable(GL_CULL_FACE);
 
         sky.Render(); 
+        mainFB.UnBind();
+        
+        bloom.Bind();
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        lightmanager.RenderLights(); 
+        bloom.RenderBloomTexture(0.005f);
+        bloom.UnBind();
         bloom.Render();
 
-        /*mainFB.render(bloom);*/
+        mainFB.render(bloom);
 
-        /*textRenderer.renderText("CamPos: ", Window::_camera.Position.x, Window::_camera.Position.y, Window::_camera.Position.z);*/
-        /*textRenderer.renderText("CamRot: ", Window::_camera.Yaw, Window::_camera.Pitch);*/
-        /*textRenderer.renderText(": ", test.x);*/
-        /*textRenderer.drawTexts();*/
+        glDisable(GL_DEPTH_TEST);
+
+        textRenderer.renderText("CamPos: ", Window::_camera.Position.x, Window::_camera.Position.y, Window::_camera.Position.z);
+        textRenderer.renderText("CamRot: ", Window::_camera.Yaw, Window::_camera.Pitch);
+        textRenderer.renderText(": ", test.x);
+        textRenderer.drawTexts();
 
         if (Input::KeyDown(KEY_UP)) {
             test.x += 5.0f;

@@ -1,11 +1,11 @@
 #pragma once
 
 
+#include "Bloom.h"
 #include "Input/Input.h"
 #include "Window.h"
 #include "glad/glad.h"
 #include "Renderer.h"
-#include "Bloom.h"
 
 struct Framebuffer
 {
@@ -44,7 +44,7 @@ struct Framebuffer
         std::cerr << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << '\n';
     }
 
-    glBindFramebuffer(GL_FRAMEBUFFER, 0); glBindVertexArray(0);
+     glBindVertexArray(0);
   }
 
   void render(BloomRenderer& bloom){
@@ -55,9 +55,10 @@ struct Framebuffer
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, _texture);
     _shader.setInt("screenTexture", 0);
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, bloom.BloomTexture());
-    _shader.setInt("screenTexture2", 1);
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, bloom.getBloomTexture());
+    _shader.setInt("screenTexture3", 2);
+
     _shader.setFloat("renderWidth", Window::GetWindowWidth());
     _shader.setFloat("renderHeight", Window::GetWindowHeight());
 
@@ -70,8 +71,11 @@ struct Framebuffer
     }
   }
 
-  GLuint getFBO() const {
-    return _FBO;
+  void Bind() const {
+    glBindFramebuffer(GL_FRAMEBUFFER, _FBO);
+  }
+  void UnBind() const {
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
   }
 
 

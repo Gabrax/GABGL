@@ -20,7 +20,7 @@ in vec2 TexCoords;
 uniform sampler2D scene;
 uniform sampler2D bloomBlur;
 uniform float exposure = 1.0f;
-uniform float bloomStrength = 0.10f;
+uniform float bloomStrength = 0.15f;
 
 
 vec3 bloom_new()
