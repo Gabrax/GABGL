@@ -25,25 +25,25 @@ void Engine::Run() {
     LoadOBJ stairs("res/stairs/Stairs.obj");
     LoadDAE guy("res/guy/guy.dae");
     Skybox sky;
+
     LightManager lightmanager;
     lightmanager.AddLight(Color::Red, glm::vec3(-2.0f, 5.0f, 10.0f), glm::vec3(0.5f));
     lightmanager.AddLight(Color::Blue, glm::vec3(17.0f, 5.0f, -10.0f), glm::vec3(0.5f));
     lightmanager.AddLight(Color::Green, glm::vec3(-12.0f, 5.0f, -1.0f), glm::vec3(0.5f));
+    lightmanager.AddLight(Color::Orange, glm::vec3(17.0f, 5.0f, 10.0f), glm::vec3(0.5f));
 
     TextRenderer textRenderer;
 
-    Framebuffer mainFB;
-
-      
-    glm::vec3 test = glm::vec3(0.0f);
-
     BloomRenderer bloom;
+    /*Framebuffer mainFB;*/
+      
+    glm::vec3 test = glm::vec3(0.0f,5.0f,0.0f);
 
     while (Window::WindowIsOpen() && Window::WindowHasNotBeenForceClosed()) {
 
         Window::BeginFrame();
 
-        mainFB.Bind(); 
+        bloom.Bind();
         glEnable(GL_DEPTH_TEST);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -56,20 +56,17 @@ void Engine::Run() {
         backpack.Render(glm::vec3(-2.0f, 3.0f, 10.0f), glm::vec3(0.25f), 90.0f);
         guy.Render(glm::vec3(0.0f, 0.50f, 8.0f), glm::vec3(1.0f));
 
+        lightmanager.RenderLights();
+
         glDisable(GL_CULL_FACE);
 
-        sky.Render(); 
-        mainFB.UnBind();
-        
-        bloom.Bind();
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        lightmanager.RenderLights(); 
+        sky.Render();
         bloom.RenderBloomTexture(0.005f);
         bloom.UnBind();
+       
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         bloom.Render();
-
-        mainFB.render(bloom);
+        
 
         glDisable(GL_DEPTH_TEST);
 
@@ -81,6 +78,7 @@ void Engine::Run() {
         if (Input::KeyDown(KEY_UP)) {
             test.x += 5.0f;
         }
+
         if (Input::KeyDown(KEY_DOWN)) {
             test.x -= 5.0f;
         }

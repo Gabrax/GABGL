@@ -242,6 +242,18 @@ bool BloomRenderer::Init()
   glBindRenderbuffer(GL_RENDERBUFFER, rboDepth);
   glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, Window::GetWindowWidth(), Window::GetWindowHeight());
   glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rboDepth);
+  
+  glGenTextures(1, &depthTexture);
+  glBindTexture(GL_TEXTURE_2D, depthTexture);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, Window::GetWindowWidth(), Window::GetWindowHeight(), 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTexture, 0);
+
+
+
   // tell OpenGL which color attachments we'll use (of this framebuffer) for rendering
   unsigned int attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
   glDrawBuffers(2, attachments);
@@ -379,10 +391,10 @@ void BloomRenderer::RenderBloomTexture(float filterRadius)
 
 	this->RenderDownsamples(colorBuffers[1]);
 	this->RenderUpsamples(filterRadius);
-    if(Input::KeyPressed(KEY_F)){
-      Resize(Window::GetWindowWidth(),Window::GetWindowHeight());
-    }
-	
+
+  if(Input::KeyPressed(KEY_F)){
+    Resize(Window::GetWindowWidth(),Window::GetWindowHeight());
+  }
 }
 
 void BloomRenderer::Resize(int newWidth, int newHeight) {
@@ -450,6 +462,11 @@ void BloomRenderer::UnBind() const
 GLuint BloomRenderer::getBloomTexture()
 {
 	return mFBO.MipChain()[0].texture;
+}
+
+GLuint BloomRenderer::getDepthTexture()
+{
+	return depthTexture;
 }
 
 GLuint BloomRenderer::BloomMip_i(int index)
