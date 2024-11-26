@@ -21,7 +21,6 @@ private:
   uint32_t hdrFBO, 
            colorBuffers[2],
            rboDepth,
-           depthTexture,
            pingpongFBO[2], 
            pingpongColorbuffers[2];
   

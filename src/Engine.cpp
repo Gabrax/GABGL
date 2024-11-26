@@ -7,7 +7,6 @@
 #include "LightManager.h"
 #include "Window.h"
 #include "LoadText.h"
-#include "FrameBuffer.h"
 #include "glad/glad.h"
 
 void Engine::Run() {
@@ -35,7 +34,6 @@ void Engine::Run() {
     TextRenderer textRenderer;
 
     BloomRenderer bloom;
-    /*Framebuffer mainFB;*/
       
     glm::vec3 test = glm::vec3(0.0f,5.0f,0.0f);
 
@@ -72,7 +70,7 @@ void Engine::Run() {
 
         textRenderer.renderText("CamPos: ", Window::_camera.Position.x, Window::_camera.Position.y, Window::_camera.Position.z);
         textRenderer.renderText("CamRot: ", Window::_camera.Yaw, Window::_camera.Pitch);
-        textRenderer.renderText(": ", test.x);
+        textRenderer.renderText("testcube: ", test.x);
         textRenderer.drawTexts();
 
         if (Input::KeyDown(KEY_UP)) {
@@ -84,7 +82,7 @@ void Engine::Run() {
         }
         
         if (Input::KeyPressed(KEY_BACKSPACE)) {
-            lightmanager.AddLight(Color::Red, test, glm::vec3(0.5f));
+            lightmanager.AddLight(Color::Orange_bright, test, glm::vec3(0.5f));
         }
 
         if (Input::KeyPressed(KEY_R)) {

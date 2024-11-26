@@ -17,6 +17,7 @@ enum class Color
   Blue,
   Yellow,
   Orange,
+  Orange_bright,
   White,
   Purple
 };
@@ -133,6 +134,7 @@ private:
             case Color::Blue:   return glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
             case Color::Yellow: return glm::vec4(1.0f, 1.0f, 0.0f, 1.0f);
             case Color::Orange: return glm::vec4(0.879f, 0.487f, 0.189f, 1.0f);
+            case Color::Orange_bright: return glm::vec4(0.892f, 0.633f, 0.153f, 1.0f);
             case Color::White:  return glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
             case Color::Purple: return glm::vec4(0.5f, 0.0f, 0.5f, 1.0f);
             default:     return glm::vec4(1.0f, 1.0f, 1.0f, 1.0f); // Default to white

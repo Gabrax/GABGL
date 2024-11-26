@@ -119,15 +119,7 @@ void Window::ToggleWireframe()
     }
 }
 
-int Window::GetScrollWheelYOffset()
-{
-    return _scrollWheelYOffset;
-}
 
-void Window::ResetScrollWheelYOffset()
-{
-    _scrollWheelYOffset = 0;
-}
 
 void Window::CreateWindow(WindowMode windowMode)
 {
@@ -373,6 +365,16 @@ int Window::GetFullscreenHeight()
  return _fullscreenHeight;
 }
 
+int Window::GetScrollWheelYOffset()
+{
+    return _scrollWheelYOffset;
+}
+
+void Window::ResetScrollWheelYOffset()
+{
+    _scrollWheelYOffset = 0;
+}
+
 int Window::GetCursorX()
 {
     double xpos, ypos;
@@ -491,7 +493,16 @@ void Window::scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 void Window::framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
     if (width > 0 && height > 0) {
-        glViewport(0, 0, width, height);  // Only update the viewport if width and height are valid
+        glViewport(0, 0, width, height);
+        // Set cursor to the center of the resized window
+        double centerX = static_cast<double>(width) / 2.0;
+        double centerY = static_cast<double>(height) / 2.0;
+
+        glfwSetCursorPos(window, centerX, centerY);  // Move the cursor
+        _lastX = static_cast<float>(centerX);
+        _lastY = static_cast<float>(centerY);
+
+        _firstMouse = true; // Skip the next offset calculation
     }
 }
 
@@ -500,11 +511,9 @@ void Window::window_focus_callback(GLFWwindow* window, int focused)
     if (focused)
     {
         Window::_windowHasFocus = true;
-        glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     }
     else
     {
         Window::_windowHasFocus = false;
-        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
     }
 }

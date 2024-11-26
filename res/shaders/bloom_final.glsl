@@ -19,7 +19,6 @@ in vec2 TexCoords;
 
 uniform sampler2D scene;
 uniform sampler2D bloomBlur;
-uniform sampler2D skyboxTexture;
 uniform float exposure = 5.0f;
 uniform float bloomStrength = 0.54f;
 
@@ -56,20 +55,19 @@ vec3 gammaCorrection(vec3 value)
 
 vec3 ApplyBloom()
 {
-    vec3 hdrColor = texture(scene, TexCoords).rgb;
-    vec3 bloomColor = texture(bloomBlur, TexCoords).rgb;
+    float dx = pixelWidth*(1.0/renderWidth);
+    float dy = pixelHeight*(1.0/renderHeight);
+     
+    vec2 coord = vec2(dx*floor(TexCoords.x/dx), dy*floor(TexCoords.y/dy));
+    vec3 hdrColor = texture(scene, coord).rgb;
+    vec3 bloomColor = texture(bloomBlur, coord).rgb;
     return mix(hdrColor, bloomColor, bloomStrength); // linear interpolation
 }
 
 void main()
 {
-    // float dx = pixelWidth*(1.0/renderWidth);
-    // float dy = pixelHeight*(1.0/renderHeight);
-    //
-    // vec2 coord = vec2(dx*floor(TexCoords.x/dx), dy*floor(TexCoords.y/dy));
-    //
-    // vec4 t1 = texture(scene, coord);
-    // vec4 t2 = texture(bloomBlur, coord);
+
+
 
     vec3 result = vec3(0.0);
     result = ApplyBloom();
