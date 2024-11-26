@@ -1,79 +1,113 @@
 @echo off
 setlocal enabledelayedexpansion
 
-for /f %%a in ('echo prompt $E^| cmd') do set "ESC=%%a"
+REM OS Detection
+for /f "delims=" %%i in ('ver') do set "OS_VER=%%i"
+echo %OS_VER% | find /i "Windows" >nul
+if errorlevel 1 (
+    echo [*] Unsupported OS: %OS_VER%
+    exit /b 1
+) else (
+    set "EXE_EXTENSION=.exe"
+    echo [*] Running on Windows
+)
 
 set "EXE_NAME=mygame"
-set "EXE_EXTENSION=.exe"
 set "EXE_PATH=%EXE_NAME%%EXE_EXTENSION%"
 
-REM Set colors
+REM Colors
+for /f %%a in ('echo prompt $E^| cmd') do set "ESC=%%a"
+set "RED=%ESC%[0;31m"
 set "GREEN=%ESC%[0;32m"
 set "YELLOW=%ESC%[0;33m"
-set "RED=%ESC%[0;31m"
 set "RESET=%ESC%[0m"
 
-REM Set build directory
 set "BUILD_DIR=build"
 set "ROOT_DIR=%cd%"
 
+REM Compiler (passed as an argument)
+set "COMPILER=%1"
+if "%COMPILER%"=="" (
+    echo !YELLOW![*] Using the default system compiler...!RESET!
+) else (
+    echo !YELLOW![*] Compiler specified: %COMPILER%!RESET!
+)
+
 REM Check if build directory exists
 if exist "%BUILD_DIR%" (
-    echo !GREEN![*] Build directory exists %ESC%[0m
+    echo !GREEN![*] Build directory exists.!RESET!
 ) else (
-    echo !YELLOW![*] Build directory does not exist. Creating it now... %ESC%[0m
+    echo !YELLOW![*] Build directory does not exist. Creating it now...!RESET!
     mkdir "%BUILD_DIR%"
 )
 
 cd "%BUILD_DIR%" || (
-    echo !RED![*] Failed to navigate to build directory %ESC%[0m
+    echo !RED![*] Failed to navigate to build directory.!RESET!
     exit /b 1
 )
 
 REM Check if project is already configured
 if exist "CMakeCache.txt" (
-    echo !GREEN![*] Project is already configured %ESC%[0m
+    echo !GREEN![*] Project is already configured.!RESET!
 ) else (
-    echo !YELLOW![*] Configuring the project with CMake... %ESC%[0m
-    cmake .. || (
-        echo !RED![*] CMake configuration failed %ESC%[0m
+    echo !YELLOW![*] Configuring the project with CMake...!RESET!
+    if "%COMPILER%"=="" (
+        cmake .. || (
+            echo !RED![*] CMake configuration failed.!RESET!
+            exit /b 1
+        )
+    ) else if /i "%COMPILER%"=="msvc" (
+        cmake -G "Visual Studio 17 2022" .. || (
+            echo !RED![*] CMake configuration failed.!RESET!
+            exit /b 1
+        )
+    ) else if /i "%COMPILER%"=="clang" (
+        cmake -G "Ninja" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ .. || (
+            echo !RED![*] CMake configuration failed.!RESET!
+            exit /b 1
+        )
+    ) else if /i "%COMPILER%"=="gcc" (
+        cmake -G "Unix Makefiles" -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ .. || (
+            echo !RED![*] CMake configuration failed.!RESET!
+            exit /b 1
+        )
+    ) else (
+        echo !RED![*] Unsupported compiler: %COMPILER%!RESET!
         exit /b 1
     )
 )
 
 REM Build the project
-echo !YELLOW![*] Building the project... %ESC%[0m
+echo !YELLOW![*] Building the project...!RESET!
 cmake --build . || (
-    echo !RED![*] Build failed %ESC%[0m
+    echo !RED![*] Build failed.!RESET!
     exit /b 1
 )
-echo !GREEN![*] Build completed successfully %ESC%[0m
+echo !GREEN![*] Build completed successfully.!RESET!
 
-REM Search for the executable in the build directory
-echo !YELLOW![*] Searching for %EXE_PATH% in the build directory... %ESC%[0m
-for /r %ROOT_DIR%\build\Debug %%f in (%EXE_PATH%) do (
+REM Search for the executable
+echo !YELLOW![*] Searching for %EXE_PATH% in the build directory...!RESET!
+for /r "%ROOT_DIR%\build" %%f in ("%EXE_PATH%") do (
     set "mygame_path=%%f"
-    echo !GREEN![*] Executable %EXE_PATH% found at: !mygame_path! %ESC%[0m
-    
-    REM Check if the executable is already in the root directory
+    echo !GREEN![*] Executable %EXE_PATH% found at: !mygame_path!!RESET!
+
     if not "!mygame_path!"=="%ROOT_DIR%\%EXE_PATH%" (
-        echo !YELLOW![*] Moving %EXE_PATH% to the root directory... %ESC%[0m
+        echo !YELLOW![*] Moving %EXE_PATH% to the root directory...!RESET!
         move "!mygame_path!" "%ROOT_DIR%" || (
-            echo !RED![*] Failed to move %EXE_PATH% %ESC%[0m
+            echo !RED![*] Failed to move %EXE_PATH%.!RESET!
             exit /b 1
         )
     ) else (
-        echo !GREEN![*] %EXE_PATH% is already in the root directory %ESC%[0m
+        echo !GREEN![*] %EXE_PATH% is already in the root directory.!RESET!
     )
 
-    REM Change to the root directory and run the executable
-    echo !YELLOW![*] Running %EXE_PATH%... %ESC%[0m
+    echo !YELLOW![*] Running %EXE_PATH%...!RESET!
     cd /d "%ROOT_DIR%" && "%EXE_PATH%" || (
-        echo !RED![*] Failed to run %EXE_PATH%! %ESC%[0m
+        echo !RED![*] Failed to run %EXE_PATH%!RESET!
         exit /b 1
     )
     exit /b 0
 )
 
-echo !RED![*] Executable %EXE_PATH% not found! %ESC%[0m
+echo !RED![*] Executable %EXE_PATH% not found.!RESET!
 exit /b 1

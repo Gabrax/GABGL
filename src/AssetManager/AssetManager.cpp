@@ -1,22 +1,22 @@
-#define TINYOBJLOADER_IMPLEMENTATION
-#include "AssetManager.h"
-#include "tiny_obj_loader.h"
-#include <cstdint>
-#include <unordered_map>
-#include <iostream>
-#include <mutex>
-#include <future>
-
-namespace AssetManager{
-
-  struct CompletedLoadingTasks {
-      bool g_hardcodedModels = false;
-      bool g_materials = false;
-      bool g_texturesBaked = false;
-      bool g_cubemapTexturesBaked = false;
-      bool g_cmpTexturesBaked = false;
-      bool g_all = false;
-  } g_completedLoadingTasks;
+/*#define TINYOBJLOADER_IMPLEMENTATION*/
+/*#include "AssetManager.h"*/
+/*#include "tiny_obj_loader.h"*/
+/*#include <cstdint>*/
+/*#include <unordered_map>*/
+/*#include <iostream>*/
+/*#include <mutex>*/
+/*#include <future>*/
+/**/
+/*namespace AssetManager{*/
+/**/
+/*  struct CompletedLoadingTasks {*/
+/*      bool g_hardcodedModels = false;*/
+/*      bool g_materials = false;*/
+/*      bool g_texturesBaked = false;*/
+/*      bool g_cubemapTexturesBaked = false;*/
+/*      bool g_cmpTexturesBaked = false;*/
+/*      bool g_all = false;*/
+/*  } g_completedLoadingTasks;*/
 
   /*std::vector<Vertex> g_vertices;*/
   /*std::vector<WeightedVertex> g_weightedVertices;*/
@@ -33,7 +33,7 @@ namespace AssetManager{
   /**/
   /*std::mutex _modelsMutex;*/
   /*std::vector<std::future<void>> _futures;*/
-}
+/*}*/
 
 
 /*void AssetManager::LoadModel(Model* model) {*/
