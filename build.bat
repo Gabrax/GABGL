@@ -24,6 +24,7 @@ set "RESET=%ESC%[0m"
 
 set "BUILD_DIR=build"
 set "ROOT_DIR=%cd%"
+set "SEARCH_PATH=%ROOT_DIR%\%BUILD_DIR%"
 
 REM Compiler (passed as an argument)
 set "COMPILER=%1"
@@ -31,6 +32,9 @@ if "%COMPILER%"=="" (
     echo !YELLOW![*] Using the default system compiler...!RESET!
 ) else (
     echo !YELLOW![*] Compiler specified: %COMPILER%!RESET!
+    if /i "%COMPILER%"=="msvc" (
+        set "SEARCH_PATH=%ROOT_DIR%\%BUILD_DIR%\Debug"
+    )
 )
 
 REM Check if build directory exists
@@ -86,8 +90,8 @@ cmake --build . || (
 echo !GREEN![*] Build completed successfully.!RESET!
 
 REM Search for the executable
-echo !YELLOW![*] Searching for %EXE_PATH% in the build directory...!RESET!
-for /r "%ROOT_DIR%\build" %%f in ("%EXE_PATH%") do (
+echo !YELLOW![*] Searching for %EXE_PATH% in the directory: %SEARCH_PATH%...!RESET!
+for /r "%SEARCH_PATH%" %%f in ("%EXE_PATH%") do (
     set "mygame_path=%%f"
     echo !GREEN![*] Executable %EXE_PATH% found at: !mygame_path!!RESET!
 
@@ -109,5 +113,6 @@ for /r "%ROOT_DIR%\build" %%f in ("%EXE_PATH%") do (
     exit /b 0
 )
 
-echo !RED![*] Executable %EXE_PATH% not found.!RESET!
+echo !RED![*] Executable %EXE_PATH% not found in %SEARCH_PATH%!RESET!
 exit /b 1
+

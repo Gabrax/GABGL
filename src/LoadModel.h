@@ -5,31 +5,32 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include "Input/Input.h"
+#include "Input/Key_Values.h"
 #include "OBJ/OBJloader.h"
 #include "Renderer.h"
 #include "DAE/Animator.h"
 #include "DAE/DAEloader.h"
 #include "Window.h"
 
-struct LoadOBJ{
-    LoadOBJ(const char* modelpath) : loadmodel(modelpath) {
+struct StaticModel{
+    StaticModel(const char* modelpath) : loadmodel(modelpath) {
         puts("OBJ loaded");
     }
 
-    ~LoadOBJ() noexcept = default;
+    ~StaticModel() noexcept = default;
 
-    inline void Render(const glm::vec3& position, const glm::vec3& scale = glm::vec3(1.0f), const float rotation = 0.0f){
+    void Render(const glm::vec3& position, const glm::vec3& scale = glm::vec3(1.0f), const float rotation = 0.0f){
         _shader.Use();
-        /*_shader.setVec3("light.position", lightPos);*/
         _shader.setVec3("viewPos", this->camera.Position);
 
         // light properties
-        /*_shader.setFloat("light.constant", 1.0f);*/
-        /*_shader.setFloat("light.linear", 0.09f);*/
-        /*_shader.setFloat("light.quadratic", 0.032f);*/
-        /**/
-        /*// material properties*/
-        /*_shader.setFloat("material.shininess", 32.0f);*/
+        _shader.setFloat("light.constant", 1.0f);
+        _shader.setFloat("light.linear", 0.09f);
+        _shader.setFloat("light.quadratic", 0.032f);
+
+        // material properties
+        _shader.setFloat("material.shininess", 32.0f);
         
         glm::mat4 projection = glm::perspective(glm::radians(this->camera.Zoom), Window::getAspectRatio(), 0.1f, 100.0f);
         _shader.setMat4("projection", projection);
@@ -49,19 +50,25 @@ private:
     OBJ loadmodel;
 };
 
-struct LoadDAE {
-    LoadDAE(const char* modelpath) 
+struct AnimatedModel{
+    AnimatedModel(const char* modelpath) 
         : loadmodel(modelpath), 
           animation(modelpath, &loadmodel),
           animator(&animation) {
             puts("DAE loaded");
           }
 
-    ~LoadDAE() noexcept = default;
+    ~AnimatedModel() noexcept = default;
 
-    inline void Render(const glm::vec3& position, const glm::vec3& scale = glm::vec3(1.0f), const float rotation = 0.0f) {
+    void Render(const glm::vec3& position, const glm::vec3& scale = glm::vec3(1.0f), const float rotation = 0.0f)
+    {
+        /*animator.PlayAnimation(1);*/
         animator.UpdateAnimation(Window::getDeltaTime());
-        
+
+        /*if(Input::KeyPressed(KEY_1)) animator.PlayAnimation(1);*/
+        /*if(Input::KeyPressed(KEY_2)) animator.PlayAnimation(2);*/
+        /*if(Input::KeyPressed(KEY_3)) animator.PlayAnimation(3);*/
+
         _shader.Use();
         /*_shader.setVec3("light.position", lightPos);*/
         _shader.setVec3("viewPos", this->camera.Position);

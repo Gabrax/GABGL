@@ -19,10 +19,12 @@ void Engine::Run() {
     Renderer::BakeShaders();
     Renderer::Initialize();
 
-    LoadOBJ house("res/map/objHouse.obj");
-    LoadOBJ backpack("res/backpack/backpack.obj");
-    LoadOBJ stairs("res/stairs/Stairs.obj");
-    LoadDAE guy("res/guy/guy.dae");
+    StaticModel house("res/map/objHouse.obj");
+    StaticModel backpack("res/backpack/backpack.obj");
+    StaticModel stairs("res/stairs/Stairs.obj");
+    /*AnimatedModel guy("res/guy/guy.dae");*/
+    AnimatedModel guy("res/lowpoly/MaleSurvivor2.glb");
+    /*AnimatedModel guy("res/pistol/source/pistolAnimated.fbx");*/
     Skybox sky;
 
     LightManager lightmanager;

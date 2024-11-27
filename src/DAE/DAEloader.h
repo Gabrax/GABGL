@@ -4,22 +4,23 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include "stb_image.h"
+
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 
-#include "OBJ/Mesh.h"
-#include "LoadShader.h"
+#include "stb_image.h"
+
+#include "../OBJ/Mesh.h"
+#include "../LoadShader.h"
 
 #include <string>
-#include <fstream>
-#include <sstream>
 #include <iostream>
 #include <map>
 #include <vector>
 #include "Assimp_glm_helpers.h"
 #include "Animdata.h"
+
 using namespace std;
 
 class DAE 
@@ -152,6 +153,10 @@ private:
 
 	void SetVertexBoneData(Vertex& vertex, int boneID, float weight)
 	{
+
+    if (weight <= 0.0f)
+        return;
+
 		for (int i = 0; i < MAX_BONE_INFLUENCE; ++i)
 		{
 			if (vertex.m_BoneIDs[i] < 0)
