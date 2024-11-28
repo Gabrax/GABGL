@@ -26,6 +26,7 @@ sh build.sh
 - [glText](https://github.com/vallentin/glText)
 - [FreeType](https://github.com/freetype/freetype)
 - [Assimp](https://github.com/assimp/assimp)
+- [MeshOptimizer](https://github.com/zeux/meshoptimizer)
 - [tinyOBJ](https://github.com/tinyobjloader/tinyobjloader)
 - [tinyCSG](https://github.com/laleksic/tiny_csg)
 - [tinyEXR](https://github.com/syoyo/tinyexr)

@@ -62,7 +62,14 @@ set(ASSIMP_INSTALL OFF CACHE BOOL "Disable Assimp installation" FORCE)
 # )
 # set(FT_DISABLE_VERSION_INFO ON CACHE BOOL "" FORCE)
 
-FetchContent_MakeAvailable(assimp)#freetype
+# Meshoptimizer
+FetchContent_Declare(
+    meshoptimizer
+    GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
+    GIT_TAG v0.18 # Use the latest stable version or a specific tag
+)
+
+FetchContent_MakeAvailable(assimp meshoptimizer)#freetype
 
 # GLFW and other third-party dependencies
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
@@ -112,4 +119,4 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 endif()
 
 # Target link libraries
-target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp glText tinyOBJ)
+target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp glText tinyOBJ meshoptimizer)

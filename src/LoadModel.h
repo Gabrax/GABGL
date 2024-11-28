@@ -65,9 +65,9 @@ struct AnimatedModel{
         /*animator.PlayAnimation(1);*/
         animator.UpdateAnimation(Window::getDeltaTime());
 
-        /*if(Input::KeyPressed(KEY_1)) animator.PlayAnimation(1);*/
-        /*if(Input::KeyPressed(KEY_2)) animator.PlayAnimation(2);*/
-        /*if(Input::KeyPressed(KEY_3)) animator.PlayAnimation(3);*/
+        if(Input::KeyPressed(KEY_1)) animator.PlayAnimation(1);
+        if(Input::KeyPressed(KEY_2)) animator.PlayAnimation(2);
+        if(Input::KeyPressed(KEY_3)) animator.PlayAnimation(3);
 
         _shader.Use();
         /*_shader.setVec3("light.position", lightPos);*/
