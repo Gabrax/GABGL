@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cassert>
-#include <stdexcept>
 #include <vector>
 #include <map>
 #include <glm/glm.hpp>
@@ -9,8 +8,6 @@
 #include "Bone.h"
 #include "Animdata.h"
 #include "DAEloader.h"
-
-
 
 struct AssimpNodeData
 {
@@ -24,9 +21,16 @@ struct AssimpNodeData
     std::vector<KeyScale> scales;
 };
 
-class Animation
-{
-public:
+struct AnimationData {
+    std::string name;
+    float duration;
+    float ticksPerSecond;
+    std::vector<Bone> bones;  // Preprocessed bone data for the animation.
+    AssimpNodeData hierarchy; // Precomputed node hierarchy for the animation.
+};
+
+struct Animation {
+
     Animation() = default;
     ~Animation() = default;
 
@@ -37,51 +41,47 @@ public:
         Assimp::Importer importer;
         scene = importer.ReadFile(animationPath, aiProcess_Triangulate);
 
-        assert(scene || scene->mRootNode);
+        assert(scene && scene->mRootNode);
 
-        // Load all animations into the m_Animations vector
         for (unsigned int i = 0; i < scene->mNumAnimations; ++i)
         {
             auto animation = scene->mAnimations[i];
-            m_Animations.push_back(animation);
+
+            AnimationData animData;
+            animData.name = animation->mName.C_Str();
+            animData.duration = animation->mDuration;
+            animData.ticksPerSecond = animation->mTicksPerSecond;
+
+            // Read bone and hierarchy data.
+            ReadHierarchyData(animData.hierarchy, scene->mRootNode);
+            ReadMissingBones(animation, *model);
+
+            // Optionally, copy bone data or preprocess for faster runtime evaluation.
+            animData.bones = m_Bones;
+
+            m_ProcessedAnimations.push_back(animData);
         }
 
-        assert(!m_Animations.empty());
-
+        assert(!m_ProcessedAnimations.empty());
         SetAnimation(m_CurrentAnimationIndex);
     }
 
     void SetAnimation(int animationIndex)
     {
-        assert(animationIndex >= 0 && animationIndex < m_Animations.size()); // Ensure valid index
+        assert(animationIndex >= 0 && animationIndex < m_ProcessedAnimations.size());
         m_CurrentAnimationIndex = animationIndex;
 
-        auto animation = m_Animations[m_CurrentAnimationIndex];
+        const auto& animData = m_ProcessedAnimations[m_CurrentAnimationIndex];
 
-        assert(animation);  // Make sure the animation pointer is valid
-        m_Duration = animation->mDuration;
-        m_TicksPerSecond = animation->mTicksPerSecond;
+        // Update current animation details.
+        m_Duration = animData.duration;
+        m_TicksPerSecond = animData.ticksPerSecond;
 
-        // Check the validity of the scene before accessing it
-        assert(scene && scene->mRootNode);
+        // Update hierarchy and bone data.
+        m_RootNode = animData.hierarchy;
+        m_Bones = animData.bones;
 
-        aiMatrix4x4 globalTransformation = scene->mRootNode->mTransformation;
-        globalTransformation = globalTransformation.Inverse();
-
-        // Reset or re-read the data for the new animation
-        ReadHierarchyData(m_RootNode, scene->mRootNode);
-
-        // Ensure the model is valid before using it
-        assert(model);
-        ReadMissingBones(animation, *model);
-    }
-
-    void SwitchAnimation(int animationIndex)
-    {
-        assert(animationIndex >= 0 && animationIndex < m_Animations.size()); // Ensure valid index
-        m_CurrentAnimationIndex = animationIndex;
-
-        auto animation = m_Animations[m_CurrentAnimationIndex];
+        std::cout << "Switched to animation: " << animData.name << '\n';
     }
 
     Bone* FindBone(const std::string& name)
@@ -105,9 +105,20 @@ public:
 
 private:
 
+    std::vector<AnimationData> m_ProcessedAnimations;
+    DAE* model;
+    const aiScene* scene = nullptr;
+    int m_CurrentAnimationIndex;
+    float m_Duration;
+    int m_TicksPerSecond;
+    std::vector<Bone> m_Bones;
+    std::vector<const aiAnimation*> m_Animations;
+    AssimpNodeData m_RootNode;
+    std::map<std::string, BoneInfo> m_BoneInfoMap;
+
     void ReadHierarchyData(AssimpNodeData& dest, const aiNode* src)
     {
-        assert(src);  // Ensure src is valid
+        assert(src);  
 
         dest.name = "";
         dest.transformation = glm::mat4(1.0f);  // Reset to identity matrix
@@ -133,7 +144,7 @@ private:
 
     void ReadMissingBones(const aiAnimation* animation, DAE& model)
     {
-        assert(animation);  // Ensure animation is valid
+        assert(animation);  
         assert(&model);
         auto& boneInfoMap = model.GetBoneInfoMap();
         int& boneCount = model.GetBoneCount();
@@ -152,21 +163,11 @@ private:
                 boneCount++;
             }
 
-            // Ensure bones are added correctly
             m_Bones.push_back(Bone(channel->mNodeName.data, boneInfoMap[boneName].id, channel));
         }
 
         m_BoneInfoMap = boneInfoMap;
     }
-
-    DAE* model;
-    const aiScene* scene = nullptr;
-    int m_CurrentAnimationIndex;
-    float m_Duration;
-    int m_TicksPerSecond;
-    std::vector<Bone> m_Bones;
-    std::vector<const aiAnimation*> m_Animations;
-    AssimpNodeData m_RootNode;
-    std::map<std::string, BoneInfo> m_BoneInfoMap;
 };
+
 

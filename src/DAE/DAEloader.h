@@ -110,10 +110,10 @@ private:
         if (mesh->mMaterialIndex >= 0)
         {
             aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
-            auto diffuseMaps = loadMaterialTextures(material, aiTextureType_DIFFUSE, "texture_diffuse");
-            auto specularMaps = loadMaterialTextures(material, aiTextureType_SPECULAR, "texture_specular");
-            auto normalMaps = loadMaterialTextures(material, aiTextureType_HEIGHT, "texture_normal");
-            auto heightMaps = loadMaterialTextures(material, aiTextureType_AMBIENT, "texture_height");
+            auto diffuseMaps = loadMaterialTextures(material, aiTextureType_DIFFUSE, "texture_diffuse",scene);
+            auto specularMaps = loadMaterialTextures(material, aiTextureType_SPECULAR, "texture_specular",scene);
+            auto normalMaps = loadMaterialTextures(material, aiTextureType_HEIGHT, "texture_normal",scene);
+            auto heightMaps = loadMaterialTextures(material, aiTextureType_AMBIENT, "texture_height",scene);
 
             textures.insert(textures.end(), diffuseMaps.begin(), diffuseMaps.end());
             textures.insert(textures.end(), specularMaps.begin(), specularMaps.end());
@@ -184,7 +184,7 @@ private:
     }
 
     // Load material textures
-    std::vector<Texture> loadMaterialTextures(aiMaterial* mat, aiTextureType type, const std::string& typeName)
+    std::vector<Texture> loadMaterialTextures(aiMaterial* mat, aiTextureType type, const std::string& typeName, const aiScene* scene)
     {
         std::vector<Texture> textures;
 
@@ -193,22 +193,51 @@ private:
             aiString str;
             mat->GetTexture(type, i, &str);
 
+            // Check if the texture is already loaded (by path)
             auto it = std::find_if(texturesLoaded.begin(), texturesLoaded.end(), [&](const Texture& tex) {
                 return tex.path == str.C_Str();
             });
 
             if (it != texturesLoaded.end())
             {
+                // Texture is already loaded
                 textures.push_back(*it);
             }
             else
             {
                 Texture texture;
-                texture.id = TextureFromFile(str.C_Str(), directory);
-                texture.type = typeName;
-                texture.path = str.C_Str();
-                textures.push_back(texture);
-                texturesLoaded.push_back(std::move(texture));
+
+                // Check if this texture is embedded (Assimp stores embedded textures in the scene)
+                if (scene && i < scene->mNumTextures)
+                {
+                    aiTexture* aiTex = scene->mTextures[i];  // Access the embedded texture directly
+
+                    if (aiTex != nullptr && aiTex->mHeight == 0)  // Check for embedded texture (mHeight == 0 means it's embedded)
+                    {
+                        // Convert aiTexel* data to unsigned char*
+                        const aiTexel* rawData = aiTex->pcData;
+                        size_t width = aiTex->mWidth;
+                        size_t height = aiTex->mHeight;
+                        size_t byteSize = width * height * 4;  // Assuming RGBA format for embedded textures (4 components per pixel)
+
+                        // Load the texture from memory (assuming it's in RGBA format)
+                        texture.id = TextureFromMemory(reinterpret_cast<const unsigned char*>(rawData), byteSize);
+                        texture.type = typeName;
+                        texture.path = str.C_Str();  // Set the texture path to the aiString path
+                        textures.push_back(texture);
+                        texturesLoaded.push_back(std::move(texture));  // Add the loaded texture to the list
+                    }
+                }
+
+                // If not embedded, load the texture from the file system
+                if (texture.id == 0)  // If it was not loaded from memory
+                {
+                    texture.id = TextureFromFile(str.C_Str(), directory);
+                    texture.type = typeName;
+                    texture.path = str.C_Str();
+                    textures.push_back(texture);
+                    texturesLoaded.push_back(std::move(texture));
+                }
             }
         }
 

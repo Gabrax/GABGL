@@ -12,6 +12,8 @@
 #include "Mesh.h"
 #include "../LoadShader.h"
 #include "../LoadTexture.h"
+#include "../Window.h"
+#include "../Renderer.h"
 
 #include <string>
 #include <iostream>
@@ -19,19 +21,56 @@
 #include <unordered_map> 
 
 
-struct OBJ {
+struct StaticModel {
     
-    OBJ(const std::string& path, bool gamma = false) : gammaCorrection(gamma)
+    StaticModel(const std::string& path, bool gamma = false) : gammaCorrection(gamma)
     {
         loadModel(path);
+        size_t pos = path.find_last_of('/');
+        std::string filename = (pos == std::string::npos) ? path : path.substr(pos + 1);
+        std::cout << filename << " loaded" << '\n';
     }
 
-    void Draw(Shader& shader) {
+    ~StaticModel() noexcept = default;
+
+    void Render(const glm::vec3& position, const glm::vec3& scale = glm::vec3(1.0f), const float rotation = 0.0f)
+    {
+        _shader.Use();
+        _shader.setVec3("viewPos", this->camera.Position);
+
+        // light properties
+        _shader.setFloat("light.constant", 1.0f);
+        _shader.setFloat("light.linear", 0.09f);
+        _shader.setFloat("light.quadratic", 0.032f);
+
+        // material properties
+        _shader.setFloat("material.shininess", 32.0f);
+        
+        glm::mat4 projection = glm::perspective(glm::radians(this->camera.Zoom), Window::getAspectRatio(), 0.1f, 100.0f);
+        _shader.setMat4("projection", projection);
+
+        _shader.setMat4("view", this->camera.GetViewMatrix());
+        glm::mat4 model = glm::mat4(1.0f); 
+        model = glm::translate(model, position);
+        model = glm::scale(model, scale);  
+        model = glm::rotate(model, glm::radians(rotation), glm::vec3(0.0f, 1.0f, 0.0f));
+        _shader.setMat4("model", model);
+        DrawModel(_shader);
+    }
+
+    void Destroy() {
+        this->~StaticModel();
+    }
+
+    void DrawModel(Shader& shader) {
         for (auto& mesh : meshes)
             mesh.Draw(shader);
     }
 
 private:
+
+    Camera& camera = Window::_camera;
+    Shader& _shader = Renderer::g_shaders.model;
 
     std::unordered_map<std::string, Texture> textures_loaded; 
     std::vector<Mesh> meshes;

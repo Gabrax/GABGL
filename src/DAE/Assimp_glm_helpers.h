@@ -7,9 +7,7 @@
 #include<glm/gtc/quaternion.hpp>
 
 
-class AssimpGLMHelpers
-{
-public:
+namespace AssimpGLMHelpers {
 
 	static inline glm::mat4 ConvertMatrixToGLMFormat(const aiMatrix4x4& from)
 	{
@@ -31,4 +29,5 @@ public:
 	{
 		return glm::quat(pOrientation.w, pOrientation.x, pOrientation.y, pOrientation.z);
 	}
+
 };

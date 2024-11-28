@@ -106,6 +106,10 @@ vec3 toneMappingACES(vec3 color) {
     return clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0, 1.0);
 }
 
+bool isInsideAABB(vec3 fragPos, vec3 minAABB, vec3 maxAABB) {
+    return all(greaterThanEqual(fragPos, minAABB)) && all(lessThanEqual(fragPos, maxAABB));
+}
+
 
 void main() {           
     // Sample diffuse color and normalize the interpolated normal

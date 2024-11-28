@@ -1,13 +1,14 @@
 #include "Engine.h"
 #include "Bloom.h"
 #include "Input/Input.h"
-#include "LoadModel.h"
+#include "AnimatedModel.h"
 #include "Renderer.h"
 #include "Skybox.h"
 #include "LightManager.h"
 #include "Window.h"
 #include "LoadText.h"
 #include "glad/glad.h"
+#include "OBJ/StaticModel.h"
 
 void Engine::Run() {
 
@@ -23,7 +24,7 @@ void Engine::Run() {
     StaticModel backpack("res/backpack/backpack.obj");
     StaticModel stairs("res/stairs/Stairs.obj");
     /*AnimatedModel guy("res/guy/guy.dae");*/
-    AnimatedModel guy("res/lowpoly/MaleSurvivor2.glb");
+    AnimatedModel guy("res/lowpoly/MS1.glb");
     /*AnimatedModel guy("res/pistol/source/pistolAnimated.fbx");*/
     Skybox sky;
 

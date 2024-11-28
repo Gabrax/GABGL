@@ -10,13 +10,11 @@
 #include "Bone.h"
 
 
-class Animator
-{
-public:
+struct Animator {
+
     Animator() = default;
 
-    Animator(Animation* animation)
-        : m_CurrentAnimation(animation), m_CurrentTime(0.0f)
+    Animator(Animation* animation) : m_CurrentAnimation(animation), m_CurrentTime(0.0f)
     {
         ResizeFinalBoneMatrices();
     }
@@ -38,6 +36,7 @@ public:
         
         m_CurrentAnimation->SetAnimation(animationIndex);
         m_CurrentTime = 0.0f;
+        /*m_CurrentAnimation->SetAnimation(animationIndex);*/
         ResizeFinalBoneMatrices();
     }
 
