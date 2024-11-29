@@ -1,0 +1,11 @@
+Model Information:
+* title:	Pistol 43 Tactical | FPS Animations
+* source:	https://sketchfab.com/3d-models/pistol-43-tactical-fps-animations-1a4c9d15818a4522aedbeb70919a17da
+* author:	Vlasov Daniil (https://sketchfab.com/dan741vlasov)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Pistol 43 Tactical | FPS Animations" (https://sketchfab.com/3d-models/pistol-43-tactical-fps-animations-1a4c9d15818a4522aedbeb70919a17da) by Vlasov Daniil (https://sketchfab.com/dan741vlasov) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

@@ -81,7 +81,7 @@ struct Animation {
         m_RootNode = animData.hierarchy;
         m_Bones = animData.bones;
 
-        std::cout << "Switched to animation: " << animData.name << '\n';
+        std::cout << "Current animation: " << animData.name << '\n';
     }
 
     Bone* FindBone(const std::string& name)

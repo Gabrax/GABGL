@@ -24,8 +24,7 @@ void Engine::Run() {
     StaticModel backpack("res/backpack/backpack.obj");
     StaticModel stairs("res/stairs/Stairs.obj");
     /*AnimatedModel guy("res/guy/guy.dae");*/
-    AnimatedModel guy("res/lowpoly/MS1.glb");
-    /*AnimatedModel guy("res/pistol/source/pistolAnimated.fbx");*/
+    AnimatedModel guy("res/lowpoly/MaleSurvivor1.glb");
     Skybox sky;
 
     LightManager lightmanager;
