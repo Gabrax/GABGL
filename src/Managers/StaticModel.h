@@ -22,12 +22,14 @@
 
 
 struct StaticModel {
-    
-    StaticModel(const std::string& path, bool gamma = false) : gammaCorrection(gamma)
+
+    StaticModel(const char* modelpath, bool gamma = false) : gammaCorrection(gamma)
     {
-        loadModel(path);
-        size_t pos = path.find_last_of('/');
-        std::string filename = (pos == std::string::npos) ? path : path.substr(pos + 1);
+        loadModel(modelpath);
+
+        const char* filename = strrchr(modelpath, '/');
+        filename = (filename == nullptr) ? modelpath : filename + 1;
+
         std::cout << filename << " loaded" << '\n';
     }
 
@@ -55,6 +57,7 @@ struct StaticModel {
         model = glm::scale(model, scale);  
         model = glm::rotate(model, glm::radians(rotation), glm::vec3(0.0f, 1.0f, 0.0f));
         _shader.setMat4("model", model);
+
         DrawModel(_shader);
     }
 

@@ -8,9 +8,8 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <vector>
 #include <iostream>
-#include "Input/Input.h"
-#include "Renderer.h"
-#include "Window.h"
+#include "../Input/Input.h"
+#include "../Renderer.h"
 
 
 static unsigned int quadVAO = 0;

@@ -114,7 +114,7 @@
 #define KEY_KP_ENTER           335
 #define KEY_KP_EQUAL           336
 #define KEY_LEFT_SHIFT         340 //16
-#define KEY_LEFT_CONTROL       17//341
+#define KEY_LEFT_CONTROL       341 //17
 #define KEY_LEFT_ALT           342
 #define KEY_LEFT_SUPER         343
 #define KEY_RIGHT_SHIFT        344

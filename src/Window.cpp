@@ -4,10 +4,11 @@
 
 #include "Input/Input.h"
 #include "Window.h"
+#include "Input/Key_Values.h"
 #include "stb_image.h"
 #include "gltext.h"
 #include "Renderer.h"
-
+#include "MapEditor.h"
 
 namespace Window {
 
@@ -36,7 +37,7 @@ namespace Window {
   inline int windowPosY = (_windowedHeight - _windowedHeight) / 2;
 
   // timing
-  inline float _deltaTime = 0.0f;	// time between current frame and last frame
+  inline float _deltaTime = 0.0f;	
   inline float _lastFrame = 0.0f;
 }
 
@@ -118,8 +119,6 @@ void Window::ToggleWireframe()
         SetRenderMode(NORMAL);
     }
 }
-
-
 
 void Window::CreateWindow(WindowMode windowMode)
 {
@@ -241,7 +240,7 @@ void Window::Init()
     glfwSetFramebufferSizeCallback(_window, framebuffer_size_callback);
     glfwSetCursorPosCallback(_window, mouse_callback);
     glfwSetScrollCallback(_window, scroll_callback);
-    glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    DisableCursor();
     glfwSetWindowFocusCallback(_window, window_focus_callback);
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
@@ -271,6 +270,7 @@ void Window::Init()
     // Init subsystems
     Input::Init();
     InitAudioDevice();
+    MapEditor::Init();
 
     Renderer::g_sounds.fullscreen = LoadSound("res/audio/select1.wav");
     SetSoundVolume(Renderer::g_sounds.fullscreen, 0.5f);
@@ -308,6 +308,7 @@ void Window::ShowFPS()
 
 void Window::EndFrame()
 {
+    MapEditor::Render();
     Input::Update();
     processInput(_window);
     glfwSwapBuffers(_window);
@@ -436,20 +437,13 @@ void Window::ForceCloseWindow()
 
 void Window::processInput(GLFWwindow* window)
 {
-    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, true);
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        _camera.ProcessKeyboard(FORWARD, _deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        _camera.ProcessKeyboard(BACKWARD, _deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        _camera.ProcessKeyboard(LEFT, _deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        _camera.ProcessKeyboard(RIGHT, _deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
-        _camera.ProcessKeyboard(UP, _deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
-        _camera.ProcessKeyboard(DOWN, _deltaTime);
+    if (Input::KeyDown(KEY_ESCAPE)) glfwSetWindowShouldClose(window, true);
+    if (Input::KeyDown(KEY_W)) _camera.ProcessKeyboard(FORWARD, _deltaTime);
+    if (Input::KeyDown(KEY_S)) _camera.ProcessKeyboard(BACKWARD, _deltaTime);
+    if (Input::KeyDown(KEY_A)) _camera.ProcessKeyboard(LEFT, _deltaTime);
+    if (Input::KeyDown(KEY_D)) _camera.ProcessKeyboard(RIGHT, _deltaTime);
+    if (Input::KeyDown(KEY_SPACE)) _camera.ProcessKeyboard(UP, _deltaTime);
+    if (Input::KeyDown(KEY_LEFT_CONTROL)) _camera.ProcessKeyboard(DOWN, _deltaTime);
 
     if (Input::KeyPressed(KEY_F)) {
         ToggleFullscreen();
@@ -480,7 +474,7 @@ void Window::mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
     _lastX = xpos;
     _lastY = ypos;
 
-    _camera.ProcessMouseMovement(xoffset, yoffset);
+  if(!MapEditor::isRendered) _camera.ProcessMouseMovement(xoffset, yoffset);
 }
 
 // glfw: whenever the mouse scroll wheel scrolls, this callback is called

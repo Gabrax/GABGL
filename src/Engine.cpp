@@ -1,31 +1,30 @@
 #include "Engine.h"
-#include "Bloom.h"
+#include "FrameBuffers/Bloom.h"
 #include "Input/Input.h"
-#include "AnimatedModel.h"
+
+#include "Managers/AnimatedModel.h"
+#include "Managers/EnvironmentMap.h"
+#include "Managers/LightManager.h"
+#include "Managers/StaticModel.h"
+
 #include "Renderer.h"
-#include "Skybox.h"
-#include "LightManager.h"
-#include "Window.h"
-#include "LoadText.h"
 #include "glad/glad.h"
-#include "OBJ/StaticModel.h"
+#include "Window.h"
 
 void Engine::Run() {
 
     Window::Init();
-    stbi_set_flip_vertically_on_load(true);
-
-    glEnable(GL_DEPTH_TEST);
+    stbi_set_flip_vertically_on_load(true); 
 
     Renderer::BakeShaders();
-    Renderer::Initialize();
+    Renderer::LoadSounds();
 
     StaticModel house("res/map/objHouse.obj");
     StaticModel backpack("res/backpack/backpack.obj");
     StaticModel stairs("res/stairs/Stairs.obj");
-    /*AnimatedModel guy("res/guy/guy.dae");*/
     AnimatedModel guy("res/lowpoly/MaleSurvivor1.glb");
-    Skybox sky;
+
+    EnvironmentMap envmap;
 
     LightManager lightmanager;
     lightmanager.AddLight(Color::Red, glm::vec3(-2.0f, 5.0f, 10.0f), glm::vec3(0.5f));
@@ -33,12 +32,8 @@ void Engine::Run() {
     lightmanager.AddLight(Color::Green, glm::vec3(-12.0f, 5.0f, -1.0f), glm::vec3(0.5f));
     lightmanager.AddLight(Color::Orange, glm::vec3(17.0f, 5.0f, 10.0f), glm::vec3(0.5f));
 
-    TextRenderer textRenderer;
-
     BloomRenderer bloom;
       
-    glm::vec3 test = glm::vec3(0.0f,5.0f,0.0f);
-
     while (Window::WindowIsOpen() && Window::WindowHasNotBeenForceClosed()) {
 
         Window::BeginFrame();
@@ -60,7 +55,8 @@ void Engine::Run() {
 
         glDisable(GL_CULL_FACE);
 
-        sky.Render();
+        envmap.Render();
+
         bloom.RenderBloomTexture(0.005f);
         bloom.UnBind();
        
@@ -69,23 +65,6 @@ void Engine::Run() {
         
 
         glDisable(GL_DEPTH_TEST);
-
-        textRenderer.renderText("CamPos: ", Window::_camera.Position.x, Window::_camera.Position.y, Window::_camera.Position.z);
-        textRenderer.renderText("CamRot: ", Window::_camera.Yaw, Window::_camera.Pitch);
-        textRenderer.renderText("testcube: ", test.x);
-        textRenderer.drawTexts();
-
-        if (Input::KeyDown(KEY_UP)) {
-            test.x += 5.0f;
-        }
-
-        if (Input::KeyDown(KEY_DOWN)) {
-            test.x -= 5.0f;
-        }
-        
-        if (Input::KeyPressed(KEY_BACKSPACE)) {
-            lightmanager.AddLight(Color::Orange_bright, test, glm::vec3(0.5f));
-        }
 
         if (Input::KeyPressed(KEY_R)) {
             Renderer::HotReloadShaders();

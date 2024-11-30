@@ -63,6 +63,15 @@ public:
         m_LocalTransform = translation * rotation * scale;
     }
 
+    glm::mat4 GetInterpolatedTransform(float animationTime) const
+    {
+        glm::mat4 translation = InterpolatePosition(animationTime);
+        glm::mat4 rotation = InterpolateRotation(animationTime);
+        glm::mat4 scale = InterpolateScaling(animationTime);
+        return translation * rotation * scale;
+    }
+
+    void SetTransform(const glm::mat4& transform) { m_LocalTransform = transform; }
     glm::mat4 GetLocalTransform() const { return m_LocalTransform; }
     std::string GetBoneName() const { return m_Name; }
     int GetBoneID() const { return m_ID; }

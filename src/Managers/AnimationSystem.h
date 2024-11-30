@@ -7,7 +7,7 @@
 #include <assimp/scene.h>
 #include "Bone.h"
 #include "Animdata.h"
-#include "DAEloader.h"
+#include "AnimatedMesh.h"
 
 struct AssimpNodeData
 {
@@ -29,12 +29,11 @@ struct AnimationData {
     AssimpNodeData hierarchy; // Precomputed node hierarchy for the animation.
 };
 
-struct Animation {
+struct AnimationSystem {
 
-    Animation() = default;
-    ~Animation() = default;
+    ~AnimationSystem() = default;
 
-    Animation(const std::string& animationPath, DAE* model) : model(model), m_CurrentAnimationIndex(0)
+    AnimationSystem(const std::string& animationPath, AnimatedMesh* model) : model(model), m_CurrentAnimationIndex(0)
     {
         assert(model);
 
@@ -45,33 +44,41 @@ struct Animation {
 
         for (unsigned int i = 0; i < scene->mNumAnimations; ++i)
         {
-            auto animation = scene->mAnimations[i];
+            aiAnimation* animation = scene->mAnimations[i];
 
             AnimationData animData;
             animData.name = animation->mName.C_Str();
             animData.duration = animation->mDuration;
             animData.ticksPerSecond = animation->mTicksPerSecond;
 
-            // Read bone and hierarchy data.
             ReadHierarchyData(animData.hierarchy, scene->mRootNode);
             ReadMissingBones(animation, *model);
 
-            // Optionally, copy bone data or preprocess for faster runtime evaluation.
             animData.bones = m_Bones;
 
             m_ProcessedAnimations.push_back(animData);
         }
 
         assert(!m_ProcessedAnimations.empty());
+
         SetAnimation(m_CurrentAnimationIndex);
+
+        ResizeFinalBoneMatrices();
+    }
+
+    void UpdateAnimation(float dt)
+    {
+        m_DeltaTime = dt;
+        m_CurrentTime += GetTicksPerSecond() * dt;
+        m_CurrentTime = fmod(m_CurrentTime, GetDuration());
+        CalculateBoneTransform(&GetRootNode(), glm::mat4(1.0f));
     }
 
     void SetAnimation(int animationIndex)
     {
         assert(animationIndex >= 0 && animationIndex < m_ProcessedAnimations.size());
-        m_CurrentAnimationIndex = animationIndex;
-
-        const auto& animData = m_ProcessedAnimations[m_CurrentAnimationIndex];
+        
+        const AnimationData& animData = m_ProcessedAnimations[animationIndex];
 
         // Update current animation details.
         m_Duration = animData.duration;
@@ -82,6 +89,46 @@ struct Animation {
         m_Bones = animData.bones;
 
         std::cout << "Current animation: " << animData.name << '\n';
+
+        ResizeFinalBoneMatrices();
+    }
+
+    void CalculateBoneTransform(const AssimpNodeData* node, glm::mat4 parentTransform)
+    {
+        std::string nodeName = node->name;
+        glm::mat4 nodeTransform = node->transformation;
+
+        // Check if this node has a corresponding bone in the animation
+        Bone* bone = FindBone(nodeName);
+        if (bone)
+        {
+            bone->Update(m_CurrentTime);
+            nodeTransform = bone->GetLocalTransform();
+        }
+
+        // Calculate the global transformation for this node
+        glm::mat4 globalTransformation = parentTransform * nodeTransform;
+
+        // Look up the bone in the boneInfoMap to get the offset matrix
+        const auto& boneInfoMap = GetBoneIDMap();
+        auto it = boneInfoMap.find(nodeName);
+        if (it != boneInfoMap.end())
+        {
+            int index = it->second.id;
+            glm::mat4 offset = it->second.offset;
+            m_FinalBoneMatrices[index] = globalTransformation * offset;
+        }
+
+        // Recursively calculate transformations for the children
+        for (size_t i = 0; i < node->children.size(); ++i)
+        {
+            CalculateBoneTransform(&node->children[i], globalTransformation);
+        }
+    }
+
+    std::vector<glm::mat4> GetFinalBoneMatrices() const
+    {
+        return m_FinalBoneMatrices;
     }
 
     Bone* FindBone(const std::string& name)
@@ -98,15 +145,22 @@ struct Animation {
     inline float GetTicksPerSecond() { return m_TicksPerSecond; }
     inline float GetDuration() { return m_Duration; }
     inline const AssimpNodeData& GetRootNode() { return m_RootNode; }
-    inline const std::map<std::string,BoneInfo>& GetBoneIDMap() 
-    { 
-        return m_BoneInfoMap;
-    }
+    inline const std::map<std::string,BoneInfo>& GetBoneIDMap() { return m_BoneInfoMap; }
 
 private:
+    void ResizeFinalBoneMatrices()
+    {
+      /*assert(m_Animation);*/
+      const auto& boneInfoMap = GetBoneIDMap();
+      m_FinalBoneMatrices.resize(boneInfoMap.size(), glm::mat4(1.0f));
+    }
+
+    std::vector<glm::mat4> m_FinalBoneMatrices;
+    float m_CurrentTime = 0.0f;
+    float m_DeltaTime = 0.0f;
 
     std::vector<AnimationData> m_ProcessedAnimations;
-    DAE* model;
+    AnimatedMesh* model;
     const aiScene* scene = nullptr;
     int m_CurrentAnimationIndex;
     float m_Duration;
@@ -142,7 +196,7 @@ private:
         }
     }
 
-    void ReadMissingBones(const aiAnimation* animation, DAE& model)
+    void ReadMissingBones(const aiAnimation* animation, AnimatedMesh& model)
     {
         assert(animation);  
         assert(&model);

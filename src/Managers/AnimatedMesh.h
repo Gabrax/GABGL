@@ -9,7 +9,7 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 
-#include "../OBJ/Mesh.h"
+#include "Mesh.h"
 #include "../LoadShader.h"
 #include "../LoadTexture.h"
 #include "Assimp_glm_helpers.h"
@@ -20,7 +20,7 @@
 #include <map>
 #include <vector>
 
-struct DAE {
+struct AnimatedMesh {
 
     const aiScene* scene; // Store scene data
     Assimp::Importer importer; // Assimp importer object
@@ -34,7 +34,7 @@ struct DAE {
     std::string directory;
 
     // Constructor
-    DAE(const std::string& path, bool gamma = false) 
+    AnimatedMesh(const std::string& path, bool gamma = false) 
         : gammaCorrection(gamma), scene(nullptr) {
         loadModel(path);
     }

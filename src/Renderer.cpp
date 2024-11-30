@@ -3,12 +3,8 @@
 namespace Renderer{
     Shaders g_shaders;
     Sounds g_sounds;
-}
 
-void Renderer::Initialize()
-{
-  g_sounds.hotload = LoadSound("res/audio/select3.wav");
-  SetSoundVolume(g_sounds.hotload, 0.5f);
+    bool loadingComplete = false;
 }
 
 void Renderer::BakeShaders()
@@ -29,3 +25,30 @@ void Renderer::HotReloadShaders()
   BakeShaders();
   PlaySound(g_sounds.hotload);
 }
+
+void Renderer::LoadSounds()
+{
+  g_sounds.hotload = LoadSound("res/audio/select3.wav");
+  SetSoundVolume(g_sounds.hotload, 0.5f);
+}
+
+bool Renderer::isInitialized()
+{
+  return loadingComplete;
+}
+
+void Renderer::Init()
+{
+  
+
+  loadingComplete = true;
+}
+
+void Renderer::Render()
+{
+
+}
+
+
+
+

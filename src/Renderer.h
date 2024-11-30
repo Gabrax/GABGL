@@ -26,13 +26,12 @@ namespace Renderer {
     };
     extern Sounds g_sounds;
 
-    void Initialize();
+    void LoadSounds();
     void BakeShaders();
     void HotReloadShaders();
     
-    namespace Scene {
-      void Init();
-      void Render();
-    }
+    void Init();
+    bool isInitialized();
+    void Render();
     
 }

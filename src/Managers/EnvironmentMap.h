@@ -5,25 +5,25 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include "Window.h"
+#include "../Window.h"
 #include "stb_image.h"
-#include "Renderer.h"
+#include "../Renderer.h"
 #include <vector>
 #include <string>
 
-struct Skybox{
-    Skybox() {
+struct EnvironmentMap {
+
+    EnvironmentMap() {
         Bake();
-        puts("Skybox loaded");
     }
 
-    ~Skybox(){
+    ~EnvironmentMap(){
         glDeleteBuffers(1, &_VBO);
         glDeleteVertexArrays(1, &_VAO);
         glDeleteTextures(1, &_texture);
     }
 
-    inline void Bake(){
+    void Bake(){
         glGenVertexArrays(1, &_VAO);
         glGenBuffers(1, &_VBO);
         glBindVertexArray(_VAO);
@@ -44,9 +44,11 @@ struct Skybox{
         stbi_set_flip_vertically_on_load(false);
         _texture = loadCubemap(faces);
         stbi_set_flip_vertically_on_load(true);
+
+        puts("EnvMap loaded");
     }
 
-    inline void Render(){
+    void Render(){
         glDepthFunc(GL_LEQUAL);  // change depth function so depth test passes when values are equal to depth buffer's content
         _shader.Use();
         glm::mat4 projection = glm::perspective(glm::radians(this->_camera.Zoom), Window::getAspectRatio(), 0.1f, 100.0f);
