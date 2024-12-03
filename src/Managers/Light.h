@@ -5,7 +5,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include "../Renderer.h"
+#include "../Utilities.hpp"
 #include "../Window.h"
 
 struct Light{
@@ -47,7 +47,7 @@ struct Light{
 
     inline void Render(const glm::vec3& initialPosition, const glm::vec3& scale = glm::vec3(1.0f),float rotation = 0.0f){ 
         _shader.Use();
-        glm::mat4 projection = glm::perspective(glm::radians(this->_camera.Zoom), Window::getAspectRatio(), 0.1f, 100.0f);
+        glm::mat4 projection = glm::perspective(glm::radians(this->_camera.Zoom), Window::getAspectRatio(), 0.001f, 2000.0f);
         _shader.setMat4("projection", projection);
         _shader.setVec4("lightColor",lightColor);
 
@@ -68,7 +68,7 @@ private:
 
     GLuint _VBO, _VAO;
     Camera& _camera = Window::_camera;
-    Shader& _shader = Renderer::g_shaders.light;
+    Shader& _shader = Utilities::g_shaders.light;
     glm::vec4 lightColor;
     glm::vec3 position = glm::vec3(0.0f, 0.0f, 0.0f);
 

@@ -51,6 +51,8 @@ namespace Window {
 	int GetCursorX();
 	int GetCursorY();
 
+  void DisableMovement();
+
 	// camera
   inline Camera _camera(glm::vec3(0.20f, 31.33f, 34.21f));
   inline float _lastX = static_cast<float>(GetWindowWidth()) / 2.0f;

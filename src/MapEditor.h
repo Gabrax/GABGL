@@ -8,20 +8,11 @@
 #include "Window.h"
 #include <json.hpp>
 #include <fstream>
+#include "Managers/LightManager.h"
 
-namespace MapEditor {
-
-  inline bool isRendered = false;
-  
-  enum class EditorPage
-  {
-    Main,
-    LightEditor
-  };
-
-  static EditorPage currentPage = EditorPage::Main; // Track current page
-
-  inline void Init()
+struct MapEditor
+{
+  void Init()
   {
 
     ImGui::CreateContext();
@@ -46,7 +37,7 @@ namespace MapEditor {
     ImGui_ImplOpenGL3_Init("#version 330");
   }
 
-  inline void editorlogic()
+  void editorlogic()
   {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -65,33 +56,38 @@ namespace MapEditor {
         ImGui::SetNextWindowSize(windowSize, ImGuiCond_Always);  
         ImGui::SetNextWindowPos(windowPos, ImGuiCond_Always);
         ImGui::Text("Camera Properties");
+
         ImGui::Columns(2, nullptr, false); // 2 columns, no borders
         ImGui::SetColumnWidth(0, 50);    // Set the width of the first column
 
-        
+        // X Value
         ImGui::Text("X:");
-        ImGui::NextColumn(); 
-        ImGui::InputFloat("##X", &Window::_camera.Position.x, 0.1f, 1.0f, "%.2f"); // Hide label in the field
+        ImGui::NextColumn();
+        ImGui::DragFloat("##X", &Window::_camera.Position.x, 0.1f, -FLT_MAX, FLT_MAX, "%.2f", ImGuiSliderFlags_None);
 
         ImGui::NextColumn(); 
+        // Y Value
         ImGui::Text("Y:");
         ImGui::NextColumn(); 
-        ImGui::InputFloat("##Y", &Window::_camera.Position.y, 0.1f, 1.0f, "%.2f");
+        ImGui::DragFloat("##Y", &Window::_camera.Position.y, 0.1f, -FLT_MAX, FLT_MAX, "%.2f", ImGuiSliderFlags_None);
 
         ImGui::NextColumn();
+        // Z Value
         ImGui::Text("Z:");
         ImGui::NextColumn();
-        ImGui::InputFloat("##Z", &Window::_camera.Position.z, 0.1f, 1.0f, "%.2f");
+        ImGui::DragFloat("##Z", &Window::_camera.Position.z, 0.1f, -FLT_MAX, FLT_MAX, "%.2f", ImGuiSliderFlags_None);
 
         ImGui::NextColumn(); 
+        // Yaw Value
         ImGui::Text("Yaw:");
         ImGui::NextColumn();
-        ImGui::SliderFloat("##Yaw", &Window::_camera.Yaw, -180.0f, 180.0f, "%.2f");
+        ImGui::DragFloat("##Yaw", &Window::_camera.Yaw, 0.5f, -180.0f, 180.0f, "%.2f", ImGuiSliderFlags_None);
 
         ImGui::NextColumn();
+        // Pitch Value
         ImGui::Text("Pitch:");
         ImGui::NextColumn();
-        ImGui::SliderFloat("##Pitch", &Window::_camera.Pitch, -90.0f, 90.0f, "%.2f");
+        ImGui::DragFloat("##Pitch", &Window::_camera.Pitch, 0.5f, -90.0f, 90.0f, "%.2f", ImGuiSliderFlags_None);
 
         ImGui::Columns(1); // Reset to single-column layout
         ImGui::Separator();
@@ -157,14 +153,15 @@ namespace MapEditor {
         ImGui::End();
     }
     else if (currentPage == EditorPage::LightEditor) {
-        
         ImGui::Begin("Light Editor");
 
         ImGui::SetNextWindowSize(windowSize, ImGuiCond_Always);  
         ImGui::SetNextWindowPos(windowPos, ImGuiCond_Always);    
-        ImGui::Text("skibidi...");
-        
 
+        // Title
+        ImGui::Text("Light Editor");
+
+        // Button to return to the main menu
         if (ImGui::Button("Return to Main")) {
             currentPage = EditorPage::Main; 
         }
@@ -184,7 +181,7 @@ namespace MapEditor {
     }
   }
 
-  inline void Render()
+  void Render()
   {
     if(isRendered){
       editorlogic();
@@ -193,7 +190,19 @@ namespace MapEditor {
 
     if(Input::KeyPressed(KEY_GRAVE_ACCENT)){
       isRendered = !isRendered;
+      Window::DisableMovement();
     }
   }
 
-}
+private:
+
+  enum class EditorPage
+  {
+    Main,
+    LightEditor
+  };
+
+  EditorPage currentPage = EditorPage::Main; // Track current page
+  LightManager lightManager;
+  bool isRendered = false;
+};

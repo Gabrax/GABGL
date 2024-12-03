@@ -7,20 +7,28 @@
 #include "Managers/LightManager.h"
 #include "Managers/StaticModel.h"
 
-#include "Renderer.h"
+#include "Utilities.hpp"
 #include "glad/glad.h"
 #include "Window.h"
-
-#include <entt.hpp>
-
+#include "MapEditor.h"
+#include "Managers/TextManager.h"
 
 void Engine::Run() {
 
     Window::Init();
-    stbi_set_flip_vertically_on_load(true); 
+    stbi_set_flip_vertically_on_load(true);
 
-    Renderer::BakeShaders();
-    Renderer::LoadSounds();
+    // Init subsystems
+    Input::Init();
+    InitAudioDevice();
+    gltInit();
+
+
+    Utilities::BakeShaders();
+    Utilities::LoadSounds();
+
+    MapEditor editor;
+    editor.Init();
 
     StaticModel house("res/map/objHouse.obj");
     StaticModel backpack("res/backpack/backpack.obj");
@@ -37,8 +45,8 @@ void Engine::Run() {
 
     BloomRenderer bloom;
       
-    while (Window::WindowIsOpen() && Window::WindowHasNotBeenForceClosed()) {
-
+    while (Window::WindowIsOpen() && Window::WindowHasNotBeenForceClosed())
+    {
         Window::BeginFrame();
 
         bloom.Bind();
@@ -69,8 +77,21 @@ void Engine::Run() {
 
         glDisable(GL_DEPTH_TEST);
 
+        editor.Render();
+
+
         if (Input::KeyPressed(KEY_R)) {
-            Renderer::HotReloadShaders();
+          Utilities::HotReloadShaders();
+        }
+
+        if (Input::KeyPressed(KEY_F)) {
+          Window::ToggleFullscreen();
+          PlaySound(Utilities::g_sounds.fullscreen);
+        }
+
+        if (Input::KeyPressed(KEY_H)) {
+          Window::ToggleWireframe();
+          PlaySound(Utilities::g_sounds.switchmode);
         }
 
         Window::EndFrame();

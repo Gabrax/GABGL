@@ -9,7 +9,7 @@
 #include <vector>
 #include <iostream>
 #include "../Input/Input.h"
-#include "../Renderer.h"
+#include "../Utilities.hpp"
 
 
 static unsigned int quadVAO = 0;
@@ -213,9 +213,9 @@ static bloomFBO mFBO;
 static glm::ivec2 mSrcViewportSize;
 static glm::vec2 mSrcViewportSizeFloat;
 
-static Shader& mDownsampleShader = Renderer::g_shaders.bloom_downsample; 
-static Shader& mUpsampleShader = Renderer::g_shaders.bloom_upsample;
-static Shader& shaderBloomFinal = Renderer::g_shaders.bloom_final;
+static Shader& mDownsampleShader = Utilities::g_shaders.bloom_downsample; 
+static Shader& mUpsampleShader = Utilities::g_shaders.bloom_upsample;
+static Shader& shaderBloomFinal = Utilities::g_shaders.bloom_final;
 
 bool BloomRenderer::Init()
 {
@@ -296,8 +296,8 @@ bool BloomRenderer::Init()
 void BloomRenderer::Destroy()
 {
 	mFBO.Destroy();
-	Renderer::g_shaders.bloom_downsample.Delete();
-	Renderer::g_shaders.bloom_upsample.Delete();
+	Utilities::g_shaders.bloom_downsample.Delete();
+	Utilities::g_shaders.bloom_upsample.Delete();
 }
 
 void BloomRenderer::RenderDownsamples(unsigned int srcTexture)

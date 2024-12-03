@@ -29,7 +29,7 @@ struct LightManager {
     LightManager() {
         // Pre-allocate SSBOs for positions and colors
         ssboPositions.PreAllocate(sizeof(glm::vec4) * maxLights + sizeof(int32_t)); 
-        ssboColors.PreAllocate(sizeof(glm::vec4) * maxLights);  // Separate SSBO for colors
+        ssboColors.PreAllocate(sizeof(glm::vec4) * maxLights);  
 
         numLights = 0; 
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, ssboPositions.GetHandle());  // Positions SSBO
@@ -165,6 +165,7 @@ struct LightManager {
     }
 
 private:
+
     glm::vec4 GetColor(Color color) {
         switch (color) {
             case Color::Red:    return glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);

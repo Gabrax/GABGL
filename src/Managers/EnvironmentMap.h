@@ -7,7 +7,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include "../Window.h"
 #include "stb_image.h"
-#include "../Renderer.h"
+#include "../Utilities.hpp"
 #include <vector>
 #include <string>
 
@@ -51,7 +51,7 @@ struct EnvironmentMap {
     void Render(){
         glDepthFunc(GL_LEQUAL);  // change depth function so depth test passes when values are equal to depth buffer's content
         _shader.Use();
-        glm::mat4 projection = glm::perspective(glm::radians(this->_camera.Zoom), Window::getAspectRatio(), 0.1f, 100.0f);
+        glm::mat4 projection = glm::perspective(glm::radians(this->_camera.Zoom), Window::getAspectRatio(), 0.001f, 2000.0f);
         glm::mat4 view = glm::mat4(glm::mat3(this->_camera.GetViewMatrix())); // remove translation from the view matrix
         _shader.setMat4("view", view);
         _shader.setMat4("projection", projection);
@@ -69,7 +69,7 @@ private:
     unsigned int _VBO, _VAO;
     unsigned int _texture;
     Camera& _camera = Window::_camera;
-    Shader& _shader = Renderer::g_shaders.skybox;
+    Shader& _shader = Utilities::g_shaders.skybox;
     // loads a cubemap texture from 6 individual texture faces
     // order:
     // +X (right)

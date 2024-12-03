@@ -13,7 +13,7 @@
 #include "../LoadShader.h"
 #include "../LoadTexture.h"
 #include "../Window.h"
-#include "../Renderer.h"
+#include "../Utilities.hpp"
 
 #include <string>
 #include <iostream>
@@ -48,7 +48,7 @@ struct StaticModel {
         // material properties
         _shader.setFloat("material.shininess", 32.0f);
         
-        glm::mat4 projection = glm::perspective(glm::radians(this->camera.Zoom), Window::getAspectRatio(), 0.1f, 100.0f);
+        glm::mat4 projection = glm::perspective(glm::radians(this->camera.Zoom), Window::getAspectRatio(), 0.001f, 2000.0f);
         _shader.setMat4("projection", projection);
 
         _shader.setMat4("view", this->camera.GetViewMatrix());
@@ -73,7 +73,7 @@ struct StaticModel {
 private:
 
     Camera& camera = Window::_camera;
-    Shader& _shader = Renderer::g_shaders.model;
+    Shader& _shader = Utilities::g_shaders.model;
 
     std::unordered_map<std::string, Texture> textures_loaded; 
     std::vector<Mesh> meshes;

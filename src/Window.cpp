@@ -4,11 +4,7 @@
 
 #include "Input/Input.h"
 #include "Window.h"
-#include "Input/Key_Values.h"
 #include "stb_image.h"
-#include "gltext.h"
-#include "Renderer.h"
-#include "MapEditor.h"
 
 namespace Window {
 
@@ -39,6 +35,8 @@ namespace Window {
   // timing
   inline float _deltaTime = 0.0f;	
   inline float _lastFrame = 0.0f;
+  
+  bool disablemovement = false;
 }
 
 GLenum glCheckError_(const char* file, int line) {
@@ -267,16 +265,6 @@ void Window::Init()
     } 
        
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-    // Init subsystems
-    Input::Init();
-    InitAudioDevice();
-    MapEditor::Init();
-
-    Renderer::g_sounds.fullscreen = LoadSound("res/audio/select1.wav");
-    SetSoundVolume(Renderer::g_sounds.fullscreen, 0.5f);
-    Renderer::g_sounds.switchmode = LoadSound("res/audio/select2.wav");
-    SetSoundVolume(Renderer::g_sounds.switchmode, 0.5f);
-
 }
 
 void Window::DeltaTime()
@@ -308,7 +296,6 @@ void Window::ShowFPS()
 
 void Window::EndFrame()
 {
-    MapEditor::Render();
     Input::Update();
     processInput(_window);
     glfwSwapBuffers(_window);
@@ -331,9 +318,41 @@ void Window::Cleanup()
     glfwTerminate();
 }
 
+GLFWwindow* Window::GetWindowPtr()
+{
+    return _window;
+}
+
 bool Window::WindowIsOpen()
 {
     return !glfwWindowShouldClose(_window);
+}
+
+bool Window::WindowHasFocus()
+{
+    return _windowHasFocus;
+}
+
+bool Window::WindowHasNotBeenForceClosed()
+{
+    return !_forceCloseWindow;
+}
+
+void Window::ForceCloseWindow()
+{
+    _forceCloseWindow = true;
+}
+
+void Window::window_focus_callback(GLFWwindow* window, int focused)
+{
+    if (focused)
+    {
+        Window::_windowHasFocus = true;
+    }
+    else
+    {
+        Window::_windowHasFocus = false;
+    }
 }
 
 int Window::GetWindowWidth()
@@ -415,26 +434,6 @@ void Window::ShowCursor()
     glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 }
 
-GLFWwindow* Window::GetWindowPtr()
-{
-    return _window;
-}
-
-bool Window::WindowHasFocus()
-{
-    return _windowHasFocus;
-}
-
-bool Window::WindowHasNotBeenForceClosed()
-{
-    return !_forceCloseWindow;
-}
-
-void Window::ForceCloseWindow()
-{
-    _forceCloseWindow = true;
-}
-
 void Window::processInput(GLFWwindow* window)
 {
     if (Input::KeyDown(KEY_ESCAPE)) glfwSetWindowShouldClose(window, true);
@@ -444,16 +443,6 @@ void Window::processInput(GLFWwindow* window)
     if (Input::KeyDown(KEY_D)) _camera.ProcessKeyboard(RIGHT, _deltaTime);
     if (Input::KeyDown(KEY_SPACE)) _camera.ProcessKeyboard(UP, _deltaTime);
     if (Input::KeyDown(KEY_LEFT_CONTROL)) _camera.ProcessKeyboard(DOWN, _deltaTime);
-
-    if (Input::KeyPressed(KEY_F)) {
-        ToggleFullscreen();
-        PlaySound(Renderer::g_sounds.fullscreen);
-    }
-
-    if (Input::KeyPressed(KEY_H)) {
-        ToggleWireframe();
-        PlaySound(Renderer::g_sounds.switchmode);
-    }
 }
 
 void Window::mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
@@ -474,7 +463,7 @@ void Window::mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
     _lastX = xpos;
     _lastY = ypos;
 
-  if(!MapEditor::isRendered) _camera.ProcessMouseMovement(xoffset, yoffset);
+    if(!disablemovement) _camera.ProcessMouseMovement(xoffset, yoffset);
 }
 
 // glfw: whenever the mouse scroll wheel scrolls, this callback is called
@@ -500,14 +489,10 @@ void Window::framebuffer_size_callback(GLFWwindow* window, int width, int height
     }
 }
 
-void Window::window_focus_callback(GLFWwindow* window, int focused)
+void Window::DisableMovement()
 {
-    if (focused)
-    {
-        Window::_windowHasFocus = true;
-    }
-    else
-    {
-        Window::_windowHasFocus = false;
-    }
+  disablemovement = !disablemovement;
 }
+
+
+

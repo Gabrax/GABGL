@@ -6,7 +6,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include "../Input/Input.h"
-#include "../Renderer.h"
+#include "../Utilities.hpp"
 #include "AnimationSystem.h"
 #include "AnimatedMesh.h"
 #include "../Window.h"
@@ -41,7 +41,7 @@ struct AnimatedModel {
         // material properties
         _shader.setFloat("material.shininess", 5.0f);
 
-        glm::mat4 projection = glm::perspective(glm::radians(this->camera.Zoom), Window::getAspectRatio(), 0.1f, 100.0f);
+        glm::mat4 projection = glm::perspective(glm::radians(this->camera.Zoom), Window::getAspectRatio(), 0.001f, 2000.0f);
         _shader.setMat4("projection", projection);
 
         glm::mat4 view = this->camera.GetViewMatrix();
@@ -64,7 +64,7 @@ struct AnimatedModel {
 private:
 
     Camera& camera = Window::_camera;
-    Shader& _shader = Renderer::g_shaders.animated;
+    Shader& _shader = Utilities::g_shaders.animated;
     AnimatedMesh loadmodel;
     AnimationSystem animation;
 };
