@@ -32,5 +32,6 @@ sh build.sh
 - [ENET](https://github.com/zpl-c/enet)
 - [JSON](https://github.com/nlohmann/json)
 - [EnTT](https://github.com/skypjack/entt)
+- [Tracy](https://github.com/wolfpld/tracy?tab=readme-ov-file)
 
 

@@ -7,6 +7,7 @@
 #include "Light.h"
 #include "../LoadSSBO.h" 
 #include "glad/glad.h"
+#include "glm/fwd.hpp"
 #include <optional>
 
 
@@ -112,8 +113,25 @@ struct LightManager {
         numLights++;
         UpdateLightDataInSSBO();
     }
+    void AddLight(const glm::vec4& color, const glm::vec3& position, const glm::vec3& scale = glm::vec3(1.0f), const float& rotation = 0.0f) {
+        if (numLights == maxLights - 1) {
+            std::cout << "Max number of lights reached!" << '\n';
+            return;
+        }
 
-    void EditLight(int index, const std::optional<Color>& newColor = std::nullopt, 
+        glm::vec4 lightColor = color;
+        glm::vec4 positionWithW(position, 1.0f);
+        LightData lightData = { positionWithW, scale, rotation, lightColor };
+
+        std::unique_ptr<Light> newLight = std::make_unique<Light>();
+        newLight->setLightColor(lightColor);
+
+        lights.push_back({ std::move(newLight), lightData });
+        numLights++;
+        UpdateLightDataInSSBO();
+    }
+
+    void EditLight(int index, const std::optional<glm::vec4>& newColor = std::nullopt, 
                const std::optional<glm::vec3>& newPosition = std::nullopt, 
                const std::optional<glm::vec3>& newScale = std::nullopt, 
                const std::optional<float>& newRotation = std::nullopt) 
@@ -127,7 +145,7 @@ struct LightManager {
 
       // Update color if a new color is provided
       if (newColor.has_value()) {
-          lightData.color = GetColor(newColor.value());
+          lightData.color = newColor.value();
           lights[index].first->setLightColor(lightData.color); // Update the light's internal color
       }
 
@@ -164,6 +182,15 @@ struct LightManager {
         }
     }
 
+    struct LightData 
+    {
+        glm::vec4 position;
+        glm::vec3 scale;
+        float rotation;
+        glm::vec4 color;
+    };
+
+    std::vector<std::pair<std::unique_ptr<Light>, LightData>> lights;
 private:
 
     glm::vec4 GetColor(Color color) {
@@ -180,15 +207,6 @@ private:
         }
     }
 
-    struct LightData 
-    {
-        glm::vec4 position;
-        glm::vec3 scale;
-        float rotation;
-        glm::vec4 color;
-    };
-
-    std::vector<std::pair<std::unique_ptr<Light>, LightData>> lights;
     SSBO ssboPositions;  // SSBO for positions
     SSBO ssboColors;     // SSBO for colors
     int32_t numLights;

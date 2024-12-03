@@ -4,7 +4,6 @@
 
 #include "Managers/AnimatedModel.h"
 #include "Managers/EnvironmentMap.h"
-#include "Managers/LightManager.h"
 #include "Managers/StaticModel.h"
 
 #include "Utilities.hpp"
@@ -12,6 +11,11 @@
 #include "Window.h"
 #include "MapEditor.h"
 #include "Managers/TextManager.h"
+
+
+#include <TracyClient.cpp> // PROFILER //
+#include <tracy/TracyOpenGL.hpp>
+#include <tracy/TracyC.h>
 
 void Engine::Run() {
 
@@ -29,7 +33,8 @@ void Engine::Run() {
 
     MapEditor editor;
     editor.Init();
-
+    editor.LoadScene();
+    
     StaticModel house("res/map/objHouse.obj");
     StaticModel backpack("res/backpack/backpack.obj");
     StaticModel stairs("res/stairs/Stairs.obj");
@@ -37,14 +42,8 @@ void Engine::Run() {
 
     EnvironmentMap envmap;
 
-    LightManager lightmanager;
-    lightmanager.AddLight(Color::Red, glm::vec3(-2.0f, 5.0f, 10.0f), glm::vec3(0.5f));
-    lightmanager.AddLight(Color::Blue, glm::vec3(17.0f, 5.0f, -10.0f), glm::vec3(0.5f));
-    lightmanager.AddLight(Color::Green, glm::vec3(-12.0f, 5.0f, -1.0f), glm::vec3(0.5f));
-    lightmanager.AddLight(Color::Orange, glm::vec3(17.0f, 5.0f, 10.0f), glm::vec3(0.5f));
-
     BloomRenderer bloom;
-      
+
     while (Window::WindowIsOpen() && Window::WindowHasNotBeenForceClosed())
     {
         Window::BeginFrame();
@@ -62,7 +61,7 @@ void Engine::Run() {
         backpack.Render(glm::vec3(-2.0f, 3.0f, 10.0f), glm::vec3(0.25f), 90.0f);
         guy.Render(glm::vec3(0.0f, 0.50f, 8.0f));
 
-        lightmanager.RenderLights();
+        editor.RenderScene();
 
         glDisable(GL_CULL_FACE);
 

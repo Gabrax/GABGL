@@ -4,6 +4,8 @@ include(FetchContent)
 
 set(CMAKE_CXX_STANDARD 17)
 
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
 # Set this to true to ship the game!
 option(PRODUCTION_BUILD "Make this a production build" OFF)
 
@@ -66,10 +68,19 @@ set(ASSIMP_INSTALL OFF CACHE BOOL "Disable Assimp installation" FORCE)
 FetchContent_Declare(
     meshoptimizer
     GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
-    GIT_TAG v0.18 # Use the latest stable version or a specific tag
+    GIT_TAG v0.18 
+    GIT_PROGRESS TRUE
 )
 
-FetchContent_MakeAvailable(assimp meshoptimizer)#freetype
+FetchContent_Declare (
+    tracy
+    GIT_REPOSITORY https://github.com/wolfpld/tracy.git
+    GIT_TAG v0.11.1
+    GIT_SHALLOW TRUE
+    GIT_PROGRESS TRUE
+)
+
+FetchContent_MakeAvailable(assimp meshoptimizer tracy)#freetype
 
 # GLFW and other third-party dependencies
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
@@ -122,4 +133,4 @@ if(RELEASE)
 endif()
 
 # Target link libraries
-target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp glText tinyOBJ meshoptimizer EnTT JSONparser)
+target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp glText tinyOBJ meshoptimizer EnTT JSONparser TracyClient)
