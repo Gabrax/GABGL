@@ -1,3 +1,4 @@
+
 #!/bin/bash
 
 OS=$(uname)
@@ -12,6 +13,11 @@ RESET="\e[0m"
 
 # Set the compiler based on the argument
 COMPILER=$1
+RELEASE_MODE=false
+
+if [[ "$2" == "release" ]]; then
+    RELEASE_MODE=true
+fi
 
 if [[ "$OS" == "Linux" || "$OS" == "Darwin" ]]; then
     # Linux or macOS
@@ -47,18 +53,23 @@ if [ -f "CMakeCache.txt" ]; then
 else
     echo -e "${YELLOW}[*] Configuring the project with CMake...${RESET}"
     
+    CMAKE_ARGS=""
+    if $RELEASE_MODE; then
+        CMAKE_ARGS="-DRELEASE=ON"
+    fi
+
     # If no compiler is specified, run cmake with the default system compiler
     if [ -z "$COMPILER" ]; then
-        cmake .. || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
+        cmake .. $CMAKE_ARGS || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
     elif [ "$COMPILER" == "msvc" ]; then
         echo -e "${YELLOW}[*] Using MSVC Compiler${RESET}"
-        cmake -G "Visual Studio 17 2022" .. || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
+        cmake -G "Visual Studio 17 2022" .. $CMAKE_ARGS || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
     elif [ "$COMPILER" == "clang" ]; then
         echo -e "${YELLOW}[*] Using Clang Compiler${RESET}"
-        cmake -G "Ninja" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -Wno-dev .. || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
+        cmake -G "Ninja" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ $CMAKE_ARGS -Wno-dev .. || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
     elif [ "$COMPILER" == "gcc" ]; then
         echo -e "${YELLOW}[*] Using GCC Compiler${RESET}"
-        cmake -G "Unix Makefiles" -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -Wno-dev .. || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
+        cmake -G "Unix Makefiles" -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ $CMAKE_ARGS -Wno-dev .. || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
     else
         echo -e "${RED}[*] Unsupported compiler: $COMPILER${RESET}"
         exit 1
@@ -90,3 +101,5 @@ if mygame_path=$(eval "$FIND_CMD"); then
 else
     echo -e "${RED}[*] Executable $EXE_PATH not found${RESET}"
 fi
+
+

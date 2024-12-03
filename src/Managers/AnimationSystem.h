@@ -15,10 +15,6 @@ struct AssimpNodeData
     std::string name;
     int childrenCount;
     std::vector<AssimpNodeData> children;
-    // Animation-specific data for each node.
-    std::vector<KeyPosition> positions;
-    std::vector<KeyRotation> rotations;
-    std::vector<KeyScale> scales;
 };
 
 struct AnimationData {
@@ -61,7 +57,7 @@ struct AnimationSystem {
 
         assert(!m_ProcessedAnimations.empty());
 
-        SetAnimation(m_CurrentAnimationIndex);
+        SetAnimationByName("IDLE");
 
         ResizeFinalBoneMatrices();
     }
@@ -74,23 +70,38 @@ struct AnimationSystem {
         CalculateBoneTransform(&GetRootNode(), glm::mat4(1.0f));
     }
 
-    void SetAnimation(int animationIndex)
+    void SetAnimationbyIndex(int animationIndex)
     {
         assert(animationIndex >= 0 && animationIndex < m_ProcessedAnimations.size());
         
         const AnimationData& animData = m_ProcessedAnimations[animationIndex];
+        const AnimationData& animData2 = m_ProcessedAnimations[0];
 
-        // Update current animation details.
         m_Duration = animData.duration;
         m_TicksPerSecond = animData.ticksPerSecond;
 
-        // Update hierarchy and bone data.
         m_RootNode = animData.hierarchy;
         m_Bones = animData.bones;
 
         std::cout << "Current animation: " << animData.name << '\n';
 
         ResizeFinalBoneMatrices();
+    }
+
+    void SetAnimationByName(const std::string& animationName)
+    {
+        auto it = std::find_if(m_ProcessedAnimations.begin(), m_ProcessedAnimations.end(),
+            [&animationName](const AnimationData& animData) {
+                return animData.name == animationName;
+            });
+
+        if (it != m_ProcessedAnimations.end()) {
+            // Get the index of the found animation
+            int animationIndex = std::distance(m_ProcessedAnimations.begin(), it);
+            SetAnimationbyIndex(animationIndex); 
+        } else {
+            std::cerr << "Animation not found: " << animationName << '\n';
+        }
     }
 
     void CalculateBoneTransform(const AssimpNodeData* node, glm::mat4 parentTransform)
@@ -148,9 +159,9 @@ struct AnimationSystem {
     inline const std::map<std::string,BoneInfo>& GetBoneIDMap() { return m_BoneInfoMap; }
 
 private:
+
     void ResizeFinalBoneMatrices()
     {
-      /*assert(m_Animation);*/
       const auto& boneInfoMap = GetBoneIDMap();
       m_FinalBoneMatrices.resize(boneInfoMap.size(), glm::mat4(1.0f));
     }
@@ -159,6 +170,9 @@ private:
     float m_CurrentTime = 0.0f;
     float m_DeltaTime = 0.0f;
 
+    float m_BlendFactor = 0.0f; // 0 -> 1 
+    bool m_IsBlending = false;
+    int m_NextAnimationIndex = -1;
     std::vector<AnimationData> m_ProcessedAnimations;
     AnimatedMesh* model;
     const aiScene* scene = nullptr;

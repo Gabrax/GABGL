@@ -28,12 +28,9 @@ struct AnimatedModel {
     {
         animation.UpdateAnimation(Window::getDeltaTime());
 
-        if(Input::KeyPressed(KEY_1)) animation.SetAnimation(1);
-        if(Input::KeyPressed(KEY_2)) animation.SetAnimation(2);
-        if(Input::KeyPressed(KEY_3)) animation.SetAnimation(3);
+        if(Input::KeyPressed(KEY_1)) animation.SetAnimationByName("WALK");
 
         _shader.Use();
-        /*_shader.setVec3("light.position", lightPos);*/
         _shader.setVec3("viewPos", this->camera.Position);
 
         // light properties

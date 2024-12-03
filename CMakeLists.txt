@@ -86,9 +86,8 @@ add_subdirectory(vendor/raudio)              # Audio
 add_subdirectory(vendor/glm)                 # Math
 add_subdirectory(vendor/imgui-docking)       # UI
 add_subdirectory(vendor/tinyobj)             # obj loader
-set(RAPIDJSON_BUILD_EXAMPLES OFF CACHE BOOL "Disable RapidJSON examples" FORCE)
-set(RAPIDJSON_BUILD_TESTS OFF CACHE BOOL "Disable RapidJSON tests" FORCE)
-add_subdirectory(vendor/rapidjson)           # JSON Parser
+add_subdirectory(vendor/EnTT)                # Entity System Component
+add_subdirectory(vendor/nlohmann-json)       # JSON parser
 
 # MY_SOURCES is defined to be a list of all the source files for my game
 file(GLOB_RECURSE MY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
@@ -111,12 +110,16 @@ target_sources("${CMAKE_PROJECT_NAME}" PRIVATE ${MY_SOURCES})
 
 if(MSVC)
     target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC _CRT_SECURE_NO_WARNINGS)
-    # Optional: Uncomment to remove console in Release
-    # set_target_properties("${CMAKE_PROJECT_NAME}" PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     # Optional: If using Clang on Windows, you might need to link against LLVM's libc++
     # target_link_options("${CMAKE_PROJECT_NAME}" PRIVATE -stdlib=libc++)
 endif()
 
+option(RELEASE "Enable Windows subsystem for the application" OFF)
+
+if(RELEASE)
+    set_target_properties("${CMAKE_PROJECT_NAME}" PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
+endif()
+
 # Target link libraries
-target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp glText tinyOBJ meshoptimizer)
+target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp glText tinyOBJ meshoptimizer EnTT JSONparser)

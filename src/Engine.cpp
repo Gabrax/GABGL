@@ -11,6 +11,9 @@
 #include "glad/glad.h"
 #include "Window.h"
 
+#include <entt.hpp>
+
+
 void Engine::Run() {
 
     Window::Init();
@@ -47,9 +50,9 @@ void Engine::Run() {
         glFrontFace(GL_CW);
 
         stairs.Render(glm::vec3(1.0f, 0.5f, 2.0f), glm::vec3(1.1f));
-        house.Render(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(50.0f));
+        house.Render(glm::vec3(0.0f, 0.0f, 0.0f));
         backpack.Render(glm::vec3(-2.0f, 3.0f, 10.0f), glm::vec3(0.25f), 90.0f);
-        guy.Render(glm::vec3(0.0f, 0.50f, 8.0f), glm::vec3(1.0f));
+        guy.Render(glm::vec3(0.0f, 0.50f, 8.0f));
 
         lightmanager.RenderLights();
 

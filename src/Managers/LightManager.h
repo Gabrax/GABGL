@@ -5,8 +5,9 @@
 #include <vector>
 #include <memory>
 #include "Light.h"
-#include "LoadSSBO.h" 
+#include "../LoadSSBO.h" 
 #include "glad/glad.h"
+#include <optional>
 
 
 
@@ -110,6 +111,43 @@ struct LightManager {
         lights.push_back({ std::move(newLight), lightData });
         numLights++;
         UpdateLightDataInSSBO();
+    }
+
+    void EditLight(int index, const std::optional<Color>& newColor = std::nullopt, 
+               const std::optional<glm::vec3>& newPosition = std::nullopt, 
+               const std::optional<glm::vec3>& newScale = std::nullopt, 
+               const std::optional<float>& newRotation = std::nullopt) 
+    {
+      if (index < 0 || index >= lights.size()) {
+          std::cerr << "Invalid light index: " << index << std::endl;
+          return;
+      }
+
+      LightData& lightData = lights[index].second;
+
+      // Update color if a new color is provided
+      if (newColor.has_value()) {
+          lightData.color = GetColor(newColor.value());
+          lights[index].first->setLightColor(lightData.color); // Update the light's internal color
+      }
+
+      // Update position if a new position is provided
+      if (newPosition.has_value()) {
+          lightData.position = glm::vec4(newPosition.value(), 1.0f);
+      }
+
+      // Update scale if a new scale is provided
+      if (newScale.has_value()) {
+          lightData.scale = newScale.value();
+      }
+
+      // Update rotation if a new rotation is provided
+      if (newRotation.has_value()) {
+          lightData.rotation = newRotation.value();
+      }
+
+      // Update SSBO to synchronize changes with the GPU
+      UpdateLightDataInSSBO();
     }
 
     void RemoveLight(int index) {

@@ -19,7 +19,6 @@ sh build.sh
 - [GLFW](https://github.com/glfw/glfw)
 - [GLAD](https://github.com/Dav1dde/glad)
 - [GLM](https://github.com/g-truc/glm)
-- [GL2D](https://github.com/meemknight/gl2d)
 - [ImGUI](https://github.com/ocornut/imgui)
 - [rAudio](https://github.com/raysan5/raudio)
 - [stb_image](https://github.com/nothings/stb/blob/master/stb_image.h)
@@ -31,6 +30,7 @@ sh build.sh
 - [tinyCSG](https://github.com/laleksic/tiny_csg)
 - [tinyEXR](https://github.com/syoyo/tinyexr)
 - [ENET](https://github.com/zpl-c/enet)
-- [RapidJSON](https://github.com/Tencent/rapidjson)
+- [JSON](https://github.com/nlohmann/json)
+- [EnTT](https://github.com/skypjack/entt)
 
 
