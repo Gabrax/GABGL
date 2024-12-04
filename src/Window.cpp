@@ -436,6 +436,7 @@ void Window::ShowCursor()
 
 void Window::processInput(GLFWwindow* window)
 {
+  if(!disablemovement){
     if (Input::KeyDown(KEY_ESCAPE)) glfwSetWindowShouldClose(window, true);
     if (Input::KeyDown(KEY_W)) _camera.ProcessKeyboard(FORWARD, _deltaTime);
     if (Input::KeyDown(KEY_S)) _camera.ProcessKeyboard(BACKWARD, _deltaTime);
@@ -443,6 +444,7 @@ void Window::processInput(GLFWwindow* window)
     if (Input::KeyDown(KEY_D)) _camera.ProcessKeyboard(RIGHT, _deltaTime);
     if (Input::KeyDown(KEY_SPACE)) _camera.ProcessKeyboard(UP, _deltaTime);
     if (Input::KeyDown(KEY_LEFT_CONTROL)) _camera.ProcessKeyboard(DOWN, _deltaTime);
+  }
 }
 
 void Window::mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
@@ -470,7 +472,7 @@ void Window::mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 // ----------------------------------------------------------------------
 void Window::scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
-    _camera.ProcessMouseScroll(static_cast<float>(yoffset));
+    if(!disablemovement) _camera.ProcessMouseScroll(static_cast<float>(yoffset));
 }
 
 void Window::framebuffer_size_callback(GLFWwindow* window, int width, int height)

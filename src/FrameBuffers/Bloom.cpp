@@ -380,9 +380,6 @@ void BloomRenderer::RenderBloomTexture(float filterRadius)
 	this->RenderDownsamples(colorBuffers[1]);
 	this->RenderUpsamples(filterRadius);
 
-  if(Input::KeyPressed(KEY_F)){
-    Resize(Window::GetWindowWidth(),Window::GetWindowHeight());
-  }
 }
 
 void BloomRenderer::Resize(int newWidth, int newHeight) {
@@ -421,6 +418,10 @@ void BloomRenderer::Render()
   shaderBloomFinal.setFloat("renderHeight", Window::GetWindowHeight());
 
   renderQuad();
+  /*if(Input::KeyPressed(KEY_F)){*/
+  /*  Resize(Window::GetFullscreenWidth(),Window::GetFullscreenHeight());*/
+  /*}*/
+
 }
 
 void BloomRenderer::Bind() const 

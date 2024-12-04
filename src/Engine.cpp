@@ -2,9 +2,7 @@
 #include "FrameBuffers/Bloom.h"
 #include "Input/Input.h"
 
-#include "Managers/AnimatedModel.h"
 #include "Managers/EnvironmentMap.h"
-#include "Managers/StaticModel.h"
 
 #include "Utilities.hpp"
 #include "glad/glad.h"
@@ -13,9 +11,10 @@
 #include "Managers/TextManager.h"
 
 
-#include <TracyClient.cpp> // PROFILER //
-#include <tracy/TracyOpenGL.hpp>
-#include <tracy/TracyC.h>
+/*#include <TracyClient.cpp> // PROFILER //*/
+/*#include <tracy/TracyOpenGL.hpp>*/
+/*#include <tracy/TracyC.h>*/
+
 
 void Engine::Run() {
 
@@ -27,7 +26,6 @@ void Engine::Run() {
     InitAudioDevice();
     gltInit();
 
-
     Utilities::BakeShaders();
     Utilities::LoadSounds();
 
@@ -35,13 +33,7 @@ void Engine::Run() {
     editor.Init();
     editor.LoadScene();
     
-    StaticModel house("res/map/objHouse.obj");
-    StaticModel backpack("res/backpack/backpack.obj");
-    StaticModel stairs("res/stairs/Stairs.obj");
-    AnimatedModel guy("res/lowpoly/MaleSurvivor1.glb");
-
     EnvironmentMap envmap;
-
     BloomRenderer bloom;
 
     while (Window::WindowIsOpen() && Window::WindowHasNotBeenForceClosed())
@@ -55,11 +47,6 @@ void Engine::Run() {
         glEnable(GL_CULL_FACE);
         glCullFace(GL_FRONT);
         glFrontFace(GL_CW);
-
-        stairs.Render(glm::vec3(1.0f, 0.5f, 2.0f), glm::vec3(1.1f));
-        house.Render(glm::vec3(0.0f, 0.0f, 0.0f));
-        backpack.Render(glm::vec3(-2.0f, 3.0f, 10.0f), glm::vec3(0.25f), 90.0f);
-        guy.Render(glm::vec3(0.0f, 0.50f, 8.0f));
 
         editor.RenderScene();
 

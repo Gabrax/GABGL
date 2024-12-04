@@ -33,7 +33,7 @@ struct AnimatedMesh {
     std::vector<Mesh> meshes;
     std::string directory;
 
-    // Constructor
+    AnimatedMesh() = default;
     AnimatedMesh(const std::string& path, bool gamma = false) 
         : gammaCorrection(gamma), scene(nullptr) {
         loadModel(path);

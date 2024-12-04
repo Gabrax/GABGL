@@ -10,20 +10,6 @@
 #include "glm/fwd.hpp"
 #include <optional>
 
-
-
-enum class Color
-{
-  Red,
-  Green,
-  Blue,
-  Yellow,
-  Orange,
-  Orange_bright,
-  White,
-  Purple
-};
-
 struct LightManager {
 
 
@@ -96,23 +82,6 @@ struct LightManager {
         }
     }
 
-    void AddLight(const Color& color, const glm::vec3& position, const glm::vec3& scale = glm::vec3(1.0f), const float& rotation = 0.0f) {
-        if (numLights == maxLights - 1) {
-            std::cout << "Max number of lights reached!" << '\n';
-            return;
-        }
-
-        glm::vec4 lightColor = GetColor(color);
-        glm::vec4 positionWithW(position, 1.0f);
-        LightData lightData = { positionWithW, scale, rotation, lightColor };
-
-        std::unique_ptr<Light> newLight = std::make_unique<Light>();
-        newLight->setLightColor(lightColor);
-
-        lights.push_back({ std::move(newLight), lightData });
-        numLights++;
-        UpdateLightDataInSSBO();
-    }
     void AddLight(const glm::vec4& color, const glm::vec3& position, const glm::vec3& scale = glm::vec3(1.0f), const float& rotation = 0.0f) {
         if (numLights == maxLights - 1) {
             std::cout << "Max number of lights reached!" << '\n';
@@ -143,28 +112,23 @@ struct LightManager {
 
       LightData& lightData = lights[index].second;
 
-      // Update color if a new color is provided
       if (newColor.has_value()) {
           lightData.color = newColor.value();
           lights[index].first->setLightColor(lightData.color); // Update the light's internal color
       }
 
-      // Update position if a new position is provided
       if (newPosition.has_value()) {
           lightData.position = glm::vec4(newPosition.value(), 1.0f);
       }
 
-      // Update scale if a new scale is provided
       if (newScale.has_value()) {
           lightData.scale = newScale.value();
       }
 
-      // Update rotation if a new rotation is provided
       if (newRotation.has_value()) {
           lightData.rotation = newRotation.value();
       }
 
-      // Update SSBO to synchronize changes with the GPU
       UpdateLightDataInSSBO();
     }
 
@@ -191,21 +155,8 @@ struct LightManager {
     };
 
     std::vector<std::pair<std::unique_ptr<Light>, LightData>> lights;
-private:
 
-    glm::vec4 GetColor(Color color) {
-        switch (color) {
-            case Color::Red:    return glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-            case Color::Green:  return glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
-            case Color::Blue:   return glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
-            case Color::Yellow: return glm::vec4(1.0f, 1.0f, 0.0f, 1.0f);
-            case Color::Orange: return glm::vec4(0.879f, 0.487f, 0.189f, 1.0f);
-            case Color::Orange_bright: return glm::vec4(0.892f, 0.633f, 0.153f, 1.0f);
-            case Color::White:  return glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-            case Color::Purple: return glm::vec4(0.5f, 0.0f, 0.5f, 1.0f);
-            default:     return glm::vec4(1.0f, 1.0f, 1.0f, 1.0f); // Default to white
-        }
-    }
+private:
 
     SSBO ssboPositions;  // SSBO for positions
     SSBO ssboColors;     // SSBO for colors

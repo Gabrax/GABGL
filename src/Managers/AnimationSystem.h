@@ -29,6 +29,7 @@ struct AnimationSystem {
 
     ~AnimationSystem() = default;
 
+    AnimationSystem() = default;
     AnimationSystem(const std::string& animationPath, AnimatedMesh* model) : model(model), m_CurrentAnimationIndex(0)
     {
         assert(model);

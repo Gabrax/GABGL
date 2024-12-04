@@ -14,13 +14,9 @@
 
 struct AnimatedModel {
 
-    AnimatedModel(const char* modelpath) : loadmodel(modelpath), animation(modelpath, &loadmodel) 
-    {
-      const char* filename = strrchr(modelpath, '/');
-      filename = (filename == nullptr) ? modelpath : filename + 1;
+    AnimatedModel() = default;
 
-      std::cout << filename << " loaded" << '\n';
-    }
+    AnimatedModel(const std::string& modelpath) : loadmodel(modelpath), animation(modelpath, &loadmodel) {}
 
     ~AnimatedModel() noexcept = default;
 
