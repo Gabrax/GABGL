@@ -12,6 +12,9 @@
 #include "Managers/LightManager.h"
 #include "Managers/ModelManager.h"
 
+#include "ImGuizmo.h"
+#include "Utilities.hpp"
+
 struct MapEditor
 {
   void Init()
@@ -43,54 +46,58 @@ struct MapEditor
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
-
-    ImVec2 windowSize(100, 100);  
-    ImVec2 windowPos(100, 100);   
+    ImGuizmo::BeginFrame();
 
     ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
 
     ImGui::Begin("MapEditor");
 
-    ImGui::SetNextWindowSize(windowSize, ImGuiCond_Always);  
-    ImGui::SetNextWindowPos(windowPos, ImGuiCond_Always);
-    ImGui::Text("Camera Properties");
+    if (ImGui::CollapsingHeader("Camera Properties")) {
+      ImGui::Columns(2, nullptr, false); // 2 columns, no borders
+      ImGui::SetColumnWidth(0, 50);      // Set the width of the first column
 
-    ImGui::Columns(2, nullptr, false); // 2 columns, no borders
-    ImGui::SetColumnWidth(0, 50);    // Set the width of the first column
+      // X Value
+      ImGui::Text("X:");
+      ImGui::NextColumn();
+      ImGui::PushItemWidth(150.0f);      // Set custom width for DragFloat
+      ImGui::DragFloat("##X", &Window::_camera.Position.x, 0.1f, -FLT_MAX, FLT_MAX, "%.2f", ImGuiSliderFlags_None);
+      ImGui::PopItemWidth();
 
-    // X Value
-    ImGui::Text("X:");
-    ImGui::NextColumn();
-    ImGui::DragFloat("##X", &Window::_camera.Position.x, 0.1f, -FLT_MAX, FLT_MAX, "%.2f", ImGuiSliderFlags_None);
+      ImGui::NextColumn();
+      // Y Value
+      ImGui::Text("Y:");
+      ImGui::NextColumn();
+      ImGui::PushItemWidth(150.0f);
+      ImGui::DragFloat("##Y", &Window::_camera.Position.y, 0.1f, -FLT_MAX, FLT_MAX, "%.2f", ImGuiSliderFlags_None);
+      ImGui::PopItemWidth();
 
-    ImGui::NextColumn(); 
-    // Y Value
-    ImGui::Text("Y:");
-    ImGui::NextColumn(); 
-    ImGui::DragFloat("##Y", &Window::_camera.Position.y, 0.1f, -FLT_MAX, FLT_MAX, "%.2f", ImGuiSliderFlags_None);
+      ImGui::NextColumn();
+      // Z Value
+      ImGui::Text("Z:");
+      ImGui::NextColumn();
+      ImGui::PushItemWidth(150.0f);
+      ImGui::DragFloat("##Z", &Window::_camera.Position.z, 0.1f, -FLT_MAX, FLT_MAX, "%.2f", ImGuiSliderFlags_None);
+      ImGui::PopItemWidth();
 
-    ImGui::NextColumn();
-    // Z Value
-    ImGui::Text("Z:");
-    ImGui::NextColumn();
-    ImGui::DragFloat("##Z", &Window::_camera.Position.z, 0.1f, -FLT_MAX, FLT_MAX, "%.2f", ImGuiSliderFlags_None);
+      ImGui::NextColumn();
+      // Yaw Value
+      ImGui::Text("Yaw:");
+      ImGui::NextColumn();
+      ImGui::PushItemWidth(150.0f);
+      ImGui::DragFloat("##Yaw", &Window::_camera.Yaw, 0.5f, -180.0f, 180.0f, "%.2f", ImGuiSliderFlags_None);
+      ImGui::PopItemWidth();
 
-    ImGui::NextColumn(); 
-    // Yaw Value
-    ImGui::Text("Yaw:");
-    ImGui::NextColumn();
-    ImGui::DragFloat("##Yaw", &Window::_camera.Yaw, 0.5f, -180.0f, 180.0f, "%.2f", ImGuiSliderFlags_None);
+      ImGui::NextColumn();
+      // Pitch Value
+      ImGui::Text("Pitch:");
+      ImGui::NextColumn();
+      ImGui::PushItemWidth(150.0f);
+      ImGui::DragFloat("##Pitch", &Window::_camera.Pitch, 0.5f, -90.0f, 90.0f, "%.2f", ImGuiSliderFlags_None);
+      ImGui::PopItemWidth();
 
-    ImGui::NextColumn();
-    // Pitch Value
-    ImGui::Text("Pitch:");
-    ImGui::NextColumn();
-    ImGui::DragFloat("##Pitch", &Window::_camera.Pitch, 0.5f, -90.0f, 90.0f, "%.2f", ImGuiSliderFlags_None);
+      ImGui::Columns(1); // Reset to one column
+    }
 
-    ImGui::Columns(1); 
-    ImGui::Separator();
-
-    
     ImGui::Text("Light Editor");
 
     static int selectedLightIndex = 0; 
@@ -124,6 +131,8 @@ struct MapEditor
             lightNamesCStr.push_back(name.c_str());
         }
 
+        const float widgetWidth = 200.0f;
+        ImGui::PushItemWidth(widgetWidth);
         // Light selection
         if (ImGui::Combo("##LightIndex", &selectedLightIndex, lightNamesCStr.data(), lightNamesCStr.size())) {
             // Update local variables when a new light is selected
@@ -133,25 +142,34 @@ struct MapEditor
             lightScale = newSelectedLight.second.scale;
             lightRotation = newSelectedLight.second.rotation;
         }
+        ImGui::PopItemWidth();
 
         ImGui::Text("Edit Properties");
 
         // Update light properties interactively
+        ImGui::PushItemWidth(widgetWidth);
         if (ImGui::ColorEdit3("lightColor", &lightColor[0])) {
             selectedLight.second.color = glm::vec4(lightColor, 1.0f); 
         }
+        ImGui::PopItemWidth();
 
+        ImGui::PushItemWidth(widgetWidth);
         if (ImGui::DragFloat3("lightPosition", &lightPosition[0])) {
             selectedLight.second.position = glm::vec4(lightPosition, selectedLight.second.position.w);
         }
+        ImGui::PopItemWidth();
 
+        ImGui::PushItemWidth(widgetWidth);
         if (ImGui::DragFloat3("lightScale", &lightScale[0])) {
             selectedLight.second.scale = lightScale; 
         }
+        ImGui::PopItemWidth();
 
+        ImGui::PushItemWidth(widgetWidth);
         if (ImGui::SliderFloat("lightRotation", &lightRotation, 0.0f, 360.0f)) {
             selectedLight.second.rotation = lightRotation; 
         }
+        ImGui::PopItemWidth();
 
         
         if (ImGui::Button("Add Light")) {
@@ -200,9 +218,6 @@ struct MapEditor
         ImGui::Text("No lights to edit.");
     }
 
-    ImGui::Separator();
-
-
     ImGui::Text("Model Editor");
 
     static int selectedModelIndex = 0;
@@ -231,7 +246,6 @@ struct MapEditor
     }
 
     if (totalModels > 0) {
-        // Set default selected model at the start
         if (selectedModelIndex == 0 && modelPosition == glm::vec3(0.0f)) {
             if (selectedModelIndex < modelManager.vec_staticModels.size()) {
                 const auto& selectedModel = modelManager.vec_staticModels[selectedModelIndex];
@@ -256,9 +270,10 @@ struct MapEditor
             modelNamesCStr.push_back(filename);
         }
 
-        // Ensure selectedModelIndex stays valid
         selectedModelIndex = std::clamp(selectedModelIndex, 0, totalModels - 1);
 
+        const float widgetWidth = 200.0f;
+        ImGui::PushItemWidth(widgetWidth);
         if (ImGui::Combo("##ModelIndex", &selectedModelIndex, modelNamesCStr.data(), modelNamesCStr.size())) {
             int modelIndex = selectedModelIndex;
             if (modelIndex < modelManager.vec_staticModels.size()) {
@@ -274,10 +289,12 @@ struct MapEditor
                 modelRotation = selectedModel.second.rotation;
             }
         }
+        ImGui::PopItemWidth();
 
-        ImGui::Text("Edit Properties");
+        ImGui::Text("Model Properties");
 
         // Position
+        ImGui::PushItemWidth(widgetWidth);
         if (ImGui::DragFloat3("modelPosition", &modelPosition[0])) {
             if (selectedModelIndex < modelManager.vec_staticModels.size()) {
                 auto& selectedModel = modelManager.vec_staticModels[selectedModelIndex];
@@ -288,8 +305,10 @@ struct MapEditor
                 selectedModel.second.position = modelPosition;  
             }
         }
+        ImGui::PopItemWidth();
 
         // Scale
+        ImGui::PushItemWidth(widgetWidth);
         if (ImGui::DragFloat3("modelScale", &modelScale[0])) {
             if (selectedModelIndex < modelManager.vec_staticModels.size()) {
                 auto& selectedModel = modelManager.vec_staticModels[selectedModelIndex];
@@ -300,8 +319,9 @@ struct MapEditor
                 selectedModel.second.scale = modelScale;  
             }
         }
-
+        ImGui::PopItemWidth();
         // Rotation
+        ImGui::PushItemWidth(widgetWidth);
         if (ImGui::SliderFloat("modelRotation", &modelRotation, 0.0f, 360.0f)) {
             if (selectedModelIndex < modelManager.vec_staticModels.size()) {
                 auto& selectedModel = modelManager.vec_staticModels[selectedModelIndex];
@@ -312,18 +332,88 @@ struct MapEditor
                 selectedModel.second.rotation = modelRotation;  
             }
         }
+        ImGui::PopItemWidth();
+
+        if (totalModels > 0) {
+            glm::mat4 modelMatrix = glm::mat4(1.0f);
+
+            // Get the selected model's matrix
+            if (selectedModelIndex < modelManager.vec_staticModels.size()) {
+                const auto& selectedModel = modelManager.vec_staticModels[selectedModelIndex];
+                modelMatrix = glm::translate(glm::mat4(1.0f), selectedModel.second.position);
+                modelMatrix = glm::rotate(modelMatrix, glm::radians(selectedModel.second.rotation), glm::vec3(0.0f, 1.0f, 0.0f));
+                modelMatrix = glm::scale(modelMatrix, selectedModel.second.scale);
+            } else {
+                int animatedModelIndex = selectedModelIndex - modelManager.vec_staticModels.size();
+                const auto& selectedModel = modelManager.vec_animatedModels[animatedModelIndex];
+                modelMatrix = glm::translate(glm::mat4(1.0f), selectedModel.second.position);
+                modelMatrix = glm::rotate(modelMatrix, glm::radians(selectedModel.second.rotation), glm::vec3(0.0f, 1.0f, 0.0f));
+                modelMatrix = glm::scale(modelMatrix, selectedModel.second.scale);
+            }
+
+            static auto currentManipulationMode = ImGuizmo::TRANSLATE;  
+
+            if (Input::KeyPressed(KEY_S)) {
+                currentManipulationMode = ImGuizmo::SCALE;
+            } else if (Input::KeyPressed(KEY_G)) {
+                currentManipulationMode = ImGuizmo::TRANSLATE;
+            } else if (Input::KeyPressed(KEY_R)) {
+                currentManipulationMode = ImGuizmo::ROTATE;
+            }
+
+            ImGuizmo::SetOrthographic(false);
+            ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, (float)Window::GetWindowWidth(), (float)Window::GetWindowHeight());
+            ImGuizmo::SetDrawlist();
+            glm::mat4 projection = glm::perspective(glm::radians(45.0f), Window::getAspectRatio(), 0.001f, 2000.0f);
+            glm::mat4 view = Window::_camera.GetViewMatrix();
+
+            ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection), currentManipulationMode, ImGuizmo::WORLD, glm::value_ptr(modelMatrix));
+           
+            if(ImGuizmo::IsUsing())
+            {
+                glm::vec3 position, rotation, scale;
+                Utilities::DecomposeTransform(modelMatrix, position, rotation, scale);
+
+                glm::vec3 newPosition(modelMatrix[3]);
+                glm::quat newRotation = glm::quat_cast(modelMatrix);
+                glm::vec3 newScale(glm::length(modelMatrix[0]), glm::length(modelMatrix[1]), glm::length(modelMatrix[2]));
+
+                // Update the model's transformation after manipulation
+                if (selectedModelIndex < modelManager.vec_staticModels.size()) {
+                    auto& selectedModel = modelManager.vec_staticModels[selectedModelIndex];
+                    selectedModel.second.position = newPosition;
+                    selectedModel.second.rotation = glm::degrees(glm::eulerAngles(newRotation).y);
+                    selectedModel.second.scale = newScale;
+                } else {
+                    int animatedModelIndex = selectedModelIndex - modelManager.vec_staticModels.size();
+                    auto& selectedModel = modelManager.vec_animatedModels[animatedModelIndex];
+                    selectedModel.second.position = newPosition;
+                    selectedModel.second.rotation = glm::degrees(glm::eulerAngles(newRotation).y);
+                    selectedModel.second.scale = newScale;
+                }
+            }
+        }
     } else {
         ImGui::Text("No models to edit.");
     }
+   
+    
+   const float inputWidth = 150.0f;  // Set custom width for input fields
 
+    // Model Path
     ImGui::Text("Model Path:");
     ImGui::SameLine();
+    ImGui::PushItemWidth(inputWidth);
     ImGui::InputText("##ModelPath", modelPathBuffer, sizeof(modelPathBuffer));
+    ImGui::PopItemWidth();
 
+    // Model Type
     ImGui::Text("Model Type:");
     ImGui::SameLine();
+    ImGui::PushItemWidth(inputWidth);
     const char* modelTypeOptions[] = { "STATIC", "ANIMATED" };
     ImGui::Combo("##ModelType", &selectedModelTypeIndex, modelTypeOptions, IM_ARRAYSIZE(modelTypeOptions));
+    ImGui::PopItemWidth();
 
     if (ImGui::Button("Add Model")) {
       if (strlen(modelPathBuffer) > 0) {
@@ -379,8 +469,6 @@ struct MapEditor
             ImGui::Text("Invalid model index selected!");
         }
     }
-
-    ImGui::Separator();
 
     if (ImGui::Button("Save Scene"))
     {

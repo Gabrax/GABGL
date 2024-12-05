@@ -46,6 +46,8 @@ namespace Window {
 	int GetWindowHeight();
   int GetWindowedWidth();
   int GetWindowedHeight();
+  int GetWindowPosX();
+  int GetWindowPosY();
   int GetFullscreenWidth();
   int GetFullscreenHeight();
 	int GetCursorX();

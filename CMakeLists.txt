@@ -4,8 +4,6 @@ include(FetchContent)
 
 set(CMAKE_CXX_STANDARD 17)
 
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
-# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
 # Set this to true to ship the game!
 option(PRODUCTION_BUILD "Make this a production build" OFF)
 
@@ -14,32 +12,21 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Compiler settings for Clang, MSVC, and GCC
 if(MSVC)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Release>:Release>")
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
-    add_compile_options(/arch:AVX2)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Release>:Release>")  
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    # Example Clang-specific options
     add_compile_options(
-        -Wall -Wextra -Wpedantic            # Warnings
-        -Wno-unused-parameter              # Disable some warnings
-        -ferror-limit=0                    # Show all errors
-        -std=c++17                         # Use C++17
+        -Wall -Wextra -Wpedantic
+        -Wno-unused-parameter
+        -ferror-limit=0
+        -std=c++17
     )
-    # Use libc++ if building on macOS or if needed for your platform
-    if(APPLE)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
-    endif()
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    # GCC-specific options
     add_compile_options(
-        -Wall -Wextra -Wpedantic            # Warnings
-        -Wno-unused-parameter              # Disable some warnings
-        -std=c++17                         # Use C++17
-        -fexceptions                       # Enable exceptions
+        -Wall -Wextra -Wpedantic
+        -Wno-unused-parameter
+        -std=c++17
+        -fexceptions
     )
-    # Optional optimizations for GCC
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -march=native -mtune=native")
 endif()
 
 project(mygame)
@@ -48,64 +35,59 @@ project(mygame)
 FetchContent_Declare(
     assimp
     GIT_REPOSITORY https://github.com/assimp/assimp.git
-    GIT_TAG v5.2.5 # Use a specific release tag, or branch like "master" for latest
+    GIT_TAG v5.2.5
 )
 set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "Disable Assimp tests" FORCE)
-set(ASSIMP_NO_EXPORT ON CACHE BOOL "Disable Assimp export functionality" FORCE)
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build Assimp as a static library" FORCE)
-set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "Disable Assimp tools" FORCE)
-set(ASSIMP_INSTALL OFF CACHE BOOL "Disable Assimp installation" FORCE)
-
-# FreeType
-# FetchContent_Declare(
-#     freetype
-#     GIT_REPOSITORY https://github.com/freetype/freetype.git
-#     GIT_TAG VER-2-12-1
-# )
-# set(FT_DISABLE_VERSION_INFO ON CACHE BOOL "" FORCE)
 
 # Meshoptimizer
 FetchContent_Declare(
     meshoptimizer
     GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
-    GIT_TAG v0.18 
-    GIT_PROGRESS TRUE
+    GIT_TAG v0.18
 )
 
 FetchContent_Declare (
     tracy
     GIT_REPOSITORY https://github.com/wolfpld/tracy.git
     GIT_TAG v0.11.1
-    GIT_SHALLOW TRUE
-    GIT_PROGRESS TRUE
 )
 
-FetchContent_MakeAvailable(assimp meshoptimizer tracy)#freetype
+# ImGuizmo
+FetchContent_Declare(
+    imguizmo
+    GIT_REPOSITORY https://github.com/CedricGuillemet/ImGuizmo
+    GIT_TAG master
+)
 
-# GLFW and other third-party dependencies
+FetchContent_MakeAvailable(assimp meshoptimizer tracy imguizmo)
+
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
-add_subdirectory(vendor/glfw-3.3.2)          # Window opener
-add_subdirectory(vendor/glad)                # OpenGL loader
-add_subdirectory(vendor/stb_image)           # Loading images
-add_subdirectory(vendor/glText)              # Easy drawing text
-add_subdirectory(vendor/raudio)              # Audio
-add_subdirectory(vendor/glm)                 # Math
-add_subdirectory(vendor/imgui-docking)       # UI
-add_subdirectory(vendor/tinyobj)             # obj loader
-add_subdirectory(vendor/EnTT)                # Entity System Component
-add_subdirectory(vendor/nlohmann-json)       # JSON parser
+add_subdirectory(vendor/glfw-3.3.2)
+add_subdirectory(vendor/glad)
+add_subdirectory(vendor/stb_image)
+add_subdirectory(vendor/glText)
+add_subdirectory(vendor/raudio)
+add_subdirectory(vendor/glm)
+add_subdirectory(vendor/imgui-docking)
+add_subdirectory(vendor/tinyobj)
+add_subdirectory(vendor/EnTT)
+add_subdirectory(vendor/nlohmann-json)
 
-# MY_SOURCES is defined to be a list of all the source files for my game
 file(GLOB_RECURSE MY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
 add_executable("${CMAKE_PROJECT_NAME}")
 
 set_property(TARGET "${CMAKE_PROJECT_NAME}" PROPERTY CXX_STANDARD 17)
+
+file(GLOB IMGUIMO_SRC "${imguizmo_SOURCE_DIR}/ImGuizmo.cpp")
+file(GLOB IMGUIMO_HEADERS "${imguizmo_SOURCE_DIR}/ImGuizmo.h")
+
+target_include_directories("${CMAKE_PROJECT_NAME}" PRIVATE ${imguizmo_SOURCE_DIR})
 
 target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC GLFW_INCLUDE_NONE=1)
 
@@ -117,7 +99,7 @@ else()
     target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC PRODUCTION_BUILD=0)
 endif()
 
-target_sources("${CMAKE_PROJECT_NAME}" PRIVATE ${MY_SOURCES})
+target_sources("${CMAKE_PROJECT_NAME}" PRIVATE ${MY_SOURCES} ${IMGUIMO_SRC})
 
 if(MSVC)
     target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC _CRT_SECURE_NO_WARNINGS)

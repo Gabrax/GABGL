@@ -66,18 +66,13 @@ void Engine::Run() {
         editor.Render();
 
 
-        if (Input::KeyPressed(KEY_R)) {
+        if (Input::KeyPressed(KEY_H)) {
           Utilities::HotReloadShaders();
         }
 
         if (Input::KeyPressed(KEY_F)) {
           Window::ToggleFullscreen();
           PlaySound(Utilities::g_sounds.fullscreen);
-        }
-
-        if (Input::KeyPressed(KEY_H)) {
-          Window::ToggleWireframe();
-          PlaySound(Utilities::g_sounds.switchmode);
         }
 
         Window::EndFrame();

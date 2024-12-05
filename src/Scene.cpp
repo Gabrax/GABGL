@@ -11,3 +11,13 @@ Scene::~Scene()
 {
 
 }
+
+void Scene::Init()
+{
+
+}
+
+void Scene::Render()
+{
+
+}

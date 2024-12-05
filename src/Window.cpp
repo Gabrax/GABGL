@@ -385,6 +385,16 @@ int Window::GetFullscreenHeight()
  return _fullscreenHeight;
 }
 
+int Window::GetWindowPosX()
+{
+  return windowPosX;
+}
+
+int Window::GetWindowPosY()
+{
+  return windowPosY;
+}
+
 int Window::GetScrollWheelYOffset()
 {
     return _scrollWheelYOffset;
