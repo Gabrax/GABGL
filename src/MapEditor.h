@@ -124,46 +124,51 @@ struct SceneEditor
             for (int i = 0; i < lightManager.lights.size(); ++i) {
                 auto& currentLight = lightManager.lights[i];
                 std::string lightNodeLabel = "Light " + std::to_string(i);
+
+                ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_OpenOnArrow;
+                if (selectedModelIndex == modelManager.vec_staticModels.size() + i) {
+                    nodeFlags |= ImGuiTreeNodeFlags_Selected;
+                }
                 
-                if (ImGui::TreeNode(lightNodeLabel.c_str())) {
-                    // Display and edit light properties inside this tree node
+                if (ImGui::TreeNodeEx(lightNodeLabel.c_str(),nodeFlags)) {
+
+                    if (ImGui::IsItemClicked()) {
+                        selectedModelIndex = i;
+                    }
+
+                    if (selectedModelIndex == i) {
+                        UpdateGizmoTransform(currentLight);
+                    }
+
                     lightColor = glm::vec3(currentLight.second.color);
                     lightPosition = currentLight.second.position;
-                    lightScale = currentLight.second.scale;
                     lightRotation = currentLight.second.rotation;
+                    lightScale = currentLight.second.scale;
 
-                    // Edit Color
                     ImGui::PushItemWidth(200.0f);
                     if (ImGui::ColorEdit3("lightColor", &lightColor[0])) {
                         currentLight.second.color = glm::vec4(lightColor, 1.0f); 
                     }
                     ImGui::PopItemWidth();
 
-                    // Edit Position
-                    ImGui::PushItemWidth(200.0f);
-                    if (ImGui::DragFloat3("lightPosition", &lightPosition[0])) {
-                        currentLight.second.position = glm::vec4(lightPosition, currentLight.second.position.w);
-                    }
-                    ImGui::PopItemWidth();
+                    DrawVec3Control("Position", lightPosition);
+                    DrawVec3Control("Rotation", lightRotation);
+                    DrawVec3Control("Scale", lightScale);
 
-                    // Edit Scale
-                    ImGui::PushItemWidth(200.0f);
-                    if (ImGui::DragFloat3("lightScale", &lightScale[0])) {
-                        currentLight.second.scale = lightScale; 
+                    if (lightPosition != glm::vec3(currentLight.second.position)) {
+                        currentLight.second.position = lightPosition;
                     }
-                    ImGui::PopItemWidth();
-
-                    // Edit Rotation
-                    ImGui::PushItemWidth(200.0f);
-                    if (ImGui::SliderFloat("lightRotation", &lightRotation, 0.0f, 360.0f)) {
-                        currentLight.second.rotation = lightRotation; 
+                    if (modelRotation != currentLight.second.rotation) {
+                        currentLight.second.rotation = lightRotation;
                     }
-                    ImGui::PopItemWidth();
+                    if (modelScale != currentLight.second.scale) {
+                        currentLight.second.scale = lightScale;
+                    }
 
                     ImGui::PushItemWidth(200.0f);
                     if (ImGui::Button("Edit Light")) {
                         glm::vec4 colorWithAlpha(lightColor, 1.0f);
-                        lightManager.EditLight(i, colorWithAlpha, lightPosition, lightScale, lightRotation);
+                        lightManager.EditLight(i, colorWithAlpha, lightPosition, lightRotation, lightScale);
                     }
                     ImGui::PopItemWidth();
 
@@ -197,153 +202,113 @@ struct SceneEditor
         }
 
         if (totalModels > 0) {
-            // Tree nodes for static models
-            if (!modelManager.vec_staticModels.empty()) {
-                for (size_t i = 0; i < modelManager.vec_staticModels.size(); ++i) {
-                    auto& model = modelManager.vec_staticModels[i];
-                    const char* filename = strrchr(model.second.modelpath.c_str(), '/');
-                    filename = (filename == nullptr) ? model.second.modelpath.c_str() : filename + 1;
-                    if (ImGui::TreeNode(filename)) {
+          // Tree nodes for static models
+          if (!modelManager.vec_staticModels.empty()) {
+              for (size_t i = 0; i < modelManager.vec_staticModels.size(); ++i) {
+                  auto& model = modelManager.vec_staticModels[i];
+                  const char* filename = strrchr(model.second.modelpath.c_str(), '/');
+                  filename = (filename == nullptr) ? model.second.modelpath.c_str() : filename + 1;
 
-                        modelPosition = model.second.position;
-                        modelScale = model.second.scale;
-                        modelRotation = model.second.rotation;
+                  ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_OpenOnArrow;
+                  if (selectedModelIndex == i) {
+                      nodeFlags |= ImGuiTreeNodeFlags_Selected;
+                  }
 
-                        // Properties of the model
-                        ImGui::PushItemWidth(200.0f);
-                        if(ImGui::DragFloat3("Position", &modelPosition[0])){
-                            model.second.position = modelPosition;
-                        }
-                        ImGui::PopItemWidth();
-                        
-                        ImGui::PushItemWidth(200.0f);
-                        if(ImGui::DragFloat3("Scale", &modelScale[0])){
-                            model.second.scale = modelScale;
-                        }
-                        ImGui::PopItemWidth();
+                  if (ImGui::TreeNodeEx(filename, nodeFlags)) {
+                      // Set the selected model index
+                      if (ImGui::IsItemClicked()) {
+                          selectedModelIndex = i;
+                      }
 
-                        ImGui::PushItemWidth(200.0f);
-                        if(ImGui::SliderFloat("Rotation", &modelRotation, 0.0f, 360.0f)){
-                            model.second.rotation = modelRotation;
-                        }
-                        ImGui::PopItemWidth();
+                      if (selectedModelIndex == i) {
+                          UpdateGizmoTransform(model);
+                      }
 
-                        ImGui::Text("Type: STATIC");
+                      modelPosition = model.second.position;
+                      modelRotation = model.second.rotation;
+                      modelScale = model.second.scale;
 
-                        ImGui::PushItemWidth(200.0f);
-                        if (ImGui::Button("Remove Model")) {
-                            modelManager.RemoveStaticModel(i);
-                        }
-                        ImGui::PopItemWidth();
+                      DrawVec3Control("Position", modelPosition);
+                      DrawVec3Control("Rotation", modelRotation);
+                      DrawVec3Control("Scale", modelScale);
 
-                        ImGui::TreePop();
-                    }
-                }
-            }
+                      if (modelPosition != model.second.position) {
+                          model.second.position = modelPosition;
+                      }
+                      if (modelRotation != model.second.rotation) {
+                          model.second.rotation = modelRotation;
+                      }
+                      if (modelScale != model.second.scale) {
+                          model.second.scale = modelScale;
+                      }
 
-            // Tree nodes for animated models
-            if (!modelManager.vec_animatedModels.empty()) {
-                for (size_t i = 0; i < modelManager.vec_animatedModels.size(); ++i) {
-                    auto& model = modelManager.vec_animatedModels[i];
-                    const char* filename = strrchr(model.second.modelpath.c_str(), '/');
-                    filename = (filename == nullptr) ? model.second.modelpath.c_str() : filename + 1;
-                    if (ImGui::TreeNode(filename)) {
+                      ImGui::Text("Type: STATIC");
 
-                        modelPosition = model.second.position;
-                        modelScale = model.second.scale;
-                        modelRotation = model.second.rotation;
-                        // Properties of the model
-                        ImGui::PushItemWidth(200.0f);
-                        if(ImGui::DragFloat3("Position", &modelPosition[0])){
-                            model.second.position = modelPosition;
-                        }
-                        ImGui::PopItemWidth();
-                        
-                        ImGui::PushItemWidth(200.0f);
-                        if(ImGui::DragFloat3("Scale", &modelScale[0])){
-                            model.second.scale = modelScale;
-                        }
-                        ImGui::PopItemWidth();
+                      ImGui::PushItemWidth(200.0f);
+                      if (ImGui::Button("Remove Model")) {
+                          modelManager.RemoveStaticModel(i);
+                      }
+                      ImGui::PopItemWidth();
 
-                        ImGui::PushItemWidth(200.0f);
-                        if(ImGui::SliderFloat("Rotation", &modelRotation, 0.0f, 360.0f)){
-                            model.second.rotation = modelRotation;
-                        }
-                        ImGui::PopItemWidth();
 
-                        ImGui::Text("Type: ANIMATED");
-
-                        ImGui::PushItemWidth(200.0f);
-                        if (ImGui::Button("Remove Model")) {
-                            modelManager.RemoveAnimatedModel(i);
-                        }
-                        ImGui::PopItemWidth();
-
-                        ImGui::TreePop();
-                    }
-                }
-            }
-        
-          if (totalModels > 0) {
-              glm::mat4 modelMatrix = glm::mat4(1.0f);
-
-              // Get the selected model's matrix
-              if (selectedModelIndex < modelManager.vec_staticModels.size()) {
-                  const auto& selectedModel = modelManager.vec_staticModels[selectedModelIndex];
-                  modelMatrix = glm::translate(glm::mat4(1.0f), selectedModel.second.position);
-                  modelMatrix = glm::rotate(modelMatrix, glm::radians(selectedModel.second.rotation), glm::vec3(0.0f, 1.0f, 0.0f));
-                  modelMatrix = glm::scale(modelMatrix, selectedModel.second.scale);
-              } else {
-                  int animatedModelIndex = selectedModelIndex - modelManager.vec_staticModels.size();
-                  const auto& selectedModel = modelManager.vec_animatedModels[animatedModelIndex];
-                  modelMatrix = glm::translate(glm::mat4(1.0f), selectedModel.second.position);
-                  modelMatrix = glm::rotate(modelMatrix, glm::radians(selectedModel.second.rotation), glm::vec3(0.0f, 1.0f, 0.0f));
-                  modelMatrix = glm::scale(modelMatrix, selectedModel.second.scale);
-              }
-
-              static auto currentManipulationMode = ImGuizmo::TRANSLATE;  
-
-              if (Input::KeyPressed(KEY_S)) {
-                  currentManipulationMode = ImGuizmo::SCALE;
-              } else if (Input::KeyPressed(KEY_G)) {
-                  currentManipulationMode = ImGuizmo::TRANSLATE;
-              } else if (Input::KeyPressed(KEY_R)) {
-                  currentManipulationMode = ImGuizmo::ROTATE;
-              }
-
-              ImGuizmo::SetOrthographic(false);
-              ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, (float)Window::GetWindowWidth(), (float)Window::GetWindowHeight());
-              ImGuizmo::SetDrawlist();
-              glm::mat4 projection = glm::perspective(glm::radians(45.0f), Window::getAspectRatio(), 0.001f, 2000.0f);
-              glm::mat4 view = Window::_camera.GetViewMatrix();
-
-              ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection), currentManipulationMode, ImGuizmo::WORLD, glm::value_ptr(modelMatrix));
-             
-              if(ImGuizmo::IsUsing())
-              {
-                  glm::vec3 position, rotation, scale;
-                  Utilities::DecomposeTransform(modelMatrix, position, rotation, scale);
-
-                  glm::vec3 newPosition(modelMatrix[3]);
-                  glm::quat newRotation = glm::quat_cast(modelMatrix);
-                  glm::vec3 newScale(glm::length(modelMatrix[0]), glm::length(modelMatrix[1]), glm::length(modelMatrix[2]));
-
-                  // Update the model's transformation after manipulation
-                  if (selectedModelIndex < modelManager.vec_staticModels.size()) {
-                      auto& selectedModel = modelManager.vec_staticModels[selectedModelIndex];
-                      selectedModel.second.position = newPosition;
-                      selectedModel.second.rotation = glm::degrees(glm::eulerAngles(newRotation).y);
-                      selectedModel.second.scale = newScale;
-                  } else {
-                      int animatedModelIndex = selectedModelIndex - modelManager.vec_staticModels.size();
-                      auto& selectedModel = modelManager.vec_animatedModels[animatedModelIndex];
-                      selectedModel.second.position = newPosition;
-                      selectedModel.second.rotation = glm::degrees(glm::eulerAngles(newRotation).y);
-                      selectedModel.second.scale = newScale;
+                      ImGui::TreePop();
                   }
               }
           }
-      } 
+
+          // Tree nodes for animated models
+          if (!modelManager.vec_animatedModels.empty()) {
+              for (size_t i = 0; i < modelManager.vec_animatedModels.size(); ++i) {
+                  auto& model = modelManager.vec_animatedModels[i];
+                  const char* filename = strrchr(model.second.modelpath.c_str(), '/');
+                  filename = (filename == nullptr) ? model.second.modelpath.c_str() : filename + 1;
+
+                  ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_OpenOnArrow;
+                  if (selectedModelIndex == modelManager.vec_staticModels.size() + i) {
+                      nodeFlags |= ImGuiTreeNodeFlags_Selected;
+                  }
+
+                  if (ImGui::TreeNodeEx(filename, nodeFlags)) {
+                      
+                      if (ImGui::IsItemClicked()) {
+                          selectedModelIndex = i;
+                      }
+
+                      if (selectedModelIndex == i) {
+                          UpdateGizmoTransform(model);
+                      }
+
+                      modelPosition = model.second.position;
+                      modelRotation = model.second.rotation;
+                      modelScale = model.second.scale;
+
+                      DrawVec3Control("Position", modelPosition);
+                      DrawVec3Control("Rotation", modelRotation);
+                      DrawVec3Control("Scale", modelScale);
+
+                      if (modelPosition != model.second.position) {
+                          model.second.position = modelPosition;
+                      }
+                      if (modelRotation != model.second.rotation) {
+                          model.second.rotation = modelRotation;
+                      }
+                      if (modelScale != model.second.scale) {
+                          model.second.scale = modelScale;
+                      }
+
+                      ImGui::Text("Type: ANIMATED");
+
+                      ImGui::PushItemWidth(200.0f);
+                      if (ImGui::Button("Remove Model")) {
+                          modelManager.RemoveAnimatedModel(i);
+                      }
+                      ImGui::PopItemWidth();
+
+                      ImGui::TreePop();
+                  }
+              }
+          }
+      }
     
     if(ImGui::IsMouseClicked(GLFW_MOUSE_BUTTON_RIGHT)) ImGui::OpenPopup("AddEntityPopup");
     if (ImGui::BeginPopup("AddEntityPopup",ImGuiWindowFlags_MenuBar)) {
@@ -382,11 +347,11 @@ struct SceneEditor
                   const char* modelType = modelTypeOptions[selectedModelTypeIndex];
 
                   if (std::strcmp(modelType, "STATIC") == 0) {
-                      modelManager.AddModelStatic(modelPathString, modelPosition, modelScale, modelRotation);
+                      modelManager.AddModelStatic(modelPathString, modelPosition, modelRotation, modelScale);
                   }
 
                   if (std::strcmp(modelType, "ANIMATED") == 0) {
-                      modelManager.AddModelAnimated(modelPathString, modelPosition, modelScale, modelRotation);
+                      modelManager.AddModelAnimated(modelPathString, modelPosition, modelRotation, modelScale);
                   }
 
                   modelPathBuffer[0] = '\0';  
@@ -453,12 +418,16 @@ struct SceneEditor
               {"y", lightData.position.y},
               {"z", lightData.position.z}
           };
+          lightJson["Rotation"] = {
+              {"x", lightData.rotation.x},
+              {"y", lightData.rotation.y},
+              {"z", lightData.rotation.z}
+          };
           lightJson["Scale"] = {
               {"x", lightData.scale.x},
               {"y", lightData.scale.y},
               {"z", lightData.scale.z}
           };
-          lightJson["Rotation"] = lightData.rotation;
           sceneData["Lights"].push_back(lightJson);
       }
       // Save Models Data
@@ -472,12 +441,16 @@ struct SceneEditor
               {"y", model.second.position.y},
               {"z", model.second.position.z}
           };
+          modelJson["Rotation"] = {
+              {"x", model.second.rotation.x},
+              {"y", model.second.rotation.y},
+              {"z", model.second.rotation.z}
+          };
           modelJson["Scale"] = {
               {"x", model.second.scale.x},
               {"y", model.second.scale.y},
               {"z", model.second.scale.z}
           };
-          modelJson["Rotation"] = model.second.rotation;
           sceneData["Models"].push_back(modelJson);
       }
       for (const auto& model : modelManager.vec_animatedModels) {
@@ -489,12 +462,16 @@ struct SceneEditor
               {"y", model.second.position.y},
               {"z", model.second.position.z}
           };
+          modelJson["Rotation"] = {
+              {"x", model.second.rotation.x},
+              {"y", model.second.rotation.y},
+              {"z", model.second.rotation.z}
+          };
           modelJson["Scale"] = {
               {"x", model.second.scale.x},
               {"y", model.second.scale.y},
               {"z", model.second.scale.z}
           };
-          modelJson["Rotation"] = model.second.rotation;
           sceneData["Models"].push_back(modelJson);
       }
 
@@ -544,13 +521,17 @@ struct SceneEditor
                         lightJson["Position"]["y"],
                         lightJson["Position"]["z"]
                     );
+                    glm::vec3 rotation(
+                        lightJson["Rotation"]["x"],
+                        lightJson["Rotation"]["y"],
+                        lightJson["Rotation"]["z"]
+                    );
                     glm::vec3 scale(
                         lightJson["Scale"]["x"],
                         lightJson["Scale"]["y"],
                         lightJson["Scale"]["z"]
                     );
-                    float rotation = lightJson["Rotation"];
-                    lightManager.AddLight(color, position, scale, rotation); // Re-add lights
+                    lightManager.AddLight(color, position, rotation, scale); // Re-add lights
                 }
                 puts("Lights data loaded successfully");
             }
@@ -565,17 +546,21 @@ struct SceneEditor
                         modelJson["Position"]["y"],
                         modelJson["Position"]["z"]
                     );
+                    glm::vec3 rotation(
+                        modelJson["Rotation"]["x"],
+                        modelJson["Rotation"]["y"],
+                        modelJson["Rotation"]["z"]
+                    );
                     glm::vec3 scale(
                         modelJson["Scale"]["x"],
                         modelJson["Scale"]["y"],
                         modelJson["Scale"]["z"]
                     );
-                    float rotation = modelJson["Rotation"];
 
                     if (modelType == "STATIC") {
-                        modelManager.AddModelStatic(modelPath.c_str(), position, scale, rotation);
+                        modelManager.AddModelStatic(modelPath, position, rotation, scale);
                     } else if (modelType == "ANIMATED") {
-                        modelManager.AddModelAnimated(modelPath.c_str(), position, scale, rotation);
+                        modelManager.AddModelAnimated(modelPath, position, rotation, scale);
                     }
                 }
                 puts("Models data loaded successfully");
@@ -593,16 +578,16 @@ struct SceneEditor
 private:
 
   int selectedLightIndex = 0; 
-  glm::vec3 lightPosition;
-  glm::vec3 lightScale;
-  float lightRotation;
   glm::vec3 lightColor;
+  glm::vec3 lightPosition;
+  glm::vec3 lightRotation;
+  glm::vec3 lightScale;
 
 
   int selectedModelIndex = 0;
   glm::vec3 modelPosition;
+  glm::vec3 modelRotation;
   glm::vec3 modelScale;
-  float modelRotation;
 
   char modelPathBuffer[256] = "";  // Input buffer for model path
   int selectedModelTypeIndex = 0;  // 0 for static, 1 for animated
@@ -614,4 +599,106 @@ private:
   ModelManager& modelManager;
   LightManager& lightManager;
   bool isRendered = false;
+
+  template<typename T>
+  void UpdateGizmoTransform(T& entity) {
+      glm::mat4 modelMatrix = glm::mat4(1.0f);
+
+      // Generate transformation matrix
+      modelMatrix = glm::translate(glm::mat4(1.0f), entity.second.position);
+      modelMatrix = glm::rotate(modelMatrix, glm::radians(entity.second.rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+      modelMatrix = glm::rotate(modelMatrix, glm::radians(entity.second.rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+      modelMatrix = glm::rotate(modelMatrix, glm::radians(entity.second.rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+      modelMatrix = glm::scale(modelMatrix, entity.second.scale);
+
+      ImGuizmo::SetOrthographic(false);
+      ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, (float)Window::GetWindowWidth(), (float)Window::GetWindowHeight());
+      ImGuizmo::SetDrawlist();
+
+      glm::mat4 projection = glm::perspective(glm::radians(45.0f), Window::getAspectRatio(), 0.001f, 2000.0f);
+      glm::mat4 view = Window::_camera.GetViewMatrix();
+
+      static auto currentManipulationMode = ImGuizmo::TRANSLATE;
+      if (Input::KeyPressed(KEY_S)) {
+          currentManipulationMode = ImGuizmo::SCALE;
+      } else if (Input::KeyPressed(KEY_G)) {
+          currentManipulationMode = ImGuizmo::TRANSLATE;
+      } else if (Input::KeyPressed(KEY_R)) {
+          currentManipulationMode = ImGuizmo::ROTATE;
+      }
+
+      ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection), currentManipulationMode, ImGuizmo::WORLD, glm::value_ptr(modelMatrix));
+
+      if (ImGuizmo::IsUsing()) {
+          glm::vec3 position, rotation, scale;
+          Utilities::DecomposeTransform(modelMatrix, position, rotation, scale);
+
+          entity.second.position = position;
+          entity.second.rotation = glm::degrees(rotation);
+          entity.second.scale = scale;
+      }
+  }
+
+  void DrawVec3Control(const std::string& label, glm::vec3& values, float resetValue = 0.0f, float columnWidth = 100.0f)
+  {
+      ImGuiIO& io = ImGui::GetIO();
+      auto boldFont = io.Fonts->Fonts[0];
+
+      ImGui::PushID(label.c_str());
+
+      ImGui::Columns(2);
+      ImGui::SetColumnWidth(0, columnWidth);
+      ImGui::Text(label.c_str());
+      ImGui::NextColumn();
+
+      ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0, 0});
+
+      float lineHeight = ImGui::GetFontSize() + ImGui::GetStyle().FramePadding.y * 2.0f;
+      ImVec2 buttonSize = {lineHeight + 3.0f, lineHeight};
+
+      // X
+      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.8f, 0.1f, 0.15f, 1.0f});
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{0.9f, 0.2f, 0.2f, 1.0f});
+      ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{0.8f, 0.1f, 0.15f, 1.0f});
+      ImGui::PushFont(boldFont);
+      if (ImGui::Button("X", buttonSize)){}
+      ImGui::PopFont();
+      ImGui::PopStyleColor(3);
+
+      ImGui::SameLine();
+      ImGui::SetNextItemWidth(ImGui::CalcItemWidth() / 10.0f);
+      ImGui::DragFloat("##X", &values.x, 0.1f, -FLT_MAX, FLT_MAX, "%.2f");
+
+      // Y
+      ImGui::SameLine();
+      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.2f, 0.7f, 0.2f, 1.0f});
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{0.3f, 0.8f, 0.3f, 1.0f});
+      ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{0.2f, 0.7f, 0.2f, 1.0f});
+      ImGui::PushFont(boldFont);
+      if (ImGui::Button("Y", buttonSize)){}
+      ImGui::PopFont();
+      ImGui::PopStyleColor(3);
+
+      ImGui::SameLine();
+      ImGui::SetNextItemWidth(ImGui::CalcItemWidth() / 10.0f);
+      ImGui::DragFloat("##Y", &values.y, 0.1f, -FLT_MAX, FLT_MAX, "%.2f");
+
+      // Z
+      ImGui::SameLine();
+      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.1f, 0.25f, 0.8f, 1.0f});
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{0.2f, 0.35f, 0.9f, 1.0f});
+      ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{0.1f, 0.25f, 0.8f, 1.0f});
+      ImGui::PushFont(boldFont);
+      if (ImGui::Button("Z", buttonSize)){}
+      ImGui::PopFont();
+      ImGui::PopStyleColor(3);
+
+      ImGui::SameLine();
+      ImGui::SetNextItemWidth(ImGui::CalcItemWidth() / 10.0f);
+      ImGui::DragFloat("##Z", &values.z, 0.1f, -FLT_MAX, FLT_MAX, "%.2f");
+
+      ImGui::PopStyleVar();
+      ImGui::Columns(1);
+      ImGui::PopID();
+  }
 };

@@ -69,14 +69,14 @@ in VS_OUT {
     mat3 TBN;
 } fs_in;
 
-// SSBO for storing light positions
-layout(std430, binding = 3) buffer LightPositions {
-    int numLights;      // Number of lights
-    vec4 positions[10];  // Array of light positions
+layout(std430, binding = 3) buffer LightsQuantity {
+    int numLights;      
 };
-
-layout(std430, binding = 4) buffer LightColors {
-    vec4 colors[10];  // Array of lights colors
+layout(std430, binding = 4) buffer LightPositions {
+    vec3 positions[10];  
+};
+layout(std430, binding = 5) buffer LightColors {
+    vec4 colors[10];  
 };
 
 uniform vec3 viewPos;  // Camera position
