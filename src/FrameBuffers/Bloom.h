@@ -5,7 +5,7 @@
 struct BloomRenderer
 {
 
-	BloomRenderer() : mInit(false) { Init(); }
+	BloomRenderer() : mInit(false) {}
 	~BloomRenderer() = default;
 	bool Init();
 	void Destroy();

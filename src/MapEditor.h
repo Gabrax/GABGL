@@ -1,4 +1,5 @@
 #pragma once
+#include "GLFW/glfw3.h"
 #include "Input/Input.h"
 #include "Input/Key_Values.h"
 #include "backends/imgui_impl_glfw.h"
@@ -15,8 +16,10 @@
 #include "ImGuizmo.h"
 #include "Utilities.hpp"
 
-struct MapEditor
+struct SceneEditor
 {
+  SceneEditor(ModelManager& model, LightManager& light) : modelManager(model), lightManager(light){}
+
   void Init()
   {
     ImGui::CreateContext();
@@ -50,517 +53,351 @@ struct MapEditor
 
     ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
 
-    ImGui::Begin("MapEditor");
+    ImGui::Begin("Scene Editor");
 
-    if (ImGui::CollapsingHeader("Camera Properties")) {
-      ImGui::Columns(2, nullptr, false); // 2 columns, no borders
-      ImGui::SetColumnWidth(0, 50);      // Set the width of the first column
+    if (ImGui::BeginMainMenuBar()) {
 
-      // X Value
-      ImGui::Text("X:");
-      ImGui::NextColumn();
-      ImGui::PushItemWidth(150.0f);      // Set custom width for DragFloat
-      ImGui::DragFloat("##X", &Window::_camera.Position.x, 0.1f, -FLT_MAX, FLT_MAX, "%.2f", ImGuiSliderFlags_None);
-      ImGui::PopItemWidth();
+        if (ImGui::Button("Save Scene"))
+        {
+          SaveScene();
+        }
 
-      ImGui::NextColumn();
-      // Y Value
-      ImGui::Text("Y:");
-      ImGui::NextColumn();
-      ImGui::PushItemWidth(150.0f);
-      ImGui::DragFloat("##Y", &Window::_camera.Position.y, 0.1f, -FLT_MAX, FLT_MAX, "%.2f", ImGuiSliderFlags_None);
-      ImGui::PopItemWidth();
+        if (ImGui::Button("Load Scene"))
+        {
+           LoadScene(); 
+        }
 
-      ImGui::NextColumn();
-      // Z Value
-      ImGui::Text("Z:");
-      ImGui::NextColumn();
-      ImGui::PushItemWidth(150.0f);
-      ImGui::DragFloat("##Z", &Window::_camera.Position.z, 0.1f, -FLT_MAX, FLT_MAX, "%.2f", ImGuiSliderFlags_None);
-      ImGui::PopItemWidth();
-
-      ImGui::NextColumn();
-      // Yaw Value
-      ImGui::Text("Yaw:");
-      ImGui::NextColumn();
-      ImGui::PushItemWidth(150.0f);
-      ImGui::DragFloat("##Yaw", &Window::_camera.Yaw, 0.5f, -180.0f, 180.0f, "%.2f", ImGuiSliderFlags_None);
-      ImGui::PopItemWidth();
-
-      ImGui::NextColumn();
-      // Pitch Value
-      ImGui::Text("Pitch:");
-      ImGui::NextColumn();
-      ImGui::PushItemWidth(150.0f);
-      ImGui::DragFloat("##Pitch", &Window::_camera.Pitch, 0.5f, -90.0f, 90.0f, "%.2f", ImGuiSliderFlags_None);
-      ImGui::PopItemWidth();
-
-      ImGui::Columns(1); // Reset to one column
+        ImGui::EndMainMenuBar();
     }
 
-    ImGui::Text("Light Editor");
+      if(ImGui::TreeNode("Camera Properties"))
+      {
+        ImGui::Columns(2, nullptr, false); // 2 columns, no borders
+        ImGui::SetColumnWidth(0, 50);      // Set the width of the first column
 
-    static int selectedLightIndex = 0; 
-    static glm::vec3 lightPosition;
-    static glm::vec3 lightScale;
-    static float lightRotation;
-    static glm::vec3 lightColor;
-
-    // Ensure selectedLightIndex is valid
-    if (!lightManager.lights.empty()) {
-        // Set default selected light at the start
-        if (selectedLightIndex == 0 && lightColor == glm::vec3(0.0f)) {
-            const auto& selectedLight = lightManager.lights[selectedLightIndex];
-            lightColor = glm::vec3(selectedLight.second.color);
-            lightPosition = selectedLight.second.position;
-            lightScale = selectedLight.second.scale;
-            lightRotation = selectedLight.second.rotation;
-        }
-
-        // Ensure selectedLightIndex is within range
-        selectedLightIndex = std::clamp(selectedLightIndex, 0, static_cast<int>(lightManager.lights.size()) - 1);
-        auto& selectedLight = lightManager.lights[selectedLightIndex];
-
-        ImGui::Text("Select Light:");
-        std::vector<std::string> lightNames;
-        for (int i = 0; i < lightManager.lights.size(); ++i) {
-            lightNames.push_back("Light " + std::to_string(i));
-        }
-        std::vector<const char*> lightNamesCStr;
-        for (const auto& name : lightNames) {
-            lightNamesCStr.push_back(name.c_str());
-        }
-
-        const float widgetWidth = 200.0f;
-        ImGui::PushItemWidth(widgetWidth);
-        // Light selection
-        if (ImGui::Combo("##LightIndex", &selectedLightIndex, lightNamesCStr.data(), lightNamesCStr.size())) {
-            // Update local variables when a new light is selected
-            const auto& newSelectedLight = lightManager.lights[selectedLightIndex];
-            lightColor = glm::vec3(newSelectedLight.second.color);
-            lightPosition = newSelectedLight.second.position;
-            lightScale = newSelectedLight.second.scale;
-            lightRotation = newSelectedLight.second.rotation;
-        }
+        // X Value
+        ImGui::Text("X:");
+        ImGui::NextColumn();
+        ImGui::PushItemWidth(150.0f);      // Set custom width for DragFloat
+        ImGui::DragFloat("##X", &Window::_camera.Position.x, 0.1f, -FLT_MAX, FLT_MAX, "%.2f", ImGuiSliderFlags_None);
         ImGui::PopItemWidth();
 
-        ImGui::Text("Edit Properties");
-
-        // Update light properties interactively
-        ImGui::PushItemWidth(widgetWidth);
-        if (ImGui::ColorEdit3("lightColor", &lightColor[0])) {
-            selectedLight.second.color = glm::vec4(lightColor, 1.0f); 
-        }
+        ImGui::NextColumn();
+        // Y Value
+        ImGui::Text("Y:");
+        ImGui::NextColumn();
+        ImGui::PushItemWidth(150.0f);
+        ImGui::DragFloat("##Y", &Window::_camera.Position.y, 0.1f, -FLT_MAX, FLT_MAX, "%.2f", ImGuiSliderFlags_None);
         ImGui::PopItemWidth();
 
-        ImGui::PushItemWidth(widgetWidth);
-        if (ImGui::DragFloat3("lightPosition", &lightPosition[0])) {
-            selectedLight.second.position = glm::vec4(lightPosition, selectedLight.second.position.w);
-        }
+        ImGui::NextColumn();
+        // Z Value
+        ImGui::Text("Z:");
+        ImGui::NextColumn();
+        ImGui::PushItemWidth(150.0f);
+        ImGui::DragFloat("##Z", &Window::_camera.Position.z, 0.1f, -FLT_MAX, FLT_MAX, "%.2f", ImGuiSliderFlags_None);
         ImGui::PopItemWidth();
 
-        ImGui::PushItemWidth(widgetWidth);
-        if (ImGui::DragFloat3("lightScale", &lightScale[0])) {
-            selectedLight.second.scale = lightScale; 
-        }
+        ImGui::NextColumn();
+        // Yaw Value
+        ImGui::Text("Yaw:");
+        ImGui::NextColumn();
+        ImGui::PushItemWidth(150.0f);
+        ImGui::DragFloat("##Yaw", &Window::_camera.Yaw, 0.5f, -180.0f, 180.0f, "%.2f", ImGuiSliderFlags_None);
         ImGui::PopItemWidth();
 
-        ImGui::PushItemWidth(widgetWidth);
-        if (ImGui::SliderFloat("lightRotation", &lightRotation, 0.0f, 360.0f)) {
-            selectedLight.second.rotation = lightRotation; 
-        }
+        ImGui::NextColumn();
+        // Pitch Value
+        ImGui::Text("Pitch:");
+        ImGui::NextColumn();
+        ImGui::PushItemWidth(150.0f);
+        ImGui::DragFloat("##Pitch", &Window::_camera.Pitch, 0.5f, -90.0f, 90.0f, "%.2f", ImGuiSliderFlags_None);
         ImGui::PopItemWidth();
 
-        
-        if (ImGui::Button("Add Light")) {
-            glm::vec4 colorWithAlpha(lightColor, 1.0f);
-            lightManager.AddLight(colorWithAlpha, lightPosition, lightScale, lightRotation);
+        ImGui::Columns(1); // Reset to one column
+        ImGui::TreePop();
+      }
 
-            // Update selected index to the newly added light
-            selectedLightIndex = static_cast<int>(lightManager.lights.size()) - 1;
-            const auto& newSelectedLight = lightManager.lights[selectedLightIndex];
-            lightColor = glm::vec3(newSelectedLight.second.color);
-            lightPosition = newSelectedLight.second.position;
-            lightScale = newSelectedLight.second.scale;
-            lightRotation = newSelectedLight.second.rotation;
-        }
+        if (!lightManager.lights.empty()) {
 
-        if (ImGui::Button("Edit Light")) {
-            if (selectedLightIndex >= 0 && selectedLightIndex < lightManager.lights.size()) {
-                glm::vec4 colorWithAlpha(lightColor, 1.0f);
-                lightManager.EditLight(selectedLightIndex, colorWithAlpha, lightPosition, lightScale, lightRotation);
-            } else {
-                ImGui::Text("Invalid light index selected!");
-            }
-        }
 
-        if (ImGui::Button("Remove Light")) {
-            if (selectedLightIndex >= 0 && selectedLightIndex < lightManager.lights.size()) {
-                lightManager.RemoveLight(selectedLightIndex);
+            for (int i = 0; i < lightManager.lights.size(); ++i) {
+                auto& currentLight = lightManager.lights[i];
+                std::string lightNodeLabel = "Light " + std::to_string(i);
+                
+                if (ImGui::TreeNode(lightNodeLabel.c_str())) {
+                    // Display and edit light properties inside this tree node
+                    lightColor = glm::vec3(currentLight.second.color);
+                    lightPosition = currentLight.second.position;
+                    lightScale = currentLight.second.scale;
+                    lightRotation = currentLight.second.rotation;
 
-                // Adjust selected index after removal
-                selectedLightIndex = std::max(0, selectedLightIndex - 1);
+                    // Edit Color
+                    ImGui::PushItemWidth(200.0f);
+                    if (ImGui::ColorEdit3("lightColor", &lightColor[0])) {
+                        currentLight.second.color = glm::vec4(lightColor, 1.0f); 
+                    }
+                    ImGui::PopItemWidth();
 
-                // Update local variables if there are remaining lights
-                if (!lightManager.lights.empty()) {
-                    const auto& remainingLight = lightManager.lights[selectedLightIndex];
-                    lightColor = glm::vec3(remainingLight.second.color);
-                    lightPosition = remainingLight.second.position;
-                    lightScale = remainingLight.second.scale;
-                    lightRotation = remainingLight.second.rotation;
+                    // Edit Position
+                    ImGui::PushItemWidth(200.0f);
+                    if (ImGui::DragFloat3("lightPosition", &lightPosition[0])) {
+                        currentLight.second.position = glm::vec4(lightPosition, currentLight.second.position.w);
+                    }
+                    ImGui::PopItemWidth();
+
+                    // Edit Scale
+                    ImGui::PushItemWidth(200.0f);
+                    if (ImGui::DragFloat3("lightScale", &lightScale[0])) {
+                        currentLight.second.scale = lightScale; 
+                    }
+                    ImGui::PopItemWidth();
+
+                    // Edit Rotation
+                    ImGui::PushItemWidth(200.0f);
+                    if (ImGui::SliderFloat("lightRotation", &lightRotation, 0.0f, 360.0f)) {
+                        currentLight.second.rotation = lightRotation; 
+                    }
+                    ImGui::PopItemWidth();
+
+                    ImGui::PushItemWidth(200.0f);
+                    if (ImGui::Button("Edit Light")) {
+                        glm::vec4 colorWithAlpha(lightColor, 1.0f);
+                        lightManager.EditLight(i, colorWithAlpha, lightPosition, lightScale, lightRotation);
+                    }
+                    ImGui::PopItemWidth();
+
+                    ImGui::PushItemWidth(200.0f);
+                    if (ImGui::Button("Remove Light")) {
+                        lightManager.RemoveLight(i);
+                    } 
+                    ImGui::PopItemWidth();
+
+          
+                    ImGui::TreePop(); // End current light node
                 }
-            } else {
-                ImGui::Text("Invalid light index selected!");
             }
+
         }
 
-    } else {
-        ImGui::Text("No lights to edit.");
-    }
 
-    ImGui::Text("Model Editor");
-
-    static int selectedModelIndex = 0;
-    static glm::vec3 modelPosition;
-    static glm::vec3 modelScale;
-    static float modelRotation;
-
-    static char modelPathBuffer[256] = "";  // Input buffer for model path
-    static int selectedModelTypeIndex = 0;  // 0 for static, 1 for animated
-
-    std::vector<std::string> modelNames;
-    int totalModels = 0;
-
-    if (!modelManager.vec_staticModels.empty()) {
-        for (const auto& model : modelManager.vec_staticModels) {
-            modelNames.push_back(model.second.modelpath);
-        }
-        totalModels += modelManager.vec_staticModels.size();
-    }
-
-    if (!modelManager.vec_animatedModels.empty()) {
-        for (const auto& model : modelManager.vec_animatedModels) {
-            modelNames.push_back(model.second.modelpath);
-        }
-        totalModels += modelManager.vec_animatedModels.size();
-    }
-
-    if (totalModels > 0) {
-        if (selectedModelIndex == 0 && modelPosition == glm::vec3(0.0f)) {
-            if (selectedModelIndex < modelManager.vec_staticModels.size()) {
-                const auto& selectedModel = modelManager.vec_staticModels[selectedModelIndex];
-                modelPosition = selectedModel.second.position;
-                modelScale = selectedModel.second.scale;
-                modelRotation = selectedModel.second.rotation;
-            } else {
-                int animatedModelIndex = selectedModelIndex - modelManager.vec_staticModels.size();
-                const auto& selectedModel = modelManager.vec_animatedModels[animatedModelIndex];
-                modelPosition = selectedModel.second.position;
-                modelScale = selectedModel.second.scale;
-                modelRotation = selectedModel.second.rotation;
+        // Collect model names from static and animated models
+        if (!modelManager.vec_staticModels.empty()) {
+            for (const auto& model : modelManager.vec_staticModels) {
+                modelNames.push_back(model.second.modelpath);
             }
+            totalModels += modelManager.vec_staticModels.size();
         }
 
-        ImGui::Text("Select Model:");
-
-        std::vector<const char*> modelNamesCStr;
-        for (const auto& name : modelNames) {
-            const char* filename = strrchr(name.c_str(), '/');  
-            filename = (filename == nullptr) ? name.c_str() : filename + 1;  
-            modelNamesCStr.push_back(filename);
-        }
-
-        selectedModelIndex = std::clamp(selectedModelIndex, 0, totalModels - 1);
-
-        const float widgetWidth = 200.0f;
-        ImGui::PushItemWidth(widgetWidth);
-        if (ImGui::Combo("##ModelIndex", &selectedModelIndex, modelNamesCStr.data(), modelNamesCStr.size())) {
-            int modelIndex = selectedModelIndex;
-            if (modelIndex < modelManager.vec_staticModels.size()) {
-                const auto& selectedModel = modelManager.vec_staticModels[modelIndex];
-                modelPosition = selectedModel.second.position;
-                modelScale = selectedModel.second.scale;
-                modelRotation = selectedModel.second.rotation;
-            } else {
-                modelIndex -= modelManager.vec_staticModels.size();
-                const auto& selectedModel = modelManager.vec_animatedModels[modelIndex];
-                modelPosition = selectedModel.second.position;
-                modelScale = selectedModel.second.scale;
-                modelRotation = selectedModel.second.rotation;
+        if (!modelManager.vec_animatedModels.empty()) {
+            for (const auto& model : modelManager.vec_animatedModels) {
+                modelNames.push_back(model.second.modelpath);
             }
+            totalModels += modelManager.vec_animatedModels.size();
         }
-        ImGui::PopItemWidth();
-
-        ImGui::Text("Model Properties");
-
-        // Position
-        ImGui::PushItemWidth(widgetWidth);
-        if (ImGui::DragFloat3("modelPosition", &modelPosition[0])) {
-            if (selectedModelIndex < modelManager.vec_staticModels.size()) {
-                auto& selectedModel = modelManager.vec_staticModels[selectedModelIndex];
-                selectedModel.second.position = modelPosition;  
-            } else {
-                int animatedModelIndex = selectedModelIndex - modelManager.vec_staticModels.size();
-                auto& selectedModel = modelManager.vec_animatedModels[animatedModelIndex];
-                selectedModel.second.position = modelPosition;  
-            }
-        }
-        ImGui::PopItemWidth();
-
-        // Scale
-        ImGui::PushItemWidth(widgetWidth);
-        if (ImGui::DragFloat3("modelScale", &modelScale[0])) {
-            if (selectedModelIndex < modelManager.vec_staticModels.size()) {
-                auto& selectedModel = modelManager.vec_staticModels[selectedModelIndex];
-                selectedModel.second.scale = modelScale;  
-            } else {
-                int animatedModelIndex = selectedModelIndex - modelManager.vec_staticModels.size();
-                auto& selectedModel = modelManager.vec_animatedModels[animatedModelIndex];
-                selectedModel.second.scale = modelScale;  
-            }
-        }
-        ImGui::PopItemWidth();
-        // Rotation
-        ImGui::PushItemWidth(widgetWidth);
-        if (ImGui::SliderFloat("modelRotation", &modelRotation, 0.0f, 360.0f)) {
-            if (selectedModelIndex < modelManager.vec_staticModels.size()) {
-                auto& selectedModel = modelManager.vec_staticModels[selectedModelIndex];
-                selectedModel.second.rotation = modelRotation;  
-            } else {
-                int animatedModelIndex = selectedModelIndex - modelManager.vec_staticModels.size();
-                auto& selectedModel = modelManager.vec_animatedModels[animatedModelIndex];
-                selectedModel.second.rotation = modelRotation;  
-            }
-        }
-        ImGui::PopItemWidth();
 
         if (totalModels > 0) {
-            glm::mat4 modelMatrix = glm::mat4(1.0f);
+            // Tree nodes for static models
+            if (!modelManager.vec_staticModels.empty()) {
+                for (size_t i = 0; i < modelManager.vec_staticModels.size(); ++i) {
+                    auto& model = modelManager.vec_staticModels[i];
+                    const char* filename = strrchr(model.second.modelpath.c_str(), '/');
+                    filename = (filename == nullptr) ? model.second.modelpath.c_str() : filename + 1;
+                    if (ImGui::TreeNode(filename)) {
 
-            // Get the selected model's matrix
-            if (selectedModelIndex < modelManager.vec_staticModels.size()) {
-                const auto& selectedModel = modelManager.vec_staticModels[selectedModelIndex];
-                modelMatrix = glm::translate(glm::mat4(1.0f), selectedModel.second.position);
-                modelMatrix = glm::rotate(modelMatrix, glm::radians(selectedModel.second.rotation), glm::vec3(0.0f, 1.0f, 0.0f));
-                modelMatrix = glm::scale(modelMatrix, selectedModel.second.scale);
-            } else {
-                int animatedModelIndex = selectedModelIndex - modelManager.vec_staticModels.size();
-                const auto& selectedModel = modelManager.vec_animatedModels[animatedModelIndex];
-                modelMatrix = glm::translate(glm::mat4(1.0f), selectedModel.second.position);
-                modelMatrix = glm::rotate(modelMatrix, glm::radians(selectedModel.second.rotation), glm::vec3(0.0f, 1.0f, 0.0f));
-                modelMatrix = glm::scale(modelMatrix, selectedModel.second.scale);
-            }
+                        modelPosition = model.second.position;
+                        modelScale = model.second.scale;
+                        modelRotation = model.second.rotation;
 
-            static auto currentManipulationMode = ImGuizmo::TRANSLATE;  
+                        // Properties of the model
+                        ImGui::PushItemWidth(200.0f);
+                        if(ImGui::DragFloat3("Position", &modelPosition[0])){
+                            model.second.position = modelPosition;
+                        }
+                        ImGui::PopItemWidth();
+                        
+                        ImGui::PushItemWidth(200.0f);
+                        if(ImGui::DragFloat3("Scale", &modelScale[0])){
+                            model.second.scale = modelScale;
+                        }
+                        ImGui::PopItemWidth();
 
-            if (Input::KeyPressed(KEY_S)) {
-                currentManipulationMode = ImGuizmo::SCALE;
-            } else if (Input::KeyPressed(KEY_G)) {
-                currentManipulationMode = ImGuizmo::TRANSLATE;
-            } else if (Input::KeyPressed(KEY_R)) {
-                currentManipulationMode = ImGuizmo::ROTATE;
-            }
+                        ImGui::PushItemWidth(200.0f);
+                        if(ImGui::SliderFloat("Rotation", &modelRotation, 0.0f, 360.0f)){
+                            model.second.rotation = modelRotation;
+                        }
+                        ImGui::PopItemWidth();
 
-            ImGuizmo::SetOrthographic(false);
-            ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, (float)Window::GetWindowWidth(), (float)Window::GetWindowHeight());
-            ImGuizmo::SetDrawlist();
-            glm::mat4 projection = glm::perspective(glm::radians(45.0f), Window::getAspectRatio(), 0.001f, 2000.0f);
-            glm::mat4 view = Window::_camera.GetViewMatrix();
+                        ImGui::Text("Type: STATIC");
 
-            ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection), currentManipulationMode, ImGuizmo::WORLD, glm::value_ptr(modelMatrix));
-           
-            if(ImGuizmo::IsUsing())
-            {
-                glm::vec3 position, rotation, scale;
-                Utilities::DecomposeTransform(modelMatrix, position, rotation, scale);
+                        ImGui::PushItemWidth(200.0f);
+                        if (ImGui::Button("Remove Model")) {
+                            modelManager.RemoveStaticModel(i);
+                        }
+                        ImGui::PopItemWidth();
 
-                glm::vec3 newPosition(modelMatrix[3]);
-                glm::quat newRotation = glm::quat_cast(modelMatrix);
-                glm::vec3 newScale(glm::length(modelMatrix[0]), glm::length(modelMatrix[1]), glm::length(modelMatrix[2]));
-
-                // Update the model's transformation after manipulation
-                if (selectedModelIndex < modelManager.vec_staticModels.size()) {
-                    auto& selectedModel = modelManager.vec_staticModels[selectedModelIndex];
-                    selectedModel.second.position = newPosition;
-                    selectedModel.second.rotation = glm::degrees(glm::eulerAngles(newRotation).y);
-                    selectedModel.second.scale = newScale;
-                } else {
-                    int animatedModelIndex = selectedModelIndex - modelManager.vec_staticModels.size();
-                    auto& selectedModel = modelManager.vec_animatedModels[animatedModelIndex];
-                    selectedModel.second.position = newPosition;
-                    selectedModel.second.rotation = glm::degrees(glm::eulerAngles(newRotation).y);
-                    selectedModel.second.scale = newScale;
+                        ImGui::TreePop();
+                    }
                 }
             }
-        }
-    } else {
-        ImGui::Text("No models to edit.");
-    }
-   
+
+            // Tree nodes for animated models
+            if (!modelManager.vec_animatedModels.empty()) {
+                for (size_t i = 0; i < modelManager.vec_animatedModels.size(); ++i) {
+                    auto& model = modelManager.vec_animatedModels[i];
+                    const char* filename = strrchr(model.second.modelpath.c_str(), '/');
+                    filename = (filename == nullptr) ? model.second.modelpath.c_str() : filename + 1;
+                    if (ImGui::TreeNode(filename)) {
+
+                        modelPosition = model.second.position;
+                        modelScale = model.second.scale;
+                        modelRotation = model.second.rotation;
+                        // Properties of the model
+                        ImGui::PushItemWidth(200.0f);
+                        if(ImGui::DragFloat3("Position", &modelPosition[0])){
+                            model.second.position = modelPosition;
+                        }
+                        ImGui::PopItemWidth();
+                        
+                        ImGui::PushItemWidth(200.0f);
+                        if(ImGui::DragFloat3("Scale", &modelScale[0])){
+                            model.second.scale = modelScale;
+                        }
+                        ImGui::PopItemWidth();
+
+                        ImGui::PushItemWidth(200.0f);
+                        if(ImGui::SliderFloat("Rotation", &modelRotation, 0.0f, 360.0f)){
+                            model.second.rotation = modelRotation;
+                        }
+                        ImGui::PopItemWidth();
+
+                        ImGui::Text("Type: ANIMATED");
+
+                        ImGui::PushItemWidth(200.0f);
+                        if (ImGui::Button("Remove Model")) {
+                            modelManager.RemoveAnimatedModel(i);
+                        }
+                        ImGui::PopItemWidth();
+
+                        ImGui::TreePop();
+                    }
+                }
+            }
+        
+          if (totalModels > 0) {
+              glm::mat4 modelMatrix = glm::mat4(1.0f);
+
+              // Get the selected model's matrix
+              if (selectedModelIndex < modelManager.vec_staticModels.size()) {
+                  const auto& selectedModel = modelManager.vec_staticModels[selectedModelIndex];
+                  modelMatrix = glm::translate(glm::mat4(1.0f), selectedModel.second.position);
+                  modelMatrix = glm::rotate(modelMatrix, glm::radians(selectedModel.second.rotation), glm::vec3(0.0f, 1.0f, 0.0f));
+                  modelMatrix = glm::scale(modelMatrix, selectedModel.second.scale);
+              } else {
+                  int animatedModelIndex = selectedModelIndex - modelManager.vec_staticModels.size();
+                  const auto& selectedModel = modelManager.vec_animatedModels[animatedModelIndex];
+                  modelMatrix = glm::translate(glm::mat4(1.0f), selectedModel.second.position);
+                  modelMatrix = glm::rotate(modelMatrix, glm::radians(selectedModel.second.rotation), glm::vec3(0.0f, 1.0f, 0.0f));
+                  modelMatrix = glm::scale(modelMatrix, selectedModel.second.scale);
+              }
+
+              static auto currentManipulationMode = ImGuizmo::TRANSLATE;  
+
+              if (Input::KeyPressed(KEY_S)) {
+                  currentManipulationMode = ImGuizmo::SCALE;
+              } else if (Input::KeyPressed(KEY_G)) {
+                  currentManipulationMode = ImGuizmo::TRANSLATE;
+              } else if (Input::KeyPressed(KEY_R)) {
+                  currentManipulationMode = ImGuizmo::ROTATE;
+              }
+
+              ImGuizmo::SetOrthographic(false);
+              ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, (float)Window::GetWindowWidth(), (float)Window::GetWindowHeight());
+              ImGuizmo::SetDrawlist();
+              glm::mat4 projection = glm::perspective(glm::radians(45.0f), Window::getAspectRatio(), 0.001f, 2000.0f);
+              glm::mat4 view = Window::_camera.GetViewMatrix();
+
+              ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection), currentManipulationMode, ImGuizmo::WORLD, glm::value_ptr(modelMatrix));
+             
+              if(ImGuizmo::IsUsing())
+              {
+                  glm::vec3 position, rotation, scale;
+                  Utilities::DecomposeTransform(modelMatrix, position, rotation, scale);
+
+                  glm::vec3 newPosition(modelMatrix[3]);
+                  glm::quat newRotation = glm::quat_cast(modelMatrix);
+                  glm::vec3 newScale(glm::length(modelMatrix[0]), glm::length(modelMatrix[1]), glm::length(modelMatrix[2]));
+
+                  // Update the model's transformation after manipulation
+                  if (selectedModelIndex < modelManager.vec_staticModels.size()) {
+                      auto& selectedModel = modelManager.vec_staticModels[selectedModelIndex];
+                      selectedModel.second.position = newPosition;
+                      selectedModel.second.rotation = glm::degrees(glm::eulerAngles(newRotation).y);
+                      selectedModel.second.scale = newScale;
+                  } else {
+                      int animatedModelIndex = selectedModelIndex - modelManager.vec_staticModels.size();
+                      auto& selectedModel = modelManager.vec_animatedModels[animatedModelIndex];
+                      selectedModel.second.position = newPosition;
+                      selectedModel.second.rotation = glm::degrees(glm::eulerAngles(newRotation).y);
+                      selectedModel.second.scale = newScale;
+                  }
+              }
+          }
+      } 
     
-   const float inputWidth = 150.0f;  // Set custom width for input fields
+    if(ImGui::IsMouseClicked(GLFW_MOUSE_BUTTON_RIGHT)) ImGui::OpenPopup("AddEntityPopup");
+    if (ImGui::BeginPopup("AddEntityPopup",ImGuiWindowFlags_MenuBar)) {
 
-    // Model Path
-    ImGui::Text("Model Path:");
-    ImGui::SameLine();
-    ImGui::PushItemWidth(inputWidth);
-    ImGui::InputText("##ModelPath", modelPathBuffer, sizeof(modelPathBuffer));
-    ImGui::PopItemWidth();
+        if (ImGui::BeginMenuBar()){
+            ImGui::Text("Add Entity");
+            ImGui::EndMenuBar();
+        }
 
-    // Model Type
-    ImGui::Text("Model Type:");
-    ImGui::SameLine();
-    ImGui::PushItemWidth(inputWidth);
-    const char* modelTypeOptions[] = { "STATIC", "ANIMATED" };
-    ImGui::Combo("##ModelType", &selectedModelTypeIndex, modelTypeOptions, IM_ARRAYSIZE(modelTypeOptions));
-    ImGui::PopItemWidth();
+        if (ImGui::Button("Add Light")) {
+            glm::vec4 colorWithAlpha(glm::vec3(0.994f,0.994f,0.994f), 1.0f);
+            lightManager.AddLight(colorWithAlpha, glm::vec3(0.0f));
+        }
 
-    if (ImGui::Button("Add Model")) {
-      if (strlen(modelPathBuffer) > 0) {
-          std::string modelPathString = modelPathBuffer;
-          const char* modelType = modelTypeOptions[selectedModelTypeIndex];
+        if (ImGui::Button("Add Model")) ImGui::OpenPopup("my_file_popup");
+        if (ImGui::BeginPopup("my_file_popup", ImGuiWindowFlags_MenuBar))
+        {
+            // Model Path
+            ImGui::Text("Model Path:");
+            ImGui::SameLine();
+            ImGui::PushItemWidth(150.0f);
+            ImGui::InputText("##ModelPath", modelPathBuffer, sizeof(modelPathBuffer));
+            ImGui::PopItemWidth();
 
-          if (std::strcmp(modelType, "STATIC") == 0) {
-              modelManager.AddModelStatic(modelPathString, modelPosition, modelScale, modelRotation);
-              selectedModelIndex = static_cast<int>(modelManager.vec_staticModels.size()) - 1;
-              const auto& newSelectedModel = modelManager.vec_staticModels[selectedModelIndex];
-              modelPosition = newSelectedModel.second.position;
-              modelScale = newSelectedModel.second.scale;
-              modelRotation = newSelectedModel.second.rotation;
-          }
+            // Model Type
+            ImGui::Text("Model Type:");
+            ImGui::SameLine();
+            ImGui::PushItemWidth(150.0f);
+            const char* modelTypeOptions[] = { "STATIC", "ANIMATED" };
+            ImGui::Combo("##ModelType", &selectedModelTypeIndex, modelTypeOptions, IM_ARRAYSIZE(modelTypeOptions));
+            ImGui::PopItemWidth();
 
-          if (std::strcmp(modelType, "ANIMATED") == 0) {
-              modelManager.AddModelAnimated(modelPathString, modelPosition, modelScale, modelRotation);
-              selectedModelIndex = static_cast<int>(modelManager.vec_animatedModels.size()) - 1;
-              const auto& newSelectedModel = modelManager.vec_animatedModels[selectedModelIndex];
-              modelPosition = newSelectedModel.second.position;
-              modelScale = newSelectedModel.second.scale;
-              modelRotation = newSelectedModel.second.rotation;
-          }
+            if(ImGui::Button("Add")){
+              if (strlen(modelPathBuffer) > 0) {
+                  std::string modelPathString = modelPathBuffer;
+                  const char* modelType = modelTypeOptions[selectedModelTypeIndex];
 
-          modelPathBuffer[0] = '\0';  
-      }
-  }
+                  if (std::strcmp(modelType, "STATIC") == 0) {
+                      modelManager.AddModelStatic(modelPathString, modelPosition, modelScale, modelRotation);
+                  }
 
-    if (ImGui::Button("Edit Model")) {
-        if (selectedModelIndex >= 0) {
-            if (selectedModelIndex < modelManager.vec_staticModels.size()) {
-                modelManager.EditStaticModel(selectedModelIndex, modelPosition, modelScale, modelRotation);
-            } else {
-                int animatedModelIndex = selectedModelIndex - modelManager.vec_staticModels.size();
-                modelManager.EditAnimatedModel(animatedModelIndex, modelPosition, modelScale, modelRotation);
+                  if (std::strcmp(modelType, "ANIMATED") == 0) {
+                      modelManager.AddModelAnimated(modelPathString, modelPosition, modelScale, modelRotation);
+                  }
+
+                  modelPathBuffer[0] = '\0';  
+              }
             }
-        } else {
-            ImGui::Text("Invalid model index selected!");
+            ImGui::EndPopup();
         }
-    }
-
-    if (ImGui::Button("Remove Model")) {
-        if (selectedModelIndex >= 0) {
-            if (selectedModelIndex < modelManager.vec_staticModels.size()) {
-                modelManager.RemoveStaticModel(selectedModelIndex);
-                selectedModelIndex = std::max(0, selectedModelIndex - 1);  // Adjust if necessary
-            } else {
-                int animatedModelIndex = selectedModelIndex - modelManager.vec_staticModels.size();
-                modelManager.RemoveAnimatedModel(animatedModelIndex);
-                selectedModelIndex = std::max(0, selectedModelIndex - 1);  // Adjust if necessary
-            }
-        } else {
-            ImGui::Text("Invalid model index selected!");
-        }
-    }
-
-    if (ImGui::Button("Save Scene"))
-    {
-        nlohmann::json sceneData;
-
-        sceneData["Camera"]["Position"] = {
-            {"x", Window::_camera.Position.x},
-            {"y", Window::_camera.Position.y},
-            {"z", Window::_camera.Position.z}
-        };
-        sceneData["Camera"]["Rotation"] = {
-            {"Yaw", Window::_camera.Yaw},
-            {"Pitch", Window::_camera.Pitch}
-        };
-
-        sceneData["Lights"] = nlohmann::json::array();
-        for (const auto& light : lightManager.lights) {
-            const auto& lightData = light.second; 
-            nlohmann::json lightJson;
-            lightJson["Color"] = {
-                {"r", lightData.color.r},
-                {"g", lightData.color.g},
-                {"b", lightData.color.b},
-                {"a", lightData.color.a}
-            };
-            lightJson["Position"] = {
-                {"x", lightData.position.x},
-                {"y", lightData.position.y},
-                {"z", lightData.position.z}
-            };
-            lightJson["Scale"] = {
-                {"x", lightData.scale.x},
-                {"y", lightData.scale.y},
-                {"z", lightData.scale.z}
-            };
-            lightJson["Rotation"] = lightData.rotation;
-            sceneData["Lights"].push_back(lightJson);
-        }
-        // Save Models Data
-        sceneData["Models"] = nlohmann::json::array();
-        for (const auto& model : modelManager.vec_staticModels) {
-            nlohmann::json modelJson;
-            modelJson["Type"] = "STATIC";
-            modelJson["Path"] = model.second.modelpath;
-            modelJson["Position"] = {
-                {"x", model.second.position.x},
-                {"y", model.second.position.y},
-                {"z", model.second.position.z}
-            };
-            modelJson["Scale"] = {
-                {"x", model.second.scale.x},
-                {"y", model.second.scale.y},
-                {"z", model.second.scale.z}
-            };
-            modelJson["Rotation"] = model.second.rotation;
-            sceneData["Models"].push_back(modelJson);
-        }
-        for (const auto& model : modelManager.vec_animatedModels) {
-            nlohmann::json modelJson;
-            modelJson["Type"] = "ANIMATED";
-            modelJson["Path"] = model.second.modelpath;
-            modelJson["Position"] = {
-                {"x", model.second.position.x},
-                {"y", model.second.position.y},
-                {"z", model.second.position.z}
-            };
-            modelJson["Scale"] = {
-                {"x", model.second.scale.x},
-                {"y", model.second.scale.y},
-                {"z", model.second.scale.z}
-            };
-            modelJson["Rotation"] = model.second.rotation;
-            sceneData["Models"].push_back(modelJson);
-        }
-
-        std::ofstream outFile("scene.json");
-        if (outFile.is_open()) {
-            outFile << sceneData.dump(4); 
-            outFile.close();
-            puts("Scene data saved");
-        } else {
-            puts("Error: Could not create file scene.json");
-        }
-    }
-
-    if (ImGui::Button("Load Scene"))
-    {
-       LoadScene(); 
+      ImGui::EndPopup();
     }
 
     ImGui::End();
-    
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -587,10 +424,88 @@ struct MapEditor
     }
   }
 
-  void RenderScene()
+  void SaveScene()
   {
-    lightManager.RenderLights();
-    modelManager.RenderModels();
+      nlohmann::json sceneData;
+
+      sceneData["Camera"]["Position"] = {
+          {"x", Window::_camera.Position.x},
+          {"y", Window::_camera.Position.y},
+          {"z", Window::_camera.Position.z}
+      };
+      sceneData["Camera"]["Rotation"] = {
+          {"Yaw", Window::_camera.Yaw},
+          {"Pitch", Window::_camera.Pitch}
+      };
+
+      sceneData["Lights"] = nlohmann::json::array();
+      for (const auto& light : lightManager.lights) {
+          const auto& lightData = light.second; 
+          nlohmann::json lightJson;
+          lightJson["Color"] = {
+              {"r", lightData.color.r},
+              {"g", lightData.color.g},
+              {"b", lightData.color.b},
+              {"a", lightData.color.a}
+          };
+          lightJson["Position"] = {
+              {"x", lightData.position.x},
+              {"y", lightData.position.y},
+              {"z", lightData.position.z}
+          };
+          lightJson["Scale"] = {
+              {"x", lightData.scale.x},
+              {"y", lightData.scale.y},
+              {"z", lightData.scale.z}
+          };
+          lightJson["Rotation"] = lightData.rotation;
+          sceneData["Lights"].push_back(lightJson);
+      }
+      // Save Models Data
+      sceneData["Models"] = nlohmann::json::array();
+      for (const auto& model : modelManager.vec_staticModels) {
+          nlohmann::json modelJson;
+          modelJson["Type"] = "STATIC";
+          modelJson["Path"] = model.second.modelpath;
+          modelJson["Position"] = {
+              {"x", model.second.position.x},
+              {"y", model.second.position.y},
+              {"z", model.second.position.z}
+          };
+          modelJson["Scale"] = {
+              {"x", model.second.scale.x},
+              {"y", model.second.scale.y},
+              {"z", model.second.scale.z}
+          };
+          modelJson["Rotation"] = model.second.rotation;
+          sceneData["Models"].push_back(modelJson);
+      }
+      for (const auto& model : modelManager.vec_animatedModels) {
+          nlohmann::json modelJson;
+          modelJson["Type"] = "ANIMATED";
+          modelJson["Path"] = model.second.modelpath;
+          modelJson["Position"] = {
+              {"x", model.second.position.x},
+              {"y", model.second.position.y},
+              {"z", model.second.position.z}
+          };
+          modelJson["Scale"] = {
+              {"x", model.second.scale.x},
+              {"y", model.second.scale.y},
+              {"z", model.second.scale.z}
+          };
+          modelJson["Rotation"] = model.second.rotation;
+          sceneData["Models"].push_back(modelJson);
+      }
+
+      std::ofstream outFile("scene.json");
+      if (outFile.is_open()) {
+          outFile << sceneData.dump(4); 
+          outFile.close();
+          puts("Scene data saved");
+      } else {
+          puts("Error: Could not create file scene.json");
+      }
   }
 
   void LoadScene()
@@ -677,7 +592,26 @@ struct MapEditor
 
 private:
 
-  ModelManager modelManager;
-  LightManager lightManager;
+  int selectedLightIndex = 0; 
+  glm::vec3 lightPosition;
+  glm::vec3 lightScale;
+  float lightRotation;
+  glm::vec3 lightColor;
+
+
+  int selectedModelIndex = 0;
+  glm::vec3 modelPosition;
+  glm::vec3 modelScale;
+  float modelRotation;
+
+  char modelPathBuffer[256] = "";  // Input buffer for model path
+  int selectedModelTypeIndex = 0;  // 0 for static, 1 for animated
+
+  std::vector<std::string> modelNames;
+  int totalModels = 0;
+
+
+  ModelManager& modelManager;
+  LightManager& lightManager;
   bool isRendered = false;
 };

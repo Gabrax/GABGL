@@ -13,17 +13,17 @@
 
 struct EnvironmentMap {
 
-    EnvironmentMap() {
-        Bake();
-    }
+    EnvironmentMap() = default;
 
-    ~EnvironmentMap(){
+    ~EnvironmentMap()
+    {
         glDeleteBuffers(1, &_VBO);
         glDeleteVertexArrays(1, &_VAO);
         glDeleteTextures(1, &_texture);
     }
 
-    void Bake(){
+    void Bake()
+    {
         glGenVertexArrays(1, &_VAO);
         glGenBuffers(1, &_VBO);
         glBindVertexArray(_VAO);
@@ -48,7 +48,8 @@ struct EnvironmentMap {
         puts("EnvMap loaded");
     }
 
-    void Render(){
+    void Render()
+    {
         glDepthFunc(GL_LEQUAL);  // change depth function so depth test passes when values are equal to depth buffer's content
         _shader.Use();
         glm::mat4 projection = glm::perspective(glm::radians(this->_camera.Zoom), Window::getAspectRatio(), 0.001f, 2000.0f);

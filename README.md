@@ -20,6 +20,7 @@ sh build.sh
 - [GLAD](https://github.com/Dav1dde/glad)
 - [GLM](https://github.com/g-truc/glm)
 - [ImGUI](https://github.com/ocornut/imgui)
+- [ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo)
 - [rAudio](https://github.com/raysan5/raudio)
 - [stb_image](https://github.com/nothings/stb/blob/master/stb_image.h)
 - [glText](https://github.com/vallentin/glText)
