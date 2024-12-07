@@ -385,7 +385,7 @@ void BloomRenderer::RenderBloomTexture(float filterRadius)
 void BloomRenderer::Resize(int newWidth, int newHeight) {
     // Update viewport
     glViewport(0, 0, newWidth, newHeight);
-
+    glfwSwapInterval(1);
     // Resize the HDR framebuffers and color buffers
     glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
     for (unsigned int i = 0; i < 2; i++) {
@@ -418,9 +418,9 @@ void BloomRenderer::Render()
   shaderBloomFinal.setFloat("renderHeight", Window::GetWindowHeight());
 
   renderQuad();
-  /*if(Input::KeyPressed(KEY_F)){*/
-  /*  Resize(Window::GetFullscreenWidth(),Window::GetFullscreenHeight());*/
-  /*}*/
+  if(Input::KeyPressed(KEY_F)){
+    Resize(Window::GetWindowWidth(),Window::GetWindowHeight());
+  }
 
 }
 
@@ -434,6 +434,7 @@ void BloomRenderer::UnBind() const
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	// Restore viewport
 	glViewport(0, 0, Window::GetWindowWidth(), Window::GetWindowHeight());
+  glfwSwapInterval(1);
 }
 
 GLuint BloomRenderer::getBloomTexture()

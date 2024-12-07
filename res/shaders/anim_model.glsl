@@ -76,17 +76,25 @@ struct Material {
     float shininess;
 };
 
+// Light structure to hold properties like ambient, diffuse, etc.
 struct Light {
+    vec3 position;    // For point light and spotlight
+    vec3 direction;   // For directional and spotlight
     vec3 ambient;
     vec3 diffuse;
     vec3 specular;
 
-    float constant;
-    float linear;
+    float constant;   // Point and spotlight attenuation
+    float linear;     
     float quadratic;
+
+    float cutOff;       // Spotlight inner cutoff (cosine)
+    float outerCutOff;  // Spotlight outer cutoff (cosine)
+
+    int type;  // 0 = Directional, 1 = Point, 2 = Spotlight
 };
 
-in VS_OUT{
+in VS_OUT {
     vec2 TexCoords;
     vec3 Normal;
     vec3 FragPos;
@@ -106,11 +114,11 @@ layout(std430, binding = 5) buffer LightColors {
 
 uniform vec3 viewPos;  // Camera position
 uniform Material material;
-uniform Light light;
+uniform Light light;    // Shared light properties for all lights
 
-// Gamma correction parameters
 const float gamma = 2.2;
 
+// Gamma correction function
 float gammaCorrection(float value) {
     return pow(value, 1.0 / gamma);
 }
@@ -127,57 +135,100 @@ vec3 toneMappingACES(vec3 color) {
     const float d = 0.59;
     const float e = 0.14;
 
-    // ACES tone mapping curve
+// ACES tone mapping curve
     return clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0, 1.0);
 }
 
-void main() {           
-    // Sample diffuse color and normalize the interpolated normal
+bool isInsideAABB(vec3 fragPos, vec3 minAABB, vec3 maxAABB) {
+    return all(greaterThanEqual(fragPos, minAABB)) && all(lessThanEqual(fragPos, maxAABB));
+}
+vec3 calculateDirectionalLight(Light light, vec3 normal, vec3 viewDir, vec3 color) {
+    vec3 lightDir = normalize(-light.direction);
+    float diff = max(dot(normal, lightDir), 0.0);
+
+    vec3 reflectDir = reflect(-lightDir, normal);
+    float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+
+    vec3 ambient = light.ambient * color;
+    vec3 diffuse = light.diffuse * diff * color;
+    vec3 specular = light.specular * spec * material.specular;
+
+    return ambient + diffuse + specular;
+}
+
+vec3 calculatePointLight(Light light, vec3 fragPos, vec3 normal, vec3 viewDir, vec3 color) {
+    vec3 lightDir = normalize(light.position - fragPos);
+    float diff = max(dot(normal, lightDir), 0.0);
+
+    vec3 reflectDir = reflect(-lightDir, normal);
+    float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+
+    float distance = length(light.position - fragPos);
+    float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * (distance * distance));
+
+    vec3 ambient = light.ambient * color * attenuation;
+    vec3 diffuse = light.diffuse * diff * color * attenuation;
+    vec3 specular = light.specular * spec * material.specular * attenuation;
+
+    return ambient + diffuse + specular;
+}
+
+vec3 calculateSpotlight(Light light, vec3 fragPos, vec3 normal, vec3 viewDir, vec3 color) {
+    vec3 lightDir = normalize(light.position - fragPos);
+    float diff = max(dot(normal, lightDir), 0.0);
+
+    vec3 reflectDir = reflect(-lightDir, normal);
+    float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+
+    float distance = length(light.position - fragPos);
+    float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * (distance * distance));
+
+    float theta = dot(lightDir, normalize(-light.direction));
+    float epsilon = light.cutOff - light.outerCutOff;
+    float intensity = clamp((theta - light.outerCutOff) / epsilon, 0.0, 1.0);
+
+    vec3 ambient = light.ambient * color * attenuation * intensity;
+    vec3 diffuse = light.diffuse * diff * color * attenuation * intensity;
+    vec3 specular = light.specular * spec * material.specular * attenuation * intensity;
+
+    return ambient + diffuse + specular;
+}
+
+void main() {
     vec3 color = texture(material.diffuse, fs_in.TexCoords).rgb;
     vec3 normal = normalize(fs_in.Normal);
-
-    // Ambient lighting
-    vec3 ambient = 0.0 * color;
-
-    // Initialize lighting components
-    vec3 lighting = vec3(0.0);
-
-    // View direction
     vec3 viewDir = normalize(viewPos - fs_in.FragPos);
 
+    vec3 lighting = vec3(0.0);
+
     for (int i = 0; i < numLights; i++) {
-        // Calculate light direction and attenuation
-        vec3 lightDir = normalize(positions[i].xyz - fs_in.FragPos);
-
-        // Diffuse lighting
-        float diff = max(dot(lightDir, normal), 0.0);
-        vec3 result = colors[i].rgb * diff * color;
-
-        float distance = length(fs_in.FragPos - positions[i].xyz);
-        // Combine diffuse and specular, applying attenuation
-        result *= 3.0 / (distance * distance);
-
-        // Accumulate lighting
-        lighting += result;
+        Light currentLight;
+        currentLight.position = positions[i].xyz;
+        currentLight.diffuse = colors[i].rgb;
+        currentLight.constant = 1.0;
+        currentLight.linear = 0.09;
+        currentLight.quadratic = 0.032;
+        currentLight.direction = vec3(-5.0f,50.0f,0.0f);
+        currentLight.cutOff = 30;
+        currentLight.outerCutOff = 5;
+        
+        lighting += calculatePointLight(currentLight, fs_in.FragPos, normal, viewDir, color);
+        // lighting += calculateDirectionalLight(currentLight, normal, viewDir, color);
+        // lighting += calculateSpotlight(currentLight, fs_in.FragPos, normal, viewDir, color);
     }
 
-    // Combine ambient and lighting
-    vec3 result = ambient + lighting;
+    vec3 result = lighting;
 
-    // Apply tone mapping (ACES)
+    // Apply tone mapping and gamma correction
     result = toneMappingACES(result);
-
-    // // Apply gamma correction
     // result = gammaCorrection(result);
 
-    // Determine bloom threshold color
-    float brightness = dot(result, vec3(0.2126, 0.7152, 0.0722)); // Luminance calculation
+    float brightness = dot(result, vec3(0.2126, 0.7152, 0.0722));
     if (brightness > 1.0)
         BrightColor = vec4(result, 1.0);
     else
         BrightColor = vec4(0.0, 0.0, 0.0, 1.0);
 
-    // Output the final color
     FragColor = vec4(result, 1.0);
 }
 

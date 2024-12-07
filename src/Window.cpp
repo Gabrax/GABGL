@@ -4,6 +4,7 @@
 
 #include "Input/Input.h"
 #include "Window.h"
+#include "Utilities.hpp"
 #include "stb_image.h"
 
 namespace Window {
@@ -184,7 +185,7 @@ void Window::Init()
 
     glfwInit();
     glfwSetErrorCallback([](int error, const char* description)
-      {
+    {
           std::cout << "GLFW Error (" << std::to_string(error) << "): " << description << "\n";
     });
 
@@ -305,6 +306,11 @@ void Window::BeginFrame()
 {
     ShowFPS();
     DeltaTime();
+    if(Input::KeyPressed(KEY_F)) {
+      Window::ToggleFullscreen();
+      PlaySound(Utilities::g_sounds.fullscreen);
+    }
+
     glfwPollEvents();
 }
 

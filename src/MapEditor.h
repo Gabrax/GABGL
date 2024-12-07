@@ -503,7 +503,6 @@ struct SceneEditor
 
             // Load lights data
             if (sceneData.contains("Lights")) {
-                lightManager.lights.clear(); // Clear existing lights
                 for (const auto& lightJson : sceneData["Lights"]) {
                     glm::vec4 color(
                         lightJson["Color"]["r"],
@@ -630,7 +629,9 @@ private:
           Utilities::DecomposeTransform(modelMatrix, position, rotation, scale);
 
           entity.second.position = position;
-          entity.second.rotation = glm::degrees(rotation);
+          entity.second.rotation.x = glm::degrees(rotation.x);
+          entity.second.rotation.y = glm::degrees(rotation.y);
+          entity.second.rotation.z = glm::degrees(rotation.z);
           entity.second.scale = scale;
       }
   }

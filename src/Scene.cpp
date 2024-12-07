@@ -43,17 +43,16 @@ void Scene::Render()
     lightManager.RenderLights();
     modelManager.RenderModels();
 
-
     glDisable(GL_CULL_FACE);
 
     envmap.Render();
 
     bloom.RenderBloomTexture(0.005f);
     bloom.UnBind();
-   
+
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     bloom.Render();
-    
+
 
     glDisable(GL_DEPTH_TEST);
 
@@ -62,10 +61,5 @@ void Scene::Render()
 
     if (Input::KeyPressed(KEY_H)) {
       Utilities::HotReloadShaders();
-    }
-
-    if (Input::KeyPressed(KEY_F)) {
-      Window::ToggleFullscreen();
-      PlaySound(Utilities::g_sounds.fullscreen);
     }
 }
