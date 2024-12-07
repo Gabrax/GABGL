@@ -25,17 +25,17 @@ struct LightManager {
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, ssboColors.GetHandle());     
     }
 
-    void AddLight(const glm::vec4& color, const glm::vec3& position, const glm::vec3& rotation = glm::vec3(0.0f), const glm::vec3& scale = glm::vec3(1.0f)) {
+    void AddLight(const glm::vec4& color, const glm::vec3& position, const glm::vec3& rotation = glm::vec3(0.0f), const glm::vec3& scale = glm::vec3(1.0f))
+    {
         if (numLights == maxLights - 1) {
             std::cout << "Max number of lights reached!" << '\n';
             return;
         }
 
-        glm::vec4 lightColor = color;
-        LightData lightData = { position, rotation, scale, lightColor };
+        LightData lightData = { position, rotation, scale, color };
 
         std::unique_ptr<Light> newLight = std::make_unique<Light>();
-        newLight->setLightColor(lightColor);
+        newLight->setLightColor(color);
 
         lights.push_back({ std::move(newLight), lightData });
         numLights++;
@@ -60,7 +60,7 @@ struct LightManager {
       }
 
       if (newPosition.has_value()) {
-          lightData.position = glm::vec4(newPosition.value(), 1.0f);
+          lightData.position = newPosition.value();
       }
 
       if (newRotation.has_value()) {
@@ -74,7 +74,8 @@ struct LightManager {
       UpdateLightDataInSSBO();
     }
 
-    void RemoveLight(int index) {
+    void RemoveLight(int index)
+    {
         if (index >= 0 && index < lights.size()) {
             lights.erase(lights.begin() + index);
             numLights--;
@@ -82,7 +83,8 @@ struct LightManager {
         }
     }
 
-    void RenderLights() {
+    void RenderLights()
+    {
         for (const auto& lightPair : lights) {
             lightPair.first->Render(lightPair.second.position, lightPair.second.rotation, lightPair.second.scale);
         }

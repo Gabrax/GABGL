@@ -98,7 +98,7 @@ layout(std430, binding = 3) buffer LightsQuantity {
     int numLights;      
 };
 layout(std430, binding = 4) buffer LightPositions {
-    vec3 positions[10];  
+    vec4 positions[10];  
 };
 layout(std430, binding = 5) buffer LightColors {
     vec4 colors[10];  

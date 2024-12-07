@@ -59,7 +59,7 @@ struct SceneEditor
 
         if (ImGui::Button("Save Scene"))
         {
-          SaveScene();
+           SaveScene();
         }
 
         if (ImGui::Button("Load Scene"))
@@ -165,12 +165,7 @@ struct SceneEditor
                         currentLight.second.scale = lightScale;
                     }
 
-                    ImGui::PushItemWidth(200.0f);
-                    if (ImGui::Button("Edit Light")) {
-                        glm::vec4 colorWithAlpha(lightColor, 1.0f);
-                        lightManager.EditLight(i, colorWithAlpha, lightPosition, lightRotation, lightScale);
-                    }
-                    ImGui::PopItemWidth();
+                    lightManager.EditLight(i,currentLight.second.color,currentLight.second.position);
 
                     ImGui::PushItemWidth(200.0f);
                     if (ImGui::Button("Remove Light")) {
@@ -475,7 +470,7 @@ struct SceneEditor
           sceneData["Models"].push_back(modelJson);
       }
 
-      std::ofstream outFile("scene.json");
+      std::ofstream outFile("./scenes/scene.json");
       if (outFile.is_open()) {
           outFile << sceneData.dump(4); 
           outFile.close();
@@ -487,7 +482,7 @@ struct SceneEditor
 
   void LoadScene()
   {
-    std::ifstream inFile("scene.json");
+    std::ifstream inFile("./scenes/scene.json");
     if (inFile.is_open()) {
         try {
             nlohmann::json sceneData;
@@ -531,13 +526,14 @@ struct SceneEditor
                         lightJson["Scale"]["y"],
                         lightJson["Scale"]["z"]
                     );
-                    lightManager.AddLight(color, position, rotation, scale); // Re-add lights
+                    lightManager.AddLight(color, position, rotation, scale); 
                 }
                 puts("Lights data loaded successfully");
             }
 
-            // Load Models Data
             if (sceneData.contains("Models")) {
+                modelManager.vec_staticModels.clear(); 
+                modelManager.vec_animatedModels.clear(); 
                 for (const auto& modelJson : sceneData["Models"]) {
                     std::string modelType = modelJson["Type"];
                     std::string modelPath = modelJson["Path"].get<std::string>();
