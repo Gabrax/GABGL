@@ -11,28 +11,36 @@
 #include "glm/fwd.hpp"
 #include <optional>
 
+enum class LightType : int32_t {
+    POINT = 0,
+    DIRECTIONAL = 1,
+    SPOT = 2
+};
+
 struct LightManager {
 
     LightManager()
     {
         ssbonumLights.PreAllocate(sizeof(int32_t)); 
         ssboPositions.PreAllocate(sizeof(glm::vec3) * maxLights); 
-        ssboColors.PreAllocate(sizeof(glm::vec4) * maxLights);  
+        ssboColors.PreAllocate(sizeof(glm::vec4) * maxLights);
+        ssboTypes.PreAllocate(sizeof(int32_t) * maxLights);
 
         numLights = 0; 
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, ssbonumLights.GetHandle());  
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ssboPositions.GetHandle());  
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, ssboColors.GetHandle());     
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, ssboColors.GetHandle());
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, ssboTypes.GetHandle());
     }
 
-    void AddLight(const glm::vec4& color, const glm::vec3& position, const glm::vec3& rotation = glm::vec3(0.0f), const glm::vec3& scale = glm::vec3(1.0f))
+    void AddLight(const LightType& type, const glm::vec4& color, const glm::vec3& position, const glm::vec3& rotation = glm::vec3(0.0f), const glm::vec3& scale = glm::vec3(1.0f))
     {
         if (numLights == maxLights - 1) {
             std::cout << "Max number of lights reached!" << '\n';
             return;
         }
 
-        LightData lightData = { position, rotation, scale, color };
+        LightData lightData = { position, rotation, scale, color, type };
 
         std::unique_ptr<Light> newLight = std::make_unique<Light>();
         newLight->setLightColor(color);
@@ -96,6 +104,7 @@ struct LightManager {
         glm::vec3 rotation;
         glm::vec3 scale;
         glm::vec4 color;
+        LightType type;
     };
 
     std::vector<std::pair<std::unique_ptr<Light>, LightData>> lights;
@@ -104,7 +113,8 @@ private:
 
   SSBO ssbonumLights;  
   SSBO ssboPositions;  
-  SSBO ssboColors;     
+  SSBO ssboColors;
+  SSBO ssboTypes;
   int32_t numLights;
   const uint32_t maxLights = 10;
 
@@ -122,8 +132,15 @@ private:
             std::memcpy(bufferPositions.data() + (i * alignedVec4Size), &lights[i].second.position, sizeof(glm::vec3));
             // Padding is automatically taken care of by leaving the last 4 bytes unused
         }
-
         ssboPositions.Update(bufferSizePositions, bufferPositions.data());
+
+        size_t bufferSizeTypes = numLights * sizeof(int32_t);
+        std::vector<int32_t> bufferTypes(numLights);
+
+        for (size_t i = 0; i < lights.size(); ++i) {
+            bufferTypes[i] = static_cast<int32_t>(lights[i].second.type);
+        }
+        ssboTypes.Update(bufferSizeTypes, bufferTypes.data());
 
         // Now update the colors SSBO
         size_t bufferSizeColors = numLights * sizeof(glm::vec4);

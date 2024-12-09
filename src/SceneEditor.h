@@ -8,6 +8,7 @@
 #include "imgui.h"
 #include "imguiThemes.h"
 #include "Window.h"
+#include <cstdint>
 #include <json.hpp>
 #include <fstream>
 #include "Managers/LightManager.h"
@@ -313,13 +314,38 @@ struct SceneEditor
             ImGui::EndMenuBar();
         }
 
-        if (ImGui::Button("Add Light")) {
+        
+        if (ImGui::Button("Add Light")) ImGui::OpenPopup("light_add_popup");
+        if (ImGui::BeginPopup("light_add_popup", ImGuiWindowFlags_MenuBar)) {
+
+            ImGui::Text("Model Type:");
+            ImGui::SameLine();
+            ImGui::PushItemWidth(150.0f);
+            const char* lightTypeOptions[] = { "POINT", "DIRECTIONAL", "SPOT" };
+            ImGui::Combo("##LightType", &selectedLightTypeIndex, lightTypeOptions, IM_ARRAYSIZE(lightTypeOptions));
+            ImGui::PopItemWidth();
+
             glm::vec4 colorWithAlpha(glm::vec3(0.994f,0.994f,0.994f), 1.0f);
-            lightManager.AddLight(colorWithAlpha, glm::vec3(0.0f));
+            if(ImGui::Button("Add")){
+              const char* lightType = lightTypeOptions[selectedLightTypeIndex];
+
+              if (std::strcmp(lightType, "POINT") == 0) {
+                  lightManager.AddLight(LightType::POINT, colorWithAlpha, glm::vec3(0.0f));
+              }
+
+              if (std::strcmp(lightType, "DIRECTIONAL") == 0) {
+                  lightManager.AddLight(LightType::DIRECTIONAL, colorWithAlpha, glm::vec3(0.0f));
+              }
+
+              if (std::strcmp(lightType, "SPOT") == 0) {
+                  lightManager.AddLight(LightType::SPOT, colorWithAlpha, glm::vec3(0.0f));
+              }
+            }
+          ImGui::EndPopup();
         }
 
-        if (ImGui::Button("Add Model")) ImGui::OpenPopup("my_file_popup");
-        if (ImGui::BeginPopup("my_file_popup", ImGuiWindowFlags_MenuBar))
+        if (ImGui::Button("Add Model")) ImGui::OpenPopup("model_add_popup");
+        if (ImGui::BeginPopup("model_add_popup", ImGuiWindowFlags_MenuBar))
         {
             // Model Path
             ImGui::Text("Model Path:");
@@ -402,6 +428,7 @@ struct SceneEditor
       for (const auto& light : lightManager.lights) {
           const auto& lightData = light.second; 
           nlohmann::json lightJson;
+          lightJson["Type"] = light.second.type;
           lightJson["Color"] = {
               {"r", lightData.color.r},
               {"g", lightData.color.g},
@@ -504,6 +531,7 @@ struct SceneEditor
             // Load lights data
             if (sceneData.contains("Lights")) {
                 for (const auto& lightJson : sceneData["Lights"]) {
+                    int32_t modelType = lightJson["Type"];
                     glm::vec4 color(
                         lightJson["Color"]["r"],
                         lightJson["Color"]["g"],
@@ -525,7 +553,18 @@ struct SceneEditor
                         lightJson["Scale"]["y"],
                         lightJson["Scale"]["z"]
                     );
-                    lightManager.AddLight(color, position, rotation, scale); 
+
+                    if (modelType == 0) {
+                        lightManager.AddLight(LightType::POINT, color, position, rotation, scale); 
+                    }
+
+                    if (modelType == 1) {
+                        lightManager.AddLight(LightType::DIRECTIONAL, color, position, rotation, scale); 
+                    }
+
+                    if (modelType == 2) {
+                        lightManager.AddLight(LightType::SPOT, color, position, rotation, scale); 
+                    }
                 }
                 puts("Lights data loaded successfully");
             }
@@ -586,6 +625,7 @@ private:
 
   char modelPathBuffer[256] = "";  // Input buffer for model path
   int selectedModelTypeIndex = 0;  // 0 for static, 1 for animated
+  int selectedLightTypeIndex = 0;  // 0 for static, 1 for animated
 
   std::vector<std::string> modelNames;
   int totalModels = 0;
@@ -622,7 +662,7 @@ private:
           currentManipulationMode = ImGuizmo::ROTATE;
       }
 
-      ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection), currentManipulationMode, ImGuizmo::WORLD, glm::value_ptr(modelMatrix));
+      ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection), currentManipulationMode, ImGuizmo::LOCAL, glm::value_ptr(modelMatrix));
 
       if (ImGuizmo::IsUsing()) {
           glm::vec3 position, rotation, scale;

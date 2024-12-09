@@ -53,6 +53,8 @@ struct AnimationSystem {
 
             animData.bones = m_Bones;
 
+            std::cout << "Animation at index: " << i << " " << animData.name << '\n';
+
             m_ProcessedAnimations.push_back(animData);
         }
 
@@ -84,7 +86,6 @@ struct AnimationSystem {
         m_RootNode = animData.hierarchy;
         m_Bones = animData.bones;
 
-        std::cout << "Current animation: " << animData.name << '\n';
 
         ResizeFinalBoneMatrices();
     }

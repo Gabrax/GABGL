@@ -111,6 +111,9 @@ layout(std430, binding = 4) buffer LightPositions {
 layout(std430, binding = 5) buffer LightColors {
     vec4 colors[10];  
 };
+layout(std430, binding = 6) buffer LightTypes {
+    int lightTypes[];
+};
 
 uniform vec3 viewPos;  // Camera position
 uniform Material material;
@@ -208,13 +211,18 @@ void main() {
         currentLight.constant = 1.0;
         currentLight.linear = 0.09;
         currentLight.quadratic = 0.032;
-        currentLight.direction = vec3(-5.0f,50.0f,0.0f);
-        currentLight.cutOff = 30;
-        currentLight.outerCutOff = 5;
+        currentLight.direction = vec3(-5.0f,0.0f,0.0f);
+        currentLight.cutOff = 0.002;
+        currentLight.outerCutOff = 0.9;
+
         
-        lighting += calculatePointLight(currentLight, fs_in.FragPos, normal, viewDir, color);
-        // lighting += calculateDirectionalLight(currentLight, normal, viewDir, color);
-        // lighting += calculateSpotlight(currentLight, fs_in.FragPos, normal, viewDir, color);
+        if (lightTypes[i] == 0) { 
+            lighting += calculatePointLight(currentLight, fs_in.FragPos, normal, viewDir, color);
+        } else if (lightTypes[i] == 1) { 
+            lighting += calculateDirectionalLight(currentLight, normal, viewDir, color);
+        } else if (lightTypes[i] == 2) { 
+            lighting += calculateSpotlight(currentLight, fs_in.FragPos, normal, viewDir, color);
+        }
     }
 
     vec3 result = lighting;

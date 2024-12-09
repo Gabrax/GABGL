@@ -4,7 +4,7 @@
 #include "FrameBuffers/Bloom.h"
 #include "Managers/LightManager.h"
 #include "Managers/ModelManager.h"
-#include "MapEditor.h"
+#include "SceneEditor.h"
 
 struct Scene {
 
