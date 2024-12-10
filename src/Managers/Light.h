@@ -24,7 +24,8 @@ struct Light{
         return lightColor;
     }
 
-    inline void Bake(){
+    void Bake()
+    {
         glGenVertexArrays(1, &_VAO);
         glGenBuffers(1, &_VBO);
 
@@ -41,7 +42,8 @@ struct Light{
         glEnableVertexAttribArray(1);
     }
 
-    inline void Render(const glm::vec3& position, const glm::vec3& rotation = glm::vec3(0.0f), const glm::vec3& scale = glm::vec3(1.0f)){ 
+    void Render(const glm::vec3& position, const glm::vec3& rotation = glm::vec3(0.0f), const glm::vec3& scale = glm::vec3(1.0f))
+    { 
         _shader.Use();
         glm::mat4 projection = glm::perspective(glm::radians(this->_camera.Zoom), Window::getAspectRatio(), 0.001f, 2000.0f);
         _shader.setMat4("projection", projection);
@@ -50,8 +52,8 @@ struct Light{
         _shader.setVec4("lightColor",lightColor);
 
         glBindVertexArray(_VAO);
-        glm::mat4 model = glm::mat4(1.0f); 
-        
+
+        glm::mat4 model = glm::mat4(1.0f);     
         model = glm::scale(model, scale);
         model = glm::rotate(model, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
         model = glm::rotate(model, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));

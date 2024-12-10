@@ -159,10 +159,10 @@ struct SceneEditor
                     if (lightPosition != glm::vec3(currentLight.second.position)) {
                         currentLight.second.position = lightPosition;
                     }
-                    if (modelRotation != currentLight.second.rotation) {
+                    if (lightRotation != currentLight.second.rotation) {
                         currentLight.second.rotation = lightRotation;
                     }
-                    if (modelScale != currentLight.second.scale) {
+                    if (lightScale != currentLight.second.scale) {
                         currentLight.second.scale = lightScale;
                     }
 
@@ -220,22 +220,22 @@ struct SceneEditor
                           UpdateGizmoTransform(model);
                       }
 
-                      modelPosition = model.second.position;
-                      modelRotation = model.second.rotation;
-                      modelScale = model.second.scale;
+                      entityPosition = model.second.position;
+                      entityRotation = model.second.rotation;
+                      entityScale = model.second.scale;
 
-                      DrawVec3Control("Position", modelPosition);
-                      DrawVec3Control("Rotation", modelRotation);
-                      DrawVec3Control("Scale", modelScale);
+                      DrawVec3Control("Position", entityPosition);
+                      DrawVec3Control("Rotation", entityRotation);
+                      DrawVec3Control("Scale", entityScale);
 
-                      if (modelPosition != model.second.position) {
-                          model.second.position = modelPosition;
+                      if (entityPosition != model.second.position) {
+                          model.second.position = entityPosition;
                       }
-                      if (modelRotation != model.second.rotation) {
-                          model.second.rotation = modelRotation;
+                      if (entityRotation != model.second.rotation) {
+                          model.second.rotation = entityRotation;
                       }
-                      if (modelScale != model.second.scale) {
-                          model.second.scale = modelScale;
+                      if (entityScale != model.second.scale) {
+                          model.second.scale = entityScale;
                       }
 
                       ImGui::Text("Type: STATIC");
@@ -274,22 +274,22 @@ struct SceneEditor
                           UpdateGizmoTransform(model);
                       }
 
-                      modelPosition = model.second.position;
-                      modelRotation = model.second.rotation;
-                      modelScale = model.second.scale;
+                      entityPosition = model.second.position;
+                      entityRotation = model.second.rotation;
+                      entityScale = model.second.scale;
 
-                      DrawVec3Control("Position", modelPosition);
-                      DrawVec3Control("Rotation", modelRotation);
-                      DrawVec3Control("Scale", modelScale);
+                      DrawVec3Control("Position", entityPosition);
+                      DrawVec3Control("Rotation", entityRotation);
+                      DrawVec3Control("Scale", entityScale);
 
-                      if (modelPosition != model.second.position) {
-                          model.second.position = modelPosition;
+                      if (entityPosition != model.second.position) {
+                          model.second.position = entityPosition;
                       }
-                      if (modelRotation != model.second.rotation) {
-                          model.second.rotation = modelRotation;
+                      if (entityRotation != model.second.rotation) {
+                          model.second.rotation = entityRotation;
                       }
-                      if (modelScale != model.second.scale) {
-                          model.second.scale = modelScale;
+                      if (entityScale != model.second.scale) {
+                          model.second.scale = entityScale;
                       }
 
                       ImGui::Text("Type: ANIMATED");
@@ -368,11 +368,11 @@ struct SceneEditor
                   const char* modelType = modelTypeOptions[selectedModelTypeIndex];
 
                   if (std::strcmp(modelType, "STATIC") == 0) {
-                      modelManager.AddModelStatic(modelPathString, modelPosition, modelRotation, modelScale);
+                      modelManager.AddModelStatic(modelPathString, entityPosition, entityRotation, entityScale);
                   }
 
                   if (std::strcmp(modelType, "ANIMATED") == 0) {
-                      modelManager.AddModelAnimated(modelPathString, modelPosition, modelRotation, modelScale);
+                      modelManager.AddModelAnimated(modelPathString, entityPosition, entityRotation, entityScale);
                   }
 
                   modelPathBuffer[0] = '\0';  
@@ -619,9 +619,9 @@ private:
 
 
   int selectedModelIndex = 0;
-  glm::vec3 modelPosition;
-  glm::vec3 modelRotation;
-  glm::vec3 modelScale;
+  glm::vec3 entityPosition;
+  glm::vec3 entityRotation;
+  glm::vec3 entityScale;
 
   char modelPathBuffer[256] = "";  // Input buffer for model path
   int selectedModelTypeIndex = 0;  // 0 for static, 1 for animated
@@ -636,7 +636,8 @@ private:
   bool isRendered = false;
 
   template<typename T>
-  void UpdateGizmoTransform(T& entity) {
+  void UpdateGizmoTransform(T& entity)
+  {
       glm::mat4 modelMatrix = glm::mat4(1.0f);
 
       // Generate transformation matrix

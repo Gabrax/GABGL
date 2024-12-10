@@ -12,10 +12,21 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Compiler settings for Clang, MSVC, and GCC
 if(MSVC)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Release>:Release>")  
+    # Set the MSVC runtime library to static multithreading for Release configuration
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Release>:Release>")
+
+    # Ensure only Release configuration is available
+    set(CMAKE_CONFIGURATION_TYPES "Release" CACHE STRING "Available build configurations" FORCE)
+
+    # Platform x64 for Visual Studio
+    set(CMAKE_GENERATOR_PLATFORM "x64" CACHE STRING "" FORCE)
+
+    # Optional: Specify DLLs if required
+    file(GLOB DEPENDENCY_DLLS "${CMAKE_BINARY_DIR}/vendor/*.dll")
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     add_compile_options(
-        -Wall -Wextra -Wpedantic
+        # -Wall -Wextra -Wpedantic
+        -Wno-unused-function
         -Wno-unused-parameter
         -ferror-limit=0
         -std=c++17
@@ -23,19 +34,20 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     add_compile_options(
         -Wall -Wextra -Wpedantic
+        -Wno-unused-function
         -Wno-unused-parameter
         -std=c++17
-        -fexceptions
+        -fexceptions 
     )
 endif()
 
-project(mygame)
+project(gl_engine)
 
 # Assimp 
 FetchContent_Declare(
     assimp
     GIT_REPOSITORY https://github.com/assimp/assimp.git
-    GIT_TAG v5.2.5
+    GIT_TAG v5.3.0
 )
 set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "Disable Assimp tests" FORCE)
 
@@ -77,6 +89,7 @@ add_subdirectory(vendor/imgui-docking)
 add_subdirectory(vendor/tinyobj)
 add_subdirectory(vendor/EnTT)
 add_subdirectory(vendor/nlohmann-json)
+add_subdirectory(vendor/physx)
 
 file(GLOB_RECURSE MY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
@@ -91,13 +104,6 @@ target_include_directories("${CMAKE_PROJECT_NAME}" PRIVATE ${imguizmo_SOURCE_DIR
 
 target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC GLFW_INCLUDE_NONE=1)
 
-if(PRODUCTION_BUILD)
-    target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC RESOURCES_PATH="./resources/")
-    target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC PRODUCTION_BUILD=1)
-else()
-    target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC RESOURCES_PATH="${CMAKE_CURRENT_SOURCE_DIR}/resources/")
-    target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC PRODUCTION_BUILD=0)
-endif()
 
 target_sources("${CMAKE_PROJECT_NAME}" PRIVATE ${MY_SOURCES} ${IMGUIMO_SRC})
 
@@ -115,4 +121,4 @@ if(RELEASE)
 endif()
 
 # Target link libraries
-target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp glText tinyOBJ meshoptimizer EnTT JSONparser TracyClient)
+target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp glText tinyOBJ meshoptimizer EnTT JSONparser TracyClient PhysX)

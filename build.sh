@@ -1,7 +1,7 @@
 #!/bin/bash
 
 OS=$(uname)
-EXE_NAME="mygame"
+EXE_NAME="gl_engine"
 EXE_EXTENSION=""
 EXE_PATH="$EXE_NAME$EXE_EXTENSION"
 
@@ -9,6 +9,16 @@ RED="\e[31m"
 GREEN="\e[32m"
 YELLOW="\e[33m"
 RESET="\e[0m"
+
+DLL_FILES=(
+    "build/_deps/assimp-build/bin/Release/assimp-vc143-mt.dll"
+    "vendor/physx/lib/release/PhysX_64.dll"
+    "vendor/physx/lib/release/PhysXCommon_64.dll"
+    "vendor/physx/lib/release/PhysXCooking_64.dll"
+    "vendor/physx/lib/release/PhysXFoundation_64.dll"
+    "vendor/physx/lib/release/PVDRuntime_64.dll"
+)
+
 
 # Set the compiler based on the argument
 COMPILER=$1
@@ -62,7 +72,7 @@ else
         cmake .. $CMAKE_ARGS || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
     elif [ "$COMPILER" == "msvc" ]; then
         echo -e "${YELLOW}[*] Using MSVC Compiler${RESET}"
-        cmake -G "Visual Studio 17 2022" .. $CMAKE_ARGS || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
+        cmake -G "Visual Studio 17 2022"  .. $CMAKE_ARGS || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
     elif [ "$COMPILER" == "clang" ]; then
         echo -e "${YELLOW}[*] Using Clang Compiler${RESET}"
         cmake -G "Ninja" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ $CMAKE_ARGS -Wno-dev .. || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
@@ -77,7 +87,7 @@ fi
 
 # Build the project
 echo -e "${YELLOW}[*] Building the project...${RESET}"
-cmake --build . || { echo -e "${RED}[*] Build failed${RESET}"; exit 1; }
+cmake --build . --config Release || { echo -e "${RED}[*] Build failed${RESET}"; exit 1; }
 echo -e "${GREEN}[*] Build completed successfully${RESET}"
 
 # Search for the executable in the build directory
@@ -93,6 +103,20 @@ if mygame_path=$(eval "$FIND_CMD"); then
     else
         echo -e "${GREEN}[*] $EXE_PATH is already in the root directory${RESET}"
     fi
+
+    cd "$ROOT_DIR"
+
+    # Copy the necessary DLLs to the root directory
+    echo -e "${YELLOW}[*] Copying necessary DLLs to the root directory...${RESET}"
+    for dll in "${DLL_FILES[@]}"; do
+        # Check if the DLL exists and copy it to the root directory
+        if [ -f "$dll" ]; then
+            cp "$dll" "$ROOT_DIR" || { echo -e "${RED}[*] Failed to copy $dll${RESET}"; exit 1; }
+            echo -e "${GREEN}[*] Copied $dll to the root directory${RESET}"
+        else
+            echo -e "${RED}[*] $dll not found${RESET}"
+        fi
+    done
 
     # Run the executable from the root directory
     echo -e "${YELLOW}[*] Running $EXE_PATH${RESET}"

@@ -128,9 +128,7 @@ private:
         std::vector<int8_t> bufferPositions(bufferSizePositions);
 
         for (size_t i = 0; i < lights.size(); ++i) {
-            // Copy the vec3 into the buffer, leaving 4 bytes padding at the end
             std::memcpy(bufferPositions.data() + (i * alignedVec4Size), &lights[i].second.position, sizeof(glm::vec3));
-            // Padding is automatically taken care of by leaving the last 4 bytes unused
         }
         ssboPositions.Update(bufferSizePositions, bufferPositions.data());
 
@@ -142,7 +140,6 @@ private:
         }
         ssboTypes.Update(bufferSizeTypes, bufferTypes.data());
 
-        // Now update the colors SSBO
         size_t bufferSizeColors = numLights * sizeof(glm::vec4);
         std::vector<int8_t> bufferColors(bufferSizeColors);
         for (size_t i = 0; i < lights.size(); ++i) {
