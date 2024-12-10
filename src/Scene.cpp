@@ -4,6 +4,54 @@
 #include "Input/Input.h"
 #include "Utilities.hpp"
 #include "glad/glad.h"
+#include "PhysX.h"
+
+GLfloat vertices[180] = {
+        // Back face
+        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f, // Bottom-left
+        0.5f, -0.5f, -0.5f,  1.0f, 0.0f, // bottom-right    
+        0.5f,  0.5f, -0.5f,  1.0f, 1.0f, // top-right              
+        0.5f,  0.5f, -0.5f,  1.0f, 1.0f, // top-right
+        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f, // top-left
+        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f, // bottom-left                
+        // Front face
+        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f, // bottom-left
+        0.5f,  0.5f,  0.5f,  1.0f, 1.0f, // top-right
+        0.5f, -0.5f,  0.5f,  1.0f, 0.0f, // bottom-right        
+        0.5f,  0.5f,  0.5f,  1.0f, 1.0f, // top-right
+        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f, // bottom-left
+        -0.5f,  0.5f,  0.5f,  0.0f, 1.0f, // top-left        
+        // Left face
+        -0.5f,  0.5f,  0.5f,  1.0f, 0.0f, // top-right
+        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f, // bottom-left
+        -0.5f,  0.5f, -0.5f,  1.0f, 1.0f, // top-left       
+        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f, // bottom-left
+        -0.5f,  0.5f,  0.5f,  1.0f, 0.0f, // top-right
+        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f, // bottom-right
+        // Right face
+        0.5f,  0.5f,  0.5f,  1.0f, 0.0f, // top-left
+        0.5f,  0.5f, -0.5f,  1.0f, 1.0f, // top-right      
+        0.5f, -0.5f, -0.5f,  0.0f, 1.0f, // bottom-right          
+        0.5f, -0.5f, -0.5f,  0.0f, 1.0f, // bottom-right
+        0.5f, -0.5f,  0.5f,  0.0f, 0.0f, // bottom-left
+        0.5f,  0.5f,  0.5f,  1.0f, 0.0f, // top-left
+        // Bottom face          
+        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f, // top-right
+        0.5f, -0.5f,  0.5f,  1.0f, 0.0f, // bottom-left
+        0.5f, -0.5f, -0.5f,  1.0f, 1.0f, // top-left        
+        0.5f, -0.5f,  0.5f,  1.0f, 0.0f, // bottom-left
+        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f, // top-right
+        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f, // bottom-right
+        // Top face
+        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f, // top-left
+        0.5f,  0.5f, -0.5f,  1.0f, 1.0f, // top-right
+        0.5f,  0.5f,  0.5f,  1.0f, 0.0f, // bottom-right                 
+        0.5f,  0.5f,  0.5f,  1.0f, 0.0f, // bottom-right
+        -0.5f,  0.5f,  0.5f,  0.0f, 0.0f, // bottom-left  
+        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f  // top-left  
+    };
+
+static unsigned int _VAO, _VBO;
 
 void Scene::Init()
 {
@@ -15,6 +63,7 @@ void Scene::Init()
   Input::Init();
   InitAudioDevice();
   gltInit();
+  PhysX::Init();
 
   Utilities::BakeShaders();
   Utilities::LoadSounds();
@@ -26,6 +75,22 @@ void Scene::Init()
   bloom.Init();
 
   std::cout << timer.Elapsed() << '\n';
+
+  
+        glGenVertexArrays(1, &_VAO);
+        glGenBuffers(1, &_VBO);
+
+        glBindVertexArray(_VAO);
+
+        glBindBuffer(GL_ARRAY_BUFFER, _VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+        // position attribute
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        // texture coord attribute
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+        glEnableVertexAttribArray(1);
 
   isComplete = true;
 }
@@ -42,6 +107,9 @@ void Scene::Render()
 
     lightManager.RenderLights();
     modelManager.RenderModels();
+
+    PhysX::RenderScene(Utilities::g_shaders.model,_VAO);
+    PhysX::Simulate(Window::getDeltaTime());
 
     glDisable(GL_CULL_FACE);
 

@@ -11,6 +11,8 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
 
+#include "PxPhysicsAPI.h"
+
 
 namespace Utilities {
 
@@ -191,4 +193,39 @@ namespace Utilities {
 
 		return true;
 	}
+
+  inline glm::mat4 PxMat44ToGlmMat4(physx::PxMat44 pxMatrix) {
+    glm::mat4 matrix;
+    for (int x = 0; x < 4; x++)
+        for (int y = 0; y < 4; y++)
+            matrix[x][y] = pxMatrix[x][y];
+    return matrix;
+  }
+
+  inline physx::PxMat44 GlmMat4ToPxMat44(glm::mat4 glmMatrix) {
+      physx::PxMat44 matrix;
+      for (int x = 0; x < 4; x++)
+          for (int y = 0; y < 4; y++)
+              matrix[x][y] = glmMatrix[x][y];
+      return matrix;
+  }
+  struct Transform {
+      glm::vec3 position = glm::vec3(0);
+      glm::vec3 rotation = glm::vec3(0);
+      glm::vec3 scale = glm::vec3(1);
+      glm::mat4 to_mat4() {
+          glm::mat4 m = glm::translate(glm::mat4(1), position);
+          m *= glm::mat4_cast(glm::quat(rotation));
+          m = glm::scale(m, scale);
+          return m;
+      };
+      glm::vec3 to_forward_vector() {
+          glm::quat q = glm::quat(rotation);
+          return glm::normalize(q * glm::vec3(0.0f, 0.0f, 1.0f));
+      }
+      glm::vec3 to_right_vector() {
+          glm::quat q = glm::quat(rotation);
+          return glm::normalize(q * glm::vec3(1.0f, 0.0f, 0.0f));
+      }
+  };
 }

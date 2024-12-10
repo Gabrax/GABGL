@@ -2,7 +2,6 @@
 #include "Window.h"
 #include "Scene.h"
 #include <cassert>
-#include "PhysX.h"
 
 /*#include <TracyClient.cpp> // PROFILER //*/
 /*#include <tracy/TracyOpenGL.hpp>*/
@@ -11,7 +10,6 @@
 void Engine::Run() {
 
     Window::Init();
-    PhysX::Init();
     Scene scene;
 
     while (Window::WindowIsOpen() && Window::WindowHasNotBeenForceClosed())
