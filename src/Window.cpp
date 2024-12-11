@@ -507,10 +507,22 @@ void Window::framebuffer_size_callback(GLFWwindow* window, int width, int height
     }
 }
 
-void Window::DisableMovement()
+void Window::toggleMovement()
 {
   disablemovement = !disablemovement;
 }
+
+void Window::enableMovement()
+{
+  disablemovement = false;
+}
+
+void Window::disableMovement()
+{
+  disablemovement = true;
+}
+
+
 
 
 

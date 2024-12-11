@@ -108,7 +108,7 @@ void Scene::Render()
     lightManager.RenderLights();
     modelManager.RenderModels();
 
-    PhysX::RenderScene(Utilities::g_shaders.model,_VAO);
+    PhysX::RenderActors(Utilities::g_shaders.model,_VAO);
     PhysX::Simulate(Window::getDeltaTime());
 
     glDisable(GL_CULL_FACE);

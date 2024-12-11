@@ -36,29 +36,31 @@ namespace Window {
 	void DeltaTime();
 
   // GETTERS // 
-  float getDeltaTime();
-  float getAspectRatio();
+  	float getDeltaTime();
+  	float getAspectRatio();
 	int GetScrollWheelYOffset();
 	GLFWwindow* GetWindowPtr();
 	int GetCursorScreenX();
 	int GetCursorScreenY();
 	int GetWindowWidth();
 	int GetWindowHeight();
-  int GetWindowedWidth();
-  int GetWindowedHeight();
-  int GetWindowPosX();
-  int GetWindowPosY();
-  int GetFullscreenWidth();
-  int GetFullscreenHeight();
+  	int GetWindowedWidth();
+  	int GetWindowedHeight();
+  	int GetWindowPosX();
+  	int GetWindowPosY();
+  	int GetFullscreenWidth();
+  	int GetFullscreenHeight();
 	int GetCursorX();
 	int GetCursorY();
 
-  void DisableMovement();
+  	void toggleMovement();
+	void enableMovement();
+	void disableMovement();
 
 	// camera
-  inline Camera _camera(glm::vec3(0.20f, 31.33f, 34.21f));
-  inline float _lastX = static_cast<float>(GetWindowWidth()) / 2.0f;
-  inline float _lastY = static_cast<float>(GetWindowHeight()) / 2.0f;
-  inline bool _firstMouse = true;
+  	inline Camera _camera;
+  	inline float _lastX = static_cast<float>(GetWindowWidth()) / 2.0f;
+  	inline float _lastY = static_cast<float>(GetWindowHeight()) / 2.0f;
+  	inline bool _firstMouse = true;
 
 }

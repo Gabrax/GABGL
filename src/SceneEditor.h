@@ -306,7 +306,7 @@ struct SceneEditor
           }
       }
     
-    if(ImGui::IsMouseClicked(GLFW_MOUSE_BUTTON_RIGHT)) ImGui::OpenPopup("AddEntityPopup");
+    if(Input::RightMousePressed()) ImGui::OpenPopup("AddEntityPopup");
     if (ImGui::BeginPopup("AddEntityPopup",ImGuiWindowFlags_MenuBar)) {
 
         if (ImGui::BeginMenuBar()){
@@ -399,15 +399,30 @@ struct SceneEditor
 
   void Render()
   {
-    if(isRendered){
-      editorlogic();
-      Window::ShowCursor();
-    } else Window::DisableCursor(); 
-
     if(Input::KeyPressed(KEY_GRAVE_ACCENT)){
       isRendered = !isRendered;
-      Window::DisableMovement();
+      Window::enableMovement();
+      if(!isRendered) Window::_camera.disableFreeCamera();
     }
+
+    if(isRendered){
+      editorlogic();
+      static bool bruh = false;
+      
+      if(Input::KeyPressed(KEY_E)){
+        bruh = !bruh;
+      } 
+      if(bruh) {
+        Window::ShowCursor();
+        Window::_camera.disableFreeCamera();
+        Window::disableMovement();
+      }
+      if(!bruh){
+        Window::DisableCursor();
+        Window::enableMovement();
+        Window::_camera.enableFreeCamera();
+      }
+    } else Window::DisableCursor(); 
   }
 
   void SaveScene()

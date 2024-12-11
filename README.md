@@ -1,4 +1,4 @@
-OpenGL sandbox with C++ for learning purposes 
+3D OpenGL engine with C++ for learning purposes 
 
 To build and run project, just use the build script in root directory for your OS. 
 For first time build, you can specify compiler (msvc, clang, gcc). Without specifying cmake will detect default compiler.
@@ -12,10 +12,10 @@ Then you can use script without argument, compiler is remembered in cache.
 ```bash
 sh build.sh
 ```
-## 💬 IMPORTANT!
-  Only build this project through the scripts, project is setup to move exe to root directory to link normally with assets
+> [!WARNING]
+> Only build this project through the scripts, project is setup to move exe to root directory to link normally with assets
 
-## 👨‍💻 Utilities
+## 👨‍💻 Tech stack
 - [GLFW](https://github.com/glfw/glfw)
 - [GLAD](https://github.com/Dav1dde/glad)
 - [GLM](https://github.com/g-truc/glm)
@@ -33,6 +33,7 @@ sh build.sh
 - [ENET](https://github.com/zpl-c/enet)
 - [JSON](https://github.com/nlohmann/json)
 - [EnTT](https://github.com/skypjack/entt)
+- [PhysX](https://github.com/NVIDIA-Omniverse/PhysX)
 - [Tracy](https://github.com/wolfpld/tracy?tab=readme-ov-file)
 
 
