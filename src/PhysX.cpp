@@ -1,6 +1,7 @@
 #include "PhysX.h"
 #include <iostream>
 #include <vector>
+#include "Input/Input.h"
 
 namespace PhysX {
 
@@ -27,6 +28,8 @@ namespace PhysX {
         public:
         virtual	bool	isTrigger(physx::PxShape*)	const	= 0;
     };
+
+    enum RaycastGroup { RAYCAST_DISABLED = 0, RAYCAST_ENABLED = 1 };
 }
 
 void PhysX::Init()
@@ -58,7 +61,7 @@ void PhysX::Init()
       pvdClient->setScenePvdFlag(PxPvdSceneFlag::eTRANSMIT_CONTACTS, true);
       pvdClient->setScenePvdFlag(PxPvdSceneFlag::eTRANSMIT_SCENEQUERIES, true);
     }
-    gMaterial = gPhysics->createMaterial(0.5f, 0.5f, 0.1f);
+    gMaterial = gPhysics->createMaterial(0.5f, 0.5f, 0.6f);
 
     PxRigidStatic* groundPlane = PxCreatePlane(*gPhysics, PxPlane(0,1,0,0), *gMaterial);
     gScene->addActor(*groundPlane);
@@ -68,7 +71,6 @@ void PhysX::Init()
         float gap = 0.1f; // Small gap between cubes
         // Position cubes along the X-axis
         PxTransform t = PxTransform(PxVec3(i * (4.0f * halfExtent + gap), 1.2f, 13.5f));
-        
         PxShape* shape = gPhysics->createShape(PxBoxGeometry(halfExtent, halfExtent, halfExtent), *gMaterial);
         PxRigidDynamic* body = gPhysics->createRigidDynamic(t);
         body->attachShape(*shape);
@@ -117,6 +119,45 @@ void PhysX::Simulate(float deltatime)
 {
     gScene->simulate(deltatime);
     gScene->fetchResults(true);
+}
+
+void PhysX::EnableRaycast(PxShape* shape) {
+    PxFilterData filterData = shape->getQueryFilterData();
+    filterData.word0 = RaycastGroup::RAYCAST_ENABLED;
+    shape->setQueryFilterData(filterData);
+}
+
+void PhysX::DisableRaycast(PxShape* shape) {
+    PxFilterData filterData = shape->getQueryFilterData();
+    filterData.word0 = RaycastGroup::RAYCAST_DISABLED;
+    shape->setQueryFilterData(filterData);
+}
+
+void PhysX::raycastAndApplyForce(PxScene* scene, const glm::vec3& origin, const glm::vec3& direction, float rayLength)
+{
+    PxVec3 pxOrigin(origin.x, origin.y, origin.z);
+    PxVec3 pxDirection(direction.x, direction.y, direction.z);
+    PxReal maxDistance = rayLength;
+
+    PxRaycastBuffer hitBuffer;
+
+    if (scene->raycast(pxOrigin, pxDirection.getNormalized(), maxDistance, hitBuffer)) {
+        if (hitBuffer.hasBlock) {
+            const PxRaycastHit& hit = hitBuffer.block;
+            PxRigidActor* actor = hit.actor;
+
+            if (actor && actor->is<PxRigidDynamic>()) {
+                //std::cout << "Hit a dynamic actor, applying force!" << std::endl;
+
+                if(Input::LeftMousePressed()){
+                  puts("ADDING FORCE");
+                  PxVec3 pxForce = PxVec3(direction.x, direction.y, direction.z) * 100;
+                  PxRigidDynamic* dynamicActor = static_cast<PxRigidDynamic*>(actor);
+                  dynamicActor->addForce(pxForce,PxForceMode::eACCELERATION,false);
+                }
+            } 
+        } 
+    } 
 }
 
 PxScene* PhysX::getScene()

@@ -109,7 +109,9 @@ void Scene::Render()
     modelManager.RenderModels();
 
     PhysX::RenderActors(Utilities::g_shaders.model,_VAO);
+    PhysX::raycastAndApplyForce(PhysX::getScene(), Window::_camera.Position, Window::_camera.Front, 250.0f);
     PhysX::Simulate(Window::getDeltaTime());
+    
 
     glDisable(GL_CULL_FACE);
 
