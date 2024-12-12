@@ -69,8 +69,7 @@ void PhysX::Init()
     for (int i = 0; i < 5; i++) {
         float halfExtent = 1.1f; // Half the side length of the cube
         float gap = 0.1f; // Small gap between cubes
-        // Position cubes along the X-axis
-        PxTransform t = PxTransform(PxVec3(i * (4.0f * halfExtent + gap), 1.2f, 13.5f));
+        PxTransform t = PxTransform(PxVec3(i * (4.0f * halfExtent + gap), 0.0f, 13.5f));
         PxShape* shape = gPhysics->createShape(PxBoxGeometry(halfExtent, halfExtent, halfExtent), *gMaterial);
         PxRigidDynamic* body = gPhysics->createRigidDynamic(t);
         body->attachShape(*shape);
@@ -121,6 +120,83 @@ void PhysX::Simulate(float deltatime)
     gScene->fetchResults(true);
 }
 
+inline void SetupCommonCookingParams(PxCookingParams& params, bool skipMeshCleanup, bool skipEdgeData) {
+    // we suppress the triangle mesh remap table computation to gain some speed, as we will not need it
+    // in this snippet
+    params.suppressTriangleMeshRemapTable = true;
+
+    // If DISABLE_CLEAN_MESH is set, the mesh is not cleaned during the cooking. The input mesh must be valid.
+    // The following conditions are true for a valid triangle mesh :
+    //  1. There are no duplicate vertices(within specified vertexWeldTolerance.See PxCookingParams::meshWeldTolerance)
+    //  2. There are no large triangles(within specified PxTolerancesScale.)
+    // It is recommended to run a separate validation check in debug/checked builds, see below.
+
+    if (!skipMeshCleanup)
+        params.meshPreprocessParams &= ~static_cast<PxMeshPreprocessingFlags>(PxMeshPreprocessingFlag::eDISABLE_CLEAN_MESH);
+    else
+        params.meshPreprocessParams |= PxMeshPreprocessingFlag::eDISABLE_CLEAN_MESH;
+
+    // If eDISABLE_ACTIVE_EDGES_PRECOMPUTE is set, the cooking does not compute the active (convex) edges, and instead
+    // marks all edges as active. This makes cooking faster but can slow down contact generation. This flag may change
+    // the collision behavior, as all edges of the triangle mesh will now be considered active.
+    if (!skipEdgeData)
+        params.meshPreprocessParams &= ~static_cast<PxMeshPreprocessingFlags>(PxMeshPreprocessingFlag::eDISABLE_ACTIVE_EDGES_PRECOMPUTE);
+    else
+        params.meshPreprocessParams |= PxMeshPreprocessingFlag::eDISABLE_ACTIVE_EDGES_PRECOMPUTE;
+}
+
+PxTriangleMesh* PhysX::CreateTriangleMesh(PxU32 numVertices, const PxVec3* vertices, PxU32 numTriangles, const PxU32* indices) {
+
+    PxTriangleMeshDesc meshDesc;
+    meshDesc.points.count = numVertices;
+    meshDesc.points.data = vertices;
+    meshDesc.points.stride = sizeof(PxVec3);
+    meshDesc.triangles.count = numTriangles;
+    meshDesc.triangles.data = indices;
+    meshDesc.triangles.stride = 3 * sizeof(PxU32);
+
+    PxTolerancesScale scale;
+    PxCookingParams params(scale);
+
+    // Create BVH33 midphase
+    params.midphaseDesc = PxMeshMidPhase::eBVH33;
+
+    // setup common cooking params
+    bool skipMeshCleanup = false;
+    bool skipEdgeData = false;
+    bool cookingPerformance = false;
+    bool meshSizePerfTradeoff = true;
+    SetupCommonCookingParams(params, skipMeshCleanup, skipEdgeData);
+
+    // The COOKING_PERFORMANCE flag for BVH33 midphase enables a fast cooking path at the expense of somewhat lower quality BVH construction.
+    if (cookingPerformance) {
+        params.midphaseDesc.mBVH33Desc.meshCookingHint = PxMeshCookingHint::eCOOKING_PERFORMANCE;
+    }
+    else {
+        params.midphaseDesc.mBVH33Desc.meshCookingHint = PxMeshCookingHint::eSIM_PERFORMANCE;
+    }
+
+    // If meshSizePerfTradeoff is set to true, smaller mesh cooked mesh is produced. The mesh size/performance trade-off
+    // is controlled by setting the meshSizePerformanceTradeOff from 0.0f (smaller mesh) to 1.0f (larger mesh).
+    if (meshSizePerfTradeoff) {
+        params.midphaseDesc.mBVH33Desc.meshSizePerformanceTradeOff = 0.0f;
+    }
+    else {
+        // using the default value
+        params.midphaseDesc.mBVH33Desc.meshSizePerformanceTradeOff = 0.55f;
+    }
+    if (skipMeshCleanup) {
+        PX_ASSERT(PxValidateTriangleMesh(params, meshDesc));
+    }
+
+    PxTriangleMesh* triMesh = NULL;
+    //PxU32 meshSize = 0;
+
+    triMesh = PxCreateTriangleMesh(params, meshDesc, gPhysics->getPhysicsInsertionCallback());
+    return triMesh;
+    //triMesh->release();
+}
+
 void PhysX::EnableRaycast(PxShape* shape) {
     PxFilterData filterData = shape->getQueryFilterData();
     filterData.word0 = RaycastGroup::RAYCAST_ENABLED;
@@ -151,9 +227,9 @@ void PhysX::raycastAndApplyForce(PxScene* scene, const glm::vec3& origin, const 
 
                 if(Input::LeftMousePressed()){
                   puts("ADDING FORCE");
-                  PxVec3 pxForce = PxVec3(direction.x, direction.y, direction.z) * 100;
+                  PxVec3 pxForce = PxVec3(direction.x, direction.y, direction.z) * 100000;
                   PxRigidDynamic* dynamicActor = static_cast<PxRigidDynamic*>(actor);
-                  dynamicActor->addForce(pxForce,PxForceMode::eACCELERATION,false);
+                  dynamicActor->addForce(pxForce,PxForceMode::eFORCE,false);
                 }
             } 
         } 
@@ -163,4 +239,14 @@ void PhysX::raycastAndApplyForce(PxScene* scene, const glm::vec3& origin, const 
 PxScene* PhysX::getScene()
 {
     return gScene;
+}
+
+PxPhysics* PhysX::getPhysics()
+{
+    return gPhysics;
+}
+
+PxMaterial* PhysX::getMaterial()
+{
+    return gMaterial;
 }

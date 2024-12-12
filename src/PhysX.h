@@ -14,6 +14,9 @@ namespace PhysX {
   void raycastAndApplyForce(PxScene* scene, const glm::vec3& origin, const glm::vec3& direction, float rayLength);
   void DisableRaycast(PxShape* shape);
   void EnableRaycast(PxShape* shape);
+  PxTriangleMesh* CreateTriangleMesh(PxU32 numVertices, const PxVec3* vertices, PxU32 numTriangles, const PxU32* indices);
 
   PxScene* getScene();
+  PxPhysics* getPhysics();
+  PxMaterial* getMaterial();
 }

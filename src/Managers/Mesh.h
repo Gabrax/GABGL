@@ -8,6 +8,7 @@
 #include <meshoptimizer.h>
 
 #include "../LoadShader.h"
+#include "../PhysX.h"
 
 #include <string>
 #include <vector>
@@ -33,26 +34,29 @@ struct Texture {
 struct Mesh {
 
     std::vector<Vertex> vertices;
-    std::vector<unsigned int> indices;
+    std::vector<GLuint> indices;
     std::vector<Texture> textures;
-    unsigned int VAO;
+    GLuint VAO;
 
-    Mesh(std::vector<Vertex> vertices, std::vector<unsigned int> indices, std::vector<Texture> textures)
+    PxTriangleMesh* physxMesh = nullptr;
+
+    Mesh(std::vector<Vertex> vertices, std::vector<GLuint> indices, std::vector<Texture> textures)
         : vertices(std::move(vertices)), indices(std::move(indices)), textures(std::move(textures))
     {
         optimizeMesh();
         setupMesh();
+        createPhysXMesh();
     }
 
     void Draw(Shader& shader) {
-        std::unordered_map<std::string, unsigned int> textureCounters = {
+        std::unordered_map<std::string, GLuint> textureCounters = {
             {"texture_diffuse", 1},
             {"texture_specular", 1},
             {"texture_normal", 1},
             {"texture_height", 1}
         };
 
-        for (unsigned int i = 0; i < textures.size(); i++) {
+        for (GLuint i = 0; i < textures.size(); i++) {
             glActiveTexture(GL_TEXTURE0 + i);
 
             std::string number = std::to_string(textureCounters[textures[i].type]++);
@@ -62,13 +66,47 @@ struct Mesh {
 
         // Draw the mesh
         glBindVertexArray(VAO);
-        glDrawElements(GL_TRIANGLES, static_cast<unsigned int>(indices.size()), GL_UNSIGNED_INT, 0);
+        glDrawElements(GL_TRIANGLES, static_cast<GLuint>(indices.size()), GL_UNSIGNED_INT, 0);
         glBindVertexArray(0);
         glActiveTexture(GL_TEXTURE0);
     }
 
 private:
-    unsigned int VBO, EBO;
+    GLuint VBO, EBO;
+
+    void createPhysXMesh() {
+        
+        std::vector<PxVec3> physxVertices(vertices.size());
+        for (size_t i = 0; i < vertices.size(); ++i) {
+            physxVertices[i] = PxVec3(vertices[i].Position.x, vertices[i].Position.y, vertices[i].Position.z);
+        }
+
+        physxMesh = PhysX::CreateTriangleMesh(static_cast<PxU32>(physxVertices.size()), physxVertices.data(), static_cast<PxU32>(indices.size() / 3), indices.data());
+
+        if (!physxMesh) {
+            throw std::runtime_error("Failed to create PhysX triangle mesh.");
+        }
+
+        PxScene* scene = PhysX::getScene();
+        PxPhysics* physics = PhysX::getPhysics();
+        PxMaterial* material = PhysX::getMaterial();
+
+        PxTriangleMeshGeometry geom;
+        PxTransform pose = PxTransform(PxVec3(0));
+        geom.triangleMesh = physxMesh;
+
+        PxRigidDynamic* meshActor = physics->createRigidDynamic(pose);
+        PxShape* meshShape;
+        if(meshActor){
+            meshActor->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, true);
+
+            PxTriangleMeshGeometry triGeom;
+            triGeom.triangleMesh = physxMesh;
+            meshShape = PxRigidActorExt::createExclusiveShape(*meshActor, triGeom, *material);
+            scene->addActor(*meshActor);
+        }
+
+    }
 
     void optimizeMesh()
     {
