@@ -38,7 +38,7 @@ struct TextManager {
     void AddText(const char* prefix, Args... args) {
         
         if (nextIndex >= texts.size()) {
-            texts.push_back(gltCreateText()); 
+            texts.emplace_back(gltCreateText()); 
         }
 
         std::ostringstream oss;

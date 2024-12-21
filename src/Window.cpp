@@ -9,8 +9,8 @@
 
 namespace Window {
 
-	// window attributes
-	inline GLFWwindow* _window;
+  // window attributes
+  inline GLFWwindow* _window;
   inline GLFWmonitor* _monitor;
   inline const GLFWvidmode* _mode;
   inline int _currentWidth = 0;
@@ -128,10 +128,10 @@ void Window::CreateWindow(WindowMode windowMode)
         _window = glfwCreateWindow(_windowedWidth, _windowedHeight, "OpenGL", NULL, NULL);
         glfwSetWindowPos(_window, 100, 100);
         if (_mode != NULL) {
-                int xpos = (_mode->width - _currentWidth) / 2;
-                int ypos = (_mode->height - _currentHeight) / 2;
-                glfwSetWindowPos(_window, xpos, ypos);
-            }
+          int xpos = (_mode->width - _currentWidth) / 2;
+          int ypos = (_mode->height - _currentHeight) / 2;
+          glfwSetWindowPos(_window, xpos, ypos);
+        }
     }
     else if (windowMode == FULLSCREEN)
     {
@@ -228,7 +228,7 @@ void Window::Init()
     }
 
     GLFWimage images[1];
-    images[0].pixels = stbi_load("res/Opengllogo.png", &images[0].width, &images[0].height, 0, 4); 
+    images[0].pixels = stbi_load("../res/Opengllogo.png", &images[0].width, &images[0].height, 0, 4); 
     if (images[0].pixels) {
         glfwSetWindowIcon(_window, 1, images);
         stbi_image_free(images[0].pixels); 

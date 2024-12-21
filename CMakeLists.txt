@@ -13,16 +13,20 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Compiler settings for Clang, MSVC, and GCC
 if(MSVC)
     # Set the MSVC runtime library to static multithreading for Release configuration
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Release>:Release>")
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:RelWithDebInfo>:RelWithDebInfo>")
+    add_compile_options(/MP)
 
-    # Ensure only Release configuration is available
-    set(CMAKE_CONFIGURATION_TYPES "Release" CACHE STRING "Available build configurations" FORCE)
+    file(COPY
+      "${CMAKE_BINARY_DIR}/_deps/assimp-build/bin/assimp-vc143-mt.dll"
+      "${CMAKE_SOURCE_DIR}/vendor/physx/lib/release/PhysX_64.dll"
+      "${CMAKE_SOURCE_DIR}/vendor/physx/lib/release/PhysXCommon_64.dll"
+      "${CMAKE_SOURCE_DIR}/vendor/physx/lib/release/PhysXCooking_64.dll"
+      "${CMAKE_SOURCE_DIR}/vendor/physx/lib/release/PhysXFoundation_64.dll"
+      "${CMAKE_SOURCE_DIR}/vendor/physx/lib/release/PVDRuntime_64.dll"
 
-    # Platform x64 for Visual Studio
-    set(CMAKE_GENERATOR_PLATFORM "x64" CACHE STRING "" FORCE)
+       DESTINATION "${CMAKE_BINARY_DIR}"
+    )
 
-    # Optional: Specify DLLs if required
-    file(GLOB DEPENDENCY_DLLS "${CMAKE_BINARY_DIR}/vendor/*.dll")
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     add_compile_options(
         # -Wall -Wextra -Wpedantic
@@ -58,6 +62,7 @@ FetchContent_Declare(
     GIT_TAG v0.18
 )
 
+# TracyProfiler
 FetchContent_Declare (
     tracy
     GIT_REPOSITORY https://github.com/wolfpld/tracy.git

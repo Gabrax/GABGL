@@ -8,7 +8,7 @@
 #include "../Window.h"
 #include "stb_image.h"
 #include "../Utilities.hpp"
-#include <vector>
+#include <array>
 #include <string>
 
 struct EnvironmentMap {
@@ -32,14 +32,14 @@ struct EnvironmentMap {
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 
-        std::vector<std::string> faces
+        std::array<std::string,6> faces
         {
-            "res/skybox/NightSky_Right.png",
-            "res/skybox/NightSky_Left.png",
-            "res/skybox/NightSky_Top.png",
-            "res/skybox/NightSky_Bottom.png",
-            "res/skybox/NightSky_Front.png",
-            "res/skybox/NightSky_Back.png"
+            "../res/skybox/NightSky_Right.png",
+            "../res/skybox/NightSky_Left.png",
+            "../res/skybox/NightSky_Top.png",
+            "../res/skybox/NightSky_Bottom.png",
+            "../res/skybox/NightSky_Front.png",
+            "../res/skybox/NightSky_Back.png"
         };
         stbi_set_flip_vertically_on_load(false);
         _texture = loadCubemap(faces);
@@ -67,8 +67,8 @@ struct EnvironmentMap {
 
 private:
 
-    unsigned int _VBO, _VAO;
-    unsigned int _texture;
+    GLuint _VBO, _VAO;
+    GLuint _texture;
     Camera& _camera = Window::_camera;
     Shader& _shader = Utilities::g_shaders.skybox;
     // loads a cubemap texture from 6 individual texture faces
@@ -80,7 +80,7 @@ private:
     // +Z (front) 
     // -Z (back)
     // -------------------------------------------------------
-    unsigned int loadCubemap(std::vector<std::string> faces) {
+    unsigned int loadCubemap(std::array<std::string,6> faces) {
         unsigned int textureID;
         glGenTextures(1, &textureID);
         glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);

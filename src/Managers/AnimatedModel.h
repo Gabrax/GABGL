@@ -48,14 +48,12 @@ struct AnimatedModel {
             _shader.setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
         }
 
-        glm::mat4 model = glm::mat4(1.0f); 
-        model = glm::scale(model, scale);
-        model = glm::rotate(model, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-        model = glm::rotate(model, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-        model = glm::rotate(model, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));   
-        model = glm::translate(model, position);
-   
-        _shader.setMat4("model", model);
+        Utilities::Transform transform;
+        transform.position = position;
+        transform.rotation = rotation;
+        transform.scale = scale;
+
+        _shader.setMat4("model", transform.to_mat4());
         loadmodel.Draw(_shader);
     }
 

@@ -12,6 +12,7 @@
 
 #include <string>
 #include <vector>
+#include <array>
 
 #define MAX_BONE_INFLUENCE 4
 
@@ -40,7 +41,7 @@ struct Mesh {
 
     PxTriangleMesh* physxMesh = nullptr;
 
-    Mesh(std::vector<Vertex> vertices, std::vector<GLuint> indices, std::vector<Texture> textures)
+    Mesh(const std::vector<Vertex>& vertices, const std::vector<GLuint>& indices, const std::vector<Texture>& textures)
         : vertices(std::move(vertices)), indices(std::move(indices)), textures(std::move(textures))
     {
         optimizeMesh();
@@ -48,7 +49,7 @@ struct Mesh {
         createPhysXMesh();
     }
 
-    void Draw(Shader& shader) {
+    void Draw(const Shader& shader) {
         std::unordered_map<std::string, GLuint> textureCounters = {
             {"texture_diffuse", 1},
             {"texture_specular", 1},
@@ -168,7 +169,7 @@ private:
             size_t offset;
         };
 
-        std::vector<Attribute> attributes = {
+        std::array<Attribute, 7> attributes = { {
             {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Position)},
             {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Normal)},
             {2, GL_FLOAT, GL_FALSE, offsetof(Vertex, TexCoords)},
@@ -176,7 +177,7 @@ private:
             {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Bitangent)},
             {4, GL_INT, GL_FALSE, offsetof(Vertex, m_BoneIDs)},
             {4, GL_FLOAT, GL_FALSE, offsetof(Vertex, m_Weights)}
-        };
+        } };
 
         for (size_t i = 0; i < attributes.size(); ++i) {
             glEnableVertexAttribArray(static_cast<GLuint>(i));

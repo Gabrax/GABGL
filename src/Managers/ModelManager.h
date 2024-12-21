@@ -12,7 +12,7 @@ struct ModelManager {
         ModelData modelData = { modelpath, position, scale, rotation };
 
         std::unique_ptr<StaticModel> newModel = std::make_unique<StaticModel>(modelpath);
-        vec_staticModels.push_back({ std::move(newModel), modelData });
+        vec_staticModels.emplace_back(std::move(newModel), modelData);
     }
 
     void AddModelAnimated(const std::string& modelpath, const glm::vec3& position, const glm::vec3& rotation = glm::vec3(0.0f), const glm::vec3& scale = glm::vec3(1.0f))
@@ -20,7 +20,7 @@ struct ModelManager {
         ModelData modelData = { modelpath, position, scale, rotation };
 
         std::unique_ptr<AnimatedModel> newModel = std::make_unique<AnimatedModel>(modelpath);
-        vec_animatedModels.push_back({ std::move(newModel), modelData });
+        vec_animatedModels.emplace_back(std::move(newModel), modelData);
     }
 
     void EditStaticModel(int index, const std::optional<glm::vec3>& newPosition = std::nullopt, const std::optional<glm::vec3>& newRotation = std::nullopt, const std::optional<glm::vec3>& newScale = std::nullopt)

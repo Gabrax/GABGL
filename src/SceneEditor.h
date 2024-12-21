@@ -185,14 +185,14 @@ struct SceneEditor
         // Collect model names from static and animated models
         if (!modelManager.vec_staticModels.empty()) {
             for (const auto& model : modelManager.vec_staticModels) {
-                modelNames.push_back(model.second.modelpath);
+                modelNames.emplace_back(model.second.modelpath);
             }
             totalModels += modelManager.vec_staticModels.size();
         }
 
         if (!modelManager.vec_animatedModels.empty()) {
             for (const auto& model : modelManager.vec_animatedModels) {
-                modelNames.push_back(model.second.modelpath);
+                modelNames.emplace_back(model.second.modelpath);
             }
             totalModels += modelManager.vec_animatedModels.size();
         }
@@ -465,7 +465,7 @@ struct SceneEditor
               {"y", lightData.scale.y},
               {"z", lightData.scale.z}
           };
-          sceneData["Lights"].push_back(lightJson);
+          sceneData["Lights"].emplace_back(lightJson);
       }
       // Save Models Data
       sceneData["Models"] = nlohmann::json::array();
@@ -488,7 +488,7 @@ struct SceneEditor
               {"y", model.second.scale.y},
               {"z", model.second.scale.z}
           };
-          sceneData["Models"].push_back(modelJson);
+          sceneData["Models"].emplace_back(modelJson);
       }
       for (const auto& model : modelManager.vec_animatedModels) {
           nlohmann::json modelJson;
@@ -509,7 +509,7 @@ struct SceneEditor
               {"y", model.second.scale.y},
               {"z", model.second.scale.z}
           };
-          sceneData["Models"].push_back(modelJson);
+          sceneData["Models"].emplace_back(modelJson);
       }
 
       std::ofstream outFile("./scenes/scene.json");
@@ -524,7 +524,7 @@ struct SceneEditor
 
   void LoadScene()
   {
-    std::ifstream inFile("./scenes/scene.json");
+    std::ifstream inFile("../scenes/scene.json");
     if (inFile.is_open()) {
         try {
             nlohmann::json sceneData;

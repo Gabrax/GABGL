@@ -34,7 +34,7 @@ public:
             aiVector3D aiPosition = channel->mPositionKeys[i].mValue;
             float timeStamp = static_cast<float>(channel->mPositionKeys[i].mTime);
             KeyPosition data = { AssimpGLMHelpers::GetGLMVec(aiPosition), timeStamp };
-            m_Positions.push_back(data);
+            m_Positions.emplace_back(data);
         }
 
         // Extract rotation keyframes
@@ -43,7 +43,7 @@ public:
             aiQuaternion aiOrientation = channel->mRotationKeys[i].mValue;
             float timeStamp = static_cast<float>(channel->mRotationKeys[i].mTime);
             KeyRotation data = { AssimpGLMHelpers::GetGLMQuat(aiOrientation), timeStamp };
-            m_Rotations.push_back(data);
+            m_Rotations.emplace_back(data);
         }
 
         // Extract scaling keyframes
@@ -52,7 +52,7 @@ public:
             aiVector3D aiScale = channel->mScalingKeys[i].mValue;
             float timeStamp = static_cast<float>(channel->mScalingKeys[i].mTime);
             KeyScale data = { AssimpGLMHelpers::GetGLMVec(aiScale), timeStamp };
-            m_Scales.push_back(data);
+            m_Scales.emplace_back(data);
         }
     }
 

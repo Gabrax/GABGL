@@ -39,7 +39,7 @@ struct AnimatedMesh {
         loadModel(path);
     }
 
-    void Draw(Shader& shader) {
+    void Draw(const Shader& shader) {
         for (auto& mesh : meshes)
             mesh.Draw(shader);
     }
@@ -66,7 +66,7 @@ private:
     void processNode(aiNode* node) {
         for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
             aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-            meshes.push_back(processMesh(mesh));
+            meshes.emplace_back(processMesh(mesh));
         }
 
         for (unsigned int i = 0; i < node->mNumChildren; ++i) {
@@ -91,7 +91,7 @@ private:
                 glm::vec2(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y) :
                 glm::vec2(0.0f, 0.0f);
 
-            vertices.push_back(std::move(vertex));
+            vertices.emplace_back(std::move(vertex));
         }
 
         // Process indices
@@ -136,7 +136,7 @@ private:
                     embeddedTexture.id = textureID;
                     embeddedTexture.type = typeName;
                     embeddedTexture.path = str.C_Str();
-                    textures.push_back(embeddedTexture);
+                    textures.emplace_back(embeddedTexture);
                 }
             } else {
                 // Handle external textures
@@ -144,7 +144,7 @@ private:
                 externalTexture.id = TextureFromFile(str.C_Str(), directory);
                 externalTexture.type = typeName;
                 externalTexture.path = str.C_Str();
-                textures.push_back(externalTexture);
+                textures.emplace_back(externalTexture);
             }
         }
 

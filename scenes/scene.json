@@ -110,7 +110,7 @@
     ],
     "Models": [
         {
-            "Path": "res/map/objHouse.obj",
+            "Path": "../res/map/objHouse.obj",
             "Position": {
                 "x": 0.0,
                 "y": 0.0,
@@ -129,7 +129,7 @@
             "Type": "STATIC"
         },
         {
-            "Path": "res/backpack/backpack.obj",
+            "Path": "../res/backpack/backpack.obj",
             "Position": {
                 "x": 0.0,
                 "y": 2.0,
@@ -148,7 +148,7 @@
             "Type": "STATIC"
         },
         {
-            "Path": "res/lowpoly/MaleSurvivor1.glb",
+            "Path": "../res/lowpoly/MaleSurvivor1.glb",
             "Position": {
                 "x": 0.0,
                 "y": 0.0,

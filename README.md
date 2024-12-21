@@ -1,19 +1,18 @@
-3D OpenGL engine with C++ for learning purposes 
+<p align="center"> 3D OpenGL engine with C++ for learning purposes </p>
 
-To build and run project, just use the build script in root directory for your OS. 
-For first time build, you can specify compiler (msvc, clang, gcc). Without specifying cmake will detect default compiler.
-Then you can use script without argument, compiler is remembered in cache.
+## Getting started
 
-- Only Windows
-```batch
-./build.bat
-```
-- Windows(with bash interpreter) & Linux & MacOS
+- Windows <br><br>
+  Visual Studio 2022 is recommended. CMakeSettings.json makes configuring cmake with VS easier without generating .sln file (Ninja generator is recommended).
+  In repository directory click right mouse button and open with VS, or open terminal and type ```start devenv . ```
+
+- Linux & MacOS
 ```bash
 sh build.sh
 ```
 > [!WARNING]
-> Only build this project through the scripts, project is setup to move exe to root directory to link normally with assets
+> To run this project, CMake needs to be installed <br>
+> Only build this project through the scripts, project is setup to move exe to root directory to with assets
 
 ## 👨‍💻 Tech stack
 - [GLFW](https://github.com/glfw/glfw)
@@ -30,10 +29,7 @@ sh build.sh
 - [tinyOBJ](https://github.com/tinyobjloader/tinyobjloader)
 - [tinyCSG](https://github.com/laleksic/tiny_csg)
 - [tinyEXR](https://github.com/syoyo/tinyexr)
-- [ENET](https://github.com/zpl-c/enet)
 - [JSON](https://github.com/nlohmann/json)
 - [EnTT](https://github.com/skypjack/entt)
 - [PhysX](https://github.com/NVIDIA-Omniverse/PhysX)
 - [Tracy](https://github.com/wolfpld/tracy?tab=readme-ov-file)
-
-

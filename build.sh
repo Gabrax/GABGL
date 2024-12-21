@@ -72,7 +72,7 @@ else
         cmake .. $CMAKE_ARGS || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
     elif [ "$COMPILER" == "msvc" ]; then
         echo -e "${YELLOW}[*] Using MSVC Compiler${RESET}"
-        cmake -G "Visual Studio 17 2022"  .. $CMAKE_ARGS || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
+        cmake -G "Visual Studio 17 2022" -G "Ninja" .. $CMAKE_ARGS || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
     elif [ "$COMPILER" == "clang" ]; then
         echo -e "${YELLOW}[*] Using Clang Compiler${RESET}"
         cmake -G "Ninja" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ $CMAKE_ARGS -Wno-dev .. || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }

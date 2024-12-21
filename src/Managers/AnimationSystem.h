@@ -55,7 +55,7 @@ struct AnimationSystem {
 
             std::cout << "Animation at index: " << i << " " << animData.name << '\n';
 
-            m_ProcessedAnimations.push_back(animData);
+            m_ProcessedAnimations.emplace_back(animData);
         }
 
         assert(!m_ProcessedAnimations.empty());
@@ -106,7 +106,7 @@ struct AnimationSystem {
         }
     }
 
-    void CalculateBoneTransform(const AssimpNodeData* node, glm::mat4 parentTransform)
+    void CalculateBoneTransform(const AssimpNodeData* node, const glm::mat4& parentTransform)
     {
         std::string nodeName = node->name;
         glm::mat4 nodeTransform = node->transformation;
@@ -208,7 +208,7 @@ private:
 
             AssimpNodeData newData;
             ReadHierarchyData(newData, src->mChildren[i]);
-            dest.children.push_back(newData);
+            dest.children.emplace_back(newData);
         }
     }
 
@@ -233,7 +233,7 @@ private:
                 boneCount++;
             }
 
-            m_Bones.push_back(Bone(channel->mNodeName.data, boneInfoMap[boneName].id, channel));
+            m_Bones.emplace_back(Bone(channel->mNodeName.data, boneInfoMap[boneName].id, channel));
         }
 
         m_BoneInfoMap = boneInfoMap;
