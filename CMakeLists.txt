@@ -63,11 +63,11 @@ FetchContent_Declare(
 )
 
 # TracyProfiler
-FetchContent_Declare (
-    tracy
-    GIT_REPOSITORY https://github.com/wolfpld/tracy.git
-    GIT_TAG v0.11.1
-)
+#FetchContent_Declare (
+#    tracy
+#    GIT_REPOSITORY https://github.com/wolfpld/tracy.git
+#    GIT_TAG v0.11.1
+#)
 
 # ImGuizmo
 FetchContent_Declare(
@@ -76,7 +76,14 @@ FetchContent_Declare(
     GIT_TAG master
 )
 
-FetchContent_MakeAvailable(assimp meshoptimizer tracy imguizmo)
+# spdlog
+FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG v1.11.0 
+)
+
+FetchContent_MakeAvailable(assimp meshoptimizer imguizmo spdlog)
 
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -126,4 +133,4 @@ if(RELEASE)
 endif()
 
 # Target link libraries
-target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp glText tinyOBJ meshoptimizer EnTT JSONparser TracyClient PhysX)
+target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp glText tinyOBJ meshoptimizer EnTT JSONparser PhysX spdlog::spdlog)
