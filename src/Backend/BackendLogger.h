@@ -47,3 +47,5 @@ inline OStream& operator<<(OStream& os, glm::qua<T, Q> quaternion)
 #define GABGL_WARN(...)     ::Log::GetCoreLogger()->warn(__VA_ARGS__)
 #define GABGL_ERROR(...)    ::Log::GetCoreLogger()->error(__VA_ARGS__)
 #define GABGL_CRITICAL(...) ::Log::GetCoreLogger()->critical(__VA_ARGS__)
+
+#define GABGL_ASSERT(x,...) { if(!(x)) { GABGL_ERROR("Assertion Failed: {0}",__VA_ARGS__); __debugbreak(); } }

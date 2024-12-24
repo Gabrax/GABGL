@@ -246,6 +246,7 @@ void Window::Init()
         std::cout << "Failed to initialize GLAD" << std::endl;
         return;
     }
+
     GLint major, minor;
     glGetIntegerv(GL_MAJOR_VERSION, &major);
     glGetIntegerv(GL_MINOR_VERSION, &minor);
