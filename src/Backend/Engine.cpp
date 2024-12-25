@@ -16,10 +16,9 @@ Engine::~Engine()
 
 }
 
-
 void Engine::Run()
 {
-    m_StartWindow = Window::Create<StartWindow>({ "GABGL", 800, 600 });
+    m_StartWindow = Window::Create<StartWindow>({ "GABGL", 600, 300 });
     m_StartWindow->SetEventCallback(BIND_EVENT(OnEvent));
 
     while (m_isRunning)
