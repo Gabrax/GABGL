@@ -47,6 +47,7 @@ void StartWindow::Init(const WindowDefaultData& props)
 	}
 
 	m_Window = glfwCreateWindow((int)props.Width, (int)props.Height, props.title.c_str(), nullptr, nullptr);
+	glfwSetWindowAttrib(m_Window, GLFW_RESIZABLE, false);
 
 	SetWindowIcon("../res/Opengllogo.png", m_Window);
 	
@@ -85,24 +86,24 @@ void StartWindow::Init(const WindowDefaultData& props)
 
 			switch (action)
 			{
-			case GLFW_PRESS:
-			{
-				KeyPressedEvent event(key, 0);
-				data.EventCallback(event);
-				break;
-			}
-			case GLFW_RELEASE:
-			{
-				KeyReleasedEvent event(key);
-				data.EventCallback(event);
-				break;
-			}
-			case GLFW_REPEAT:
-			{
-				KeyPressedEvent event(key, true);
-				data.EventCallback(event);
-				break;
-			}
+				case GLFW_PRESS:
+				{
+					KeyPressedEvent event(key, 0);
+					data.EventCallback(event);
+					break;
+				}
+				case GLFW_RELEASE:
+				{
+					KeyReleasedEvent event(key);
+					data.EventCallback(event);
+					break;
+				}
+				case GLFW_REPEAT:
+				{
+					KeyPressedEvent event(key, true);
+					data.EventCallback(event);
+					break;
+				}
 			}
 		});
 
@@ -120,18 +121,18 @@ void StartWindow::Init(const WindowDefaultData& props)
 
 			switch (action)
 			{
-			case GLFW_PRESS:
-			{
-				MouseButtonPressedEvent event(button);
-				data.EventCallback(event);
-				break;
-			}
-			case GLFW_RELEASE:
-			{
-				MouseButtonReleasedEvent event(button);
-				data.EventCallback(event);
-				break;
-			}
+				case GLFW_PRESS:
+				{
+					MouseButtonPressedEvent event(button);
+					data.EventCallback(event);
+					break;
+				}
+				case GLFW_RELEASE:
+				{
+					MouseButtonReleasedEvent event(button);
+					data.EventCallback(event);
+					break;
+				}
 			}
 		});
 
@@ -162,7 +163,6 @@ void StartWindow::Terminate()
 
 void StartWindow::Update()
 {
-	glClear(GL_COLOR_BUFFER_BIT);
 	glfwPollEvents();
 	m_Context->SwapBuffers();
 }

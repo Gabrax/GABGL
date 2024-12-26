@@ -49,3 +49,5 @@ inline OStream& operator<<(OStream& os, glm::qua<T, Q> quaternion)
 #define GABGL_CRITICAL(...) ::Log::GetCoreLogger()->critical(__VA_ARGS__)
 
 #define GABGL_ASSERT(x,...) { if(!(x)) { GABGL_ERROR("Assertion Failed: {0}",__VA_ARGS__); __debugbreak(); } }
+
+#define BIND_EVENT(fn) [this](auto&&... args) -> decltype(auto) { return this->fn(std::forward<decltype(args)>(args)...); }

@@ -2,19 +2,12 @@
 
 #include <imgui.h>
 #include <imgui_internal.h>
-
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
 
 #include "../Backend/Engine.h"
 
-// TEMPORARY
-#include <GLFW/glfw3.h>
-#include <glad/glad.h>
-
 #include "ImGuizmo.h"
-
-ImGuiLayer::ImGuiLayer() : Layer("ImGuiLayer"){}
 
 void ImGuiLayer::OnAttach()
 {
@@ -22,12 +15,8 @@ void ImGuiLayer::OnAttach()
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;       // Enable Keyboard Controls
-	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;           // Enable Docking
 	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;         // Enable Multi-Viewport / Platform Windows
-	//io.ConfigFlags |= ImGuiConfigFlags_ViewportsNoTaskBarIcons;
-	//io.ConfigFlags |= ImGuiConfigFlags_ViewportsNoMerge;
-
 	//float fontSize = 18.0f;// *2.0f;
 	//io.Fonts->AddFontFromFileTTF("assets/fonts/opensans/OpenSans-Bold.ttf", fontSize);
 	//io.FontDefault = io.Fonts->AddFontFromFileTTF("assets/fonts/opensans/OpenSans-Regular.ttf", fontSize);
@@ -43,8 +32,7 @@ void ImGuiLayer::OnAttach()
 
 	SetDarkThemeColors();
 
-	Engine& instance = Engine::GetInstance();
-	GLFWwindow* window = static_cast<GLFWwindow*>(instance.GetWindow().GetNativeWindow());
+	GLFWwindow* window = reinterpret_cast<GLFWwindow*>(m_Window->GetNativeWindow());
 
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 410");
@@ -78,10 +66,8 @@ void ImGuiLayer::Begin()
 void ImGuiLayer::End()
 {
 	ImGuiIO& io = ImGui::GetIO();
-	Engine& instance = Engine::GetInstance();
-	io.DisplaySize = ImVec2((float)instance.GetWindow().GetWidth(), (float)instance.GetWindow().GetHeight());
+	io.DisplaySize = ImVec2((float)m_Window->GetWidth(), (float)m_Window->GetHeight());
 
-	// Rendering
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 

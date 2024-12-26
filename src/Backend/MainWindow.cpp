@@ -154,7 +154,6 @@ void MainWindow::Terminate()
 
 void MainWindow::Update()
 {
-	glClear(GL_COLOR_BUFFER_BIT);
 	glfwPollEvents();
 	m_Context->SwapBuffers();
 }

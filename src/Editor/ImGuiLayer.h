@@ -3,12 +3,16 @@
 #include "../Backend/Layer.h"
 #include "../Input/EngineEvent.h"
 #include "../Input/KeyEvent.h"
+#include "../Backend/Windowbase.h"
+// TEMPORARY
+#include <GLFW/glfw3.h>
+#include <glad/glad.h>
 
 
-class ImGuiLayer : public Layer
+struct ImGuiLayer : Layer
 {
-public:
-	ImGuiLayer();
+	template<typename T>
+	ImGuiLayer(T* t) : Layer("ImGuiLayer"), m_Window(t) {};
 	~ImGuiLayer() = default;
 
 	virtual void OnAttach() override;
@@ -24,6 +28,7 @@ public:
 
 	uint32_t GetActiveWidgetID() const;
 private:
+	Window* m_Window;
 	bool m_BlockEvents = true;
 };
 

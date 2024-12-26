@@ -2,8 +2,7 @@
 #include "BackendLogger.h"
 #include "MainWindow.h"
 #include "StartWindow.h"
-
-#define BIND_EVENT(x) std::bind(&Engine::x,this,std::placeholders::_1)
+#include "../Editor/SCEditor.h"
 
 Engine* Engine::s_Instance = nullptr;
 
@@ -25,8 +24,10 @@ void Engine::Run()
     m_StartWindow = Window::Create<StartWindow>({ "GABGL", 600, 300 });
     m_StartWindow->SetEventCallback(BIND_EVENT(OnEvent));
 
-    m_ImGuiLayer = new ImGuiLayer();
+    m_ImGuiLayer = new ImGuiLayer(m_StartWindow.get());
     PushOverlay(m_ImGuiLayer);
+	EditorLayer* editlayer = new EditorLayer;
+	PushLayer(editlayer);
 
     while (m_isRunning)
     {
@@ -34,13 +35,12 @@ void Engine::Run()
 		DeltaTime deltatime = time - m_LastFrameTime;
         m_LastFrameTime = time;
 
+		glClear(GL_COLOR_BUFFER_BIT);
+
         if (!StartWindow::isClosed())
         {
 			if (!m_Minimized)
-			{
-				for (Layer* layer : m_LayerStack)
-					layer->OnUpdate(deltatime);
-				
+			{	
 				m_ImGuiLayer->Begin();
 				{
 					for (Layer* layer : m_LayerStack)
@@ -49,7 +49,6 @@ void Engine::Run()
 				m_ImGuiLayer->End();
 			}
             m_StartWindow->Update();
-
         }
         else
         {
@@ -57,6 +56,8 @@ void Engine::Run()
             {
                 m_MainWindow = Window::Create<MainWindow>({ "Main Window", 1000, 600 });
                 m_MainWindow->SetEventCallback(BIND_EVENT(OnEvent));
+				m_ImGuiLayer = new ImGuiLayer(m_MainWindow.get());
+				PushOverlay(m_ImGuiLayer);
             }
 
 			if (!m_Minimized)
@@ -76,6 +77,8 @@ void Engine::Run()
 
             if (StartWindow::isClosed())
             {
+				m_LayerStack.PopOverlay(m_ImGuiLayer);
+				m_LayerStack.PopLayer(editlayer);
                 m_StartWindow.reset();
             }
         }

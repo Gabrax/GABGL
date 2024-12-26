@@ -13,7 +13,8 @@ struct Engine
 	void Run();
 	void OnEvent(Event& e);
 	inline static Engine& GetInstance() { return *s_Instance; }
-	Window& GetWindow() { return *m_StartWindow; }
+	Window& GetStartWindow() { return *m_StartWindow; }
+	Window& GetMainWindow() { return *m_MainWindow; }
 private:
 	bool OnWindowClose(WindowCloseEvent& e);
 	bool OnWindowResize(WindowResizeEvent& e);
