@@ -4,7 +4,6 @@
 #include "BackendLogger.h"
 #include "../Input/EngineEvent.h"
 #include "../Input/KeyEvent.h"
-#include <stb_image.h>
 
 #include <iostream>
 
@@ -37,6 +36,7 @@ void MainWindow::Init(const WindowDefaultData& props)
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
 	GABGL_ASSERT(GLFWstatus, "Failed to init GLFW");
 	glfwSetErrorCallback(GLFWErrorCallback);
   }
@@ -44,18 +44,13 @@ void MainWindow::Init(const WindowDefaultData& props)
   const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
   m_Window = glfwCreateWindow((int)props.Width, (int)props.Height, props.title.c_str(), nullptr, nullptr);
   glfwMakeContextCurrent(m_Window);
-  GLFWimage images[1];
-  images[0].pixels = stbi_load("../res/Opengllogo.png", &images[0].width, &images[0].height, 0, 4);
-  if (images[0].pixels) {
-	  glfwSetWindowIcon(m_Window, 1, images);
-	  stbi_image_free(images[0].pixels);
-  }
+
+  SetWindowIcon("../res/Opengllogo.png", m_Window);
+
+  m_Context = GraphicsContext::Create(m_Window);
+  m_Context->Init();
+
   glfwMaximizeWindow(m_Window);
-  if (!StartWindow::isGLADInit())
-  {
-	int GLADstatus = gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
-	GABGL_ASSERT(GLADstatus, "Failed to init GLAD");
-  }
   glfwSetWindowUserPointer(m_Window, &m_Data);
   SetVSync(true);
 
@@ -160,8 +155,8 @@ void MainWindow::Terminate()
 void MainWindow::Update()
 {
 	glClear(GL_COLOR_BUFFER_BIT);
-	glfwSwapBuffers(m_Window);
 	glfwPollEvents();
+	m_Context->SwapBuffers();
 }
 
 void MainWindow::SetVSync(bool enabled)

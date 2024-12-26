@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Timestep.h"
+#include "DeltaTime.h"
 #include "../Input/Event.h"
 #include <string>
 
@@ -11,7 +11,7 @@ struct Layer
 
 	virtual void OnAttach() {}
 	virtual void OnDetach() {}
-	virtual void OnUpdate(Timestep ts) {}
+	virtual void OnUpdate(DeltaTime dt) {}
 	virtual void OnImGuiRender() {}
 	virtual void OnEvent(Event& event) {}
 

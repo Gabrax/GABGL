@@ -1,6 +1,7 @@
 #pragma once 
 
 #include "Windowbase.h"
+#include "../Renderer/GraphicsContext.h"
 
 struct MainWindow : Window
 {
@@ -9,6 +10,7 @@ struct MainWindow : Window
 	void Update() override;
 	inline uint32_t GetWidth() const override { return m_Data.Width; }
 	inline uint32_t GetHeight() const override { return m_Data.Height; }
+	inline void* GetNativeWindow() const override { return m_Window; }
 	inline void SetEventCallback(const EventCallbackFn& callback) override { m_Data.EventCallback = callback; }
 	void SetVSync(bool enabled) override;
 	bool IsVSync() const override;
@@ -18,16 +20,15 @@ private:
 	virtual void Terminate() override;
 private:
 
-  GLFWwindow* m_Window;
+	GLFWwindow* m_Window;
+	Scope<GraphicsContext> m_Context;
 
-  struct WindowSpecificData
-  {
-    std::string title;
-    uint32_t Width, Height;
-    bool VSync;
+	struct WindowSpecificData
+	{
+		std::string title;
+		uint32_t Width, Height;
+		bool VSync;
 
-    EventCallbackFn EventCallback;
-  };
-
-  WindowSpecificData m_Data;
+		EventCallbackFn EventCallback;
+	} m_Data;
 };
