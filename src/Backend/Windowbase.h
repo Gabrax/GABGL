@@ -32,6 +32,7 @@ struct Window
 	virtual void SetEventCallback(const EventCallbackFn& callback) = 0;
 	virtual bool IsVSync() const = 0;
 	virtual void SetVSync(bool enabled) = 0;
+	virtual bool isClosed() = 0;
 
 	inline void SetWindowIcon(const char* iconpath, GLFWwindow* window)
 	{

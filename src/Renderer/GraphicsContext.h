@@ -2,13 +2,18 @@
 
 #include "../Backend/BackendScopeRef.h"
 
-class GraphicsContext
+struct GLFWwindow;
+
+struct GraphicsContext
 {
-public:
-	virtual ~GraphicsContext() = default;
+    GraphicsContext(GLFWwindow* windowHandle);
 
-	virtual void Init() = 0;
-	virtual void SwapBuffers() = 0;
+    virtual ~GraphicsContext() = default;
 
-	static Scope<GraphicsContext> Create(void* window);
+    void Init();
+    void SwapBuffers();
+    static Scope<GraphicsContext> Create(void* window);
+
+private:
+    GLFWwindow* m_WindowHandle;
 };

@@ -8,10 +8,10 @@
 #include <filesystem>
 #include <glm/glm.hpp>
 
-struct StartEditor : Layer
+struct MainEditor : Layer
 {
-	StartEditor();
-	virtual ~StartEditor() = default;
+	MainEditor();
+	virtual ~MainEditor() = default;
 
 	virtual void OnAttach() override;
 	virtual void OnDetach() override;
@@ -24,10 +24,12 @@ private:
 	bool OpenProject();
 	void OpenProject(const std::filesystem::path& path);
 	void SaveProject();
-
-	//void SerializeScene(Ref<Scene> scene, const std::filesystem::path& path);
 private:
-	
+
+	void CenteredText(const char* text);
+
+private:
+
 	bool m_ViewportFocused = false, m_ViewportHovered = false;
 	glm::vec2 m_ViewportSize = { 0.0f, 0.0f };
 	glm::vec2 m_ViewportBounds[2];

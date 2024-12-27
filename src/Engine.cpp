@@ -1,8 +1,7 @@
 #include "Engine.h"
-#include "BackendLogger.h"
-#include "MainWindow.h"
-#include "StartWindow.h"
-#include "../Editor/SCEditor.h"
+#include "Backend/BackendLogger.h"
+#include "Backend/MainWindow.h"
+#include "Backend/StartWindow.h"
 
 Engine* Engine::s_Instance = nullptr;
 
@@ -16,7 +15,7 @@ Engine::Engine()
 
 Engine::~Engine()
 {
-
+	
 }
 
 void Engine::Run()
@@ -26,61 +25,49 @@ void Engine::Run()
 
     m_ImGuiLayer = new ImGuiLayer(m_StartWindow.get());
     PushOverlay(m_ImGuiLayer);
-	EditorLayer* editlayer = new EditorLayer;
-	PushLayer(editlayer);
+	m_StartEditorlayer = new StartEditor;
+	PushLayer(m_StartEditorlayer);
 
     while (m_isRunning)
     {
-        float time = (float)glfwGetTime();
-		DeltaTime deltatime = time - m_LastFrameTime;
-        m_LastFrameTime = time;
+		DeltaTime dt;
 
-		glClear(GL_COLOR_BUFFER_BIT);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        if (!StartWindow::isClosed())
+        if (!m_StartWindow->isClosed())
         {
 			if (!m_Minimized)
 			{	
-				m_ImGuiLayer->Begin();
-				{
-					for (Layer* layer : m_LayerStack)
-						layer->OnImGuiRender();
-				}
-				m_ImGuiLayer->End();
+				RenderEditorLayers();
 			}
+
             m_StartWindow->Update();
         }
         else
         {
-            if (!m_MainWindow) // Only create MainWindow once
+			if (m_StartWindow->isClosed() && !closed)
+			{
+				CleanupStartWindow();
+			}
+
+            if (!m_MainWindow) 
             {
                 m_MainWindow = Window::Create<MainWindow>({ "Main Window", 1000, 600 });
                 m_MainWindow->SetEventCallback(BIND_EVENT(OnEvent));
 				m_ImGuiLayer = new ImGuiLayer(m_MainWindow.get());
 				PushOverlay(m_ImGuiLayer);
+				m_MainEditorlayer = new MainEditor;
+				PushLayer(m_MainEditorlayer);
             }
 
 			if (!m_Minimized)
 			{
-				for (Layer* layer : m_LayerStack)
-					layer->OnUpdate(deltatime);
-
-				m_ImGuiLayer->Begin();
-				{
-					for (Layer* layer : m_LayerStack)
-						layer->OnImGuiRender();
-				}
-				m_ImGuiLayer->End();
+				RenderLayers(dt);
+				RenderEditorLayers();
 			}
 
             m_MainWindow->Update();
 
-            if (StartWindow::isClosed())
-            {
-				m_LayerStack.PopOverlay(m_ImGuiLayer);
-				m_LayerStack.PopLayer(editlayer);
-                m_StartWindow.reset();
-            }
         }
     }
 }
@@ -130,4 +117,32 @@ bool Engine::OnWindowResize(WindowResizeEvent& e)
 	//Renderer::OnWindowResize(e.GetWidth(), e.GetHeight());
 
 	return false;
+}
+
+void Engine::RenderLayers(DeltaTime& dt)
+{
+	for (Layer* layer : m_LayerStack)
+		layer->OnUpdate(dt);
+}
+
+void Engine::RenderEditorLayers()
+{
+	m_ImGuiLayer->Begin();
+	{
+		for (Layer* layer : m_LayerStack)
+			layer->OnImGuiRender();
+	}
+	m_ImGuiLayer->End();
+}
+
+void Engine::CleanupStartWindow()
+{
+	closed = true;
+	m_LayerStack.PopOverlay(m_ImGuiLayer);
+	delete m_ImGuiLayer;
+	m_ImGuiLayer = nullptr;
+
+	m_LayerStack.PopLayer(m_StartEditorlayer);
+	delete m_StartEditorlayer;
+	m_StartEditorlayer = nullptr;
 }

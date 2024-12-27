@@ -28,6 +28,7 @@ struct ImGuiLayer : Layer
 
 	uint32_t GetActiveWidgetID() const;
 private:
+	GLFWwindow* window;
 	Window* m_Window;
 	bool m_BlockEvents = true;
 };

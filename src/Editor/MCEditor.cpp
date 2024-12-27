@@ -1,4 +1,4 @@
-#include "SCEditor.h"
+#include "MCEditor.h"
 #include "../Backend/BackendLogger.h"
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -8,18 +8,25 @@
 #include <glad/glad.h>
 #include "../Engine.h"
 
-StartEditor::StartEditor() : Layer("StartEditor"){}
+MainEditor::MainEditor() : Layer("MainEditor") {}
 
-void StartEditor::OnAttach(){}
-
-void StartEditor::OnDetach(){}
-
-void StartEditor::OnImGuiRender()
+void MainEditor::OnAttach()
 {
+
+}
+
+void MainEditor::OnDetach()
+{
+
+}
+
+void MainEditor::OnImGuiRender()
+{
+	// Note: Switch this to true to enable dockspace
 	static bool dockspaceOpen = true;
 	static bool opt_fullscreen_persistant = true;
 	bool opt_fullscreen = opt_fullscreen_persistant;
-	static ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_NoTabBar;
+	static ImGuiDockNodeFlags dockspace_flags = ImGuiWindowFlags_NoCollapse | ImGuiDockNodeFlags_NoTabBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
 
 	// We are using the ImGuiWindowFlags_NoDocking flag to make the parent window not dockable into,
 	// because it would be confusing to have two docking targets within each others.
@@ -66,38 +73,81 @@ void StartEditor::OnImGuiRender()
 
 	style.WindowMinSize.x = minWinSizeX;
 
-		if (ImGui::BeginMenuBar())
+	if (ImGui::BeginMenuBar())
+	{
+		if (ImGui::BeginMenu("File"))
 		{
-			if (ImGui::BeginMenu("File"))
-			{
-				if (ImGui::MenuItem("Open Project...", "Ctrl+O")) puts("open");
-				if (ImGui::MenuItem("Create Project...", "Ctrl+N")) puts("create");
-				if (ImGui::MenuItem("Delete Project...", "Ctrl+D")) puts("delete");
+			if (ImGui::MenuItem("Open Project...", "Ctrl+O")) puts("open");
+			if (ImGui::MenuItem("Create Project...", "Ctrl+N")) puts("create");
+			if (ImGui::MenuItem("Delete Project...", "Ctrl+D")) puts("delete");
 
-				ImGui::EndMenu();
-			}
-
-			ImGui::EndMenuBar();
+			ImGui::EndMenu();
 		}
 
-		ImGui::Begin("Projects", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		ImGui::EndMenuBar();
+	}
+	ImGui::Begin("Scene Hierarchy", nullptr,  ImGuiWindowFlags_NoCollapse);
 
-			if (ImGui::Button("SELECT")) puts("select");
-			if (ImGui::Button("bruh")) {
-				instance.GetStartWindow().Terminate();
-				puts("select");
-			}
+		CenteredText("Scene Hierarchy");
+
+	ImGui::End();
+
+	ImGui::Begin("Components", nullptr, ImGuiWindowFlags_NoCollapse);
+		
+		CenteredText("Components");
+
+	ImGui::End();
+
+	ImGui::ShowDebugLogWindow();
+
+	ImGui::Begin("Content Browser", nullptr, ImGuiWindowFlags_NoCollapse);
+
+		CenteredText("Content Browser");
+
+	ImGui::End();
+
+	ImGui::Begin("Debug Instrumentation", nullptr, ImGuiWindowFlags_NoCollapse);
+
+		CenteredText("Debug Instrumentation");
+
+	ImGui::End();
+
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
+		ImGui::Begin("Viewport", nullptr, ImGuiWindowFlags_NoMove);
+			auto viewportMinRegion = ImGui::GetWindowContentRegionMin();
+			auto viewportMaxRegion = ImGui::GetWindowContentRegionMax();
+			auto viewportOffset = ImGui::GetWindowPos();
+			m_ViewportBounds[0] = { viewportMinRegion.x + viewportOffset.x, viewportMinRegion.y + viewportOffset.y };
+			m_ViewportBounds[1] = { viewportMaxRegion.x + viewportOffset.x, viewportMaxRegion.y + viewportOffset.y };
+
+			m_ViewportFocused = ImGui::IsWindowFocused();
+			m_ViewportHovered = ImGui::IsWindowHovered();
+
+			Engine::GetInstance().GetImGuiLayer()->BlockEvents(!m_ViewportHovered);
+
+			ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
+			m_ViewportSize = { viewportPanelSize.x, viewportPanelSize.y };
 
 		ImGui::End();
+	ImGui::PopStyleVar();
 
 	ImGui::End();
 }
 
-void StartEditor::OnEvent(Event& e)
+void MainEditor::OnEvent(Event& e)
 {
 	EventDispatcher dispatcher(e);
-	//dispatcher.Dispatch<KeyPressedEvent>(BIND_EVENT(StartEditor::OnKeyPressed));
-	//dispatcher.Dispatch<MouseButtonPressedEvent>(BIND_EVENT(StartEditor::OnMouseButtonPressed));
+	//dispatcher.Dispatch<KeyPressedEvent>(BIND_EVENT(MainEditor::OnKeyPressed));
+	//dispatcher.Dispatch<MouseButtonPressedEvent>(BIND_EVENT(MainEditor::OnMouseButtonPressed));
+}
+
+void MainEditor::CenteredText(const char* text) {
+	ImVec2 windowSize = ImGui::GetWindowSize();
+	ImVec2 textSize = ImGui::CalcTextSize(text);
+
+	float centeredX = (windowSize.x - textSize.x) / 2.0f;
+	ImGui::SetCursorPosX(centeredX);
+	ImGui::Text("%s", text);
 }
 
 

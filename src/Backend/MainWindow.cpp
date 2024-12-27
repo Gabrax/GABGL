@@ -17,10 +17,7 @@ MainWindow::MainWindow(const WindowDefaultData& props)
     Init(props);
 }
 
-MainWindow::~MainWindow()
-{
-    Terminate();
-}
+MainWindow::~MainWindow(){}
 
 void MainWindow::Init(const WindowDefaultData& props)
 {
@@ -32,18 +29,18 @@ void MainWindow::Init(const WindowDefaultData& props)
 
   if(!StartWindow::isGLFWInit())
   {
-	int GLFWstatus = glfwInit();
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
-	GABGL_ASSERT(GLFWstatus, "Failed to init GLFW");
-	glfwSetErrorCallback(GLFWErrorCallback);
+	  int GLFWstatus = glfwInit();
+	  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+	  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+	  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	  glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
+	  GABGL_ASSERT(GLFWstatus, "Failed to init GLFW");
+	  glfwSetErrorCallback(GLFWErrorCallback);
   }
   
   const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
   m_Window = glfwCreateWindow((int)props.Width, (int)props.Height, props.title.c_str(), nullptr, nullptr);
-  glfwMakeContextCurrent(m_Window);
+  //glfwSetWindowAttrib(m_Window, GLFW_RESIZABLE, false);
 
   SetWindowIcon("../res/Opengllogo.png", m_Window);
 

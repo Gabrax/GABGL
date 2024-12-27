@@ -15,7 +15,7 @@ struct StartWindow : Window
 	void SetVSync(bool enabled) override;
 	bool IsVSync() const override;
 	inline static bool isGLFWInit() { return m_GLFWInitialized; }
-	inline static bool isClosed()   { return m_WindowClosed; }
+	inline bool isClosed() override { return m_WindowClosed; }
 
 private:
 	virtual void Init(const WindowDefaultData& data);
@@ -25,7 +25,7 @@ private:
 	GLFWwindow* m_Window;
 	Scope<GraphicsContext> m_Context;
 	static bool m_GLFWInitialized;
-	static bool m_WindowClosed;
+	bool m_WindowClosed = false;
 
 	struct WindowSpecificData
 	{

@@ -3,9 +3,8 @@
 #include "Event.h"
 #include "KeyCodes.h"
 
-class KeyEvent : public Event
+struct KeyEvent : Event
 {
-public:
 	KeyCode GetKeyCode() const { return m_KeyCode; }
 
 	EVENT_CLASS_CATEGORY(EventCategoryKeyboard | EventCategoryInput)
@@ -16,9 +15,8 @@ protected:
 	KeyCode m_KeyCode;
 };
 
-class KeyPressedEvent : public KeyEvent
+struct KeyPressedEvent : KeyEvent
 {
-public:
 	KeyPressedEvent(const KeyCode keycode, bool isRepeat = false)
 		: KeyEvent(keycode), m_IsRepeat(isRepeat) {}
 
@@ -36,9 +34,8 @@ private:
 	bool m_IsRepeat;
 };
 
-class KeyReleasedEvent : public KeyEvent
+struct KeyReleasedEvent : KeyEvent
 {
-public:
 	KeyReleasedEvent(const KeyCode keycode)
 		: KeyEvent(keycode) {}
 
@@ -52,9 +49,8 @@ public:
 	EVENT_CLASS_TYPE(KeyReleased)
 };
 
-class KeyTypedEvent : public KeyEvent
+struct KeyTypedEvent : KeyEvent
 {
-public:
 	KeyTypedEvent(const KeyCode keycode)
 		: KeyEvent(keycode) {}
 

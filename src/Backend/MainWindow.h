@@ -14,6 +14,7 @@ struct MainWindow : Window
 	inline void SetEventCallback(const EventCallbackFn& callback) override { m_Data.EventCallback = callback; }
 	void SetVSync(bool enabled) override;
 	bool IsVSync() const override;
+	inline bool isClosed() override { return m_WindowClosed; }
 
 private:
 	virtual void Init(const WindowDefaultData& data);
@@ -21,6 +22,7 @@ private:
 private:
 
 	GLFWwindow* m_Window;
+	bool m_WindowClosed = false;
 	Scope<GraphicsContext> m_Context;
 
 	struct WindowSpecificData

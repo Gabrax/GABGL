@@ -9,22 +9,15 @@
 #include "imguiThemes.h"
 
 bool StartWindow::m_GLFWInitialized = false;
-bool StartWindow::m_WindowClosed = false;
 
 static void GLFWErrorCallback(int error, const char* description)
 {
 	GABGL_ERROR("GLFW Error ({0}): {1}", error, description);
 }
 
-StartWindow::StartWindow(const WindowDefaultData& props)
-{
-	Init(props);
-}
+StartWindow::StartWindow(const WindowDefaultData& props) { Init(props); }
 
-StartWindow::~StartWindow()
-{
-	Terminate();
-}
+StartWindow::~StartWindow() { /*Terminate();*/ }
 
 void StartWindow::Init(const WindowDefaultData& props)
 {
