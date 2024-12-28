@@ -52,7 +52,7 @@ void Engine::Run()
 
             if (!m_MainWindow) 
             {
-                m_MainWindow = Window::Create<MainWindow>({ "Main Window", 1000, 600 });
+                m_MainWindow = Window::Create<MainWindow>({ "GABGL - " + GetCurrentProject(), 1000, 600});
                 m_MainWindow->SetEventCallback(BIND_EVENT(OnEvent));
 				m_ImGuiLayer = new ImGuiLayer(m_MainWindow.get());
 				PushOverlay(m_ImGuiLayer);

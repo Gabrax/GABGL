@@ -19,10 +19,7 @@ struct MainEditor : Layer
 	virtual void OnImGuiRender() override;
 	void OnEvent(Event& e) override;
 private:
-
-	void NewProject();
-	bool OpenProject();
-	void OpenProject(const std::filesystem::path& path);
+	void ReloadProject();
 	void SaveProject();
 private:
 

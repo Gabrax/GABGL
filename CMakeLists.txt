@@ -2,8 +2,6 @@ cmake_minimum_required(VERSION 3.5)
 
 include(FetchContent)
 
-set(CMAKE_CXX_STANDARD 17)
-
 # Set this to true to ship the game!
 option(PRODUCTION_BUILD "Make this a production build" OFF)
 
@@ -107,7 +105,7 @@ file(GLOB_RECURSE MY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/
 
 add_executable("${CMAKE_PROJECT_NAME}")
 
-set_property(TARGET "${CMAKE_PROJECT_NAME}" PROPERTY CXX_STANDARD 17)
+set_property(TARGET "${CMAKE_PROJECT_NAME}" PROPERTY CXX_STANDARD 20)
 
 file(GLOB IMGUIMO_SRC "${imguizmo_SOURCE_DIR}/ImGuizmo.cpp")
 file(GLOB IMGUIMO_HEADERS "${imguizmo_SOURCE_DIR}/ImGuizmo.h")
@@ -115,7 +113,6 @@ file(GLOB IMGUIMO_HEADERS "${imguizmo_SOURCE_DIR}/ImGuizmo.h")
 target_include_directories("${CMAKE_PROJECT_NAME}" PRIVATE ${imguizmo_SOURCE_DIR})
 
 target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC GLFW_INCLUDE_NONE=1)
-
 
 target_sources("${CMAKE_PROJECT_NAME}" PRIVATE ${MY_SOURCES} ${IMGUIMO_SRC})
 
@@ -131,6 +128,16 @@ option(RELEASE "Enable Windows subsystem for the application" OFF)
 if(RELEASE)
     set_target_properties("${CMAKE_PROJECT_NAME}" PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
 endif()
+
+set(IMGUI_INI_FILE "${CMAKE_BINARY_DIR}/imgui.ini")
+set(RES_FOLDER "${CMAKE_BINARY_DIR}/../res")
+file(MAKE_DIRECTORY ${RES_FOLDER})
+
+add_custom_command(
+    TARGET "${CMAKE_PROJECT_NAME}" POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${IMGUI_INI_FILE} ${RES_FOLDER}
+    COMMENT "Copying imgui.ini to ../res folder..."
+)
 
 # Target link libraries
 target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp glText tinyOBJ meshoptimizer EnTT JSONparser PhysX spdlog::spdlog)

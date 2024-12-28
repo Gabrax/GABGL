@@ -8,9 +8,14 @@
 #include <glad/glad.h>
 #include "../Engine.h"
 
+static char projectName[256] = ""; 
+
 StartEditor::StartEditor() : Layer("StartEditor"){}
 
-void StartEditor::OnAttach(){}
+void StartEditor::OnAttach()
+{
+	m_ProjIcon = Texture::Create("../res/engineTextures/projfileicon.png");
+}
 
 void StartEditor::OnDetach(){}
 
@@ -62,42 +67,219 @@ void StartEditor::OnImGuiRender()
 		ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
 	}
 
-	Engine& instance = Engine::GetInstance();
-
 	style.WindowMinSize.x = minWinSizeX;
 
 		if (ImGui::BeginMenuBar())
 		{
-			if (ImGui::BeginMenu("File"))
-			{
-				if (ImGui::MenuItem("Open Project...", "Ctrl+O")) puts("open");
-				if (ImGui::MenuItem("Create Project...", "Ctrl+N")) puts("create");
-				if (ImGui::MenuItem("Delete Project...", "Ctrl+D")) puts("delete");
+			if (ImGui::MenuItem("Create Project...", "Ctrl+N")) ImGui::OpenPopup("Create New Project");
+			
+			if (ImGui::BeginPopup("Create New Project", ImGuiWindowFlags_AlwaysAutoResize)) {
+				ImGui::Text("Enter the project name:");
+				ImGui::InputText("##ProjectName", projectName, sizeof(projectName));
 
-				ImGui::EndMenu();
+				ImGui::Separator();
+
+				if (ImGui::Button("Create", ImVec2(120, 0))) {
+
+					NewProject(projectName);
+
+					projectName[0] = '\0';
+
+					ImGui::CloseCurrentPopup();
+				}
+				ImGui::SameLine();
+				if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+					projectName[0] = '\0';
+
+					ImGui::CloseCurrentPopup();
+				}
+
+				ImGui::EndPopup();
 			}
 
 			ImGui::EndMenuBar();
 		}
 
-		ImGui::Begin("Projects", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
-
-			if (ImGui::Button("SELECT")) puts("select");
-			if (ImGui::Button("bruh")) {
-				instance.GetStartWindow().Terminate();
-				puts("select");
-			}
-
-		ImGui::End();
+		ProjectsBrowserPanel();
 
 	ImGui::End();
 }
 
-void StartEditor::OnEvent(Event& e)
+void StartEditor::NewProject(const std::string& projectName)
 {
-	EventDispatcher dispatcher(e);
-	//dispatcher.Dispatch<KeyPressedEvent>(BIND_EVENT(StartEditor::OnKeyPressed));
-	//dispatcher.Dispatch<MouseButtonPressedEvent>(BIND_EVENT(StartEditor::OnMouseButtonPressed));
+	namespace fs = std::filesystem;
+	try {
+		if (fs::exists(generalProjectsFolderPath)) {
+			GABGL_WARN("Project folder already exists: {}", generalProjectsFolderPath);
+		}
+		else {
+			fs::create_directory(generalProjectsFolderPath);
+			GABGL_INFO("Created project folder: {}", generalProjectsFolderPath);
+		}
+
+
+	}catch (const fs::filesystem_error& e) {
+		GABGL_ERROR("Filesystem error: {}", e.what());
+	}
+
+	// Create the project folder
+	fs::path projectPath = generalProjectsFolderPath / projectName;
+	try {
+		if (fs::exists(projectPath)) {
+			GABGL_WARN("Project folder already exists: {}",projectPath);
+			return;
+		}
+
+		fs::create_directory(projectPath);
+		GABGL_INFO("Created project folder: {}", projectPath);
+
+		fs::path projectFile = projectPath / (projectName + ".proj");
+		std::ofstream file(projectFile);
+		if (file) {
+			file << "Project: " << projectName << "\n";
+			file.close();
+			GABGL_INFO("Created project file: {}", projectFile);
+		}
+		else {
+			GABGL_ERROR("Failed to create project file: {}", projectFile);
+		}
+
+		fs::path assetsPath = projectPath / "Assets";
+		fs::create_directory(assetsPath);
+		GABGL_INFO("Created Assets folder: {}", assetsPath);
+	}
+	catch (const fs::filesystem_error& e) {
+		GABGL_ERROR("Filesystem error: {}", e.what());
+	}
+	catch (const std::exception& e) {
+		GABGL_ERROR("Unexpected error: {}", e.what());
+	}
+}
+
+void StartEditor::OpenProject(const std::filesystem::path& projectPath)
+{
+}
+
+void StartEditor::DeleteProject(const std::filesystem::path& projectPath)
+{
+	try
+	{
+		if (std::filesystem::exists(projectPath))
+		{
+			std::filesystem::remove_all(projectPath); // Attempt deletion
+			if (std::filesystem::exists(projectPath))
+			{
+				throw std::runtime_error("Failed to delete folder: " + projectPath.string());
+			}
+			GABGL_INFO("Deleted folder: {}",projectPath);
+		}
+		else
+		{
+			GABGL_WARN("Folder not found: {}", projectPath);
+		}
+	}
+	catch (const std::exception& e)
+	{
+		GABGL_ERROR("Error deleting folder: {}", e.what());
+	}
+}
+
+void StartEditor::ProjectsBrowserPanel()
+{
+	static std::string folderToDelete; // Stores the name of the folder to delete
+	static bool showConfirmationPopup = false;
+
+	ImGui::Begin("Projects", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+
+	static float padding = 16.0f;
+	static float thumbnailSize = 128.0f;
+	float cellSize = thumbnailSize + padding;
+
+	float panelWidth = ImGui::GetContentRegionAvail().x;
+	int columnCount = (int)(panelWidth / cellSize);
+	if (columnCount < 1)
+		columnCount = 1;
+
+	ImGui::Columns(columnCount, 0, false);
+
+	for (auto& directoryEntry : std::filesystem::directory_iterator(generalProjectsFolderPath))
+	{
+		if (!directoryEntry.is_directory())
+			continue;
+
+		const auto& path = directoryEntry.path();
+		std::string folderName = path.filename().string();
+
+		ImGui::PushID(folderName.c_str());
+
+		ImGui::BeginGroup();
+
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+
+		if (ImGui::ImageButton((ImTextureID)m_ProjIcon->GetRendererID(), { thumbnailSize, thumbnailSize }, { 0, 1 }, { 1, 0 }))
+		{
+			Engine::GetInstance().SetCurrentProject(folderName);
+			Engine::GetInstance().GetStartWindow().Terminate();
+		}
+
+		if (ImGui::IsItemHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Right))
+		{
+			ImGui::OpenPopup("Folder Options");
+			folderToDelete = path.string(); 
+		}
+		
+		ImGui::TextWrapped(folderName.c_str());
+
+		ImGui::PopStyleColor();
+
+		ImGui::EndGroup();
+
+		if (ImGui::BeginPopup("Folder Options"))
+		{
+			if (ImGui::MenuItem("Delete"))
+			{
+				showConfirmationPopup = true;
+			}
+			ImGui::EndPopup();
+		}
+
+		ImGui::NextColumn();
+		ImGui::PopID();
+	}
+
+	ImGui::Columns(1);
+
+	ImGui::End();
+
+	// Confirmation popup
+	if (showConfirmationPopup)
+	{
+		ImGui::OpenPopup("Confirm Delete");
+		showConfirmationPopup = false;
+	}
+
+	if (ImGui::BeginPopupModal("Confirm Delete", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	{
+		ImGui::Text("Are you sure you want to delete this folder?");
+		ImGui::Separator();
+
+		if (ImGui::Button("Yes", ImVec2(120, 0)))
+		{
+			DeleteProject(folderToDelete); // Delete the folder
+			folderToDelete.clear();       // Clear the folder path
+			ImGui::CloseCurrentPopup();
+		}
+
+		ImGui::SameLine();
+
+		if (ImGui::Button("No", ImVec2(120, 0)))
+		{
+			folderToDelete.clear(); // Clear the folder path
+			ImGui::CloseCurrentPopup();
+		}
+
+		ImGui::EndPopup();
+	}
 }
 
 
