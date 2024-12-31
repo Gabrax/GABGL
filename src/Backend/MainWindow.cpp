@@ -98,7 +98,7 @@ void MainWindow::Init(const WindowDefaultData& props)
   m_Window = glfwCreateWindow((int)props.Width, (int)props.Height, props.title.c_str(), nullptr, nullptr);
   //glfwSetWindowAttrib(m_Window, GLFW_RESIZABLE, false);
 
-  SetWindowIcon("../res/Opengllogo.png", m_Window);
+  SetWindowIcon("../res/engineTextures/gabglicon.png", m_Window);
 
   m_Context = GraphicsContext::Create(m_Window);
   m_Context->Init();
@@ -200,13 +200,13 @@ void MainWindow::Init(const WindowDefaultData& props)
   int flags;
   glGetIntegerv(GL_CONTEXT_FLAGS, &flags);
   if (flags & GL_CONTEXT_FLAG_DEBUG_BIT) {
-	  std::cout << "Debug GL context enabled\n\n";
+	  GABGL_INFO("Debug GL context enabled");
 	  glEnable(GL_DEBUG_OUTPUT);
 	  glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS); // makes sure errors are displayed synchronously
 	  glDebugMessageCallback(glDebugOutput, nullptr);
   }
   else {
-	  std::cout << "Debug GL context not available\n";
+	  GABGL_ERROR("Debug GL context not available");
   }
 
   glClearColor(0.2f, 0.2f, 0.2f, 1.0f);

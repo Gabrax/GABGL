@@ -25,6 +25,8 @@ struct Engine
 private:
 	bool OnWindowClose(WindowCloseEvent& e);
 	bool OnWindowResize(WindowResizeEvent& e);
+	void SetupStartWindow();
+	void SetupMainWindow();
 	void CleanupStartWindow();
 	void RenderLayers(DeltaTime& dt);
 	void RenderEditorLayers();

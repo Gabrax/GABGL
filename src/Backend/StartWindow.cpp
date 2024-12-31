@@ -42,7 +42,7 @@ void StartWindow::Init(const WindowDefaultData& props)
 	m_Window = glfwCreateWindow((int)props.Width, (int)props.Height, props.title.c_str(), nullptr, nullptr);
 	glfwSetWindowAttrib(m_Window, GLFW_RESIZABLE, false);
 
-	SetWindowIcon("../res/Opengllogo.png", m_Window);
+	SetWindowIcon("../res/engineTextures/gabglicon.png", m_Window);
 	
 	const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
 	int xPos = (mode->width - props.Width) / 2;
