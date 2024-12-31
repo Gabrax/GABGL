@@ -7,6 +7,7 @@
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
 #include "../Engine.h"
+#include "../Renderer/Renderer.h"
 
 MainEditor::MainEditor() : Layer("MainEditor"), m_BaseDirectory(Engine::GetInstance().GetCurrentProjectPath()), m_CurrentDirectory(m_BaseDirectory)
 {
@@ -26,7 +27,6 @@ void MainEditor::OnDetach()
 
 void MainEditor::OnImGuiRender()
 {
-	GABGL_PROFILE_SCOPE("GAB");
 	// Note: Switch this to true to enable dockspace
 	static bool dockspaceOpen = true;
 	static bool opt_fullscreen_persistant = true;
@@ -73,8 +73,6 @@ void MainEditor::OnImGuiRender()
 		ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
 		ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
 	}
-
-	Engine& instance = Engine::GetInstance();
 
 	style.WindowMinSize.x = minWinSizeX;
 
@@ -137,9 +135,11 @@ void MainEditor::ViewportPanel()
 	m_ViewportHovered = ImGui::IsWindowHovered();
 
 	Engine::GetInstance().GetImGuiLayer()->BlockEvents(!m_ViewportHovered);
-
 	ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
 	m_ViewportSize = { viewportPanelSize.x, viewportPanelSize.y };
+
+	uint64_t textureID = Renderer::GetRenderer().GetFrameBuffer()->GetColorAttachmentRendererID();
+	ImGui::Image(reinterpret_cast<void*>(textureID), ImVec2{ m_ViewportSize.x, m_ViewportSize.y }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
 
 	ImGui::End();
 	ImGui::PopStyleVar();
@@ -148,7 +148,6 @@ void MainEditor::ViewportPanel()
 void MainEditor::SceneHierarchyPanel()
 {
 	ImGui::Begin("Scene Hierarchy", nullptr, ImGuiWindowFlags_NoCollapse);
-
 	CenteredText("Scene Hierarchy");
 
 	ImGui::End();
@@ -157,7 +156,6 @@ void MainEditor::SceneHierarchyPanel()
 void MainEditor::ComponentsPanel()
 {
 	ImGui::Begin("Components", nullptr, ImGuiWindowFlags_NoCollapse);
-
 	CenteredText("Components");
 
 	ImGui::End();
@@ -216,7 +214,6 @@ void MainEditor::ContentBrowserPanel()
 		{
 			if (directoryEntry.is_directory())
 				m_CurrentDirectory /= path.filename();
-
 		}
 		ImGui::TextWrapped(filenameString.c_str());
 
@@ -233,8 +230,11 @@ void MainEditor::ContentBrowserPanel()
 void MainEditor::DebugProfilerPanel()
 {
 	ImGui::Begin("Debug Instrumentation", nullptr, ImGuiWindowFlags_NoCollapse);
-
 	CenteredText("Debug Instrumentation");
+
+	if (ImGui::Button("Reload 2D Shaders")) Renderer::Load2DShaders();
+	if (ImGui::Button("Reload 3D Shaders")) Renderer::Load3DShaders();
+
 	for (auto& result : s_ProfileResults)
 	{
 		char label[50];

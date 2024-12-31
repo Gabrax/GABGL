@@ -92,6 +92,6 @@ private:
 	std::chrono::time_point<std::chrono::high_resolution_clock> m_Start;
 };
 
-static std::vector<ProfileResult> s_ProfileResults;
+inline std::vector<ProfileResult> s_ProfileResults;
 
 #define GABGL_PROFILE_SCOPE(name) Timer timer##__LINE__(name, [&](ProfileResult pr){ s_ProfileResults.push_back(pr);})

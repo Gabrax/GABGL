@@ -58,8 +58,3 @@ private:
         }
     }
 };
-
-struct Shaders
-{
-    Shader basic;
-} g_shaders;

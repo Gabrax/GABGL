@@ -7,6 +7,7 @@
 #include "Editor/ImGuiLayer.h"
 #include "Editor/SCEditor.h"
 #include "Editor/MCEditor.h"
+#include "Renderer/Renderer.h"
 
 struct Engine
 {
@@ -33,6 +34,7 @@ private:
 	StartEditor* m_StartEditorlayer;
 	MainEditor* m_MainEditorlayer;
 	LayerStack m_LayerStack;
+	Renderer* m_RendererLayer;
 	void PushLayer(Layer* layer);
 	void PushOverlay(Layer* layer);
 	float m_LastFrameTime = 0.0f;

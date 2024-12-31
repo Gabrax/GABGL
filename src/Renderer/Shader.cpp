@@ -196,6 +196,11 @@ void Shader::Load(const char* vertexPath, const char* fragmentPath, const char* 
         glDeleteShader(geometry);
 }
 
+void Shader::Use() const
+{
+    glUseProgram(this->m_ID);
+}
+
 GLuint Shader::getID() const
 {
     return this->m_ID;

@@ -221,5 +221,5 @@ void Framebuffer::ClearAttachment(uint32_t attachmentIndex, int value)
 
 Ref<Framebuffer> Framebuffer::Create(const FramebufferSpecification& spec)
 {
-	return Ref<Framebuffer>();
+	return CreateRef<Framebuffer>(spec);
 }

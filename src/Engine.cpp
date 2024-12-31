@@ -58,6 +58,8 @@ void Engine::Run()
 				PushOverlay(m_ImGuiLayer);
 				m_MainEditorlayer = new MainEditor;
 				PushLayer(m_MainEditorlayer);
+				m_RendererLayer = new Renderer;
+				PushLayer(m_RendererLayer);
             }
 
 			if (!m_Minimized)
