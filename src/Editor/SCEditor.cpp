@@ -7,15 +7,16 @@
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
 #include "../Engine.h"
+#include <json.hpp>
 
 static char projectName[256] = ""; 
 
-StartEditor::StartEditor() : Layer("StartEditor"){}
-
-void StartEditor::OnAttach()
+StartEditor::StartEditor() : Layer("StartEditor")
 {
 	m_ProjIcon = Texture::Create("../res/engineTextures/projfileicon.png");
 }
+
+void StartEditor::OnAttach(){}
 
 void StartEditor::OnDetach(){}
 
@@ -134,9 +135,18 @@ void StartEditor::NewProject(const std::string& projectName)
 		GABGL_INFO("Created project folder: {}", projectPath);
 
 		fs::path projectFile = projectPath / (projectName + ".proj");
+
+		nlohmann::json projectJson = {
+			{"Project", {
+				{"Name", projectName},
+				{"StartScene", ""},
+				{"AssetDirectory", "Assets"}
+			}}
+		};
+
 		std::ofstream file(projectFile);
 		if (file) {
-			file << "Project: " << projectName << "\n";
+			file << projectJson.dump(4); 
 			file.close();
 			GABGL_INFO("Created project file: {}", projectFile);
 		}
@@ -144,9 +154,13 @@ void StartEditor::NewProject(const std::string& projectName)
 			GABGL_ERROR("Failed to create project file: {}", projectFile);
 		}
 
-		fs::path assetsPath = projectPath / "Assets";
-		fs::create_directory(assetsPath);
-		GABGL_INFO("Created Assets folder: {}", assetsPath);
+		fs::path Path = projectPath / "Assets";
+		fs::create_directory(Path);
+		GABGL_INFO("Created Assets folder: {}", Path);
+
+		Path = projectPath / "Scenes";
+		fs::create_directory(Path);
+		GABGL_INFO("Created Scenes folder: {}", Path);
 	}
 	catch (const fs::filesystem_error& e) {
 		GABGL_ERROR("Filesystem error: {}", e.what());
@@ -211,14 +225,11 @@ void StartEditor::ProjectsBrowserPanel()
 		std::string folderName = path.filename().string();
 
 		ImGui::PushID(folderName.c_str());
-
-		ImGui::BeginGroup();
-
 		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
 
 		if (ImGui::ImageButton((ImTextureID)m_ProjIcon->GetRendererID(), { thumbnailSize, thumbnailSize }, { 0, 1 }, { 1, 0 }))
 		{
-			Engine::GetInstance().SetCurrentProject(folderName);
+			Engine::GetInstance().SetCurrentProject(path);
 			Engine::GetInstance().GetStartWindow().Terminate();
 		}
 
@@ -229,10 +240,7 @@ void StartEditor::ProjectsBrowserPanel()
 		}
 		
 		ImGui::TextWrapped(folderName.c_str());
-
 		ImGui::PopStyleColor();
-
-		ImGui::EndGroup();
 
 		if (ImGui::BeginPopup("Folder Options"))
 		{

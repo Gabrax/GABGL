@@ -19,12 +19,11 @@ struct StartEditor : Layer
 
 	virtual void OnImGuiRender() override;
 private:
-
 	void NewProject(const std::string& projectName);
 	void OpenProject(const std::filesystem::path& projectPath);
 	void DeleteProject(const std::filesystem::path& projectPath);
 	std::filesystem::path generalProjectsFolderPath = std::filesystem::current_path() / "Projects";
-	Ref<Texture> m_ProjIcon;
 private:
+	Ref<Texture> m_ProjIcon;
 	void ProjectsBrowserPanel();
 };

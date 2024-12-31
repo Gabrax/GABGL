@@ -18,8 +18,9 @@ struct Engine
 	inline ImGuiLayer* GetImGuiLayer() { return m_ImGuiLayer; }
 	inline Window& GetStartWindow() { return *m_StartWindow; }
 	inline Window& GetMainWindow() { return *m_MainWindow; }
-	void SetCurrentProject(const std::string& projectName) { m_CurrentProject = projectName; }
-	const std::string& GetCurrentProject() const { return m_CurrentProject; }
+	inline void SetCurrentProject(const std::filesystem::path& projectPath) { m_CurrentProjectName = projectPath.filename().string(); m_CurrentProjectPath = projectPath; }
+	inline const std::filesystem::path& GetCurrentProjectPath() const { return m_CurrentProjectPath; }
+	inline const std::string& GetCurrentProject() const { return m_CurrentProjectName; }
 private:
 	bool OnWindowClose(WindowCloseEvent& e);
 	bool OnWindowResize(WindowResizeEvent& e);
@@ -39,8 +40,8 @@ private:
 	bool m_isRunning = true;
 	bool closed = false;
 private:
-
-	std::string m_CurrentProject;
+	std::filesystem::path m_CurrentProjectPath;
+	std::string m_CurrentProjectName;
 	enum class EngineState
 	{
 		StartWindow, MainWindow, Exiting

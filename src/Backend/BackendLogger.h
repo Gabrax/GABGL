@@ -12,12 +12,10 @@
 #pragma warning(pop)
 
 
-class Log
+struct Log
 {
-public:
 	static void Init();
-
-	static Ref<spdlog::logger>& GetCoreLogger() { return s_CoreLogger; }
+	inline static Ref<spdlog::logger>& GetCoreLogger() { return s_CoreLogger; }
 private:
 	static Ref<spdlog::logger> s_CoreLogger;
 };
@@ -52,3 +50,48 @@ inline OStream& operator<<(OStream& os, glm::qua<T, Q> quaternion)
 #define GABGL_ASSERT(x) { if(!(x)) { GABGL_ERROR("Assertion Failed"); __debugbreak(); } }
 
 #define BIND_EVENT(fn) [this](auto&&... args) -> decltype(auto) { return this->fn(std::forward<decltype(args)>(args)...); }
+
+#include <chrono>
+#include <vector>
+
+struct ProfileResult
+{
+	const char* Name;
+	float Time;
+};
+
+template<typename Func>
+struct Timer
+{
+	inline Timer(const char* name, Func&& func) : m_Name(name), m_Stop(false), m_Func(func)
+	{
+		m_Start = std::chrono::high_resolution_clock::now();
+	}
+
+	inline ~Timer()
+	{
+		if (!m_Stop) Stop();
+	}
+
+	inline void Stop()
+	{
+		auto endPoint = std::chrono::high_resolution_clock::now();
+
+		long long start = std::chrono::time_point_cast<std::chrono::milliseconds>(m_Start).time_since_epoch().count();
+		long long end = std::chrono::time_point_cast<std::chrono::milliseconds>(endPoint).time_since_epoch().count();
+
+		m_Stop = true;
+		float duration = (end - start) * 0.001f;
+		m_Func({ m_Name, duration });
+	}
+
+private:
+	Func m_Func;
+	bool m_Stop;
+	const char* m_Name;
+	std::chrono::time_point<std::chrono::high_resolution_clock> m_Start;
+};
+
+static std::vector<ProfileResult> s_ProfileResults;
+
+#define GABGL_PROFILE_SCOPE(name) Timer timer##__LINE__(name, [&](ProfileResult pr){ s_ProfileResults.push_back(pr);})

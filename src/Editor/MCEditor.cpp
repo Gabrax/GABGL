@@ -8,7 +8,11 @@
 #include <glad/glad.h>
 #include "../Engine.h"
 
-MainEditor::MainEditor() : Layer("MainEditor") {}
+MainEditor::MainEditor() : Layer("MainEditor"), m_BaseDirectory(Engine::GetInstance().GetCurrentProjectPath()), m_CurrentDirectory(m_BaseDirectory)
+{
+	m_FolderIcon = Texture::Create("../res/engineTextures/foldericon.png");
+	m_FileIcon = Texture::Create("../res/engineTextures/projfileicon.png");
+}
 
 void MainEditor::OnAttach()
 {
@@ -22,6 +26,7 @@ void MainEditor::OnDetach()
 
 void MainEditor::OnImGuiRender()
 {
+	GABGL_PROFILE_SCOPE("GAB");
 	// Note: Switch this to true to enable dockspace
 	static bool dockspaceOpen = true;
 	static bool opt_fullscreen_persistant = true;
@@ -77,59 +82,26 @@ void MainEditor::OnImGuiRender()
 	{
 		if (ImGui::BeginMenu("File"))
 		{
-			if (ImGui::MenuItem("Open Project...", "Ctrl+O")) puts("open");
-			if (ImGui::MenuItem("Create Project...", "Ctrl+N")) puts("create");
-			if (ImGui::MenuItem("Delete Project...", "Ctrl+D")) puts("delete");
+			if (ImGui::MenuItem("ReloadProject", "Ctrl+R")) ReloadProject();
+			if (ImGui::MenuItem("SaveProject", "Ctrl+S")) SaveProject();
 
 			ImGui::EndMenu();
 		}
 
 		ImGui::EndMenuBar();
 	}
-	ImGui::Begin("Scene Hierarchy", nullptr,  ImGuiWindowFlags_NoCollapse);
+	
+	SceneHierarchyPanel();
 
-		CenteredText("Scene Hierarchy");
-
-	ImGui::End();
-
-	ImGui::Begin("Components", nullptr, ImGuiWindowFlags_NoCollapse);
-		
-		CenteredText("Components");
-
-	ImGui::End();
+	ComponentsPanel();
 
 	ImGui::ShowDebugLogWindow();
 
-	ImGui::Begin("Content Browser", nullptr, ImGuiWindowFlags_NoCollapse);
+	ContentBrowserPanel();
 
-		CenteredText("Content Browser");
+	DebugProfilerPanel();
 
-	ImGui::End();
-
-	ImGui::Begin("Debug Instrumentation", nullptr, ImGuiWindowFlags_NoCollapse);
-
-		CenteredText("Debug Instrumentation");
-
-	ImGui::End();
-
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
-		ImGui::Begin("Viewport", nullptr, ImGuiWindowFlags_NoMove);
-			auto viewportMinRegion = ImGui::GetWindowContentRegionMin();
-			auto viewportMaxRegion = ImGui::GetWindowContentRegionMax();
-			auto viewportOffset = ImGui::GetWindowPos();
-			m_ViewportBounds[0] = { viewportMinRegion.x + viewportOffset.x, viewportMinRegion.y + viewportOffset.y };
-			m_ViewportBounds[1] = { viewportMaxRegion.x + viewportOffset.x, viewportMaxRegion.y + viewportOffset.y };
-
-			m_ViewportFocused = ImGui::IsWindowFocused();
-			m_ViewportHovered = ImGui::IsWindowHovered();
-
-			Engine::GetInstance().GetImGuiLayer()->BlockEvents(!m_ViewportHovered);
-
-			ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
-			m_ViewportSize = { viewportPanelSize.x, viewportPanelSize.y };
-
-		ImGui::End();
-	ImGui::PopStyleVar();
+	ViewportPanel();
 
 	ImGui::End();
 }
@@ -141,6 +113,140 @@ void MainEditor::OnEvent(Event& e)
 	//dispatcher.Dispatch<MouseButtonPressedEvent>(BIND_EVENT(MainEditor::OnMouseButtonPressed));
 }
 
+void MainEditor::ReloadProject()
+{
+
+}
+
+void MainEditor::SaveProject()
+{
+
+}
+
+void MainEditor::ViewportPanel()
+{
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
+	ImGui::Begin("Viewport", nullptr, ImGuiWindowFlags_NoMove);
+	auto viewportMinRegion = ImGui::GetWindowContentRegionMin();
+	auto viewportMaxRegion = ImGui::GetWindowContentRegionMax();
+	auto viewportOffset = ImGui::GetWindowPos();
+	m_ViewportBounds[0] = { viewportMinRegion.x + viewportOffset.x, viewportMinRegion.y + viewportOffset.y };
+	m_ViewportBounds[1] = { viewportMaxRegion.x + viewportOffset.x, viewportMaxRegion.y + viewportOffset.y };
+
+	m_ViewportFocused = ImGui::IsWindowFocused();
+	m_ViewportHovered = ImGui::IsWindowHovered();
+
+	Engine::GetInstance().GetImGuiLayer()->BlockEvents(!m_ViewportHovered);
+
+	ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
+	m_ViewportSize = { viewportPanelSize.x, viewportPanelSize.y };
+
+	ImGui::End();
+	ImGui::PopStyleVar();
+}
+
+void MainEditor::SceneHierarchyPanel()
+{
+	ImGui::Begin("Scene Hierarchy", nullptr, ImGuiWindowFlags_NoCollapse);
+
+	CenteredText("Scene Hierarchy");
+
+	ImGui::End();
+}
+
+void MainEditor::ComponentsPanel()
+{
+	ImGui::Begin("Components", nullptr, ImGuiWindowFlags_NoCollapse);
+
+	CenteredText("Components");
+
+	ImGui::End();
+}
+
+
+void MainEditor::ContentBrowserPanel()
+{
+	ImGui::Begin("Content Browser",nullptr, ImGuiWindowFlags_NoCollapse);
+	ImGui::BeginGroup();
+	if (m_CurrentDirectory != std::filesystem::path(m_BaseDirectory))
+	{
+		if (ImGui::Button("<"))
+		{
+			m_CurrentDirectory = m_CurrentDirectory.parent_path();
+		}
+	}
+	ImGui::SameLine();
+	CenteredText("Content Browser");
+	ImGui::EndGroup();
+
+	static float padding = 16.0f;
+	static float thumbnailSize = 128.0f;
+	float cellSize = thumbnailSize + padding;
+
+	float panelWidth = ImGui::GetContentRegionAvail().x;
+	int columnCount = (int)(panelWidth / cellSize);
+	if (columnCount < 1)
+		columnCount = 1;
+
+	ImGui::Columns(columnCount, 0, false);
+
+	for (auto& directoryEntry : std::filesystem::directory_iterator(m_CurrentDirectory))
+	{
+		const auto& path = directoryEntry.path();
+		std::string filenameString = path.filename().string();
+
+		if (!directoryEntry.is_directory() && path.extension() == ".proj")
+			continue;
+
+		ImGui::PushID(filenameString.c_str());
+		Ref<Texture> icon = directoryEntry.is_directory() ? m_FolderIcon : m_FileIcon;
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+		ImGui::ImageButton((ImTextureID)icon->GetRendererID(), { thumbnailSize, thumbnailSize }, { 0, 1 }, { 1, 0 });
+
+		if (ImGui::BeginDragDropSource())
+		{
+			std::filesystem::path relativePath(path);
+			const wchar_t* itemPath = relativePath.c_str();
+			ImGui::SetDragDropPayload("CONTENT_BROWSER_ITEM", itemPath, (wcslen(itemPath) + 1) * sizeof(wchar_t));
+			ImGui::EndDragDropSource();
+		}
+
+		ImGui::PopStyleColor();
+		if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+		{
+			if (directoryEntry.is_directory())
+				m_CurrentDirectory /= path.filename();
+
+		}
+		ImGui::TextWrapped(filenameString.c_str());
+
+		ImGui::NextColumn();
+
+		ImGui::PopID();
+	}
+
+	ImGui::Columns(1);
+
+	ImGui::End();
+}
+
+void MainEditor::DebugProfilerPanel()
+{
+	ImGui::Begin("Debug Instrumentation", nullptr, ImGuiWindowFlags_NoCollapse);
+
+	CenteredText("Debug Instrumentation");
+	for (auto& result : s_ProfileResults)
+	{
+		char label[50];
+		std::strcpy(label, result.Name);
+		std::strcat(label, " %.3fms");
+		ImGui::Text(label, result.Time);
+	}
+	s_ProfileResults.clear();
+
+	ImGui::End();
+}
+
 void MainEditor::CenteredText(const char* text) {
 	ImVec2 windowSize = ImGui::GetWindowSize();
 	ImVec2 textSize = ImGui::CalcTextSize(text);
@@ -149,5 +255,4 @@ void MainEditor::CenteredText(const char* text) {
 	ImGui::SetCursorPosX(centeredX);
 	ImGui::Text("%s", text);
 }
-
 
