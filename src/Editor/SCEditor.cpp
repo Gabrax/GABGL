@@ -200,7 +200,7 @@ void StartEditor::DeleteProject(const std::filesystem::path& projectPath)
 
 void StartEditor::ProjectsBrowserPanel()
 {
-	static std::string folderToDelete; // Stores the name of the folder to delete
+	static std::string folderToDelete; 
 	static bool showConfirmationPopup = false;
 
 	ImGui::Begin("Projects", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
@@ -259,7 +259,6 @@ void StartEditor::ProjectsBrowserPanel()
 
 	ImGui::End();
 
-	// Confirmation popup
 	if (showConfirmationPopup)
 	{
 		ImGui::OpenPopup("Confirm Delete");
@@ -268,13 +267,13 @@ void StartEditor::ProjectsBrowserPanel()
 
 	if (ImGui::BeginPopupModal("Confirm Delete", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 	{
-		ImGui::Text("Are you sure you want to delete this folder?");
+		ImGui::Text("Are you sure you want to delete this project?");
 		ImGui::Separator();
 
 		if (ImGui::Button("Yes", ImVec2(120, 0)))
 		{
-			DeleteProject(folderToDelete); // Delete the folder
-			folderToDelete.clear();       // Clear the folder path
+			DeleteProject(folderToDelete); 
+			folderToDelete.clear();       
 			ImGui::CloseCurrentPopup();
 		}
 
@@ -282,7 +281,7 @@ void StartEditor::ProjectsBrowserPanel()
 
 		if (ImGui::Button("No", ImVec2(120, 0)))
 		{
-			folderToDelete.clear(); // Clear the folder path
+			folderToDelete.clear(); 
 			ImGui::CloseCurrentPopup();
 		}
 

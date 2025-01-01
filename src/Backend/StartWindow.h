@@ -2,6 +2,7 @@
 
 #include "Windowbase.h"
 #include "../Renderer/GraphicsContext.h"
+#include <string>
 
 struct StartWindow : Window
 {

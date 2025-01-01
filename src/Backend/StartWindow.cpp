@@ -7,6 +7,7 @@
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
 #include "imguiThemes.h"
+#include "../Renderer/Texture.h"
 
 bool StartWindow::m_GLFWInitialized = false;
 
@@ -174,5 +175,4 @@ bool StartWindow::IsVSync() const
 {
 	return m_Data.VSync;
 }
-
 

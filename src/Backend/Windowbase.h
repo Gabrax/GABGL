@@ -36,6 +36,7 @@ struct Window
 
 	inline void SetWindowIcon(const char* iconpath, GLFWwindow* window)
 	{
+		stbi_set_flip_vertically_on_load(0);
 		GLFWimage images[1];
 		images[0].pixels = stbi_load(iconpath, &images[0].width, &images[0].height, 0, 4);
 		if (images[0].pixels) {
@@ -43,6 +44,7 @@ struct Window
 			stbi_image_free(images[0].pixels);
 		}
 	}
+
 	template<typename T>
 	inline static Scope<Window> Create(const WindowDefaultData& props = WindowDefaultData())
 	{

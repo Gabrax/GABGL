@@ -4,12 +4,13 @@
 
 struct Camera
 {
-    virtual void SetProjection(float width, float height) = 0;
-    virtual glm::mat4 GetViewProjectionMatrix() const = 0;
+	Camera() = default;
+	Camera(const glm::mat4& projection)
+		: m_Projection(projection) {}
 
-    virtual ~Camera() = default;
+	virtual ~Camera() = default;
 
+	const glm::mat4& GetProjection() const { return m_Projection; }
 protected:
-    glm::mat4 m_ProjectionMatrix;
-    glm::mat4 m_ViewMatrix;
+	glm::mat4 m_Projection = glm::mat4(1.0f);
 };

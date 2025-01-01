@@ -4,7 +4,7 @@
 #include "BackendLogger.h"
 #include "../Input/EngineEvent.h"
 #include "../Input/KeyEvent.h"
-
+#include "../Renderer/Texture.h"
 #include <iostream>
 
 static void GLFWErrorCallback(int error, const char* description)
@@ -94,7 +94,6 @@ void MainWindow::Init(const WindowDefaultData& props)
 	  glfwSetErrorCallback(GLFWErrorCallback);
   }
   
-  const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
   m_Window = glfwCreateWindow((int)props.Width, (int)props.Height, props.title.c_str(), nullptr, nullptr);
   //glfwSetWindowAttrib(m_Window, GLFW_RESIZABLE, false);
 
@@ -237,5 +236,3 @@ bool MainWindow::IsVSync() const
 {
   return m_Data.VSync;
 }
-
-

@@ -53,12 +53,12 @@ Texture::Texture(const std::string& path)
 	stbi_set_flip_vertically_on_load(1);
 	stbi_uc* data = nullptr;
 	{
-		//GABGL_PROFILE_SCOPE("stbi_load - Texture::Texture(const std::string&)");
 		data = stbi_load(path.c_str(), &width, &height, &channels, 0);
 	}
 
 	if (data)
 	{
+		m_RawData = data;
 		m_IsLoaded = true;
 
 		m_Width = width;

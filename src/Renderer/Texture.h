@@ -32,6 +32,7 @@ struct Texture
 	inline uint32_t GetWidth() const { return m_Width; }
 	inline uint32_t GetHeight() const { return m_Height; }
 	inline uint32_t GetRendererID() const { return m_RendererID; }
+	inline const uint8_t* GetRawData() const { return m_RawData; }
 	inline const std::string& GetPath() const { return m_Path; }
 	void SetData(void* data, uint32_t size);
 	void Bind(uint32_t slot = 0) const;
@@ -50,6 +51,7 @@ private:
 	bool m_IsLoaded = false;
 	uint32_t m_Width, m_Height;
 	uint32_t m_RendererID;
+	uint8_t* m_RawData = nullptr;
 	GLenum m_InternalFormat, m_DataFormat;
 };
 
