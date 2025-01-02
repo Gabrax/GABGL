@@ -5,9 +5,11 @@
 #include "../Backend/Layer.h"
 #include "../Backend/BackendScopeRef.h"
 #include "../Renderer/Texture.h"
+#include "../Scene/Scene.h"
 
 #include <filesystem>
 #include <glm/glm.hpp>
+#include "../Scene/Entity.hpp"
 
 struct MainEditor : Layer
 {
@@ -17,20 +19,43 @@ struct MainEditor : Layer
 	virtual void OnAttach() override;
 	virtual void OnDetach() override;
 
+	void OnUpdate(DeltaTime dt) override;
 	virtual void OnImGuiRender() override;
 	void OnEvent(Event& e) override;
+private:
+	bool OnKeyPressed(KeyPressedEvent& e);
+	bool OnMouseButtonPressed(MouseButtonPressedEvent& e);
 private:
 	void ReloadProject();
 	void SaveProject();
 private:
+	void SetupStartupScenePopup();
 	void ViewportPanel();
 	void SceneHierarchyPanel();
 	void ComponentsPanel();
 	void ContentBrowserPanel();
 	void DebugProfilerPanel();
 	void CenteredText(const char* text);
+	void DrawEntityNode(Entity entity);
+	void DrawComponents(Entity entity);
+	template<typename T>
+	void DisplayAddComponentEntry(const std::string& entryName);
 private:
 
+	enum class SceneState
+	{
+		Edit = 0, Play = 1, Simulate = 2
+	};
+	SceneState m_SceneState = SceneState::Edit;
+
+	bool isPopupOpen = false;
+	int m_GizmoType = -1;
+	Entity m_SelectionContext;
+	Entity m_HoveredEntity;
+	Ref<Scene> m_ActiveScene;
+	Ref<Scene> m_EditorScene;
+	bool m_PrimaryCamera = true;
+	EditorCamera m_EditorCamera;
 	std::filesystem::path m_BaseDirectory;
 	std::filesystem::path m_CurrentDirectory;
 	bool m_ViewportFocused = false, m_ViewportHovered = false;

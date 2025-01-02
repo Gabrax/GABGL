@@ -4,11 +4,15 @@
 #include "../Editor/CameraEditor.h"
 #include "../Backend/DeltaTime.h"
 #include <string_view>
+#include "../Backend/UUID.h"
+#include "../Backend/BackendScopeRef.h"
+
+class Entity;
 
 struct Scene
 {
-	Scene() = default;
-	~Scene() = default;
+	Scene();
+	~Scene();
 	static Ref<Scene> Copy(Ref<Scene> other);
 
 	Entity CreateEntity(const std::string& name = std::string());
@@ -61,5 +65,6 @@ private:
 	bool m_IsPaused = false;
 	int m_StepFrames = 0;
 	std::unordered_map<UUID, entt::entity> m_EntityMap;
-	friend class Entity;
+	friend struct Entity;
+	friend struct MainEditor;
 };

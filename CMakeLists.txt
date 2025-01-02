@@ -129,6 +129,10 @@ if(RELEASE)
     set_target_properties("${CMAKE_PROJECT_NAME}" PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
 endif()
 
+if (DEBUG)
+    add_compile_definitions(DEBUG)
+endif()
+
 set(IMGUI_INI_FILE "${CMAKE_BINARY_DIR}/imgui.ini")
 set(RES_FOLDER "${CMAKE_BINARY_DIR}/../res")
 file(MAKE_DIRECTORY ${RES_FOLDER})

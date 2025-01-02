@@ -1,8 +1,15 @@
 #pragma once
 
-#include <glm/glm.hpp>
 #include "../Backend/UUID.h"
 #include "../Renderer/Texture.h"
+#include "SceneCamera.h"
+
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/quaternion.hpp>
+
 
 struct IDComponent
 {
@@ -10,6 +17,7 @@ struct IDComponent
 
     IDComponent() = default;
     IDComponent(const IDComponent&) = default;
+    explicit IDComponent(const UUID& id) : ID(id) {}
 };
 
 struct TransformComponent
@@ -32,11 +40,11 @@ struct TransformComponent
             * glm::scale(glm::mat4(1.0f), Scale);
     }
     glm::vec3 to_forward_vector() {
-        glm::quat q = glm::quat(rotation);
+        glm::quat q = glm::quat(Rotation);
         return glm::normalize(q * glm::vec3(0.0f, 0.0f, 1.0f));
     }
     glm::vec3 to_right_vector() {
-        glm::quat q = glm::quat(rotation);
+        glm::quat q = glm::quat(Rotation);
         return glm::normalize(q * glm::vec3(1.0f, 0.0f, 0.0f));
     }
 };
@@ -53,18 +61,23 @@ struct TagComponent
 
 struct CameraComponent
 {
+    SceneCamera Camera;
+    bool Primary = true; 
+    bool FixedAspectRatio = false;
 
+    CameraComponent() = default;
+    CameraComponent(const CameraComponent&) = default;
 };
 
 struct SpriteComponent
 {
-    glm::vec4 Color(1);
+    glm::vec4 Color = glm::vec4(1);
     Ref<Texture> Texture;
     float TilingFactor = 1.0f;
 
-    SpriteRendererComponent() = default;
-    SpriteRendererComponent(const SpriteRendererComponent&) = default;
-    SpriteRendererComponent(const glm::vec4& color)
+    SpriteComponent() = default;
+    SpriteComponent(const SpriteComponent&) = default;
+    SpriteComponent(const glm::vec4& color)
         : Color(color) {}
 };
 
@@ -72,3 +85,21 @@ struct MeshComponent
 {
 
 };
+
+struct TextComponent
+{
+    std::string TextString;
+    //Ref<Font> FontAsset = Font::GetDefault();
+    glm::vec4 Color{ 1.0f };
+    float Kerning = 0.0f;
+    float LineSpacing = 0.0f;
+};
+
+template<typename... Component>
+struct ComponentGroup
+{
+};
+
+using AllComponents =
+ComponentGroup<TransformComponent, SpriteComponent,
+    CameraComponent, TextComponent>;

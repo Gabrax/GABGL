@@ -1,49 +1,26 @@
 #pragma once
 
-#include "../Backend/Layer.h"
-#include "../Backend/DeltaTime.h"
-#include "../Input/EngineEvent.h"
-#include "../Input/KeyEvent.h"
-#include "Shader.h"
+#include "../Renderer/Shader.h"
 #include "../Backend/BackendScopeRef.h"
-#include "FrameBuffer.h"
+#include "../Editor/CameraEditor.h"
 
-struct Renderer : Layer
+struct Renderer
 {
-	Renderer();
-	virtual ~Renderer() = default;
+	static void Init();
+	static void Shutdown();
 
-	void OnAttach() override;
-	void OnDetach() override;
+	static void OnWindowResize(uint32_t width, uint32_t height);
 
-	void OnUpdate(DeltaTime dt) override;
-	void OnEvent(Event& e) override;
-	inline static Renderer& GetRenderer() { return *s_Renderer; }
-	inline Ref<Framebuffer> GetFrameBuffer() { return m_FrameBuffer; }
-	static void Load3DShaders();
-	static void Load2DShaders();
+	static void BeginScene(EditorCamera& camera);
+	static void EndScene();
+
+	//static void Submit(const Ref<Shader>& shader, const Ref<VertexArray>& vertexArray, const glm::mat4& transform = glm::mat4(1.0f));
 
 private:
-	bool OnKeyPressed(KeyPressedEvent& e);
-	bool OnMouseButtonPressed(MouseButtonPressedEvent& e);
-private:
-	void Render3D();
-	void Render2D();
-private:
-
-	Ref<Framebuffer> m_FrameBuffer;
-
-	float quadVertices[5*6] = {
-		// Positions          // Texture Coords
-		-0.5f, -0.5f, 0.0f,   0.0f, 0.0f, // Bottom-left
-		 0.5f, -0.5f, 0.0f,   1.0f, 0.0f, // Bottom-right
-		 0.5f,  0.5f, 0.0f,   1.0f, 1.0f, // Top-right
-
-		-0.5f, -0.5f, 0.0f,   0.0f, 0.0f, // Bottom-left
-		 0.5f,  0.5f, 0.0f,   1.0f, 1.0f, // Top-right
-		-0.5f,  0.5f, 0.0f,   0.0f, 1.0f  // Top-left
+	struct SceneData
+	{
+		glm::mat4 ViewProjectionMatrix;
 	};
-	unsigned int VAO, VBO, EBO;
 
-	static Renderer* s_Renderer;
+	static Scope<SceneData> s_SceneData;
 };

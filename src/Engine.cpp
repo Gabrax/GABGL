@@ -2,6 +2,7 @@
 #include "Backend/BackendLogger.h"
 #include "Backend/MainWindow.h"
 #include "Backend/StartWindow.h"
+#include "Renderer/Renderer.h"
 
 Engine* Engine::s_Instance = nullptr;
 
@@ -23,6 +24,8 @@ void Engine::Run()
 
     while (m_isRunning)
     {
+		GABGL_PROFILE_SCOPE("Main Loop");
+
 		DeltaTime dt;
 
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -102,7 +105,7 @@ bool Engine::OnWindowResize(WindowResizeEvent& e)
 	}
 
 	m_Minimized = false;
-	//Renderer::OnWindowResize(e.GetWidth(), e.GetHeight());
+	Renderer::OnWindowResize(e.GetWidth(), e.GetHeight());
 
 	return false;
 }
@@ -122,11 +125,12 @@ void Engine::SetupMainWindow()
 {
 	m_MainWindow = Window::Create<MainWindow>({ "GABGL - " + GetCurrentProject(), 1000, 600 });
 	m_MainWindow->SetEventCallback(BIND_EVENT(OnEvent));
+	Renderer::Init();
 	m_ImGuiLayer = new ImGuiLayer(m_MainWindow.get());
 	PushOverlay(m_ImGuiLayer);
 	m_MainEditorlayer = new MainEditor;
 	PushLayer(m_MainEditorlayer);
-	m_RendererLayer = new Renderer;
+	m_RendererLayer = new Renderer2D;
 	PushLayer(m_RendererLayer);
 }
 
