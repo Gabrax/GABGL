@@ -10,6 +10,17 @@
       "cmakeCommandArgs": "-DDEBUG=true",
       "buildCommandArgs": "",
       "ctestCommandArgs": ""
+    },
+    {
+      "name": "Dist",
+      "generator": "Ninja",
+      "configurationType": "Release",
+      "inheritEnvironments": [ "msvc_x64_x64" ],
+      "buildRoot": "${projectDir}\\${name}",
+      "installRoot": "${projectDir}\\out\\install\\${name}",
+      "cmakeCommandArgs": "-DDEBUG=false",
+      "buildCommandArgs": "",
+      "ctestCommandArgs": ""
     }
   ]
 }

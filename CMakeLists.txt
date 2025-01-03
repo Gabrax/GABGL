@@ -13,6 +13,7 @@ if(MSVC)
     # Set the MSVC runtime library to static multithreading for Release configuration
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:RelWithDebInfo>:RelWithDebInfo>")
     add_compile_options(/MP)
+    target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC _CRT_SECURE_NO_WARNINGS)
 
     file(COPY
       "${CMAKE_BINARY_DIR}/_deps/assimp-build/bin/assimp-vc143-mt.dll"
@@ -27,7 +28,7 @@ if(MSVC)
 
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     add_compile_options(
-        # -Wall -Wextra -Wpedantic
+        -Wall -Wextra -Wpedantic
         -Wno-unused-function
         -Wno-unused-parameter
         -ferror-limit=0
@@ -116,21 +117,10 @@ target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC GLFW_INCLUDE_NONE=1)
 
 target_sources("${CMAKE_PROJECT_NAME}" PRIVATE ${MY_SOURCES} ${IMGUIMO_SRC})
 
-if(MSVC)
-    target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC _CRT_SECURE_NO_WARNINGS)
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    # Optional: If using Clang on Windows, you might need to link against LLVM's libc++
-    # target_link_options("${CMAKE_PROJECT_NAME}" PRIVATE -stdlib=libc++)
-endif()
-
-option(RELEASE "Enable Windows subsystem for the application" OFF)
-
-if(RELEASE)
-    set_target_properties("${CMAKE_PROJECT_NAME}" PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
-endif()
-
 if (DEBUG)
     add_compile_definitions(DEBUG)
+else()
+    set_target_properties("${CMAKE_PROJECT_NAME}" PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
 endif()
 
 set(IMGUI_INI_FILE "${CMAKE_BINARY_DIR}/imgui.ini")

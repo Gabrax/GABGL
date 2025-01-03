@@ -8,7 +8,7 @@
 // This ignores all warnings raised inside External headers
 #pragma warning(push, 0)
 #include <spdlog/spdlog.h>
-#include <spdlog/fmt/ostr.h>
+#include <spdlog/fmt/ostr.h> 
 #pragma warning(pop)
 
 
@@ -40,11 +40,19 @@ inline OStream& operator<<(OStream& os, glm::qua<T, Q> quaternion)
 }
 
 // Core log macros
-#define GABGL_TRACE(...)    ::Log::GetCoreLogger()->trace(__VA_ARGS__)
-#define GABGL_INFO(...)     ::Log::GetCoreLogger()->info(__VA_ARGS__)
-#define GABGL_WARN(...)     ::Log::GetCoreLogger()->warn(__VA_ARGS__)
-#define GABGL_ERROR(...)    ::Log::GetCoreLogger()->error(__VA_ARGS__)
-#define GABGL_CRITICAL(...) ::Log::GetCoreLogger()->critical(__VA_ARGS__)
+#ifdef DEBUG
+	#define GABGL_TRACE(...)    ::Log::GetCoreLogger()->trace(__VA_ARGS__)
+	#define GABGL_INFO(...)     ::Log::GetCoreLogger()->info(__VA_ARGS__)
+	#define GABGL_WARN(...)     ::Log::GetCoreLogger()->warn(__VA_ARGS__)
+	#define GABGL_ERROR(...)    ::Log::GetCoreLogger()->error(__VA_ARGS__)
+	#define GABGL_CRITICAL(...) ::Log::GetCoreLogger()->critical(__VA_ARGS__)
+#else
+	#define GABGL_TRACE(...)    
+	#define GABGL_INFO(...)     
+	#define GABGL_WARN(...)     
+	#define GABGL_ERROR(...)    
+	#define GABGL_CRITICAL(...) 
+#endif
 
 #define GABGL_ASSERT(x,...) { if(!(x)) { GABGL_ERROR("Assertion Failed: {0}",__VA_ARGS__); __debugbreak(); } }
 #define GABGL_ASSERT(x) { if(!(x)) { GABGL_ERROR("Assertion Failed"); __debugbreak(); } }
@@ -94,4 +102,8 @@ private:
 
 inline std::vector<ProfileResult> s_ProfileResults;
 
-#define GABGL_PROFILE_SCOPE(name) Timer timer##__LINE__(name, [&](ProfileResult pr){ s_ProfileResults.push_back(pr);})
+#ifdef DEBUG
+	#define GABGL_PROFILE_SCOPE(name) Timer timer##__LINE__(name, [&](ProfileResult pr){ s_ProfileResults.push_back(pr);})
+#else
+	#define GABGL_PROFILE_SCOPE(name)
+#endif
