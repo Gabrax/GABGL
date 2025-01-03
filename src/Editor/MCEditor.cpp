@@ -4,16 +4,17 @@
 #include <imgui_internal.h>
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
-#include "ImGuizmo.h"
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
+#include "ImGuizmo.h"
 #include <glm/gtc/type_ptr.hpp>
 #include "../Engine.h"
 #include "../Renderer/Renderer2D.h"
 #include "../Input/UserInput.h"
 #include "../Backend/Utils.hpp"
+#include "../Renderer/RendererAPI.h"
 
-MainEditor::MainEditor() : Layer("MainEditor"), m_BaseDirectory(Engine::GetInstance().GetCurrentProjectPath()), m_CurrentDirectory(m_BaseDirectory)
+MainEditor::MainEditor() : Layer("MainEditor"), m_BaseDirectory(Engine::GetInstance().GetCurrentProjectPath()), m_CurrentDirectory(m_BaseDirectory), m_GizmoType(ImGuizmo::OPERATION::TRANSLATE)
 {
 	m_FolderIcon = Texture::Create("../res/engineTextures/foldericon.png");
 	m_FileIcon = Texture::Create("../res/engineTextures/projfileicon.png");
@@ -21,9 +22,16 @@ MainEditor::MainEditor() : Layer("MainEditor"), m_BaseDirectory(Engine::GetInsta
 
 void MainEditor::OnAttach()
 {
+	FramebufferSpecification fbSpec;
+	fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::Depth };
+	fbSpec.Width = Engine::GetInstance().GetMainWindow().GetWidth();
+	fbSpec.Height = Engine::GetInstance().GetMainWindow().GetHeight();
+	m_Framebuffer = Framebuffer::Create(fbSpec);
+
 	m_EditorScene = CreateRef<Scene>();
 	m_ActiveScene = m_EditorScene;
 	m_EditorCamera = EditorCamera(30.0f, 1.778f, 0.1f, 1000.0f);
+	Renderer2D::SetLineWidth(4.0f);
 }
 
 void MainEditor::OnDetach()
@@ -36,14 +44,19 @@ void MainEditor::OnUpdate(DeltaTime dt)
 	m_ActiveScene->OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
 
 	// Resize
-	if (FramebufferSpecification spec = Renderer2D::GetRenderer().GetFrameBuffer()->GetSpecification();
+	if (FramebufferSpecification spec = m_Framebuffer->GetSpecification();
 		m_ViewportSize.x > 0.0f && m_ViewportSize.y > 0.0f && // zero sized framebuffer is invalid
 		(spec.Width != m_ViewportSize.x || spec.Height != m_ViewportSize.y))
 	{
-		//m_Framebuffer->Resize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
+		m_Framebuffer->Resize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
 		//m_CameraController.OnResize(m_ViewportSize.x, m_ViewportSize.y);
 		m_EditorCamera.SetViewportSize(m_ViewportSize.x, m_ViewportSize.y);
 	}
+	Renderer2D::ResetStats();
+	m_Framebuffer->Bind();
+	RendererAPI::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
+	RendererAPI::Clear();
+	m_Framebuffer->ClearAttachment(1, -1);
 
 	switch (m_SceneState)
 	{
@@ -70,6 +83,22 @@ void MainEditor::OnUpdate(DeltaTime dt)
 			break;
 		}
 	}
+
+	auto [mx, my] = ImGui::GetMousePos();
+	mx -= m_ViewportBounds[0].x;
+	my -= m_ViewportBounds[0].y;
+	glm::vec2 viewportSize = m_ViewportBounds[1] - m_ViewportBounds[0];
+	my = viewportSize.y - my;
+	int mouseX = (int)mx;
+	int mouseY = (int)my;
+
+	if (mouseX >= 0 && mouseY >= 0 && mouseX < (int)viewportSize.x && mouseY < (int)viewportSize.y)
+	{
+		int pixelData = m_Framebuffer->ReadPixel(1, mouseX, mouseY);
+		m_HoveredEntity = pixelData == -1 ? Entity() : Entity((entt::entity)pixelData, m_ActiveScene.get());
+	}
+
+	m_Framebuffer->Unbind();
 }
 
 void MainEditor::OnImGuiRender()
@@ -163,57 +192,16 @@ void MainEditor::OnImGuiRender()
 	ViewportPanel();
 	// PANELS //
 
-	Entity selectedEntity = m_SelectionContext;
-	if (selectedEntity && m_GizmoType != -1)
-	{
-		ImGuizmo::SetOrthographic(false);
-		ImGuizmo::SetDrawlist();
-
-		ImGuizmo::SetRect(m_ViewportBounds[0].x, m_ViewportBounds[0].y, m_ViewportBounds[1].x - m_ViewportBounds[0].x, m_ViewportBounds[1].y - m_ViewportBounds[0].y);
-
-		// Editor camera
-		const glm::mat4& cameraProjection = m_EditorCamera.GetProjection();
-		glm::mat4 cameraView = m_EditorCamera.GetViewMatrix();
-
-		// Entity transform
-		auto& tc = selectedEntity.GetComponent<TransformComponent>();
-		glm::mat4 transform = tc.GetTransform();
-
-		// Snapping
-		bool snap = Input::IsKeyPressed(Key::LeftControl);
-		float snapValue = 0.5f; // Snap to 0.5m for translation/scale
-		// Snap to 45 degrees for rotation
-		if (m_GizmoType == ImGuizmo::OPERATION::ROTATE)
-			snapValue = 45.0f;
-
-		float snapValues[3] = { snapValue, snapValue, snapValue };
-
-		ImGuizmo::Manipulate(glm::value_ptr(cameraView), glm::value_ptr(cameraProjection),
-			(ImGuizmo::OPERATION)m_GizmoType, ImGuizmo::LOCAL, glm::value_ptr(transform),
-			nullptr, snap ? snapValues : nullptr);
-
-		if (ImGuizmo::IsUsing())
-		{
-			glm::vec3 position, rotation, scale;
-			Utils::DecomposeTransform(transform, position, rotation, scale);
-
-			glm::vec3 deltaRotation = rotation - tc.Rotation;
-			tc.Position = position;
-			tc.Rotation += deltaRotation;
-			tc.Scale = scale;
-		}
-	}
-
 	ImGui::End();
 }
 
 void MainEditor::OnEvent(Event& e)
 {
-	/*m_CameraController.OnEvent(e);
+	//m_CameraController.OnEvent(e);
 	if (m_SceneState == SceneState::Edit)
 	{
 		m_EditorCamera.OnEvent(e);
-	}*/
+	}
 
 	EventDispatcher dispatcher(e);
 	dispatcher.Dispatch<KeyPressedEvent>(BIND_EVENT(MainEditor::OnKeyPressed));
@@ -231,82 +219,82 @@ bool MainEditor::OnKeyPressed(KeyPressedEvent& e)
 
 	switch (e.GetKeyCode())
 	{
-	case Key::N:
-	{
-		if (control)
-			//NewScene();
-
-		break;
-	}
-	case Key::O:
-	{
-		if (control)
-			//OpenProject();
-
-		break;
-	}
-	case Key::S:
-	{
-		if (control)
+		case Key::N:
 		{
-			/*if (shift)
-				SaveSceneAs();
-			else
-				SaveScene();*/
+			if (control)
+				//NewScene();
+
+			break;
 		}
-
-		break;
-	}
-
-	// Scene Commands
-	case Key::D:
-	{
-		if (control)
-			//OnDuplicateEntity();
-
-		break;
-	}
-
-	// Gizmos
-	case Key::Q:
-	{
-		if (!ImGuizmo::IsUsing())
-			m_GizmoType = -1;
-		break;
-	}
-	case Key::W:
-	{
-		if (!ImGuizmo::IsUsing())
-			m_GizmoType = ImGuizmo::OPERATION::TRANSLATE;
-		break;
-	}
-	case Key::E:
-	{
-		if (!ImGuizmo::IsUsing())
-			m_GizmoType = ImGuizmo::OPERATION::ROTATE;
-		break;
-	}
-	case Key::R:
-	{
-		
-		if (!ImGuizmo::IsUsing())
-			m_GizmoType = ImGuizmo::OPERATION::SCALE;
-		
-		break;
-	}
-	case Key::Delete:
-	{
-		if (Engine::GetInstance().GetImGuiLayer()->GetActiveWidgetID() == 0)
+		case Key::O:
 		{
-			Entity selectedEntity = m_SelectionContext;
-			if (selectedEntity)
+			if (control)
+				//OpenProject();
+
+			break;
+		}
+		case Key::S:
+		{
+			if (control)
 			{
-				m_SelectionContext = {};
-				m_ActiveScene->DestroyEntity(selectedEntity);
+				/*if (shift)
+					SaveSceneAs();
+				else
+					SaveScene();*/
 			}
+
+			break;
 		}
-		break;
-	}
+
+		// Scene Commands
+		case Key::D:
+		{
+			if (control)
+				//OnDuplicateEntity();
+
+			break;
+		}
+
+		// Gizmos
+		case Key::Q:
+		{
+			if (!ImGuizmo::IsUsing())
+				m_GizmoType = -1;
+			break;
+		}
+		case Key::W:
+		{
+			if (!ImGuizmo::IsUsing())
+				m_GizmoType = ImGuizmo::OPERATION::TRANSLATE;
+			break;
+		}
+		case Key::E:
+		{
+			if (!ImGuizmo::IsUsing())
+				m_GizmoType = ImGuizmo::OPERATION::ROTATE;
+			break;
+		}
+		case Key::R:
+		{
+		
+			if (!ImGuizmo::IsUsing())
+				m_GizmoType = ImGuizmo::OPERATION::SCALE;
+		
+			break;
+		}
+		case Key::Delete:
+		{
+			if (Engine::GetInstance().GetImGuiLayer()->GetActiveWidgetID() == 0)
+			{
+				Entity selectedEntity = m_SelectionContext;
+				if (selectedEntity)
+				{
+					m_SelectionContext = {};
+					m_ActiveScene->DestroyEntity(selectedEntity);
+				}
+			}
+			break;
+		}
 	}
 
 	return false;
@@ -396,7 +384,7 @@ void MainEditor::ViewportPanel()
 	ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
 	m_ViewportSize = { viewportPanelSize.x, viewportPanelSize.y };
 
-	uint64_t textureID = Renderer2D::GetRenderer().GetFrameBuffer()->GetColorAttachmentRendererID();
+	uint64_t textureID = m_Framebuffer->GetColorAttachmentRendererID();
 	ImGui::Image(reinterpret_cast<void*>(textureID), ImVec2{ m_ViewportSize.x, m_ViewportSize.y }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
 
 	if (ImGui::BeginDragDropTarget())
@@ -407,6 +395,47 @@ void MainEditor::ViewportPanel()
 			//OpenScene(path);
 		}
 		ImGui::EndDragDropTarget();
+	}
+
+	Entity selectedEntity = m_SelectionContext;
+	if (selectedEntity && m_GizmoType != -1)
+	{
+		ImGuizmo::SetOrthographic(false);
+		ImGuizmo::SetDrawlist();
+
+		ImGuizmo::SetRect(m_ViewportBounds[0].x, m_ViewportBounds[0].y, m_ViewportBounds[1].x - m_ViewportBounds[0].x, m_ViewportBounds[1].y - m_ViewportBounds[0].y);
+
+		// Editor camera
+		const glm::mat4& cameraProjection = m_EditorCamera.GetProjection();
+		glm::mat4 cameraView = m_EditorCamera.GetViewMatrix();
+
+		// Entity transform
+		auto& tc = selectedEntity.GetComponent<TransformComponent>();
+		glm::mat4 transform = tc.GetTransform();
+
+		// Snapping
+		bool snap = Input::IsKeyPressed(Key::LeftControl);
+		float snapValue = 0.5f; // Snap to 0.5m for translation/scale
+		// Snap to 45 degrees for rotation
+		if (m_GizmoType == ImGuizmo::OPERATION::ROTATE)
+			snapValue = 45.0f;
+
+		float snapValues[3] = { snapValue, snapValue, snapValue };
+
+		ImGuizmo::Manipulate(glm::value_ptr(cameraView), glm::value_ptr(cameraProjection),
+			(ImGuizmo::OPERATION)m_GizmoType, ImGuizmo::LOCAL, glm::value_ptr(transform),
+			nullptr, snap ? snapValues : nullptr);
+
+		if (ImGuizmo::IsUsing())
+		{
+			glm::vec3 position, rotation, scale;
+			Utils::DecomposeTransform(transform, position, rotation, scale);
+
+			glm::vec3 deltaRotation = rotation - tc.Rotation;
+			tc.Position = position;
+			tc.Rotation += deltaRotation;
+			tc.Scale = scale;
+		}
 	}
 
 	ImGui::End();
@@ -470,7 +499,6 @@ void MainEditor::DrawEntityNode(Entity entity)
 	if (ImGui::IsItemClicked())
 	{
 		m_SelectionContext = entity;
-		puts("clicked");
 	}
 
 	bool entityDeleted = false;
@@ -823,8 +851,8 @@ void MainEditor::DebugProfilerPanel()
 	ImGui::Begin("Debug Instrumentation", nullptr, ImGuiWindowFlags_NoCollapse);
 	CenteredText("Debug Instrumentation");
 
-	if (ImGui::Button("Reload 2D Shaders")) Renderer2D::Load2DShaders();
-	if (ImGui::Button("Reload 3D Shaders")) Renderer2D::Load3DShaders();
+	if (ImGui::Button("Reload 2D Shaders")) puts("TO BE DONE");
+	if (ImGui::Button("Reload 3D Shaders")) puts("TO BE DONE");
 
 	for (auto& result : s_ProfileResults)
 	{

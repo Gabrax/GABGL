@@ -1,17 +1,18 @@
 #include "Renderer.h"
 #include "RendererAPI.h"
+#include "Renderer2D.h"
 
 Scope<Renderer::SceneData> Renderer::s_SceneData = CreateScope<Renderer::SceneData>();
 
 void Renderer::Init()
 {
 	RendererAPI::Init();
-	//Renderer2D::Init();
+	Renderer2D::Init();
 }
 
 void Renderer::Shutdown()
 {
-	//Renderer2D::Shutdown();
+	Renderer2D::Shutdown();
 }
 
 void Renderer::OnWindowResize(uint32_t width, uint32_t height)

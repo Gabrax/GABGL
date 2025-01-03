@@ -1,6 +1,20 @@
 #include "Shader.h"
 #include "../Backend/BackendLogger.h"
 
+Shader::Shader(const char* fullshader)
+{
+    Timer timer;
+    Load(fullshader);
+    GABGL_WARN("Shader creation took {0} ms", timer.ElapsedMillis());
+}
+
+Shader::Shader(const char* vertexPath, const char* fragmentPath, const char* geometryPath)
+{
+    Timer timer;
+    Load(vertexPath, fragmentPath, geometryPath);
+    GABGL_WARN("Shader creation took {0} ms", timer.ElapsedMillis());
+}
+
 void Shader::Load(const char* fullshader)
 {
     std::ifstream shaderFile(fullshader);

@@ -2,6 +2,7 @@
 #include "Components.hpp"
 #include "Entity.hpp"
 #include <glm/glm.hpp>
+#include "../Renderer/Renderer2D.h"
 
 Scene::Scene(){}
 
@@ -154,7 +155,7 @@ void Scene::OnUpdateRuntime(DeltaTime dt)
 
 	if (mainCamera)
 	{
-		//Renderer2D::BeginScene(*mainCamera, cameraTransform);
+		Renderer2D::BeginScene(*mainCamera, cameraTransform);
 
 		// Draw sprites
 		{
@@ -163,33 +164,33 @@ void Scene::OnUpdateRuntime(DeltaTime dt)
 			{
 				auto [transform, sprite] = group.get<TransformComponent, SpriteComponent>(entity);
 
-				//Renderer2D::DrawSprite(transform.GetTransform(), sprite, (int)entity);
+				Renderer2D::DrawSprite(transform.GetTransform(), sprite, (int)entity);
 			}
 		}
 
 		// Draw circles
 		{
-			//auto view = m_Registry.view<TransformComponent, CircleRendererComponent>();
-			//for (auto entity : view)
-			//{
-			//	auto [transform, circle] = view.get<TransformComponent, CircleRendererComponent>(entity);
+			/*auto view = m_Registry.view<TransformComponent, CircleRendererComponent>();
+			for (auto entity : view)
+			{
+				auto [transform, circle] = view.get<TransformComponent, CircleRendererComponent>(entity);
 
-			//	//Renderer2D::DrawCircle(transform.GetTransform(), circle.Color, circle.Thickness, circle.Fade, (int)entity);
-			//}
+				Renderer2D::DrawCircle(transform.GetTransform(), circle.Color, circle.Thickness, circle.Fade, (int)entity);
+			}*/
 		}
 
 		// Draw text
 		{
-			auto view = m_Registry.view<TransformComponent, TextComponent>();
+			/*auto view = m_Registry.view<TransformComponent, TextComponent>();
 			for (auto entity : view)
 			{
 				auto [transform, text] = view.get<TransformComponent, TextComponent>(entity);
 
-				//Renderer2D::DrawString(text.TextString, transform.GetTransform(), text, (int)entity);
-			}
+				Renderer2D::DrawString(text.TextString, transform.GetTransform(), text, (int)entity);
+			}*/
 		}
 
-		//Renderer2D::EndScene();
+		Renderer2D::EndScene();
 	}
 
 }
@@ -288,18 +289,18 @@ void Scene::OnPhysics3DStop()
 
 void Scene::RenderScene(EditorCamera& camera)
 {
-	//Renderer2D::BeginScene(camera);
+	Renderer2D::BeginScene(camera);
 
 	//// Draw sprites
-	//{
-	//	auto group = m_Registry.group<TransformComponent>(entt::get<SpriteRendererComponent>);
-	//	for (auto entity : group)
-	//	{
-	//		auto [transform, sprite] = group.get<TransformComponent, SpriteRendererComponent>(entity);
+	{
+		auto group = m_Registry.group<TransformComponent>(entt::get<SpriteComponent>);
+		for (auto entity : group)
+		{
+			auto [transform, sprite] = group.get<TransformComponent, SpriteComponent>(entity);
 
-	//		Renderer2D::DrawSprite(transform.GetTransform(), sprite, (int)entity);
-	//	}
-	//}
+			Renderer2D::DrawSprite(transform.GetTransform(), sprite, (int)entity);
+		}
+	}
 
 	//// Draw circles
 	//{
@@ -323,7 +324,7 @@ void Scene::RenderScene(EditorCamera& camera)
 	//	}
 	//}
 
-	//Renderer2D::EndScene();
+	Renderer2D::EndScene();
 }
 
 template<typename T>

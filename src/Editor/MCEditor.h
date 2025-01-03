@@ -6,10 +6,11 @@
 #include "../Backend/BackendScopeRef.h"
 #include "../Renderer/Texture.h"
 #include "../Scene/Scene.h"
+#include "../Renderer/FrameBuffer.h"
+#include "../Scene/Entity.hpp"
 
 #include <filesystem>
 #include <glm/glm.hpp>
-#include "../Scene/Entity.hpp"
 
 struct MainEditor : Layer
 {
@@ -48,8 +49,9 @@ private:
 	};
 	SceneState m_SceneState = SceneState::Edit;
 
+	Ref<Framebuffer> m_Framebuffer;
 	bool isPopupOpen = false;
-	int m_GizmoType = -1;
+	int m_GizmoType;
 	Entity m_SelectionContext;
 	Entity m_HoveredEntity;
 	Ref<Scene> m_ActiveScene;

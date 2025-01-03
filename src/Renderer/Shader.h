@@ -7,9 +7,12 @@
 #include <sstream>
 #include <iostream>
 #include <unordered_map>
+#include "../Backend/BackendScopeRef.h"
 
 struct Shader
 {
+    Shader(const char* fullshader);
+    Shader(const char* vertexPath, const char* fragmentPath, const char* geometryPath = nullptr);
     ~Shader() = default;
 
     void Load(const char* fullshader);
@@ -30,6 +33,8 @@ struct Shader
     void setMat3(const std::string& name, const glm::mat3& mat) const;
     void setMat4(const std::string& name, const glm::mat4& mat) const;
     
+    static Ref<Shader> Create(const char* fullshader) { return CreateRef<Shader>(fullshader); };
+    static Ref<Shader> Create(const char* vertexPath, const char* fragmentPath, const char* geometryPath = nullptr) { return CreateRef<Shader>(vertexPath,fragmentPath,geometryPath); }
 private:
 
     GLuint m_ID;

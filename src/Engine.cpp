@@ -125,13 +125,11 @@ void Engine::SetupMainWindow()
 {
 	m_MainWindow = Window::Create<MainWindow>({ "GABGL - " + GetCurrentProject(), 1000, 600 });
 	m_MainWindow->SetEventCallback(BIND_EVENT(OnEvent));
-	Renderer::Init();
 	m_ImGuiLayer = new ImGuiLayer(m_MainWindow.get());
+	Renderer::Init();
 	PushOverlay(m_ImGuiLayer);
 	m_MainEditorlayer = new MainEditor;
 	PushLayer(m_MainEditorlayer);
-	m_RendererLayer = new Renderer2D;
-	PushLayer(m_RendererLayer);
 }
 
 void Engine::RenderLayers(DeltaTime& dt)
