@@ -69,15 +69,15 @@ struct CameraComponent
     CameraComponent(const CameraComponent&) = default;
 };
 
-struct SpriteComponent
+struct TextureComponent
 {
     glm::vec4 Color = glm::vec4(1);
     Ref<Texture> Texture;
     float TilingFactor = 1.0f;
 
-    SpriteComponent() = default;
-    SpriteComponent(const SpriteComponent&) = default;
-    SpriteComponent(const glm::vec4& color)
+    TextureComponent() = default;
+    TextureComponent(const TextureComponent&) = default;
+    TextureComponent(const glm::vec4& color)
         : Color(color) {}
 };
 
@@ -86,20 +86,21 @@ struct MeshComponent
 
 };
 
+struct AudioComponent
+{
+
+};
+
 struct TextComponent
 {
     std::string TextString;
     //Ref<Font> FontAsset = Font::GetDefault();
-    glm::vec4 Color{ 1.0f };
+    glm::vec4 Color = glm::vec4(1);
     float Kerning = 0.0f;
     float LineSpacing = 0.0f;
 };
 
 template<typename... Component>
-struct ComponentGroup
-{
-};
+struct ComponentGroup {};
 
-using AllComponents =
-ComponentGroup<TransformComponent, SpriteComponent,
-    CameraComponent, TextComponent>;
+using AllComponents = ComponentGroup<TransformComponent, TextureComponent, CameraComponent, TextComponent>;

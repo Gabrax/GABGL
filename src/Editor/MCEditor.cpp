@@ -13,6 +13,7 @@
 #include "../Input/UserInput.h"
 #include "../Backend/Utils.hpp"
 #include "../Renderer/RendererAPI.h"
+#include "json.hpp"
 
 MainEditor::MainEditor() : Layer("MainEditor"), m_BaseDirectory(Engine::GetInstance().GetCurrentProjectPath()), m_CurrentDirectory(m_BaseDirectory), m_GizmoType(ImGuizmo::OPERATION::TRANSLATE)
 {
@@ -152,6 +153,8 @@ void MainEditor::OnImGuiRender()
 
 	style.WindowMinSize.x = minWinSizeX;
 
+	static bool isPopupOpen = false;
+
 	if (ImGui::BeginMenuBar())
 	{
 		if (ImGui::BeginMenu("File"))
@@ -175,7 +178,42 @@ void MainEditor::OnImGuiRender()
 		ImGui::EndMenuBar();
 	}
 	// POPUPS //
-	SetupStartupScenePopup();
+	if (isPopupOpen) ImGui::OpenPopup("Setup Startup Scene Popup");
+	if (ImGui::BeginPopup("Setup Startup Scene Popup", ImGuiWindowFlags_AlwaysAutoResize))
+	{
+		isPopupOpen = false;
+		static char scenePath[256] = ""; // Buffer for the scene file path
+
+		ImGui::Text("Drag and drop a .scene file or type the file path:");
+		ImGui::InputText("##ScenePath", scenePath, IM_ARRAYSIZE(scenePath));
+
+		// Accept drag-and-drop for .scene files
+		if (ImGui::BeginDragDropTarget())
+		{
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("SCENE_FILE"))
+			{
+				const char* droppedFilePath = static_cast<const char*>(payload->Data);
+				strncpy(scenePath, droppedFilePath, IM_ARRAYSIZE(scenePath));
+			}
+			ImGui::EndDragDropTarget();
+		}
+
+		// Buttons
+		if (ImGui::Button("OK"))
+		{
+			printf("Selected Scene Path: %s\n", scenePath);
+			isPopupOpen = false; // Close the popup
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Cancel"))
+		{
+			isPopupOpen = false; // Close the popup
+			ImGui::CloseCurrentPopup();
+		}
+
+		ImGui::EndPopup();
+	}
 	// POPUPS //
 
 	// PANELS //
@@ -318,53 +356,6 @@ void MainEditor::ReloadProject()
 void MainEditor::SaveProject()
 {
 
-}
-
-void MainEditor::SetupStartupScenePopup()
-{
-	if (isPopupOpen)
-	{
-		ImGui::OpenPopup("Setup Startup Scene Popup");
-		if (ImGui::BeginPopup("Setup Startup Scene Popup", ImGuiWindowFlags_AlwaysAutoResize))
-		{
-			static char scenePath[256] = ""; // Buffer for the scene file path
-
-			ImGui::Text("Drag and drop a .scene file or type the file path:");
-			ImGui::InputText("##ScenePath", scenePath, IM_ARRAYSIZE(scenePath));
-
-			// Accept drag-and-drop for .scene files
-			if (ImGui::BeginDragDropTarget())
-			{
-				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("SCENE_FILE"))
-				{
-					const char* droppedFilePath = static_cast<const char*>(payload->Data);
-					strncpy(scenePath, droppedFilePath, IM_ARRAYSIZE(scenePath));
-				}
-				ImGui::EndDragDropTarget();
-			}
-
-			// Buttons
-			if (ImGui::Button("OK"))
-			{
-				printf("Selected Scene Path: %s\n", scenePath);
-				isPopupOpen = false; // Close the popup
-				ImGui::CloseCurrentPopup();
-			}
-			ImGui::SameLine();
-			if (ImGui::Button("Cancel"))
-			{
-				isPopupOpen = false; // Close the popup
-				ImGui::CloseCurrentPopup();
-			}
-
-			ImGui::EndPopup();
-		}
-		else
-		{
-			// Reset state if popup is closed by other means
-			isPopupOpen = false;
-		}
-	}
 }
 
 void MainEditor::ViewportPanel()
@@ -659,7 +650,7 @@ void MainEditor::DrawComponents(Entity entity)
 	{
 		DisplayAddComponentEntry<TransformComponent>("Transform");
 		DisplayAddComponentEntry<CameraComponent>("Camera");
-		DisplayAddComponentEntry<SpriteComponent>("Texture");
+		DisplayAddComponentEntry<TextureComponent>("Texture");
 		DisplayAddComponentEntry<TextComponent>("Text");
 
 		ImGui::EndPopup();
@@ -735,11 +726,23 @@ void MainEditor::DrawComponents(Entity entity)
 			}
 		});
 
-	DrawComponent<SpriteComponent>("Sprite Renderer", entity, [](auto& component)
+	DrawComponent<TextureComponent>("Texture", entity, [](auto& component)
 		{
 			ImGui::ColorEdit4("Color", glm::value_ptr(component.Color));
 
-			ImGui::Button("Texture", ImVec2(100.0f, 0.0f));
+			if (component.Texture)
+			{
+				// Flip the Y axis by changing UV coordinates
+				ImVec2 uv0 = { 0.0f, 1.0f }; // Bottom-left
+				ImVec2 uv1 = { 1.0f, 0.0f }; // Top-right
+				ImGui::Image((ImTextureID)component.Texture->GetRendererID(), ImVec2(100.0f, 100.0f), uv0, uv1);
+			}
+			else
+			{
+				ImGui::Text("Drop Texture here");
+			}
+
+			// Handle drag and drop for the texture
 			if (ImGui::BeginDragDropTarget())
 			{
 				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM"))
@@ -754,8 +757,6 @@ void MainEditor::DrawComponents(Entity entity)
 				}
 				ImGui::EndDragDropTarget();
 			}
-
-			ImGui::DragFloat("Tiling Factor", &component.TilingFactor, 0.1f, 0.0f, 100.0f);
 		});
 
 	DrawComponent<TextComponent>("Text Renderer", entity, [](auto& component)
@@ -783,77 +784,191 @@ void MainEditor::DisplayAddComponentEntry(const std::string& entryName) {
 
 void MainEditor::ContentBrowserPanel()
 {
-	ImGui::Begin("Content Browser",nullptr, ImGuiWindowFlags_NoCollapse);
-	ImGui::BeginGroup();
-	if (m_CurrentDirectory != std::filesystem::path(m_BaseDirectory))
-	{
-		if (ImGui::Button("<"))
+    ImGui::Begin("Content Browser", nullptr, ImGuiWindowFlags_NoCollapse);
+    ImGui::BeginGroup();
+    if (m_CurrentDirectory != std::filesystem::path(m_BaseDirectory))
+    {
+        if (ImGui::Button("<"))
+        {
+            m_CurrentDirectory = m_CurrentDirectory.parent_path();
+        }
+    }
+    ImGui::SameLine();
+    CenteredText("Content Browser");
+    ImGui::EndGroup();
+
+    static float padding = 16.0f;
+    static float thumbnailSize = 128.0f;
+    float cellSize = thumbnailSize + padding;
+
+    float panelWidth = ImGui::GetContentRegionAvail().x;
+    int columnCount = (int)(panelWidth / cellSize);
+    if (columnCount < 1)
+        columnCount = 1;
+
+    ImGui::Columns(columnCount, 0, false);
+
+	static bool openCreateScenePopup = false;
+
+    for (auto& directoryEntry : std::filesystem::directory_iterator(m_CurrentDirectory))
+    {
+        const auto& path = directoryEntry.path();
+        std::string filenameString = path.filename().string();
+
+        if (!directoryEntry.is_directory() && path.extension() == ".proj")
+            continue;
+
+        ImGui::PushID(filenameString.c_str());
+        Ref<Texture> icon = directoryEntry.is_directory() ? m_FolderIcon : m_FileIcon;
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+        ImGui::ImageButton((ImTextureID)icon->GetRendererID(), { thumbnailSize, thumbnailSize }, { 0, 1 }, { 1, 0 });
+
+        if (ImGui::BeginDragDropSource())
+        {
+            std::filesystem::path relativePath(path);
+            const wchar_t* itemPath = relativePath.c_str();
+            ImGui::SetDragDropPayload("CONTENT_BROWSER_ITEM", itemPath, (wcslen(itemPath) + 1) * sizeof(wchar_t));
+            ImGui::EndDragDropSource();
+        }
+
+        ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+        {
+            if (directoryEntry.is_directory())
+                m_CurrentDirectory /= path.filename();
+        }
+        // Right-click context menu for delete on files and directories
+        if (ImGui::IsItemHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Right))
+        {
+            ImGui::OpenPopup("Delete");
+        }
+
+        if (ImGui::BeginPopup("Delete"))
+        {
+            if (ImGui::MenuItem("Delete") && !IsProtectedFolder(path))
+            {
+                DeleteFileOrFolder(path);
+            }
+
+            ImGui::EndPopup();
+        }
+		if (ImGui::IsMouseReleased(ImGuiMouseButton_Right) && ImGui::IsWindowHovered() && !ImGui::IsItemHovered())
 		{
-			m_CurrentDirectory = m_CurrentDirectory.parent_path();
+			ImGui::OpenPopup("Context Menu");
 		}
-	}
-	ImGui::SameLine();
-	CenteredText("Content Browser");
-	ImGui::EndGroup();
 
-	static float padding = 16.0f;
-	static float thumbnailSize = 128.0f;
-	float cellSize = thumbnailSize + padding;
-
-	float panelWidth = ImGui::GetContentRegionAvail().x;
-	int columnCount = (int)(panelWidth / cellSize);
-	if (columnCount < 1)
-		columnCount = 1;
-
-	ImGui::Columns(columnCount, 0, false);
-
-	for (auto& directoryEntry : std::filesystem::directory_iterator(m_CurrentDirectory))
-	{
-		const auto& path = directoryEntry.path();
-		std::string filenameString = path.filename().string();
-
-		if (!directoryEntry.is_directory() && path.extension() == ".proj")
-			continue;
-
-		ImGui::PushID(filenameString.c_str());
-		Ref<Texture> icon = directoryEntry.is_directory() ? m_FolderIcon : m_FileIcon;
-		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-		ImGui::ImageButton((ImTextureID)icon->GetRendererID(), { thumbnailSize, thumbnailSize }, { 0, 1 }, { 1, 0 });
-
-		if (ImGui::BeginDragDropSource())
+		if (ImGui::BeginPopup("Context Menu"))
 		{
-			std::filesystem::path relativePath(path);
-			const wchar_t* itemPath = relativePath.c_str();
-			ImGui::SetDragDropPayload("CONTENT_BROWSER_ITEM", itemPath, (wcslen(itemPath) + 1) * sizeof(wchar_t));
-			ImGui::EndDragDropSource();
+			if (ImGui::MenuItem("Create Scene"))
+			{
+				openCreateScenePopup = true;
+			}
+			ImGui::EndPopup();
 		}
+		
+        ImGui::TextWrapped(filenameString.c_str());
 
-		ImGui::PopStyleColor();
-		if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-		{
-			if (directoryEntry.is_directory())
-				m_CurrentDirectory /= path.filename();
-		}
-		ImGui::TextWrapped(filenameString.c_str());
+        ImGui::NextColumn();
+        ImGui::PopID();
+    }
 
-		ImGui::NextColumn();
+    ImGui::Columns(1);
 
-		ImGui::PopID();
-	}
+    if (openCreateScenePopup) ImGui::OpenPopup("Create Scene");
 
-	ImGui::Columns(1);
+    // Modal Popup for scene creation
+    if (ImGui::BeginPopupModal("Create Scene", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        openCreateScenePopup = false;
+        static char sceneName[256] = "";
+        ImGui::InputText("Scene Name", sceneName, sizeof(sceneName));
 
-	ImGui::End();
+        // Save and Cancel Buttons
+        if (ImGui::Button("Save"))
+        {
+            // Construct JSON object
+            nlohmann::json sceneJson;
+            sceneJson["Scene"] = sceneName;
+            sceneJson["Entities"] = NULL;
+
+            // Save JSON to file
+            std::filesystem::path sceneFilePath = m_CurrentDirectory / (std::string(sceneName) + ".scene");
+            std::ofstream sceneFile(sceneFilePath);
+            if (sceneFile.is_open())
+            {
+                sceneFile << sceneJson.dump(4); // Pretty-print with 4 spaces
+                sceneFile.close();
+            }
+
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel"))
+        {
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
+
+    ImGui::End();
 }
+
+
+
+bool MainEditor::IsProtectedFolder(const std::filesystem::path& path)
+{
+	// Prevent deletion of the 'Scenes' folder, assuming it is at the same level as 'Assets'
+	std::filesystem::path parentPath = path.parent_path();
+	std::string folderName = path.filename().string();
+
+	// Check if the parent directory is the same as your base directory and if the folder is "Scenes"
+	if (parentPath == m_BaseDirectory && folderName == "Scenes")
+	{
+		return true;
+	}
+
+	return false;
+}
+
+void MainEditor::DeleteFileOrFolder(const std::filesystem::path& path)
+{
+	try
+	{
+		if (std::filesystem::is_directory(path))
+		{
+			// Delete directory and its contents
+			std::filesystem::remove_all(path);
+		}
+		else
+		{
+			// Delete file
+			std::filesystem::remove(path);
+		}
+	}
+	catch (const std::exception& e)
+	{
+		// Handle any errors that may occur during deletion
+		std::cerr << "Error deleting file or folder: " << e.what() << std::endl;
+	}
+}
+
 
 void MainEditor::DebugProfilerPanel()
 {
 	ImGui::Begin("Debug Instrumentation", nullptr, ImGuiWindowFlags_NoCollapse);
 	CenteredText("Debug Instrumentation");
-
-	if (ImGui::Button("Reload 2D Shaders")) puts("TO BE DONE");
+	ImGui::Separator();
+	if (ImGui::Button("Reload 2D Shaders")) Renderer2D::LoadShaders();
 	if (ImGui::Button("Reload 3D Shaders")) puts("TO BE DONE");
-
+	ImGui::Separator();
+	auto stats = Renderer2D::GetStats();
+	ImGui::Text("Renderer2D Stats:");
+	ImGui::Text("Draw Calls: %d", stats.DrawCalls);
+	ImGui::Text("Quads: %d", stats.QuadCount);
+	ImGui::Text("Vertices: %d", stats.GetTotalVertexCount());
+	ImGui::Text("Indices: %d", stats.GetTotalIndexCount());
+	ImGui::Separator();
 	for (auto& result : s_ProfileResults)
 	{
 		char label[50];

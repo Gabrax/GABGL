@@ -2,15 +2,11 @@ cmake_minimum_required(VERSION 3.5)
 
 include(FetchContent)
 
-# Set this to true to ship the game!
-option(PRODUCTION_BUILD "Make this a production build" OFF)
-
 # Set this to false if you don’t use clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Compiler settings for Clang, MSVC, and GCC
 if(MSVC)
-    # Set the MSVC runtime library to static multithreading for Release configuration
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:RelWithDebInfo>:RelWithDebInfo>")
     add_compile_options(/MP)
     target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC _CRT_SECURE_NO_WARNINGS)
@@ -61,13 +57,6 @@ FetchContent_Declare(
     GIT_TAG v0.18
 )
 
-# TracyProfiler
-#FetchContent_Declare (
-#    tracy
-#    GIT_REPOSITORY https://github.com/wolfpld/tracy.git
-#    GIT_TAG v0.11.1
-#)
-
 # ImGuizmo
 FetchContent_Declare(
     imguizmo
@@ -82,7 +71,14 @@ FetchContent_Declare(
     GIT_TAG v1.11.0 
 )
 
-FetchContent_MakeAvailable(assimp meshoptimizer imguizmo spdlog)
+# OpenAL Soft
+FetchContent_Declare(
+    openal-soft
+    GIT_REPOSITORY https://github.com/kcat/openal-soft.git
+    GIT_TAG 1.23.1 # Replace with the desired version
+)
+
+FetchContent_MakeAvailable(assimp meshoptimizer imguizmo spdlog openal-soft)
 
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -134,4 +130,4 @@ add_custom_command(
 )
 
 # Target link libraries
-target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp glText tinyOBJ meshoptimizer EnTT JSONparser PhysX spdlog::spdlog)
+target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp glText tinyOBJ meshoptimizer EnTT JSONparser PhysX spdlog::spdlog OpenAL::OpenAL)

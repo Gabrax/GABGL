@@ -29,12 +29,12 @@ void Renderer::EndScene()
 {
 }
 
-//void Renderer::Submit(const Ref<Shader>& shader, const Ref<VertexArray>& vertexArray, const glm::mat4& transform)
-//{
-//	shader->Bind();
-//	shader->SetMat4("u_ViewProjection", s_SceneData->ViewProjectionMatrix);
-//	shader->SetMat4("u_Transform", transform);
-//
-//	vertexArray->Bind();
-//	RenderCommand::DrawIndexed(vertexArray);
-//}
+void Renderer::Submit(const Ref<Shader>& shader, const Ref<VertexArray>& vertexArray, const glm::mat4& transform)
+{
+	shader->Use();
+	shader->setMat4("u_ViewProjection", s_SceneData->ViewProjectionMatrix);
+	shader->setMat4("u_Transform", transform);
+
+	vertexArray->Bind();
+	RendererAPI::DrawIndexed(vertexArray);
+}

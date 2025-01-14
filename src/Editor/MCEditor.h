@@ -30,11 +30,12 @@ private:
 	void ReloadProject();
 	void SaveProject();
 private:
-	void SetupStartupScenePopup();
 	void ViewportPanel();
 	void SceneHierarchyPanel();
 	void ComponentsPanel();
 	void ContentBrowserPanel();
+	bool IsProtectedFolder(const std::filesystem::path& path);
+	void DeleteFileOrFolder(const std::filesystem::path& path);
 	void DebugProfilerPanel();
 	void CenteredText(const char* text);
 	void DrawEntityNode(Entity entity);
@@ -50,7 +51,6 @@ private:
 	SceneState m_SceneState = SceneState::Edit;
 
 	Ref<Framebuffer> m_Framebuffer;
-	bool isPopupOpen = false;
 	int m_GizmoType;
 	Entity m_SelectionContext;
 	Entity m_HoveredEntity;

@@ -58,20 +58,24 @@ struct Renderer2DData
 
 	Ref<VertexArray> QuadVertexArray;
 	Ref<VertexBuffer> QuadVertexBuffer;
-	Ref<Shader> QuadShader;
 	Ref<Texture> WhiteTexture;
 
 	Ref<VertexArray> CircleVertexArray;
 	Ref<VertexBuffer> CircleVertexBuffer;
-	Ref<Shader> CircleShader;
 
 	Ref<VertexArray> LineVertexArray;
 	Ref<VertexBuffer> LineVertexBuffer;
-	Ref<Shader> LineShader;
 
 	Ref<VertexArray> TextVertexArray;
 	Ref<VertexBuffer> TextVertexBuffer;
-	Ref<Shader> TextShader;
+
+	struct Shaders2D
+	{
+		Ref<Shader> QuadShader;
+		Ref<Shader> CircleShader;
+		Ref<Shader> LineShader;
+		Ref<Shader> TextShader;
+	} _shaders2D;
 
 	uint32_t QuadIndexCount = 0;
 	QuadVertex* QuadVertexBufferBase = nullptr;
@@ -107,6 +111,14 @@ struct Renderer2DData
 	CameraData CameraBuffer;
 	Ref<UniformBuffer> CameraUniformBuffer;
 } s_Data;
+
+void Renderer2D::LoadShaders()
+{
+	s_Data._shaders2D.QuadShader = Shader::Create("../res/shaders/Renderer2D_Quad.glsl");
+	s_Data._shaders2D.CircleShader = Shader::Create("../res/shaders/Renderer2D_Circle.glsl");
+	s_Data._shaders2D.LineShader = Shader::Create("../res/shaders/Renderer2D_Line.glsl");
+	//s_Data._shaders2D.TextShader = Shader::Create("assets/shaders/Renderer2D_Text.glsl");
+}
 
 void Renderer2D::Init()
 {
@@ -156,6 +168,9 @@ void Renderer2D::Init()
 		{ ShaderDataType::Float,  "a_Thickness"     },
 		{ ShaderDataType::Float,  "a_Fade"          },
 		{ ShaderDataType::Int,    "a_EntityID"      }
+		/*{ ShaderDataType::Float,  "a_TilingFactor"  },
+		{ ShaderDataType::Float2, "a_TexCoord"		},
+		{ ShaderDataType::Float,  "a_TexIndex"		}*/
 		});
 	s_Data.CircleVertexArray->AddVertexBuffer(s_Data.CircleVertexBuffer);
 	s_Data.CircleVertexArray->SetIndexBuffer(quadIB); // Use quad IB
@@ -195,10 +210,7 @@ void Renderer2D::Init()
 	for (uint32_t i = 0; i < s_Data.MaxTextureSlots; i++)
 		samplers[i] = i;
 
-	s_Data.QuadShader = Shader::Create("../res/shaders/Renderer2D_Quad.glsl");
-	//s_Data.CircleShader = Shader::Create("assets/shaders/Renderer2D_Circle.glsl");
-	s_Data.LineShader = Shader::Create("../res/shaders/Renderer2D_Line.glsl");
-	//s_Data.TextShader = Shader::Create("assets/shaders/Renderer2D_Text.glsl");
+	LoadShaders();
 
 	// Set first texture slot to 0
 	s_Data.TextureSlots[0] = s_Data.WhiteTexture;
@@ -259,7 +271,7 @@ void Renderer2D::Flush()
 		for (uint32_t i = 0; i < s_Data.TextureSlotIndex; i++)
 			s_Data.TextureSlots[i]->Bind(i);
 
-		s_Data.QuadShader->Use();
+		s_Data._shaders2D.QuadShader->Use();
 		RendererAPI::DrawIndexed(s_Data.QuadVertexArray, s_Data.QuadIndexCount);
 		s_Data.Stats.DrawCalls++;
 	}
@@ -269,7 +281,7 @@ void Renderer2D::Flush()
 		uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.CircleVertexBufferPtr - (uint8_t*)s_Data.CircleVertexBufferBase);
 		s_Data.CircleVertexBuffer->SetData(s_Data.CircleVertexBufferBase, dataSize);
 
-		s_Data.CircleShader->Use();
+		s_Data._shaders2D.CircleShader->Use();
 		RendererAPI::DrawIndexed(s_Data.CircleVertexArray, s_Data.CircleIndexCount);
 		s_Data.Stats.DrawCalls++;
 	}
@@ -279,7 +291,7 @@ void Renderer2D::Flush()
 		uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.LineVertexBufferPtr - (uint8_t*)s_Data.LineVertexBufferBase);
 		s_Data.LineVertexBuffer->SetData(s_Data.LineVertexBufferBase, dataSize);
 
-		s_Data.LineShader->Use();
+		s_Data._shaders2D.LineShader->Use();
 		RendererAPI::SetLineWidth(s_Data.LineWidth);
 		RendererAPI::DrawLines(s_Data.LineVertexArray, s_Data.LineVertexCount);
 		s_Data.Stats.DrawCalls++;
@@ -293,7 +305,7 @@ void Renderer2D::Flush()
 		auto buf = s_Data.TextVertexBufferBase;
 		s_Data.FontAtlasTexture->Bind(0);
 
-		s_Data.TextShader->Use();
+		s_Data._shaders2D.TextShader->Use();
 		RendererAPI::DrawIndexed(s_Data.TextVertexArray, s_Data.TextIndexCount);
 		s_Data.Stats.DrawCalls++;
 	}
@@ -496,7 +508,7 @@ void Renderer2D::DrawRect(const glm::mat4& transform, const glm::vec4& color, in
 	DrawLine(lineVertices[3], lineVertices[0], color, entityID);
 }
 
-void Renderer2D::DrawSprite(const glm::mat4& transform, SpriteComponent& src, int entityID)
+void Renderer2D::DrawSprite(const glm::mat4& transform, TextureComponent& src, int entityID)
 {
 	if (src.Texture)
 		DrawQuad(transform, src.Texture, src.TilingFactor, src.Color, entityID);

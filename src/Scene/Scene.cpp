@@ -135,7 +135,6 @@ void Scene::OnUpdateRuntime(DeltaTime dt)
 		}
 	}
 
-	// Render 3D
 	Camera* mainCamera = nullptr;
 	glm::mat4 cameraTransform;
 	{
@@ -159,24 +158,13 @@ void Scene::OnUpdateRuntime(DeltaTime dt)
 
 		// Draw sprites
 		{
-			auto group = m_Registry.group<TransformComponent>(entt::get<SpriteComponent>);
+			auto group = m_Registry.group<TransformComponent>(entt::get<TextureComponent>);
 			for (auto entity : group)
 			{
-				auto [transform, sprite] = group.get<TransformComponent, SpriteComponent>(entity);
+				auto [transform, sprite] = group.get<TransformComponent, TextureComponent>(entity);
 
 				Renderer2D::DrawSprite(transform.GetTransform(), sprite, (int)entity);
 			}
-		}
-
-		// Draw circles
-		{
-			/*auto view = m_Registry.view<TransformComponent, CircleRendererComponent>();
-			for (auto entity : view)
-			{
-				auto [transform, circle] = view.get<TransformComponent, CircleRendererComponent>(entity);
-
-				Renderer2D::DrawCircle(transform.GetTransform(), circle.Color, circle.Thickness, circle.Fade, (int)entity);
-			}*/
 		}
 
 		// Draw text
@@ -202,13 +190,11 @@ void Scene::OnUpdateSimulation(DeltaTime dt, EditorCamera& camera)
 		
 	}
 
-	// Render
 	RenderScene(camera);
 }
 
 void Scene::OnUpdateEditor(DeltaTime dt, EditorCamera& camera)
 {
-	// Render
 	RenderScene(camera);
 }
 
@@ -293,25 +279,14 @@ void Scene::RenderScene(EditorCamera& camera)
 
 	//// Draw sprites
 	{
-		auto group = m_Registry.group<TransformComponent>(entt::get<SpriteComponent>);
+		auto group = m_Registry.group<TransformComponent>(entt::get<TextureComponent>);
 		for (auto entity : group)
 		{
-			auto [transform, sprite] = group.get<TransformComponent, SpriteComponent>(entity);
+			auto [transform, sprite] = group.get<TransformComponent, TextureComponent>(entity);
 
 			Renderer2D::DrawSprite(transform.GetTransform(), sprite, (int)entity);
 		}
 	}
-
-	//// Draw circles
-	//{
-	//	auto view = m_Registry.view<TransformComponent, CircleRendererComponent>();
-	//	for (auto entity : view)
-	//	{
-	//		auto [transform, circle] = view.get<TransformComponent, CircleRendererComponent>(entity);
-
-	//		Renderer2D::DrawCircle(transform.GetTransform(), circle.Color, circle.Thickness, circle.Fade, (int)entity);
-	//	}
-	//}
 
 	//// Draw text
 	//{
@@ -339,6 +314,11 @@ void Scene::OnComponentAdded<IDComponent>(Entity entity, IDComponent& component)
 }
 
 template<>
+void Scene::OnComponentAdded<TagComponent>(Entity entity, TagComponent& component)
+{
+}
+
+template<>
 void Scene::OnComponentAdded<TransformComponent>(Entity entity, TransformComponent& component)
 {
 }
@@ -351,12 +331,7 @@ void Scene::OnComponentAdded<CameraComponent>(Entity entity, CameraComponent& co
 }
 
 template<>
-void Scene::OnComponentAdded<SpriteComponent>(Entity entity, SpriteComponent& component)
-{
-}
-
-template<>
-void Scene::OnComponentAdded<TagComponent>(Entity entity, TagComponent& component)
+void Scene::OnComponentAdded<TextureComponent>(Entity entity, TextureComponent& component)
 {
 }
 

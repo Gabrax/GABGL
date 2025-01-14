@@ -42,7 +42,7 @@ struct Renderer2D
 	static void DrawRect(const glm::vec3& position, const glm::vec2& size, const glm::vec4& color, int entityID = -1);
 	static void DrawRect(const glm::mat4& transform, const glm::vec4& color, int entityID = -1);
 
-	static void DrawSprite(const glm::mat4& transform, SpriteComponent& src, int entityID);
+	static void DrawSprite(const glm::mat4& transform, TextureComponent& src, int entityID);
 
 	struct TextParams
 	{
@@ -55,6 +55,7 @@ struct Renderer2D
 
 	static float GetLineWidth();
 	static void SetLineWidth(float width);
+	static void LoadShaders();
 
 	// Stats
 	struct Statistics
