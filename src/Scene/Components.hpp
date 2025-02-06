@@ -91,6 +91,16 @@ struct AudioComponent
 
 };
 
+struct LightComponent
+{
+
+};
+
+struct EnvironmentMapComponent
+{
+
+};
+
 struct TextComponent
 {
     std::string TextString;

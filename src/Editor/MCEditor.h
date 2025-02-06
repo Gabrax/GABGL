@@ -60,6 +60,8 @@ private:
 	EditorCamera m_EditorCamera;
 	std::filesystem::path m_BaseDirectory;
 	std::filesystem::path m_CurrentDirectory;
+	std::vector<std::string> sceneFiles;
+	int selectedSceneIndex = -1;
 	bool m_ViewportFocused = false, m_ViewportHovered = false;
 	glm::vec2 m_ViewportSize = { 0.0f, 0.0f };
 	glm::vec2 m_ViewportBounds[2];

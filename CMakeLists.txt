@@ -22,21 +22,13 @@ if(MSVC)
        DESTINATION "${CMAKE_BINARY_DIR}"
     )
 
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     add_compile_options(
         -Wall -Wextra -Wpedantic
         -Wno-unused-function
         -Wno-unused-parameter
         -ferror-limit=0
         -std=c++17
-    )
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    add_compile_options(
-        -Wall -Wextra -Wpedantic
-        -Wno-unused-function
-        -Wno-unused-parameter
-        -std=c++17
-        -fexceptions 
     )
 endif()
 
@@ -85,6 +77,9 @@ set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries only" FORCE)
+set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "Disable Assimp tests" FORCE)
+set(ASSIMP_BUILD_DOCS OFF CACHE BOOL "Disable Assimp documentation" FORCE)
 
 add_subdirectory(vendor/glfw-3.3.2)
 add_subdirectory(vendor/glad)

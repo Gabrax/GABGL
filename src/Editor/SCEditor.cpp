@@ -140,7 +140,7 @@ void StartEditor::NewProject(const std::string& projectName)
 			{"Project", {
 				{"Name", projectName},
 				{"StartScene", ""},
-				{"AssetDirectory", "Assets"}
+				{"AssetDirectory", projectPath / "Assets" }
 			}}
 		};
 
