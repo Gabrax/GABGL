@@ -167,9 +167,8 @@ void MainEditor::OnImGuiRender()
 		
 		if (ImGui::BeginMenu("Options"))
 		{
-			if (ImGui::MenuItem("Setup Startup Scene"))
+			if (ImGui::BeginMenu("Setup Startup Scene"))
 			{
-				isPopupOpen = true;
 				sceneFiles.clear();
 				std::filesystem::path scenesFolderPath = m_CurrentDirectory / "Scenes";
 				
@@ -183,6 +182,83 @@ void MainEditor::OnImGuiRender()
 						}
 					}
 				}
+				//isPopupOpen = true;
+				ImGui::Separator(); // Visual separation
+				ImGui::Text("Select a startup scene:");
+
+				if (sceneFiles.empty())
+				{
+					ImGui::Text("No .scene files found in /Scenes folder.");
+				}
+				else
+				{
+					if (ImGui::BeginCombo("##SceneFiles", selectedSceneIndex >= 0 ? sceneFiles[selectedSceneIndex].c_str() : "Select a scene"))
+					{
+						for (size_t i = 0; i < sceneFiles.size(); ++i)
+						{
+							bool isSelected = (selectedSceneIndex == (int)i);
+							if (ImGui::Selectable(sceneFiles[i].c_str(), isSelected))
+							{
+								selectedSceneIndex = (int)i;
+							}
+							if (isSelected)
+							{
+								ImGui::SetItemDefaultFocus();
+							}
+						}
+						ImGui::EndCombo();
+					}
+					if (ImGui::Button("OK") && selectedSceneIndex != -1)
+					{
+						std::filesystem::path selectedScenePath = m_BaseDirectory / "Scenes" / sceneFiles[selectedSceneIndex];
+
+						// Path to the project file
+						std::filesystem::path projectFilePath = m_BaseDirectory / (Engine::GetInstance().GetCurrentProject() + ".proj");
+						nlohmann::json projectJson;
+
+						// Check if the project file exists and load it
+						if (std::filesystem::exists(projectFilePath))
+						{
+							std::ifstream file(projectFilePath);
+							if (file.is_open())
+							{
+								try
+								{
+									file >> projectJson; // Load existing JSON
+								}
+								catch (const std::exception& e)
+								{
+									std::cerr << "Error loading JSON: " << e.what() << std::endl;
+								}
+								file.close();
+							}
+						}
+
+						// Update the StartScene field with the selected scene file
+						projectJson["Project"]["StartScene"] = selectedScenePath.string();
+
+						std::ofstream outFile(projectFilePath);
+						if (outFile.is_open())
+						{
+							outFile << projectJson.dump(4); // Pretty-print with 4 spaces indentation
+							outFile.close();
+							std::cout << "Saved StartScene path to project.proj: " << selectedScenePath << std::endl;
+						}
+						else
+						{
+							std::cerr << "Failed to open project.proj for writing!" << std::endl;
+						}
+						ImGui::CloseCurrentPopup();
+					}
+					ImGui::SameLine();
+					if (ImGui::Button("Cancel"))
+					{
+						ImGui::CloseCurrentPopup();
+					}
+				}
+
+
+				ImGui::EndMenu();
 			}
 
 			ImGui::EndMenu();
@@ -190,90 +266,6 @@ void MainEditor::OnImGuiRender()
 
 		ImGui::EndMenuBar();
 	}
-	// POPUPS //
-	if (isPopupOpen) ImGui::OpenPopup("Setup Startup Scene Popup");
-	if (ImGui::BeginPopup("Setup Startup Scene Popup", ImGuiWindowFlags_AlwaysAutoResize))
-	{
-		isPopupOpen = false; // Reset flag
-
-		ImGui::Text("Select a startup scene:");
-
-		if (sceneFiles.empty())
-		{
-			ImGui::Text("No .scene files found in /scene folder.");
-		}
-		else
-		{
-			if (ImGui::BeginCombo("##SceneFiles", selectedSceneIndex >= 0 ? sceneFiles[selectedSceneIndex].c_str() : "Select a scene"))
-			{
-				for (size_t i = 0; i < sceneFiles.size(); ++i)
-				{
-					bool isSelected = (selectedSceneIndex == (int)i);
-					if (ImGui::Selectable(sceneFiles[i].c_str(), isSelected))
-					{
-						selectedSceneIndex = (int)i;
-					}
-					if (isSelected)
-					{
-						ImGui::SetItemDefaultFocus();
-					}
-				}
-				ImGui::EndCombo();
-			}
-		}
-
-		if (ImGui::Button("OK") && selectedSceneIndex != -1)
-		{
-			std::filesystem::path selectedScenePath = m_BaseDirectory / "Scenes" / sceneFiles[selectedSceneIndex];
-
-			// Path to the project file
-			std::filesystem::path projectFilePath = m_BaseDirectory / (Engine::GetInstance().GetCurrentProject() + ".proj");
-			nlohmann::json projectJson;
-
-			// Check if the project file exists and load it
-			if (std::filesystem::exists(projectFilePath))
-			{
-				std::ifstream file(projectFilePath);
-				if (file.is_open())
-				{
-					try
-					{
-						file >> projectJson; // Load existing JSON
-					}
-					catch (const std::exception& e)
-					{
-						std::cerr << "Error loading JSON: " << e.what() << std::endl;
-					}
-					file.close();
-				}
-			}
-
-			// Update the StartScene field with the selected scene file
-			projectJson["Project"]["StartScene"] = selectedScenePath.string();
-
-			std::ofstream outFile(projectFilePath);
-			if (outFile.is_open())
-			{
-				outFile << projectJson.dump(4); // Pretty-print with 4 spaces indentation
-				outFile.close();
-				std::cout << "Saved StartScene path to project.proj: " << selectedScenePath << std::endl;
-			}
-			else
-			{
-				std::cerr << "Failed to open project.proj for writing!" << std::endl;
-			}
-			ImGui::CloseCurrentPopup();
-		}
-		ImGui::SameLine();
-		if (ImGui::Button("Cancel"))
-		{
-			ImGui::CloseCurrentPopup();
-		}
-
-
-		ImGui::EndPopup();
-	}
-	// POPUPS //
 
 	// PANELS //
 	SceneHierarchyPanel();
@@ -702,8 +694,7 @@ void MainEditor::DrawComponents(Entity entity)
 	ImGui::SameLine();
 	ImGui::PushItemWidth(-1);
 
-	if (ImGui::Button("Add Component"))
-		ImGui::OpenPopup("AddComponent");
+	if (ImGui::Button("Add Component")) ImGui::OpenPopup("AddComponent");
 
 	if (ImGui::BeginPopup("AddComponent"))
 	{
@@ -897,43 +888,61 @@ void MainEditor::ContentBrowserPanel()
                 m_CurrentDirectory /= path.filename();
         }
         // Right-click context menu for delete on files and directories
-        if (ImGui::IsItemHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Right))
+        if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && !IsProtectedFolder(path))
         {
             ImGui::OpenPopup("Delete");
         }
 
         if (ImGui::BeginPopup("Delete"))
         {
-            if (ImGui::MenuItem("Delete") && !IsProtectedFolder(path))
+            if (ImGui::MenuItem("Delete"))
             {
                 DeleteFileOrFolder(path);
             }
 
             ImGui::EndPopup();
         }
-		if (ImGui::IsMouseReleased(ImGuiMouseButton_Right) && ImGui::IsWindowHovered() && !ImGui::IsItemHovered())
+		if (!ImGui::IsPopupOpen("Delete") && ImGui::IsMouseReleased(ImGuiMouseButton_Right) &&
+			ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup) &&
+			!ImGui::IsAnyItemHovered())
 		{
 			ImGui::OpenPopup("Context Menu");
 		}
 
+		bool isInScenesFolder = (m_CurrentDirectory.filename() == "Scenes");
+
 		if (ImGui::BeginPopup("Context Menu"))
 		{
-			if (ImGui::MenuItem("Create Scene"))
+			// Disable the "Create Scene" option if not in the "Scenes" folder
+			if (isInScenesFolder)
 			{
-				openCreateScenePopup = true;
+				if (ImGui::MenuItem("Create Scene"))
+				{
+					openCreateScenePopup = true;
+				}
 			}
+			else
+			{
+				ImGui::BeginDisabled();
+				ImGui::MenuItem("Create Scene");
+				ImGui::EndDisabled();
+			}
+
 			ImGui::EndPopup();
 		}
-		
+
         ImGui::TextWrapped(filenameString.c_str());
 
         ImGui::NextColumn();
         ImGui::PopID();
     }
 
+	if (openCreateScenePopup) {
+		ImGui::OpenPopup("Create Scene");
+		openCreateScenePopup = false;
+	}
     ImGui::Columns(1);
 
-    if (openCreateScenePopup) ImGui::OpenPopup("Create Scene");
 
     // Modal Popup for scene creation
     if (ImGui::BeginPopupModal("Create Scene", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
@@ -982,7 +991,7 @@ bool MainEditor::IsProtectedFolder(const std::filesystem::path& path)
 	std::string folderName = path.filename().string();
 
 	// Check if the parent directory is the same as your base directory and if the folder is "Scenes"
-	if (parentPath == m_BaseDirectory && folderName == "Scenes")
+	if (parentPath == m_BaseDirectory && folderName == "Scenes" || folderName == "Assets")
 	{
 		return true;
 	}
