@@ -1,7 +1,6 @@
 #include "Engine.h"
 #include "Backend/BackendLogger.h"
 #include "Backend/MainWindow.h"
-#include "Backend/StartWindow.h"
 #include "Renderer/Renderer.h"
 
 Engine* Engine::s_Instance = nullptr;
@@ -20,8 +19,7 @@ Engine::~Engine()
 
 void Engine::Run()
 {
-	SetupStartWindow();
-
+	SetupMainWindow();
     while (m_isRunning)
     {
 		GABGL_PROFILE_SCOPE("Main Loop");
@@ -30,36 +28,13 @@ void Engine::Run()
 
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        if (!m_StartWindow->isClosed())
-        {
-			if (!m_Minimized)
-			{	
-				RenderEditorLayers();
-			}
+		if (!m_Minimized)
+		{
+			RenderLayers(dt);
+			RenderEditorLayers();
+		}
 
-            m_StartWindow->Update();
-        }
-        else
-        {
-			if (m_StartWindow->isClosed() && !closed)
-			{
-				CleanupStartWindow();
-			}
-
-            if (!m_MainWindow) 
-            {
-				SetupMainWindow();
-            }
-
-			if (!m_Minimized)
-			{
-				RenderLayers(dt);
-				RenderEditorLayers();
-			}
-
-            m_MainWindow->Update();
-
-        }
+		m_MainWindow->Update();
     }
 }
 
@@ -110,20 +85,9 @@ bool Engine::OnWindowResize(WindowResizeEvent& e)
 	return false;
 }
 
-void Engine::SetupStartWindow()
-{
-	m_StartWindow = Window::Create<StartWindow>({ "GABGL", 600, 300 });
-	m_StartWindow->SetEventCallback(BIND_EVENT(OnEvent));
-
-	m_ImGuiLayer = new ImGuiLayer(m_StartWindow.get());
-	PushOverlay(m_ImGuiLayer);
-	m_StartEditorlayer = new StartEditor;
-	PushLayer(m_StartEditorlayer);
-}
-
 void Engine::SetupMainWindow()
 {
-	m_MainWindow = Window::Create<MainWindow>({ "GABGL - " + GetCurrentProject(), 1000, 600 });
+	m_MainWindow = Window::Create<MainWindow>({ "GABGL", 1000, 600 });
 	m_MainWindow->SetEventCallback(BIND_EVENT(OnEvent));
 	m_ImGuiLayer = new ImGuiLayer(m_MainWindow.get());
 	Renderer::Init();
@@ -146,16 +110,4 @@ void Engine::RenderEditorLayers()
 			layer->OnImGuiRender();
 	}
 	m_ImGuiLayer->End();
-}
-
-void Engine::CleanupStartWindow()
-{
-	closed = true;
-	m_LayerStack.PopOverlay(m_ImGuiLayer);
-	delete m_ImGuiLayer;
-	m_ImGuiLayer = nullptr;
-
-	m_LayerStack.PopLayer(m_StartEditorlayer);
-	delete m_StartEditorlayer;
-	m_StartEditorlayer = nullptr;
 }

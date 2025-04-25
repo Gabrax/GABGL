@@ -15,7 +15,7 @@
 #include "../Renderer/RendererAPI.h"
 #include "json.hpp"
 
-MainEditor::MainEditor() : Layer("MainEditor"), m_BaseDirectory(Engine::GetInstance().GetCurrentProjectPath()), m_CurrentDirectory(m_BaseDirectory), m_GizmoType(ImGuizmo::OPERATION::TRANSLATE)
+MainEditor::MainEditor() : Layer("MainEditor"), m_GizmoType(ImGuizmo::OPERATION::TRANSLATE)
 {
 	m_FolderIcon = Texture::Create("../res/engineTextures/foldericon.png");
 	m_FileIcon = Texture::Create("../res/engineTextures/projfileicon.png");
@@ -108,11 +108,11 @@ void MainEditor::OnImGuiRender()
 	static bool dockspaceOpen = true;
 	static bool opt_fullscreen_persistant = true;
 	bool opt_fullscreen = opt_fullscreen_persistant;
-	static ImGuiDockNodeFlags dockspace_flags = ImGuiWindowFlags_NoCollapse | ImGuiDockNodeFlags_NoTabBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
+	static ImGuiDockNodeFlags dockspace_flags = ImGuiWindowFlags_NoCollapse | ImGuiDockNodeFlags_NoTabBar;
 
 	// We are using the ImGuiWindowFlags_NoDocking flag to make the parent window not dockable into,
 	// because it would be confusing to have two docking targets within each others.
-	ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
+	ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDocking;
 	if (opt_fullscreen)
 	{
 		ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -153,130 +153,10 @@ void MainEditor::OnImGuiRender()
 
 	style.WindowMinSize.x = minWinSizeX;
 
-	static bool isPopupOpen = false;
-
-	if (ImGui::BeginMenuBar())
-	{
-		if (ImGui::BeginMenu("File"))
-		{
-			if (ImGui::MenuItem("ReloadProject", "Ctrl+R")) ReloadProject();
-			if (ImGui::MenuItem("SaveProject", "Ctrl+S")) SaveProject();
-
-			ImGui::EndMenu();
-		}
-		
-		if (ImGui::BeginMenu("Options"))
-		{
-			if (ImGui::BeginMenu("Setup Startup Scene"))
-			{
-				sceneFiles.clear();
-				std::filesystem::path scenesFolderPath = m_CurrentDirectory / "Scenes";
-				
-				if (std::filesystem::exists(scenesFolderPath) && std::filesystem::is_directory(scenesFolderPath))
-				{
-					for (const auto& entry : std::filesystem::directory_iterator(scenesFolderPath))
-					{
-						if (entry.path().extension() == ".scene")
-						{
-							sceneFiles.push_back(entry.path().filename().string());
-						}
-					}
-				}
-				//isPopupOpen = true;
-				ImGui::Separator(); // Visual separation
-				ImGui::Text("Select a startup scene:");
-
-				if (sceneFiles.empty())
-				{
-					ImGui::Text("No .scene files found in /Scenes folder.");
-				}
-				else
-				{
-					if (ImGui::BeginCombo("##SceneFiles", selectedSceneIndex >= 0 ? sceneFiles[selectedSceneIndex].c_str() : "Select a scene"))
-					{
-						for (size_t i = 0; i < sceneFiles.size(); ++i)
-						{
-							bool isSelected = (selectedSceneIndex == (int)i);
-							if (ImGui::Selectable(sceneFiles[i].c_str(), isSelected))
-							{
-								selectedSceneIndex = (int)i;
-							}
-							if (isSelected)
-							{
-								ImGui::SetItemDefaultFocus();
-							}
-						}
-						ImGui::EndCombo();
-					}
-					if (ImGui::Button("OK") && selectedSceneIndex != -1)
-					{
-						std::filesystem::path selectedScenePath = m_BaseDirectory / "Scenes" / sceneFiles[selectedSceneIndex];
-
-						// Path to the project file
-						std::filesystem::path projectFilePath = m_BaseDirectory / (Engine::GetInstance().GetCurrentProject() + ".proj");
-						nlohmann::json projectJson;
-
-						// Check if the project file exists and load it
-						if (std::filesystem::exists(projectFilePath))
-						{
-							std::ifstream file(projectFilePath);
-							if (file.is_open())
-							{
-								try
-								{
-									file >> projectJson; // Load existing JSON
-								}
-								catch (const std::exception& e)
-								{
-									std::cerr << "Error loading JSON: " << e.what() << std::endl;
-								}
-								file.close();
-							}
-						}
-
-						// Update the StartScene field with the selected scene file
-						projectJson["Project"]["StartScene"] = selectedScenePath.string();
-
-						std::ofstream outFile(projectFilePath);
-						if (outFile.is_open())
-						{
-							outFile << projectJson.dump(4); // Pretty-print with 4 spaces indentation
-							outFile.close();
-							std::cout << "Saved StartScene path to project.proj: " << selectedScenePath << std::endl;
-						}
-						else
-						{
-							std::cerr << "Failed to open project.proj for writing!" << std::endl;
-						}
-						ImGui::CloseCurrentPopup();
-					}
-					ImGui::SameLine();
-					if (ImGui::Button("Cancel"))
-					{
-						ImGui::CloseCurrentPopup();
-					}
-				}
-
-
-				ImGui::EndMenu();
-			}
-
-			ImGui::EndMenu();
-		}
-
-		ImGui::EndMenuBar();
-	}
-
 	// PANELS //
 	SceneHierarchyPanel();
 
 	ComponentsPanel();
-
-	ImGui::ShowDebugLogWindow();
-
-	ContentBrowserPanel();
-
-	DebugProfilerPanel();
 
 	ViewportPanel();
 	// PANELS //
@@ -412,7 +292,7 @@ void MainEditor::SaveProject()
 void MainEditor::ViewportPanel()
 {
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
-	ImGui::Begin("Viewport", nullptr, ImGuiWindowFlags_NoMove);
+	ImGui::Begin("Viewport", nullptr, NULL);
 	auto viewportMinRegion = ImGui::GetWindowContentRegionMin();
 	auto viewportMaxRegion = ImGui::GetWindowContentRegionMax();
 	auto viewportOffset = ImGui::GetWindowPos();
@@ -829,224 +709,6 @@ void MainEditor::DisplayAddComponentEntry(const std::string& entryName) {
 			ImGui::CloseCurrentPopup();
 		}
 	}
-}
-
-
-void MainEditor::ContentBrowserPanel()
-{
-    ImGui::Begin("Content Browser", nullptr, ImGuiWindowFlags_NoCollapse);
-    ImGui::BeginGroup();
-    if (m_CurrentDirectory != std::filesystem::path(m_BaseDirectory))
-    {
-        if (ImGui::Button("<"))
-        {
-            m_CurrentDirectory = m_CurrentDirectory.parent_path();
-        }
-    }
-    ImGui::SameLine();
-    CenteredText("Content Browser");
-    ImGui::EndGroup();
-
-    static float padding = 16.0f;
-    static float thumbnailSize = 128.0f;
-    float cellSize = thumbnailSize + padding;
-
-    float panelWidth = ImGui::GetContentRegionAvail().x;
-    int columnCount = (int)(panelWidth / cellSize);
-    if (columnCount < 1)
-        columnCount = 1;
-
-    ImGui::Columns(columnCount, 0, false);
-
-	static bool openCreateScenePopup = false;
-
-    for (auto& directoryEntry : std::filesystem::directory_iterator(m_CurrentDirectory))
-    {
-        const auto& path = directoryEntry.path();
-        std::string filenameString = path.filename().string();
-
-        if (!directoryEntry.is_directory() && path.extension() == ".proj")
-            continue;
-
-        ImGui::PushID(filenameString.c_str());
-        Ref<Texture> icon = directoryEntry.is_directory() ? m_FolderIcon : m_FileIcon;
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-        ImGui::ImageButton((ImTextureID)icon->GetRendererID(), { thumbnailSize, thumbnailSize }, { 0, 1 }, { 1, 0 });
-
-        if (ImGui::BeginDragDropSource())
-        {
-            std::filesystem::path relativePath(path);
-            const wchar_t* itemPath = relativePath.c_str();
-            ImGui::SetDragDropPayload("CONTENT_BROWSER_ITEM", itemPath, (wcslen(itemPath) + 1) * sizeof(wchar_t));
-            ImGui::EndDragDropSource();
-        }
-
-        ImGui::PopStyleColor();
-        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-        {
-            if (directoryEntry.is_directory())
-                m_CurrentDirectory /= path.filename();
-        }
-        // Right-click context menu for delete on files and directories
-        if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && !IsProtectedFolder(path))
-        {
-            ImGui::OpenPopup("Delete");
-        }
-
-        if (ImGui::BeginPopup("Delete"))
-        {
-            if (ImGui::MenuItem("Delete"))
-            {
-                DeleteFileOrFolder(path);
-            }
-
-            ImGui::EndPopup();
-        }
-		if (!ImGui::IsPopupOpen("Delete") && ImGui::IsMouseReleased(ImGuiMouseButton_Right) &&
-			ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup) &&
-			!ImGui::IsAnyItemHovered())
-		{
-			ImGui::OpenPopup("Context Menu");
-		}
-
-		bool isInScenesFolder = (m_CurrentDirectory.filename() == "Scenes");
-
-		if (ImGui::BeginPopup("Context Menu"))
-		{
-			// Disable the "Create Scene" option if not in the "Scenes" folder
-			if (isInScenesFolder)
-			{
-				if (ImGui::MenuItem("Create Scene"))
-				{
-					openCreateScenePopup = true;
-				}
-			}
-			else
-			{
-				ImGui::BeginDisabled();
-				ImGui::MenuItem("Create Scene");
-				ImGui::EndDisabled();
-			}
-
-			ImGui::EndPopup();
-		}
-
-        ImGui::TextWrapped(filenameString.c_str());
-
-        ImGui::NextColumn();
-        ImGui::PopID();
-    }
-
-	if (openCreateScenePopup) {
-		ImGui::OpenPopup("Create Scene");
-		openCreateScenePopup = false;
-	}
-    ImGui::Columns(1);
-
-
-    // Modal Popup for scene creation
-    if (ImGui::BeginPopupModal("Create Scene", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
-    {
-        openCreateScenePopup = false;
-        static char sceneName[256] = "";
-        ImGui::InputText("Scene Name", sceneName, sizeof(sceneName));
-
-        // Save and Cancel Buttons
-        if (ImGui::Button("Save"))
-        {
-            // Construct JSON object
-            nlohmann::json sceneJson;
-            sceneJson["Scene"] = sceneName;
-            sceneJson["Entities"] = NULL;
-
-            // Save JSON to file
-            std::filesystem::path sceneFilePath = m_CurrentDirectory / (std::string(sceneName) + ".scene");
-            std::ofstream sceneFile(sceneFilePath);
-            if (sceneFile.is_open())
-            {
-                sceneFile << sceneJson.dump(4); // Pretty-print with 4 spaces
-                sceneFile.close();
-            }
-
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel"))
-        {
-            ImGui::CloseCurrentPopup();
-        }
-
-        ImGui::EndPopup();
-    }
-
-    ImGui::End();
-}
-
-
-
-bool MainEditor::IsProtectedFolder(const std::filesystem::path& path)
-{
-	// Prevent deletion of the 'Scenes' folder, assuming it is at the same level as 'Assets'
-	std::filesystem::path parentPath = path.parent_path();
-	std::string folderName = path.filename().string();
-
-	// Check if the parent directory is the same as your base directory and if the folder is "Scenes"
-	if (parentPath == m_BaseDirectory && folderName == "Scenes" || folderName == "Assets")
-	{
-		return true;
-	}
-
-	return false;
-}
-
-void MainEditor::DeleteFileOrFolder(const std::filesystem::path& path)
-{
-	try
-	{
-		if (std::filesystem::is_directory(path))
-		{
-			// Delete directory and its contents
-			std::filesystem::remove_all(path);
-		}
-		else
-		{
-			// Delete file
-			std::filesystem::remove(path);
-		}
-	}
-	catch (const std::exception& e)
-	{
-		// Handle any errors that may occur during deletion
-		std::cerr << "Error deleting file or folder: " << e.what() << std::endl;
-	}
-}
-
-
-void MainEditor::DebugProfilerPanel()
-{
-	ImGui::Begin("Debug Instrumentation", nullptr, ImGuiWindowFlags_NoCollapse);
-	CenteredText("Debug Instrumentation");
-	ImGui::Separator();
-	if (ImGui::Button("Reload 2D Shaders")) Renderer2D::LoadShaders();
-	if (ImGui::Button("Reload 3D Shaders")) puts("TO BE DONE");
-	ImGui::Separator();
-	auto stats = Renderer2D::GetStats();
-	ImGui::Text("Renderer2D Stats:");
-	ImGui::Text("Draw Calls: %d", stats.DrawCalls);
-	ImGui::Text("Quads: %d", stats.QuadCount);
-	ImGui::Text("Vertices: %d", stats.GetTotalVertexCount());
-	ImGui::Text("Indices: %d", stats.GetTotalIndexCount());
-	ImGui::Separator();
-	for (auto& result : s_ProfileResults)
-	{
-		char label[50];
-		std::strcpy(label, result.Name);
-		std::strcat(label, " %.3fms");
-		ImGui::Text(label, result.Time);
-	}
-	s_ProfileResults.clear();
-
-	ImGui::End();
 }
 
 void MainEditor::CenteredText(const char* text) {

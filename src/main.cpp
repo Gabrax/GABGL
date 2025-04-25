@@ -1,5 +1,5 @@
 #include "Engine.h"
-
+#include <iostream>
 // Prevent accidentally selecting integrated GPU
 extern "C" {
 	__declspec(dllexport) unsigned __int32 AmdPowerXpressRequestHighPerformance = 0x1;

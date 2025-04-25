@@ -1,6 +1,5 @@
 #include "Windowbase.h"
 #include "MainWindow.h"
-#include "StartWindow.h"
 #include "BackendLogger.h"
 #include "../Input/EngineEvent.h"
 #include "../Input/KeyEvent.h"
@@ -27,8 +26,6 @@ void MainWindow::Init(const WindowDefaultData& props)
 
   GABGL_INFO("Creating window {0} ({1},{2})", props.title, props.Width, props.Height);
 
-  if(!StartWindow::isGLFWInit())
-  {
 	  int GLFWstatus = glfwInit();
 	  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
@@ -36,7 +33,7 @@ void MainWindow::Init(const WindowDefaultData& props)
 	  glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
 	  GABGL_ASSERT(GLFWstatus, "Failed to init GLFW");
 	  glfwSetErrorCallback(GLFWErrorCallback);
-  }
+  
 #ifdef DEBUG
 	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
 #endif

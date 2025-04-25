@@ -33,10 +33,6 @@ private:
 	void ViewportPanel();
 	void SceneHierarchyPanel();
 	void ComponentsPanel();
-	void ContentBrowserPanel();
-	bool IsProtectedFolder(const std::filesystem::path& path);
-	void DeleteFileOrFolder(const std::filesystem::path& path);
-	void DebugProfilerPanel();
 	void CenteredText(const char* text);
 	void DrawEntityNode(Entity entity);
 	void DrawComponents(Entity entity);
@@ -58,8 +54,6 @@ private:
 	Ref<Scene> m_EditorScene;
 	bool m_PrimaryCamera = true;
 	EditorCamera m_EditorCamera;
-	std::filesystem::path m_BaseDirectory;
-	std::filesystem::path m_CurrentDirectory;
 	std::vector<std::string> sceneFiles;
 	int selectedSceneIndex = -1;
 	bool m_ViewportFocused = false, m_ViewportHovered = false;

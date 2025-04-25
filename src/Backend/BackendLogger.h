@@ -11,6 +11,7 @@
 #include <spdlog/fmt/ostr.h> 
 #pragma warning(pop)
 
+#define DEBUG 1
 
 struct Log
 {
