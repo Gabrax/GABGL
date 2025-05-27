@@ -5,7 +5,7 @@
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
 
-#include "../Engine.h"
+#include "../engine.h"
 
 #include "ImGuizmo.h"
 
@@ -32,7 +32,7 @@ void ImGuiLayer::OnAttach()
 
 	SetDarkThemeColors();
 
-	window = reinterpret_cast<GLFWwindow*>(m_Window->GetNativeWindow());
+	window = reinterpret_cast<GLFWwindow*>(m_Window->GetWindowPtr());
 
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 410");

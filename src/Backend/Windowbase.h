@@ -1,37 +1,41 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <string>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-#include "../Input/Event.h"
-#include "BackendScopeRef.h"
+#include "../input/Event.h"
 #include <stb_image.h>
 
 struct WindowDefaultData
 {
 	std::string title = "";
 	uint32_t Width, Height;
-	WindowDefaultData(const std::string& windowTitle = "GABGL",
-		uint32_t width = 1280,
-		uint32_t height = 720)
+	WindowDefaultData(const std::string& windowTitle = "def",
+		uint32_t width = 800,
+		uint32_t height = 600)
 		: title(windowTitle), Width(width), Height(height) {}
 };
 
-struct Window
+struct WindowBase
 {
 	using EventCallbackFn = std::function<void(Event&)>;
 
-	virtual ~Window() = default;
+	virtual ~WindowBase() = default;
 	virtual void Terminate() = 0;
 	virtual void Update() = 0;
 	virtual uint32_t GetWidth() const = 0;
 	virtual uint32_t GetHeight() const = 0;
-	virtual GLFWwindow* GetNativeWindow() const = 0;
+	virtual void SetResolution(uint32_t width, uint32_t height) = 0;
+	virtual void SetFullscreen(bool full) = 0;
+	virtual GLFWwindow* GetWindowPtr() const = 0;
 	virtual void SetEventCallback(const EventCallbackFn& callback) = 0;
 	virtual bool IsVSync() const = 0;
 	virtual void SetVSync(bool enabled) = 0;
+  virtual void Maximize(bool maximize) = 0;
+  virtual void CenterWindowPos() = 0;
 	virtual bool isClosed() = 0;
 
 	inline void SetWindowIcon(const char* iconpath, GLFWwindow* window)
@@ -46,8 +50,8 @@ struct Window
 	}
 
 	template<typename T>
-	inline static Scope<Window> Create(const WindowDefaultData& props = WindowDefaultData())
+	inline static std::unique_ptr<WindowBase> Create(const WindowDefaultData& props = WindowDefaultData())
 	{
-		return CreateScope<T>(props);
+		return std::make_unique<T>(props);
 	}
 };

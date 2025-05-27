@@ -40,7 +40,6 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/assimp/assimp.git
     GIT_TAG v5.3.0
 )
-set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "Disable Assimp tests" FORCE)
 
 # Meshoptimizer
 FetchContent_Declare(
@@ -76,7 +75,8 @@ set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
-#set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries only" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries only" FORCE)
+set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "Build spdlog as static library" FORCE)
 set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "Disable Assimp tests" FORCE)
 set(ASSIMP_BUILD_DOCS OFF CACHE BOOL "Disable Assimp documentation" FORCE)
 
@@ -117,11 +117,11 @@ set(IMGUI_INI_FILE "${CMAKE_BINARY_DIR}/imgui.ini")
 set(RES_FOLDER "${CMAKE_BINARY_DIR}/../res")
 file(MAKE_DIRECTORY ${RES_FOLDER})
 
-add_custom_command(
-   TARGET "${CMAKE_PROJECT_NAME}" POST_BUILD
-   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${IMGUI_INI_FILE} ${RES_FOLDER}
-   COMMENT "Copying imgui.ini to ../res folder..."
-)
+# add_custom_command(
+#    TARGET "${CMAKE_PROJECT_NAME}" POST_BUILD
+#    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${IMGUI_INI_FILE} ${RES_FOLDER}
+#    COMMENT "Copying imgui.ini to ../res folder..."
+# )
 
 # Target link libraries
 target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp glText tinyOBJ meshoptimizer EnTT JSONparser PhysX spdlog::spdlog OpenAL::OpenAL)

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "DeltaTime.h"
-#include "../Input/Event.h"
+#include "../input/Event.h"
 #include <string>
 
 struct Layer

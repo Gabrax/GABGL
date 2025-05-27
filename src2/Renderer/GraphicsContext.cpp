@@ -1,5 +1,5 @@
 #include "GraphicsContext.h"
-#include "../Backend/BackendLogger.h"
+#include "../backend/BackendLogger.h"
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
 

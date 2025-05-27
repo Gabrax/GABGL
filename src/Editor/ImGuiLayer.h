@@ -1,9 +1,9 @@
 #pragma once
 
 #include "../Backend/Layer.h"
-#include "../Input/EngineEvent.h"
-#include "../Input/KeyEvent.h"
-#include "../Backend/Windowbase.h"
+#include "../input/EngineEvent.h"
+#include "../input/KeyEvent.h"
+#include "../backend/Windowbase.h"
 // TEMPORARY
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
@@ -29,7 +29,7 @@ struct ImGuiLayer : Layer
 	uint32_t GetActiveWidgetID() const;
 private:
 	GLFWwindow* window;
-	Window* m_Window;
+	WindowBase* m_Window;
 	bool m_BlockEvents = true;
 };
 

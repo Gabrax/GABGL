@@ -1,8 +1,3 @@
-//--------------------------
-// - Hazel 2D -
-// Renderer2D Circle Shader
-// --------------------------
-
 #type VERTEX
 #version 450 core
 

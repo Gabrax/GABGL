@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.5)
 project(imgui)
 
 cmake_policy(SET CMP0069 NEW)
-add_library(imgui)
+add_library(imgui STATIC)
 target_sources(imgui PRIVATE 
 "${CMAKE_CURRENT_SOURCE_DIR}/imgui/imgui.cpp"
 "${CMAKE_CURRENT_SOURCE_DIR}/imgui/imgui_demo.cpp"

@@ -1,20 +1,23 @@
 #pragma once 
 
-#include "Windowbase.h"
-#include "../Renderer/GraphicsContext.h"
+#include "windowbase.h"
 
-struct MainWindow : Window
+struct Window : WindowBase
 {
-	MainWindow(const WindowDefaultData& data);
-	virtual ~MainWindow();
+	Window(const WindowDefaultData& data);
+	virtual ~Window();
 	void Update() override;
 	inline uint32_t GetWidth() const override { return m_Data.Width; }
 	inline uint32_t GetHeight() const override { return m_Data.Height; }
-	inline GLFWwindow* GetNativeWindow() const override { return m_Window; }
+	inline GLFWwindow* GetWindowPtr() const override { return m_Window; }
 	inline void SetEventCallback(const EventCallbackFn& callback) override { m_Data.EventCallback = callback; }
 	void SetVSync(bool enabled) override;
 	bool IsVSync() const override;
 	inline bool isClosed() override { return m_WindowClosed; }
+  void Maximize(bool maximize) override;
+  void SetResolution(uint32_t width, uint32_t height) override;
+	void SetFullscreen(bool full) override;
+  void CenterWindowPos() override;
 
 private:
 	virtual void Init(const WindowDefaultData& data);
@@ -22,8 +25,11 @@ private:
 private:
 
 	GLFWwindow* m_Window;
+  GLFWmonitor* m_Monitor;
+  const GLFWvidmode* m_Mode;
+
+  int32_t currWidth, currHeight;
 	bool m_WindowClosed = false;
-	Scope<GraphicsContext> m_Context;
 
 	struct WindowSpecificData
 	{

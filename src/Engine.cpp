@@ -1,53 +1,47 @@
-#include "Engine.h"
-#include "Backend/BackendLogger.h"
-#include "Backend/MainWindow.h"
-#include "Renderer/Renderer.h"
+#include "engine.h"
+
+#include <iostream>
+
+#include "backend/BackendLogger.h"
+#include "input/KeyCodes.h"
+#include "input/UserInput.h"
+#include "backend/RendererAPI.h"
 
 Engine* Engine::s_Instance = nullptr;
 
 Engine::Engine()
 {
-	s_Instance = this;
-	Log::Init();
-	Run();
+  s_Instance = this;
+  Log::Init();
+  Run();
 }
 
-Engine::~Engine()
-{
-	
-}
+Engine::~Engine() = default;
 
 void Engine::Run()
 {
-	SetupMainWindow();
-    while (m_isRunning)
-    {
-		GABGL_PROFILE_SCOPE("Main Loop");
+  m_Window = WindowBase::Create<Window>({ "GABGL", 1000, 600 });
+	m_Window->SetEventCallback(BIND_EVENT(OnEvent));
 
-		DeltaTime dt;
+	RendererAPI::Init();
+  while(m_isRunning)
+  {
 
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    DeltaTime dt;
 
-		if (!m_Minimized)
+    RendererAPI::Clear();
+
+    if(Input::IsKeyPressed(Key::E)) m_Window->SetFullscreen(true);
+    if(Input::IsKeyPressed(Key::R)) m_Window->SetFullscreen(false);
+
+    if (!m_Minimized)
 		{
 			RenderLayers(dt);
-			RenderEditorLayers();
+			/*RenderEditorLayers();*/
 		}
 
-		m_MainWindow->Update();
-    }
-}
-
-void Engine::PushLayer(Layer* layer)
-{
-	m_LayerStack.PushLayer(layer);
-	layer->OnAttach();
-}
-
-void Engine::PushOverlay(Layer* layer)
-{
-	m_LayerStack.PushOverlay(layer);
-	layer->OnAttach();
+    m_Window->Update();
+  }
 }
 
 void Engine::OnEvent(Event& e)
@@ -80,21 +74,32 @@ bool Engine::OnWindowResize(WindowResizeEvent& e)
 	}
 
 	m_Minimized = false;
-	Renderer::OnWindowResize(e.GetWidth(), e.GetHeight());
+	RendererAPI::OnWindowResize(e.GetWidth(), e.GetHeight());
 
 	return false;
 }
 
-void Engine::SetupMainWindow()
+void Engine::PushLayer(Layer* layer)
 {
-	m_MainWindow = Window::Create<MainWindow>({ "GABGL", 1000, 600 });
-	m_MainWindow->SetEventCallback(BIND_EVENT(OnEvent));
-	m_ImGuiLayer = new ImGuiLayer(m_MainWindow.get());
-	Renderer::Init();
-	PushOverlay(m_ImGuiLayer);
-	m_MainEditorlayer = new MainEditor;
-	PushLayer(m_MainEditorlayer);
+	m_LayerStack.PushLayer(layer);
+	layer->OnAttach();
 }
+
+void Engine::PushOverlay(Layer* layer)
+{
+	m_LayerStack.PushOverlay(layer);
+	layer->OnAttach();
+}
+
+/*void Engine::SetupMainWindow()*/
+/*{*/
+/*	m_MainWindow = Window::Create<MainWindow>({ "GABGL", 1000, 600 });*/
+/*	m_MainWindow->SetEventCallback(BIND_EVENT(OnEvent));*/
+/*	m_ImGuiLayer = new ImGuiLayer(m_MainWindow.get());*/
+/*	PushOverlay(m_ImGuiLayer);*/
+/*	m_MainEditorlayer = new MainEditor;*/
+/*	PushLayer(m_MainEditorlayer);*/
+/*}*/
 
 void Engine::RenderLayers(DeltaTime& dt)
 {
@@ -111,3 +116,4 @@ void Engine::RenderEditorLayers()
 	}
 	m_ImGuiLayer->End();
 }
+

@@ -10,6 +10,50 @@ GREEN="\e[32m"
 YELLOW="\e[33m"
 RESET="\e[0m"
 
+COMPILER=""
+RELEASE_MODE=false
+
+for arg in "$@"; do
+    case "$arg" in
+        -CMSVC|-Cmsvc|-cmsvc)
+            COMPILER="msvc"
+            ;;
+        -CGCC|-Cgcc|-cgcc)
+            COMPILER="gcc"
+            ;;
+        -CCLANG|-Cclang|-cclang)
+            COMPILER="clang"
+            ;;
+        -Ccl|-CCL|-ccl)
+            COMPILER="cl"
+            ;;
+        -DRELEASE|-Drelease|-drelease)
+            RELEASE_MODE=true
+            ;;
+        --help|-h)
+            echo -e "${YELLOW}Usage:${RESET} ./build.sh [options]"
+            echo -e ""
+            echo -e "${YELLOW}Options:${RESET}"
+            echo -e "  -C | -c          Compiler flag(no compiler specified = CMake detects which one)"
+            echo -e "  -D | -d          Build flag"
+            echo -e "  --help, -h       Show this help message and exit"
+
+            echo -e "${YELLOW}Compilers:${RESET}"
+            echo -e "  MSVC | msvc      Use the MSVC compiler (Visual Studio 2022)"
+            echo -e "  GCC  | gcc       Use the GCC compiler"
+            echo -e "  CLANG | clang    Use the Clang compiler"
+            echo -e ""
+            echo -e "${YELLOW}Examples:${RESET}"
+            echo -e "  ./build.sh -CGCC -DRELEASE"
+            echo -e "  ./build.sh -Drelease -Cmsvc"
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}[!] unknown argument: $arg${RESET}"
+            ;;
+    esac
+done
+
 DLL_FILES=(
     "build/_deps/assimp-build/bin/Release/assimp-vc143-mt.dll"
     "vendor/physx/lib/release/PhysX_64.dll"
@@ -18,15 +62,6 @@ DLL_FILES=(
     "vendor/physx/lib/release/PhysXFoundation_64.dll"
     "vendor/physx/lib/release/PVDRuntime_64.dll"
 )
-
-
-# Set the compiler based on the argument
-COMPILER=$1
-RELEASE_MODE=false
-
-if [[ "$2" == "release" ]]; then
-    RELEASE_MODE=true
-fi
 
 if [[ "$OS" == "Linux" || "$OS" == "Darwin" ]]; then
     # Linux or macOS
@@ -58,27 +93,33 @@ cd "$BUILD_DIR" || { echo -e "${RED}[*] Failed to navigate to build directory${R
 
 # Check if project is already configured
 if [ -f "CMakeCache.txt" ]; then
-    echo -e "${GREEN}[*] Project is already configured${RESET}"
+    echo -e "${YELLOW}[*] Project is already configured${RESET}"
 else
-    echo -e "${YELLOW}[*] Configuring the project with CMake...${RESET}"
+    echo -e "${GREEN}[*] Configuring the project with CMake...${RESET}"
     
     CMAKE_ARGS=""
     if $RELEASE_MODE; then
         CMAKE_ARGS="-DRELEASE=ON"
+        echo -e "${YELLOW}[*] Building in RELEASE${RESET}"
+    else
+        echo -e "${YELLOW}[*] Building in DEBUG${RESET}"
     fi
 
     # If no compiler is specified, run cmake with the default system compiler
     if [ -z "$COMPILER" ]; then
         cmake .. $CMAKE_ARGS || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
+    elif [ "$COMPILER" == "cl" ]; then
+        echo -e "${YELLOW}[*] Using MSVC CL Compiler${RESET}"
+        cmake -G "Ninja" -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_BUILD_TYPE=Release $CMAKE_ARGS .. || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
     elif [ "$COMPILER" == "msvc" ]; then
         echo -e "${YELLOW}[*] Using MSVC Compiler${RESET}"
-        cmake -G "Visual Studio 17 2022" $CMAKE_ARGS -Wno-dev .. || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
+        cmake -G "Visual Studio 17 2022" -DCMAKE_BUILD_TYPE=Release $CMAKE_ARGS .. || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
     elif [ "$COMPILER" == "clang" ]; then
         echo -e "${YELLOW}[*] Using Clang Compiler${RESET}"
-        cmake -G "Ninja" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ $CMAKE_ARGS -Wno-dev .. || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
+        cmake -G "Ninja" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Release $CMAKE_ARGS -Wno-dev .. || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
     elif [ "$COMPILER" == "gcc" ]; then
         echo -e "${YELLOW}[*] Using GCC Compiler${RESET}"
-        cmake -G "Unix Makefiles" -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ $CMAKE_ARGS -Wno-dev .. || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
+        cmake -G "Unix Makefiles" -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Release $CMAKE_ARGS -Wno-dev .. || { echo -e "${RED}[*] CMake configuration failed${RESET}"; exit 1; }
     else
         echo -e "${RED}[*] Unsupported compiler: $COMPILER${RESET}"
         exit 1
@@ -124,5 +165,3 @@ if mygame_path=$(eval "$FIND_CMD"); then
 else
     echo -e "${RED}[*] Executable $EXE_PATH not found${RESET}"
 fi
-
-

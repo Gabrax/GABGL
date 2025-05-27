@@ -1,7 +1,6 @@
 #pragma once
 
-#include "BackendScopeRef.h"
-
+#include <memory>
 #define GLM_ENABLE_EXPERIMENTAL
 #include "glm/gtx/string_cast.hpp"
 
@@ -16,9 +15,9 @@
 struct Log
 {
 	static void Init();
-	inline static Ref<spdlog::logger>& GetCoreLogger() { return s_CoreLogger; }
+	inline static std::shared_ptr<spdlog::logger>& GetCoreLogger() { return s_CoreLogger; }
 private:
-	static Ref<spdlog::logger> s_CoreLogger;
+	static std::shared_ptr<spdlog::logger> s_CoreLogger;
 };
 
 
@@ -56,7 +55,7 @@ inline OStream& operator<<(OStream& os, glm::qua<T, Q> quaternion)
 #endif
 
 #define GABGL_ASSERT(x,...) { if(!(x)) { GABGL_ERROR("Assertion Failed: {0}",__VA_ARGS__); __debugbreak(); } }
-#define GABGL_ASSERT(x) { if(!(x)) { GABGL_ERROR("Assertion Failed"); __debugbreak(); } }
+/*#define GABGL_ASSERT(x) { if(!(x)) { GABGL_ERROR("Assertion Failed"); __debugbreak(); } }*/
 
 #define BIND_EVENT(fn) [this](auto&&... args) -> decltype(auto) { return this->fn(std::forward<decltype(args)>(args)...); }
 
