@@ -3,11 +3,11 @@
 #include <iostream>
 
 #include "backend/BackendLogger.h"
+#include "glm/fwd.hpp"
 #include "input/KeyCodes.h"
 #include "input/UserInput.h"
 #include "backend/RendererAPI.h"
 
-#include "backend/Text.h"
 
 #include "backend/Renderer2D.h"
 
@@ -28,12 +28,13 @@ void Engine::Run()
 	m_Window->SetEventCallback(BIND_EVENT(OnEvent));
 
 	RendererAPI::Init();
-
-  Text text;
+  Camera m_Camera(45.0f, (float)m_Window->GetWidth() / (float)m_Window->GetHeight(), 0.1f, 1000.0f);
+  m_Camera.SetViewportSize((float)m_Window->GetWidth(), (float)m_Window->GetHeight());
+  m_Camera.SetOrthographic(10.0f, 0.1f, 1000.0f);
+  m_Camera.SetProjectionType(Camera::ProjectionType::Orthographic);
 
   while(m_isRunning)
   {
-
     DeltaTime dt;
 
     RendererAPI::Clear();
@@ -44,10 +45,13 @@ void Engine::Run()
     if (!m_Minimized)
 		{
 			RenderLayers(dt);
+      m_Camera.OnUpdate(dt);
+      Renderer2D::BeginScene(m_Camera);
 			/*RenderEditorLayers();*/
-      text.RenderText("HELLO", 500.0f, 500.0f, 2.0f, glm::vec3(2.0f));
+      Renderer2D::DrawQuad(glm::vec2(0.0f,0.0f),glm::vec2(1.0f),glm::vec4(1.0f));
+      Renderer2D::DrawText("HEHE", glm::vec3(0.0f,2.0f,0.0f), glm::vec2(0.01f), glm::vec4(1.0f,2.0f,1.0f,1.0f));
+      Renderer2D::EndScene();
 		}
-
 
     m_Window->Update();
   }

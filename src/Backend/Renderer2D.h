@@ -17,7 +17,6 @@ struct Renderer2D
 
 	static void BeginScene(const Camera& camera, const glm::mat4& transform);
 	static void BeginScene(const Camera& camera);
-	//static void BeginScene(const OrthographicCamera& camera); // TODO: Remove
 	static void EndScene();
 	static void Flush();
 
@@ -26,7 +25,6 @@ struct Renderer2D
 	static void DrawQuad(const glm::vec3& position, const glm::vec2& size, const glm::vec4& color);
 	static void DrawQuad(const glm::vec2& position, const glm::vec2& size, const std::shared_ptr<Texture>& texture, float tilingFactor = 1.0f, const glm::vec4& tintColor = glm::vec4(1.0f));
 	static void DrawQuad(const glm::vec3& position, const glm::vec2& size, const std::shared_ptr<Texture>& texture, float tilingFactor = 1.0f, const glm::vec4& tintColor = glm::vec4(1.0f));
-
 	static void DrawQuad(const glm::mat4& transform, const glm::vec4& color, int entityID = -1);
 	static void DrawQuad(const glm::mat4& transform, const std::shared_ptr<Texture>& texture, float tilingFactor = 1.0f, const glm::vec4& tintColor = glm::vec4(1.0f), int entityID = -1);
 
@@ -44,15 +42,9 @@ struct Renderer2D
 
 	/*static void DrawSprite(const glm::mat4& transform, TextureComponent& src, int entityID);*/
 
-	struct TextParams
-	{
-		glm::vec4 Color{ 1.0f };
-		float Kerning = 0.0f;
-		float LineSpacing = 0.0f;
-	};
-
 	//static void DrawString(const std::string& string, Ref<Font> font, const glm::mat4& transform, const TextParams& textParams, int entityID = -1);
 	//static void DrawString(const std::string& string, const glm::mat4& transform, const TextComponent& component, int entityID = -1);
+  static void DrawText(const std::string& text, const glm::vec3& position, const glm::vec2 scale, const glm::vec4& color, int entityID = -1);
 
 	static float GetLineWidth();
 	static void SetLineWidth(float width);

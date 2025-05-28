@@ -1,8 +1,12 @@
 #include "Renderer2D.h"
 
+#include "BackendLogger.h"
 #include "Buffer.h"
 #include <array>
 #include "RendererAPI.h"
+#include "glm/fwd.hpp"
+#include <ft2build.h>
+#include FT_FREETYPE_H  
 
 struct QuadVertex
 {
@@ -37,18 +41,6 @@ struct LineVertex
 	int EntityID;
 };
 
-struct TextVertex
-{
-	glm::vec3 Position;
-	glm::vec4 Color;
-	glm::vec2 TexCoord;
-
-	// TODO: bg color for outline/bg
-
-	// Editor-only
-	int EntityID;
-};
-
 struct Renderer2DData
 {
 	static const uint32_t MaxQuads = 20000;
@@ -65,9 +57,6 @@ struct Renderer2DData
 
 	std::shared_ptr<VertexArray> LineVertexArray;
 	std::shared_ptr<VertexBuffer> LineVertexBuffer;
-
-	std::shared_ptr<VertexArray> TextVertexArray;
-	std::shared_ptr<VertexBuffer> TextVertexBuffer;
 
 	struct Shaders2D
 	{
@@ -88,10 +77,6 @@ struct Renderer2DData
 	LineVertex* LineVertexBufferBase = nullptr;
 	LineVertex* LineVertexBufferPtr = nullptr;
 
-	uint32_t TextIndexCount = 0;
-	TextVertex* TextVertexBufferBase = nullptr;
-	TextVertex* TextVertexBufferPtr = nullptr;
-
 	float LineWidth = 20.0f;
 
 	std::array<std::shared_ptr<Texture>, MaxTextureSlots> TextureSlots;
@@ -109,6 +94,16 @@ struct Renderer2DData
 	};
 	CameraData CameraBuffer;
 	std::shared_ptr<UniformBuffer> CameraUniformBuffer;
+
+  struct Character {
+    uint32_t TextureID;
+    glm::ivec2 Size;
+    glm::ivec2 Bearing;
+    uint32_t Advance;
+  };
+
+  std::unordered_map<char, Character> Characters;
+  bool FontInitialized = false;
 
 } s_Data;
 
@@ -187,20 +182,6 @@ void Renderer2D::Init()
 	s_Data.LineVertexArray->AddVertexBuffer(s_Data.LineVertexBuffer);
 	s_Data.LineVertexBufferBase = new LineVertex[s_Data.MaxVertices];
 
-	// Text
-	s_Data.TextVertexArray = VertexArray::Create();
-
-	s_Data.TextVertexBuffer = VertexBuffer::Create(s_Data.MaxVertices * sizeof(TextVertex));
-	s_Data.TextVertexBuffer->SetLayout({
-		{ ShaderDataType::Float3, "a_Position"     },
-		{ ShaderDataType::Float4, "a_Color"        },
-		{ ShaderDataType::Float2, "a_TexCoord"     },
-		{ ShaderDataType::Int,    "a_EntityID"     }
-		});
-	s_Data.TextVertexArray->AddVertexBuffer(s_Data.TextVertexBuffer);
-	s_Data.TextVertexArray->SetIndexBuffer(quadIB);
-	s_Data.TextVertexBufferBase = new TextVertex[s_Data.MaxVertices];
-
 	s_Data.WhiteTexture = Texture::Create(TextureSpecification());
 	uint32_t whiteTextureData = 0xffffffff;
 	s_Data.WhiteTexture->SetData(&whiteTextureData, sizeof(uint32_t));
@@ -220,6 +201,63 @@ void Renderer2D::Init()
 	s_Data.QuadVertexPositions[3] = { -0.5f,  0.5f, 0.0f, 1.0f };
 
 	s_Data.CameraUniformBuffer = UniformBuffer::Create(sizeof(Renderer2DData::CameraData), 0);
+
+  FT_Library ft;
+  GABGL_ASSERT(!FT_Init_FreeType(&ft), "Could not init FreeType Library");
+
+  FT_Face face;
+  if (FT_New_Face(ft, "res/fonts/dpcomic.ttf", 0, &face)) {
+      GABGL_ERROR("Failed to load font");
+  } else {
+      FT_Set_Pixel_Sizes(face, 0, 48);
+      glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+      for (unsigned char c = 0; c < 128; c++) {
+          if (FT_Load_Char(face, c, FT_LOAD_RENDER)) {
+              std::cout << "ERROR::FREETYPE: Failed to load Glyph" << std::endl;
+              continue;
+          }
+
+          GLuint texture;
+          glGenTextures(1, &texture);
+          glBindTexture(GL_TEXTURE_2D, texture);
+          glTexImage2D(
+              GL_TEXTURE_2D,
+              0,
+              GL_RED,
+              face->glyph->bitmap.width,
+              face->glyph->bitmap.rows,
+              0,
+              GL_RED,
+              GL_UNSIGNED_BYTE,
+              face->glyph->bitmap.buffer
+          );
+
+          glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+          glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+          glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+          glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+          GLint swizzleMask[] = {GL_ONE, GL_ONE, GL_ONE, GL_RED};
+          glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
+
+          Renderer2DData::Character character = {
+              texture,
+              { face->glyph->bitmap.width, face->glyph->bitmap.rows },
+              { face->glyph->bitmap_left, face->glyph->bitmap_top },
+              static_cast<uint32_t>(face->glyph->advance.x)
+          };
+
+          s_Data.Characters.insert({ c, character });
+      }
+
+      glBindTexture(GL_TEXTURE_2D, 0);
+      FT_Done_Face(face);
+      FT_Done_FreeType(ft);
+
+      s_Data.FontInitialized = true;
+      GABGL_WARN("FONT LOADED");
+  }
 }
 
 void Renderer2D::Shutdown()
@@ -237,9 +275,6 @@ void Renderer2D::StartBatch()
 
 	s_Data.LineVertexCount = 0;
 	s_Data.LineVertexBufferPtr = s_Data.LineVertexBufferBase;
-
-	s_Data.TextIndexCount = 0;
-	s_Data.TextVertexBufferPtr = s_Data.TextVertexBufferBase;
 
 	s_Data.TextureSlotIndex = 1;
 }
@@ -275,7 +310,6 @@ void Renderer2D::Flush()
 		RendererAPI::DrawIndexed(s_Data.QuadVertexArray, s_Data.QuadIndexCount);
 		s_Data.Stats.DrawCalls++;
 	}
-
 	if (s_Data.CircleIndexCount)
 	{
 		uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.CircleVertexBufferPtr - (uint8_t*)s_Data.CircleVertexBufferBase);
@@ -285,7 +319,6 @@ void Renderer2D::Flush()
 		RendererAPI::DrawIndexed(s_Data.CircleVertexArray, s_Data.CircleIndexCount);
 		s_Data.Stats.DrawCalls++;
 	}
-
 	if (s_Data.LineVertexCount)
 	{
 		uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.LineVertexBufferPtr - (uint8_t*)s_Data.LineVertexBufferBase);
@@ -296,7 +329,6 @@ void Renderer2D::Flush()
 		RendererAPI::DrawLines(s_Data.LineVertexArray, s_Data.LineVertexCount);
 		s_Data.Stats.DrawCalls++;
 	}
-
 }
 
 void Renderer2D::EndScene()
@@ -503,6 +535,90 @@ void Renderer2D::DrawRect(const glm::mat4& transform, const glm::vec4& color, in
 /*	else*/
 /*		DrawQuad(transform, src.Color, entityID);*/
 /*}*/
+
+void Renderer2D::DrawText(const std::string& text, const glm::vec3& position, const glm::vec2 size, const glm::vec4& color, int entityID)
+{
+    if (!s_Data.FontInitialized)
+        return;
+
+    float x = 0.0f;
+    float y = 0.0f;
+
+    for (char c : text)
+    {
+        auto it = s_Data.Characters.find(c);
+        if (it == s_Data.Characters.end())
+            continue;
+
+        Renderer2DData::Character& ch = it->second;
+
+        if (s_Data.QuadIndexCount >= Renderer2DData::MaxIndices)
+            NextBatch();
+
+        float xpos = x + ch.Bearing.x;
+        float ypos = y - (ch.Size.y - ch.Bearing.y);
+
+        float w = ch.Size.x;
+        float h = ch.Size.y;
+
+        glm::vec3 glyphOffset = {
+            position.x + xpos * size.x,
+            position.y + ypos * size.y,
+            position.z
+        };
+        glm::vec3 glyphScale = { w * size.x, h * size.y, 1.0f };
+
+        glm::mat4 transform = glm::translate(glm::mat4(1.0f), glyphOffset)
+                            * glm::scale(glm::mat4(1.0f), glyphScale);
+
+        glm::vec3 quadPositions[4] = {
+            { 0.0f, 0.0f, 0.0f },
+            { 1.0f, 0.0f, 0.0f },
+            { 1.0f, 1.0f, 0.0f },
+            { 0.0f, 1.0f, 0.0f }
+        };
+
+        glm::vec2 texCoords[4] = {
+            { 0.0f, 0.0f },
+            { 1.0f, 0.0f },
+            { 1.0f, 1.0f },
+            { 0.0f, 1.0f }
+        };
+
+        float textureIndex = 0.0f;
+        for (uint32_t i = 1; i < s_Data.TextureSlotIndex; i++) {
+            if (s_Data.TextureSlots[i]->GetRendererID() == ch.TextureID) {
+                textureIndex = (float)i;
+                break;
+            }
+        }
+
+        if (textureIndex == 0.0f) {
+            if (s_Data.TextureSlotIndex >= Renderer2DData::MaxTextureSlots)
+                NextBatch();
+
+            textureIndex = (float)s_Data.TextureSlotIndex;
+            s_Data.TextureSlots[s_Data.TextureSlotIndex++] = Texture::WrapExisting(ch.TextureID);
+        }
+
+        for (int i = 0; i < 4; i++) {
+            s_Data.QuadVertexBufferPtr->Position = transform * glm::vec4(quadPositions[i], 1.0f);
+            s_Data.QuadVertexBufferPtr->Color = color;
+            s_Data.QuadVertexBufferPtr->TexCoord = texCoords[i];
+            s_Data.QuadVertexBufferPtr->TexIndex = textureIndex;
+            s_Data.QuadVertexBufferPtr->TilingFactor = 1.0f;
+            s_Data.QuadVertexBufferPtr->EntityID = entityID;
+            s_Data.QuadVertexBufferPtr++;
+        }
+
+        s_Data.QuadIndexCount += 6;
+
+        x += (ch.Advance >> 6); // no scaling here
+    }
+
+    s_Data.Stats.QuadCount++;
+}
+
 
 float Renderer2D::GetLineWidth()
 {

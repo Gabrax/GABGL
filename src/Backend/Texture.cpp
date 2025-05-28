@@ -96,9 +96,10 @@ Texture::Texture(const std::string& path)
 	}
 }
 
-Texture::~Texture()
-{
-	glDeleteTextures(1, &m_RendererID);
+Texture::~Texture() {
+    if (m_OwnsTexture && m_RendererID != 0) {
+        glDeleteTextures(1, &m_RendererID);
+    }
 }
 
 void Texture::SetData(void* data, uint32_t size)
@@ -111,6 +112,24 @@ void Texture::SetData(void* data, uint32_t size)
 void Texture::Bind(uint32_t slot) const
 {
 	glBindTextureUnit(slot, m_RendererID);
+}
+
+std::shared_ptr<Texture> Texture::WrapExisting(uint32_t rendererID)
+{
+    if (rendererID == 0)
+    {
+        GABGL_ERROR("ID IS NULL");
+        return nullptr;
+    }
+
+    std::shared_ptr<Texture> texture(new Texture());
+    texture->m_RendererID = rendererID;
+    texture->m_InternalFormat = GL_RED;
+    texture->m_DataFormat = GL_RED;
+    texture->m_IsLoaded = true;
+    texture->m_OwnsTexture = false; // <== Prevent deletion
+
+    return texture;
 }
 
 std::shared_ptr<Texture> Texture::Create(const TextureSpecification& specification)

@@ -23,6 +23,7 @@ struct TextureSpecification
 
 struct Texture
 {
+  Texture() = default;
 	Texture(const TextureSpecification& specification);
 	Texture(const std::string& path);
 	~Texture();
@@ -44,11 +45,14 @@ struct Texture
 	}
 	static std::shared_ptr<Texture> Create(const TextureSpecification& specification);
 	static std::shared_ptr<Texture> Create(const std::string& path);
+  static std::shared_ptr<Texture> WrapExisting(uint32_t rendererID);
+
 private:
 	TextureSpecification m_Specification;
 
 	std::string m_Path;
 	bool m_IsLoaded = false;
+  bool m_OwnsTexture = true;
 	uint32_t m_Width, m_Height;
 	uint32_t m_RendererID;
 	uint8_t* m_RawData = nullptr;

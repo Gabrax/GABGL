@@ -10,25 +10,34 @@
 #include <glm/gtx/quaternion.hpp>
 
 Camera::Camera(float fov, float aspectRatio, float nearClip, float farClip)
-	: m_FOV(fov), m_AspectRatio(aspectRatio), m_NearClip(nearClip), m_FarClip(farClip), m_Projection(glm::perspective(glm::radians(fov), aspectRatio, nearClip, farClip))
+    : m_ProjectionType(ProjectionType::Perspective),
+      m_PerspectiveFOV(glm::radians(fov)),
+      m_AspectRatio(aspectRatio),
+      m_PerspectiveNear(nearClip),
+      m_PerspectiveFar(farClip),
+      m_Distance(10.0f),
+      m_Pitch(0.0f),
+      m_Yaw(0.0f)
 {
-	UpdateView();
+    RecalculateProjection();
+    UpdateView();
 }
 
 void Camera::UpdateProjection()
 {
-	m_AspectRatio = m_ViewportWidth / m_ViewportHeight;
-	m_Projection = glm::perspective(glm::radians(m_FOV), m_AspectRatio, m_NearClip, m_FarClip);
+    // Deprecated, you can call RecalculateProjection() instead
+    m_AspectRatio = m_ViewportWidth / m_ViewportHeight;
+
+    m_Projection = glm::perspective(m_PerspectiveFOV, m_AspectRatio, m_PerspectiveNear, m_PerspectiveFar);
 }
 
 void Camera::UpdateView()
 {
-	// m_Yaw = m_Pitch = 0.0f; // Lock the camera's rotation
-	m_Position = CalculatePosition();
+    m_Position = CalculatePosition();
 
-	glm::quat orientation = GetOrientation();
-	m_ViewMatrix = glm::translate(glm::mat4(1.0f), m_Position) * glm::toMat4(orientation);
-	m_ViewMatrix = glm::inverse(m_ViewMatrix);
+    glm::quat orientation = GetOrientation();
+    m_ViewMatrix = glm::translate(glm::mat4(1.0f), m_Position) * glm::toMat4(orientation);
+    m_ViewMatrix = glm::inverse(m_ViewMatrix);
 }
 
 std::pair<float, float> Camera::PanSpeed() const
@@ -98,9 +107,13 @@ void Camera::MousePan(const glm::vec2& delta)
 
 void Camera::MouseRotate(const glm::vec2& delta)
 {
-	float yawSign = GetUpDirection().y < 0 ? -1.0f : 1.0f;
-	m_Yaw += yawSign * delta.x * RotationSpeed();
-	m_Pitch += delta.y * RotationSpeed();
+    float yawSign = GetUpDirection().y < 0 ? -1.0f : 1.0f;
+    m_Yaw += yawSign * delta.x * RotationSpeed();
+    m_Pitch += delta.y * RotationSpeed();
+
+    // Clamp pitch to avoid flipping over
+    const float pitchLimit = glm::radians(89.0f);
+    m_Pitch = glm::clamp(m_Pitch, -pitchLimit, pitchLimit);
 }
 
 void Camera::MouseZoom(float delta)
@@ -136,4 +149,60 @@ glm::vec3 Camera::CalculatePosition() const
 glm::quat Camera::GetOrientation() const
 {
 	return glm::quat(glm::vec3(-m_Pitch, -m_Yaw, 0.0f));
+}
+
+void Camera::SetPerspective(float verticalFOV, float nearClip, float farClip)
+{
+	m_ProjectionType = ProjectionType::Perspective;
+	m_PerspectiveFOV = verticalFOV;
+	m_PerspectiveNear = nearClip;
+	m_PerspectiveFar = farClip;
+	RecalculateProjection();
+}
+
+void Camera::SetOrthographic(float size, float nearClip, float farClip)
+{
+	m_ProjectionType = ProjectionType::Orthographic;
+	m_OrthographicSize = size;
+	m_OrthographicNear = nearClip;
+	m_OrthographicFar = farClip;
+	RecalculateProjection();
+}
+
+void Camera::SetViewportSize(uint32_t width, uint32_t height)
+{
+    GABGL_ASSERT(width > 0 && height > 0, "SIZE BELOW ZERO");
+    m_ViewportWidth = static_cast<float>(width);
+    m_ViewportHeight = static_cast<float>(height);
+    m_AspectRatio = m_ViewportWidth / m_ViewportHeight;
+    RecalculateProjection();
+}
+
+void Camera::SetViewportSize(float width, float height)
+{
+    GABGL_ASSERT(width > 0 && height > 0, "SIZE BELOW ZERO");
+    m_ViewportWidth = width;
+    m_ViewportHeight = height;
+    m_AspectRatio = m_ViewportWidth / m_ViewportHeight;
+    RecalculateProjection();
+}
+
+
+void Camera::RecalculateProjection()
+{
+    if (m_ProjectionType == ProjectionType::Perspective)
+    {
+        // m_PerspectiveFOV is already in radians
+        m_Projection = glm::perspective(m_PerspectiveFOV, m_AspectRatio, m_PerspectiveNear, m_PerspectiveFar);
+    }
+    else
+    {
+        float orthoLeft = -m_OrthographicSize * m_AspectRatio * 0.5f;
+        float orthoRight = m_OrthographicSize * m_AspectRatio * 0.5f;
+        float orthoBottom = -m_OrthographicSize * 0.5f;
+        float orthoTop = m_OrthographicSize * 0.5f;
+
+        m_Projection = glm::ortho(orthoLeft, orthoRight,
+            orthoBottom, orthoTop, m_OrthographicNear, m_OrthographicFar);
+    }
 }
