@@ -44,7 +44,7 @@ struct Renderer2D
 
 	//static void DrawString(const std::string& string, Ref<Font> font, const glm::mat4& transform, const TextParams& textParams, int entityID = -1);
 	//static void DrawString(const std::string& string, const glm::mat4& transform, const TextComponent& component, int entityID = -1);
-  static void DrawText(const std::string& text, const glm::vec3& position, const glm::vec2 scale, const glm::vec4& color, int entityID = -1);
+  static void DrawText(const std::string& text,  const glm::vec2& position, float size, const glm::vec4& color, int entityID = -1);
 
 	static float GetLineWidth();
 	static void SetLineWidth(float width);

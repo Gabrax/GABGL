@@ -6,7 +6,7 @@
 #include "input/EngineEvent.h"
 #include "backend/LayerStack.h"
 #include "backend/DeltaTime.h"
-#include "editor/ImGuiLayer.h"
+#include "game/game.h"
 
 struct Engine
 {
@@ -28,7 +28,7 @@ private:
   void RenderLayers(DeltaTime& dt);
   void RenderEditorLayers();
 
-  ImGuiLayer* m_ImGuiLayer;
+  GAME* m_Game;
 
 	float m_LastFrameTime = 0.0f;
 	bool m_Minimized = false;

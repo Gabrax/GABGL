@@ -536,14 +536,39 @@ void Renderer2D::DrawRect(const glm::mat4& transform, const glm::vec4& color, in
 /*		DrawQuad(transform, src.Color, entityID);*/
 /*}*/
 
-void Renderer2D::DrawText(const std::string& text, const glm::vec3& position, const glm::vec2 size, const glm::vec4& color, int entityID)
+void Renderer2D::DrawText(const std::string& text, const glm::vec2& position, float size, const glm::vec4& color, int entityID)
 {
     if (!s_Data.FontInitialized)
         return;
 
-    float x = 0.0f;
-    float y = 0.0f;
+    // --- Precompute total width and height for centering ---
+    float textWidth = 0.0f;
+    float maxBearingY = 0.0f;
+    float maxBelowBaseline = 0.0f;
 
+    for (char c : text)
+    {
+        auto it = s_Data.Characters.find(c);
+        if (it == s_Data.Characters.end())
+            continue;
+
+        const auto& ch = it->second;
+        textWidth += (ch.Advance >> 6) * size;
+
+        float bearingY = ch.Bearing.y * size;
+        float belowBaseline = (ch.Size.y - ch.Bearing.y) * size;
+
+        if (bearingY > maxBearingY) maxBearingY = bearingY;
+        if (belowBaseline > maxBelowBaseline) maxBelowBaseline = belowBaseline;
+    }
+
+    float totalHeight = maxBearingY + maxBelowBaseline;
+
+    // Center the starting position
+    float x = position.x - textWidth * 0.5f;
+    float y = position.y - totalHeight * 0.5f;
+
+    // --- Render characters ---
     for (char c : text)
     {
         auto it = s_Data.Characters.find(c);
@@ -555,21 +580,14 @@ void Renderer2D::DrawText(const std::string& text, const glm::vec3& position, co
         if (s_Data.QuadIndexCount >= Renderer2DData::MaxIndices)
             NextBatch();
 
-        float xpos = x + ch.Bearing.x;
-        float ypos = y - (ch.Size.y - ch.Bearing.y);
+        float xpos = x + ch.Bearing.x * size;
+        float ypos = y + (maxBearingY - ch.Bearing.y * size);  // Adjust Y using max bearing
 
-        float w = ch.Size.x;
-        float h = ch.Size.y;
+        float w = ch.Size.x * size;
+        float h = ch.Size.y * size;
 
-        glm::vec3 glyphOffset = {
-            position.x + xpos * size.x,
-            position.y + ypos * size.y,
-            position.z
-        };
-        glm::vec3 glyphScale = { w * size.x, h * size.y, 1.0f };
-
-        glm::mat4 transform = glm::translate(glm::mat4(1.0f), glyphOffset)
-                            * glm::scale(glm::mat4(1.0f), glyphScale);
+        glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(xpos, ypos, 0.0f)) *
+                              glm::scale(glm::mat4(1.0f), glm::vec3(w, h, 1.0f));
 
         glm::vec3 quadPositions[4] = {
             { 0.0f, 0.0f, 0.0f },
@@ -613,10 +631,10 @@ void Renderer2D::DrawText(const std::string& text, const glm::vec3& position, co
 
         s_Data.QuadIndexCount += 6;
 
-        x += (ch.Advance >> 6); // no scaling here
+        x += (ch.Advance >> 6) * size;
     }
 
-    s_Data.Stats.QuadCount++;
+    s_Data.Stats.QuadCount += (int)text.length();
 }
 
 
