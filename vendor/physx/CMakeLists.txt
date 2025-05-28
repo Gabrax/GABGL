@@ -25,6 +25,8 @@ include_directories(${PHYSX_INCLUDE_DIR})
 # Create an interface target for PhysX
 add_library(PhysX INTERFACE)
 
+target_compile_definitions(PhysX INTERFACE PX_PHYSX_STATIC_LIB)
+
 # Link PhysX libraries to the interface target
 foreach(lib IN LISTS PHYSX_LIBS)
     target_link_libraries(PhysX INTERFACE "${PHYSX_LIB_DIR}/${lib}.lib")

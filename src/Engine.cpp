@@ -7,6 +7,10 @@
 #include "input/UserInput.h"
 #include "backend/RendererAPI.h"
 
+#include "backend/Text.h"
+
+#include "backend/Renderer2D.h"
+
 Engine* Engine::s_Instance = nullptr;
 
 Engine::Engine()
@@ -24,6 +28,9 @@ void Engine::Run()
 	m_Window->SetEventCallback(BIND_EVENT(OnEvent));
 
 	RendererAPI::Init();
+
+  Text text;
+
   while(m_isRunning)
   {
 
@@ -38,7 +45,9 @@ void Engine::Run()
 		{
 			RenderLayers(dt);
 			/*RenderEditorLayers();*/
+      text.RenderText("HELLO", 500.0f, 500.0f, 2.0f, glm::vec3(2.0f));
 		}
+
 
     m_Window->Update();
   }

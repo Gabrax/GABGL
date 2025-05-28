@@ -54,15 +54,6 @@ for arg in "$@"; do
     esac
 done
 
-DLL_FILES=(
-    "build/_deps/assimp-build/bin/Release/assimp-vc143-mt.dll"
-    "vendor/physx/lib/release/PhysX_64.dll"
-    "vendor/physx/lib/release/PhysXCommon_64.dll"
-    "vendor/physx/lib/release/PhysXCooking_64.dll"
-    "vendor/physx/lib/release/PhysXFoundation_64.dll"
-    "vendor/physx/lib/release/PVDRuntime_64.dll"
-)
-
 if [[ "$OS" == "Linux" || "$OS" == "Darwin" ]]; then
     # Linux or macOS
     EXE_EXTENSION=""
@@ -146,18 +137,6 @@ if mygame_path=$(eval "$FIND_CMD"); then
     fi
 
     cd "$ROOT_DIR"
-
-    # Copy the necessary DLLs to the root directory
-    echo -e "${YELLOW}[*] Copying necessary DLLs to the root directory...${RESET}"
-    for dll in "${DLL_FILES[@]}"; do
-        # Check if the DLL exists and copy it to the root directory
-        if [ -f "$dll" ]; then
-            cp "$dll" "$ROOT_DIR" || { echo -e "${RED}[*] Failed to copy $dll${RESET}"; exit 1; }
-            echo -e "${GREEN}[*] Copied $dll to the root directory${RESET}"
-        else
-            echo -e "${RED}[*] $dll not found${RESET}"
-        fi
-    done
 
     # Run the executable from the root directory
     echo -e "${YELLOW}[*] Running $EXE_PATH${RESET}"

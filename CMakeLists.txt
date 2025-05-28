@@ -69,7 +69,14 @@ FetchContent_Declare(
     GIT_TAG 1.23.1 # Replace with the desired version
 )
 
-FetchContent_MakeAvailable(assimp meshoptimizer imguizmo spdlog openal-soft)
+# Freetype
+FetchContent_Declare(
+  freetype
+  GIT_REPOSITORY https://gitlab.freedesktop.org/freetype/freetype.git
+  GIT_TAG VER-2-13-2 # You can change this to another stable tag
+)
+
+FetchContent_MakeAvailable(assimp meshoptimizer imguizmo spdlog openal-soft freetype)
 
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -83,7 +90,6 @@ set(ASSIMP_BUILD_DOCS OFF CACHE BOOL "Disable Assimp documentation" FORCE)
 add_subdirectory(vendor/glfw-3.3.2)
 add_subdirectory(vendor/glad)
 add_subdirectory(vendor/stb_image)
-add_subdirectory(vendor/glText)
 add_subdirectory(vendor/raudio)
 add_subdirectory(vendor/glm)
 add_subdirectory(vendor/imgui-docking)
@@ -107,11 +113,15 @@ target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC GLFW_INCLUDE_NONE=1)
 
 target_sources("${CMAKE_PROJECT_NAME}" PRIVATE ${MY_SOURCES} ${IMGUIMO_SRC})
 
-if (DEBUG)
-#     add_compile_definitions(DEBUG)
-# else()
+# if(RELEASE)
+#   if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+#     set_target_properties("${CMAKE_PROJECT_NAME}" PROPERTIES LINK_FLAGS "-Wl,-subsystem:windows -Wl,-entry:mainCRTStartup")
+#   else()
 #     set_target_properties("${CMAKE_PROJECT_NAME}" PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
-endif()
+#   endif()
+# else()
+#     add_compile_definitions(DEBUG)
+# endif()
 
 set(IMGUI_INI_FILE "${CMAKE_BINARY_DIR}/imgui.ini")
 set(RES_FOLDER "${CMAKE_BINARY_DIR}/../res")
@@ -124,4 +134,4 @@ file(MAKE_DIRECTORY ${RES_FOLDER})
 # )
 
 # Target link libraries
-target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp glText tinyOBJ meshoptimizer EnTT JSONparser PhysX spdlog::spdlog OpenAL::OpenAL)
+target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp tinyOBJ meshoptimizer EnTT JSONparser PhysX spdlog::spdlog OpenAL::OpenAL freetype)
