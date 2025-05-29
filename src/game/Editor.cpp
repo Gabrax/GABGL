@@ -1,5 +1,6 @@
 #include "Editor.h"
 #include "../backend/BackendLogger.h"
+#include <cstdint>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include "backends/imgui_impl_glfw.h"
@@ -64,7 +65,7 @@ Editor::~Editor()
 	ImGui::DestroyContext();
 }
 
-void Editor::OnImGuiRender(std::shared_ptr<Framebuffer>& m_Framebuffer)
+void Editor::OnImGuiRender(uint32_t framebufferTexture)
 {
   Begin();
 	// Note: Switch this to true to enable dockspace
@@ -121,7 +122,7 @@ void Editor::OnImGuiRender(std::shared_ptr<Framebuffer>& m_Framebuffer)
 
 	ComponentsPanel();
 
-	ViewportPanel(m_Framebuffer);
+	ViewportPanel(framebufferTexture);
 	// PANELS //
 
 	ImGui::End();
@@ -316,7 +317,7 @@ void Editor::SaveProject()
 
 }
 
-void Editor::ViewportPanel(std::shared_ptr<Framebuffer>& m_Framebuffer)
+void Editor::ViewportPanel(uint32_t framebufferTexture)
 {
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
 	ImGui::Begin("Viewport", nullptr, NULL);
@@ -333,7 +334,7 @@ void Editor::ViewportPanel(std::shared_ptr<Framebuffer>& m_Framebuffer)
 	ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
 	m_ViewportSize = { viewportPanelSize.x, viewportPanelSize.y };
 
-	uint64_t textureID = m_Framebuffer->GetColorAttachmentRendererID();
+	uint64_t textureID = static_cast<uint64_t>(framebufferTexture);
 	ImGui::Image(reinterpret_cast<void*>(textureID), ImVec2{ m_ViewportSize.x, m_ViewportSize.y }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
 
 	ImGui::End();

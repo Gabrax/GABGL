@@ -186,7 +186,7 @@ bool Window::IsVSync() const
 
 void Window::SetResolution(uint32_t width, uint32_t height) 
 { 
-  glfwSetWindowSize(m_Window, width, height);
+  glViewport(0, 0, width, height);
   m_Data.Width = width;
   m_Data.Height = height;
 }
@@ -203,6 +203,7 @@ void Window::SetFullscreen(bool full)
 {
   if(full){
     glfwSetWindowMonitor(m_Window, m_Monitor, 0, 0, m_Mode->width, m_Mode->height, m_Mode->refreshRate);
+    SetVSync(true);
   } else {
     glfwSetWindowMonitor(m_Window, nullptr, currWidth, currHeight, 1000, 600, 0);
     CenterWindowPos();

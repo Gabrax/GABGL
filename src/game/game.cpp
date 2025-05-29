@@ -40,14 +40,6 @@ void GAME::OnEvent(Event& e)
 
 void GAME::OnUpdate(DeltaTime dt)
 {
-  if (FramebufferSpecification spec = m_Framebuffer->GetSpecification();
-		m_ViewportSize.x > 0.0f && m_ViewportSize.y > 0.0f && // zero sized framebuffer is invalid
-		(spec.Width != m_ViewportSize.x || spec.Height != m_ViewportSize.y))
-	{
-		m_Framebuffer->Resize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
-		//m_CameraController.OnResize(m_ViewportSize.x, m_ViewportSize.y);
-		m_Camera.SetViewportSize(m_ViewportSize.x, m_ViewportSize.y);
-	}
 	Renderer2D::ResetStats();
 	m_Framebuffer->Bind();
 	RendererAPI::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
@@ -56,8 +48,8 @@ void GAME::OnUpdate(DeltaTime dt)
 
   Renderer2D::BeginScene(m_Camera);
   
-  Renderer2D::DrawQuad(glm::vec2(0.0f,-2.0f),glm::vec2(1.0f),glm::vec4(2.0f));
-  Renderer2D::DrawText("HEHE", glm::vec2(0.0f), 0.01f, glm::vec4(2.0f,1.0f,1.0f,1.0f));
+  Renderer2D::DrawQuad(glm::vec2(0.0f,-2.0f),glm::vec2(1.0f),glm::vec4(1.0f,2.0f,3.0f,1.0f));
+  Renderer2D::DrawText("FPS: " + std::to_string(dt.GetFPS()), glm::vec2(0.0f), 0.01f, glm::vec4(2.0f,1.0f,1.0f,1.0f));
 
   Renderer2D::EndScene();
 
@@ -69,7 +61,7 @@ void GAME::OnUpdate(DeltaTime dt)
 		{
       m_Camera.OnUpdate(dt);
 
-      m_Editor.OnImGuiRender(m_Framebuffer);
+      m_Editor.OnImGuiRender(m_Framebuffer->GetColorAttachmentRendererID());
 			break;
 		}
 		case SceneState::Play:
@@ -96,11 +88,17 @@ bool GAME::OnKeyPressed(KeyPressedEvent& e)
 		case Key::R:
 		{
       m_WindowRef->SetFullscreen(true);
+      m_Framebuffer->Resize((uint32_t)m_WindowRef->GetWidth(), (uint32_t)m_WindowRef->GetHeight());
+      m_Camera.SetViewportSize((uint32_t)m_WindowRef->GetWidth(), (uint32_t)m_WindowRef->GetHeight());
+
 			break;
 		}
 		case Key::T:
 		{
       m_WindowRef->SetFullscreen(false);
+      m_Framebuffer->Resize((uint32_t)m_WindowRef->GetWidth(), (uint32_t)m_WindowRef->GetHeight());
+      m_Camera.SetViewportSize((uint32_t)m_WindowRef->GetWidth(), (uint32_t)m_WindowRef->GetHeight());
+  
 			break;
 		}
 		case Key::Q:

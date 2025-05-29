@@ -16,7 +16,7 @@ struct Editor
   Editor();
 	~Editor();
 
-	void OnImGuiRender(std::shared_ptr<Framebuffer>& m_Framebuffer);
+	void OnImGuiRender(uint32_t framebufferTexture);
 	void OnEvent(Event& e);
 private:
 	bool OnKeyPressed(KeyPressedEvent& e);
@@ -25,7 +25,7 @@ private:
 	void ReloadProject();
 	void SaveProject();
 private:
-	void ViewportPanel(std::shared_ptr<Framebuffer>& m_Framebuffer);
+	void ViewportPanel(uint32_t framebufferTexture);
 	void SceneHierarchyPanel();
 	void ComponentsPanel();
 	void CenteredText(const char* text);

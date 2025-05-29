@@ -6,7 +6,8 @@
 #include "RendererAPI.h"
 #include "glm/fwd.hpp"
 #include <ft2build.h>
-#include FT_FREETYPE_H  
+#include FT_FREETYPE_H
+#include "../engine.h"
 
 struct QuadVertex
 {
@@ -542,6 +543,7 @@ void Renderer2D::RenderFullscreenFramebufferTexture(uint32_t textureID)
 {
     s_Data._shaders2D.FramebufferShader->Use();
     s_Data._shaders2D.FramebufferShader->setInt("u_Texture", 0);
+
     static uint32_t quadVAO = 0, quadVBO = 0;
     if (quadVAO == 0)
     {
@@ -569,8 +571,6 @@ void Renderer2D::RenderFullscreenFramebufferTexture(uint32_t textureID)
 
     glDisable(GL_DEPTH_TEST);
 
-    // You need a shader bound here that uses a sampler2D at location 0.
-    // Assume the shader is already active.
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, textureID);
 
@@ -639,10 +639,10 @@ void Renderer2D::DrawText(const std::string& text, const glm::vec2& position, fl
         };
 
         glm::vec2 texCoords[4] = {
-            { 0.0f, 0.0f },
-            { 1.0f, 0.0f },
+            { 0.0f, 1.0f },
             { 1.0f, 1.0f },
-            { 0.0f, 1.0f }
+            { 1.0f, 0.0f },
+            { 0.0f, 0.0f }
         };
 
         float textureIndex = 0.0f;
