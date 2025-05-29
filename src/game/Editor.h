@@ -2,7 +2,6 @@
 
 #include "../input/KeyEvent.h"
 #include "../backend/DeltaTime.h"
-#include "../backend/Layer.h"
 #include "../backend/Texture.h"
 /*#include "../Scene/Scene.h"*/
 #include "../backend/FrameBuffer.h"
@@ -12,17 +11,13 @@
 #include <filesystem>
 #include <glm/glm.hpp>
 
-struct Editor : Layer
+struct Editor
 {
   Editor();
-	virtual ~Editor() = default;
+	~Editor();
 
-	void OnAttach() override;
-	void OnDetach() override;
-
-	void OnUpdate(DeltaTime dt) override;
-	virtual void OnImGuiRender() override;
-	void OnEvent(Event& e) override;
+	void OnImGuiRender(std::shared_ptr<Framebuffer>& m_Framebuffer);
+	void OnEvent(Event& e);
 private:
 	bool OnKeyPressed(KeyPressedEvent& e);
 	bool OnMouseButtonPressed(MouseButtonPressedEvent& e);
@@ -30,7 +25,7 @@ private:
 	void ReloadProject();
 	void SaveProject();
 private:
-	void ViewportPanel();
+	void ViewportPanel(std::shared_ptr<Framebuffer>& m_Framebuffer);
 	void SceneHierarchyPanel();
 	void ComponentsPanel();
 	void CenteredText(const char* text);
@@ -39,12 +34,6 @@ private:
 	template<typename T>
 	void DisplayAddComponentEntry(const std::string& entryName);
 private:
-
-	enum class SceneState
-	{
-		Edit = 0, Play = 1, Simulate = 2
-	};
-	SceneState m_SceneState = SceneState::Edit;
 
 	std::shared_ptr<Framebuffer> m_Framebuffer;
 	int m_GizmoType;

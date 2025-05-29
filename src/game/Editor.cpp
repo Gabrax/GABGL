@@ -8,12 +8,11 @@
 #include <glad/glad.h>
 #include "ImGuizmo.h"
 #include <glm/gtc/type_ptr.hpp>
-/*#include "../Engine.h"*/
 /*#include "../Renderer/Renderer2D.h"*/
 /*#include "../Input/UserInput.h"*/
 /*#include "../Backend/Utils.hpp"*/
 /*#include "../Renderer/RendererAPI.h"*/
-/*#include "json.hpp"*/
+#include "json.hpp"
 #include "../input/KeyCodes.h"
 #include "../input/UserInput.h"
 
@@ -21,15 +20,13 @@
 #include <imgui_internal.h>
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
+#include "ImGuizmo.h"
 
 #include "../engine.h"
 
-#include "ImGuizmo.h"
 #include "../backend/Renderer2D.h"
 
-Editor::Editor() : Layer("MainEditor"), m_GizmoType(ImGuizmo::OPERATION::TRANSLATE) {};
-
-void Editor::OnAttach()
+Editor::Editor() : m_GizmoType(ImGuizmo::OPERATION::TRANSLATE)
 {
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -57,86 +54,17 @@ void Editor::OnAttach()
 
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 410");
-
-	FramebufferSpecification fbSpec;
-	fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::Depth };
-	fbSpec.Width = Engine::GetInstance().GetMainWindow().GetWidth();
-	fbSpec.Height = Engine::GetInstance().GetMainWindow().GetHeight();
-	m_Framebuffer = Framebuffer::Create(fbSpec);
-
 	Renderer2D::SetLineWidth(4.0f);
-}
+};
 
-void Editor::OnDetach()
+Editor::~Editor()
 {
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
 }
 
-void Editor::OnUpdate(DeltaTime dt)
-{
-	/*m_ActiveScene->OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);*/
-	/**/
-	/*// Resize*/
-	/*if (FramebufferSpecification spec = m_Framebuffer->GetSpecification();*/
-	/*	m_ViewportSize.x > 0.0f && m_ViewportSize.y > 0.0f && // zero sized framebuffer is invalid*/
-	/*	(spec.Width != m_ViewportSize.x || spec.Height != m_ViewportSize.y))*/
-	/*{*/
-	/*	m_Framebuffer->Resize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);*/
-	/*	//m_CameraController.OnResize(m_ViewportSize.x, m_ViewportSize.y);*/
-	/*	m_EditorCamera.SetViewportSize(m_ViewportSize.x, m_ViewportSize.y);*/
-	/*}*/
-	/*Renderer2D::ResetStats();*/
-	/*m_Framebuffer->Bind();*/
-	/*RendererAPI::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });*/
-	/*RendererAPI::Clear();*/
-	/*m_Framebuffer->ClearAttachment(1, -1);*/
-	/**/
-	/*switch (m_SceneState)*/
-	/*{*/
-	/*	case SceneState::Edit:*/
-	/*	{*/
-	/*		//if (m_ViewportFocused)*/
-	/*			//m_CameraController.OnUpdate(ts);*/
-	/**/
-	/*		m_EditorCamera.OnUpdate(dt);*/
-	/**/
-	/*		m_ActiveScene->OnUpdateEditor(dt, m_EditorCamera);*/
-	/*		break;*/
-	/*	}*/
-	/*	case SceneState::Simulate:*/
-	/*	{*/
-	/*		m_EditorCamera.OnUpdate(dt);*/
-	/**/
-	/*		m_ActiveScene->OnUpdateSimulation(dt, m_EditorCamera);*/
-	/*		break;*/
-	/*	}*/
-	/*	case SceneState::Play:*/
-	/*	{*/
-	/*		m_ActiveScene->OnUpdateRuntime(dt);*/
-	/*		break;*/
-	/*	}*/
-	/*}*/
-	/**/
-	/*auto [mx, my] = ImGui::GetMousePos();*/
-	/*mx -= m_ViewportBounds[0].x;*/
-	/*my -= m_ViewportBounds[0].y;*/
-	/*glm::vec2 viewportSize = m_ViewportBounds[1] - m_ViewportBounds[0];*/
-	/*my = viewportSize.y - my;*/
-	/*int mouseX = (int)mx;*/
-	/*int mouseY = (int)my;*/
-	/**/
-	/*if (mouseX >= 0 && mouseY >= 0 && mouseX < (int)viewportSize.x && mouseY < (int)viewportSize.y)*/
-	/*{*/
-	/*	int pixelData = m_Framebuffer->ReadPixel(1, mouseX, mouseY);*/
-	/*	m_HoveredEntity = pixelData == -1 ? Entity() : Entity((entt::entity)pixelData, m_ActiveScene.get());*/
-	/*}*/
-	/**/
-	/*m_Framebuffer->Unbind();*/
-}
-
-void Editor::OnImGuiRender()
+void Editor::OnImGuiRender(std::shared_ptr<Framebuffer>& m_Framebuffer)
 {
   Begin();
 	// Note: Switch this to true to enable dockspace
@@ -193,7 +121,7 @@ void Editor::OnImGuiRender()
 
 	ComponentsPanel();
 
-	ViewportPanel();
+	ViewportPanel(m_Framebuffer);
 	// PANELS //
 
 	ImGui::End();
@@ -207,12 +135,6 @@ void Editor::OnEvent(Event& e)
 		ImGuiIO& io = ImGui::GetIO();
 		e.Handled |= e.IsInCategory(EventCategoryMouse) & io.WantCaptureMouse;
 		e.Handled |= e.IsInCategory(EventCategoryKeyboard) & io.WantCaptureKeyboard;
-	}
-
-	//m_CameraController.OnEvent(e);
-	if (m_SceneState == SceneState::Edit)
-	{
-		/*m_EditorCamera.OnEvent(e);*/
 	}
 
 	EventDispatcher dispatcher(e);
@@ -394,79 +316,28 @@ void Editor::SaveProject()
 
 }
 
-void Editor::ViewportPanel()
+void Editor::ViewportPanel(std::shared_ptr<Framebuffer>& m_Framebuffer)
 {
-	/*ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });*/
-	/*ImGui::Begin("Viewport", nullptr, NULL);*/
-	/*auto viewportMinRegion = ImGui::GetWindowContentRegionMin();*/
-	/*auto viewportMaxRegion = ImGui::GetWindowContentRegionMax();*/
-	/*auto viewportOffset = ImGui::GetWindowPos();*/
-	/*m_ViewportBounds[0] = { viewportMinRegion.x + viewportOffset.x, viewportMinRegion.y + viewportOffset.y };*/
-	/*m_ViewportBounds[1] = { viewportMaxRegion.x + viewportOffset.x, viewportMaxRegion.y + viewportOffset.y };*/
-	/**/
-	/*m_ViewportFocused = ImGui::IsWindowFocused();*/
-	/*m_ViewportHovered = ImGui::IsWindowHovered();*/
-	/**/
-	/*BlockEvents(!m_ViewportHovered);*/
-	/*ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();*/
-	/*m_ViewportSize = { viewportPanelSize.x, viewportPanelSize.y };*/
-	/**/
-	/*uint64_t textureID = m_Framebuffer->GetColorAttachmentRendererID();*/
-	/*ImGui::Image(reinterpret_cast<void*>(textureID), ImVec2{ m_ViewportSize.x, m_ViewportSize.y }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });*/
-	/**/
-	/*if (ImGui::BeginDragDropTarget())*/
-	/*{*/
-	/*	if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM"))*/
-	/*	{*/
-	/*		const wchar_t* path = (const wchar_t*)payload->Data;*/
-	/*		//OpenScene(path);*/
-	/*	}*/
-	/*	ImGui::EndDragDropTarget();*/
-	/*}*/
-	/**/
-	/*Entity selectedEntity = m_SelectionContext;*/
-	/*if (selectedEntity && m_GizmoType != -1)*/
-	/*{*/
-	/*	ImGuizmo::SetOrthographic(false);*/
-	/*	ImGuizmo::SetDrawlist();*/
-	/**/
-	/*	ImGuizmo::SetRect(m_ViewportBounds[0].x, m_ViewportBounds[0].y, m_ViewportBounds[1].x - m_ViewportBounds[0].x, m_ViewportBounds[1].y - m_ViewportBounds[0].y);*/
-	/**/
-	/*	// Editor camera*/
-	/*	const glm::mat4& cameraProjection = m_EditorCamera.GetProjection();*/
-	/*	glm::mat4 cameraView = m_EditorCamera.GetViewMatrix();*/
-	/**/
-	/*	// Entity transform*/
-	/*	auto& tc = selectedEntity.GetComponent<TransformComponent>();*/
-	/*	glm::mat4 transform = tc.GetTransform();*/
-	/**/
-	/*	// Snapping*/
-	/*	bool snap = Input::IsKeyPressed(Key::LeftControl);*/
-	/*	float snapValue = 0.5f; // Snap to 0.5m for translation/scale*/
-	/*	// Snap to 45 degrees for rotation*/
-	/*	if (m_GizmoType == ImGuizmo::OPERATION::ROTATE)*/
-	/*		snapValue = 45.0f;*/
-	/**/
-	/*	float snapValues[3] = { snapValue, snapValue, snapValue };*/
-	/**/
-	/*	ImGuizmo::Manipulate(glm::value_ptr(cameraView), glm::value_ptr(cameraProjection),*/
-	/*		(ImGuizmo::OPERATION)m_GizmoType, ImGuizmo::LOCAL, glm::value_ptr(transform),*/
-	/*		nullptr, snap ? snapValues : nullptr);*/
-	/**/
-	/*	if (ImGuizmo::IsUsing())*/
-	/*	{*/
-	/*		glm::vec3 position, rotation, scale;*/
-	/*		Utils::DecomposeTransform(transform, position, rotation, scale);*/
-	/**/
-	/*		glm::vec3 deltaRotation = rotation - tc.Rotation;*/
-	/*		tc.Position = position;*/
-	/*		tc.Rotation += deltaRotation;*/
-	/*		tc.Scale = scale;*/
-	/*	}*/
-	/*}*/
-	/**/
-	/*ImGui::End();*/
-	/*ImGui::PopStyleVar();*/
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
+	ImGui::Begin("Viewport", nullptr, NULL);
+	auto viewportMinRegion = ImGui::GetWindowContentRegionMin();
+	auto viewportMaxRegion = ImGui::GetWindowContentRegionMax();
+	auto viewportOffset = ImGui::GetWindowPos();
+	m_ViewportBounds[0] = { viewportMinRegion.x + viewportOffset.x, viewportMinRegion.y + viewportOffset.y };
+	m_ViewportBounds[1] = { viewportMaxRegion.x + viewportOffset.x, viewportMaxRegion.y + viewportOffset.y };
+
+	m_ViewportFocused = ImGui::IsWindowFocused();
+	m_ViewportHovered = ImGui::IsWindowHovered();
+
+	BlockEvents(!m_ViewportHovered);
+	ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
+	m_ViewportSize = { viewportPanelSize.x, viewportPanelSize.y };
+
+	uint64_t textureID = m_Framebuffer->GetColorAttachmentRendererID();
+	ImGui::Image(reinterpret_cast<void*>(textureID), ImVec2{ m_ViewportSize.x, m_ViewportSize.y }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
+
+	ImGui::End();
+	ImGui::PopStyleVar();
 }
 
 void Editor::SceneHierarchyPanel()

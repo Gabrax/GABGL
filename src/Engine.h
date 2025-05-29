@@ -7,6 +7,7 @@
 #include "backend/LayerStack.h"
 #include "backend/DeltaTime.h"
 #include "game/game.h"
+#include "game/Editor.h"
 
 struct Engine
 {

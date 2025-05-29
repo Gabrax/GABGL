@@ -63,6 +63,7 @@ struct Renderer2DData
 		std::shared_ptr<Shader> QuadShader;
 		std::shared_ptr<Shader> CircleShader;
 		std::shared_ptr<Shader> LineShader;
+		std::shared_ptr<Shader> FramebufferShader;
 	} _shaders2D;
 
 	uint32_t QuadIndexCount = 0;
@@ -112,6 +113,7 @@ void Renderer2D::LoadShaders()
 	s_Data._shaders2D.QuadShader = Shader::Create("res/shaders/Renderer2D_Quad.glsl");
 	s_Data._shaders2D.CircleShader = Shader::Create("res/shaders/Renderer2D_Circle.glsl");
 	s_Data._shaders2D.LineShader = Shader::Create("res/shaders/Renderer2D_Line.glsl");
+	s_Data._shaders2D.FramebufferShader = Shader::Create("res/shaders/FB.glsl");
 }
 
 void Renderer2D::Init()
@@ -535,6 +537,46 @@ void Renderer2D::DrawRect(const glm::mat4& transform, const glm::vec4& color, in
 /*	else*/
 /*		DrawQuad(transform, src.Color, entityID);*/
 /*}*/
+
+void Renderer2D::RenderFullscreenFramebufferTexture(uint32_t textureID)
+{
+    s_Data._shaders2D.FramebufferShader->Use();
+    s_Data._shaders2D.FramebufferShader->setInt("u_Texture", 0);
+    static uint32_t quadVAO = 0, quadVBO = 0;
+    if (quadVAO == 0)
+    {
+        float quadVertices[] = {
+            // positions   // texCoords
+            -1.0f,  1.0f,  0.0f, 1.0f,
+            -1.0f, -1.0f,  0.0f, 0.0f,
+             1.0f, -1.0f,  1.0f, 0.0f,
+
+            -1.0f,  1.0f,  0.0f, 1.0f,
+             1.0f, -1.0f,  1.0f, 0.0f,
+             1.0f,  1.0f,  1.0f, 1.0f
+        };
+
+        glGenVertexArrays(1, &quadVAO);
+        glGenBuffers(1, &quadVBO);
+        glBindVertexArray(quadVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+    }
+
+    glDisable(GL_DEPTH_TEST);
+
+    // You need a shader bound here that uses a sampler2D at location 0.
+    // Assume the shader is already active.
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, textureID);
+
+    glBindVertexArray(quadVAO);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+}
 
 void Renderer2D::DrawText(const std::string& text, const glm::vec2& position, float size, const glm::vec4& color, int entityID)
 {

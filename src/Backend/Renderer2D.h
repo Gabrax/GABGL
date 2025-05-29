@@ -42,8 +42,8 @@ struct Renderer2D
 
 	/*static void DrawSprite(const glm::mat4& transform, TextureComponent& src, int entityID);*/
 
-	//static void DrawString(const std::string& string, Ref<Font> font, const glm::mat4& transform, const TextParams& textParams, int entityID = -1);
-	//static void DrawString(const std::string& string, const glm::mat4& transform, const TextComponent& component, int entityID = -1);
+  static void RenderFullscreenFramebufferTexture(uint32_t textureID);
+
   static void DrawText(const std::string& text,  const glm::vec2& position, float size, const glm::vec4& color, int entityID = -1);
 
 	static float GetLineWidth();

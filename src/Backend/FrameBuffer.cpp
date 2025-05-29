@@ -1,4 +1,5 @@
 #include "FrameBuffer.h"
+#include "BackendLogger.h"
 
 #include <glad/glad.h>
 
@@ -99,6 +100,8 @@ Framebuffer::Framebuffer(const FramebufferSpecification& spec)
 	}
 
 	Invalidate();
+
+  GABGL_WARN("Framebuffer created");
 }
 
 Framebuffer::~Framebuffer()
