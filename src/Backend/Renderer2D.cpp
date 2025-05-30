@@ -7,7 +7,7 @@
 #include "glm/fwd.hpp"
 #include <ft2build.h>
 #include FT_FREETYPE_H
-#include "../engine.h"
+#include "Shader.h"
 
 struct QuadVertex
 {
@@ -84,8 +84,6 @@ struct Renderer2DData
 	std::array<std::shared_ptr<Texture>, MaxTextureSlots> TextureSlots;
 	uint32_t TextureSlotIndex = 1; // 0 = white texture
 
-	std::shared_ptr<Texture> FontAtlasTexture;
-
 	glm::vec4 QuadVertexPositions[4];
 
 	Renderer2D::Statistics Stats;
@@ -93,8 +91,7 @@ struct Renderer2DData
 	struct CameraData
 	{
 		glm::mat4 ViewProjection;
-	};
-	CameraData CameraBuffer;
+	} CameraBuffer;
 	std::shared_ptr<UniformBuffer> CameraUniformBuffer;
 
   struct Character {
@@ -491,7 +488,7 @@ void Renderer2D::DrawCircle(const glm::mat4& transform, const glm::vec4& color, 
 	s_Data.Stats.QuadCount++;
 }
 
-void Renderer2D::DrawLine(const glm::vec3& p0, glm::vec3& p1, const glm::vec4& color, int entityID)
+void Renderer2D::DrawLine(const glm::vec3& p0, const glm::vec3& p1, const glm::vec4& color, int entityID)
 {
 	s_Data.LineVertexBufferPtr->Position = p0;
 	s_Data.LineVertexBufferPtr->Color = color;

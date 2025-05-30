@@ -1,10 +1,12 @@
 #include "game.h"
 
 #include "../backend/Renderer2D.h"
+#include "../backend/Renderer3D.h"
 #include "../input/KeyCodes.h"
 #include "../input/UserInput.h"
 #include "../engine.h"
 #include "../backend/RendererAPI.h"
+#include "glm/fwd.hpp"
 
 void GAME::OnAttach()
 {
@@ -47,11 +49,17 @@ void GAME::OnUpdate(DeltaTime dt)
 	m_Framebuffer->ClearAttachment(1, -1);
 
   Renderer2D::BeginScene(m_Camera);
-  
-  Renderer2D::DrawQuad(glm::vec2(0.0f,-2.0f),glm::vec2(1.0f),glm::vec4(1.0f,2.0f,3.0f,1.0f));
+
   Renderer2D::DrawText("FPS: " + std::to_string(dt.GetFPS()), glm::vec2(0.0f), 0.01f, glm::vec4(2.0f,1.0f,1.0f,1.0f));
+  Renderer2D::DrawLine(glm::vec3(2.0f), glm::vec3(1.0f,1.0f,0.0f), glm::vec4(1.0f));
 
   Renderer2D::EndScene();
+
+  Renderer3D::BeginScene(m_Camera);
+
+  Renderer3D::DrawCube({glm::vec3(0.0f)});
+
+  Renderer3D::EndScene();
 
 	m_Framebuffer->Unbind();
 

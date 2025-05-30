@@ -1,12 +1,5 @@
 #pragma once
 
-#include "../backend/Layer.h"
-#include "../backend/DeltaTime.h"
-#include "../input/EngineEvent.h"
-#include "../input/KeyEvent.h"
-#include "Shader.h"
-#include "FrameBuffer.h"
-/*#include "../Scene/Components.hpp"*/
 #include "Camera.h"
 #include "Texture.h"
 
@@ -35,12 +28,10 @@ struct Renderer2D
 
 	static void DrawCircle(const glm::mat4& transform, const glm::vec4& color, float thickness = 1.0f, float fade = 0.005f, int entityID = -1);
 
-	static void DrawLine(const glm::vec3& p0, glm::vec3& p1, const glm::vec4& color, int entityID = -1);
+	static void DrawLine(const glm::vec3& p0, const glm::vec3& p1, const glm::vec4& color, int entityID = -1);
 
 	static void DrawRect(const glm::vec3& position, const glm::vec2& size, const glm::vec4& color, int entityID = -1);
 	static void DrawRect(const glm::mat4& transform, const glm::vec4& color, int entityID = -1);
-
-	/*static void DrawSprite(const glm::mat4& transform, TextureComponent& src, int entityID);*/
 
   static void RenderFullscreenFramebufferTexture(uint32_t textureID);
 
