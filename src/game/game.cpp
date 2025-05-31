@@ -1,20 +1,18 @@
 #include "game.h"
 
 #include "../backend/Renderer2D.h"
-#include "../backend/Renderer3D.h"
 #include "../input/KeyCodes.h"
 #include "../input/UserInput.h"
 #include "../engine.h"
 #include "../backend/RendererAPI.h"
+#include "glad/glad.h"
 #include "glm/fwd.hpp"
 
 void GAME::OnAttach()
 {
   m_WindowRef = &Engine::GetInstance().GetMainWindow();
-  m_Camera = Camera(45.0f, (float)m_WindowRef->GetWidth() / (float)m_WindowRef->GetHeight(), 0.1f, 1000.0f);
+  m_Camera = Camera(45.0f, (float)m_WindowRef->GetWidth() / (float)m_WindowRef->GetHeight(), 0.001f, 2000.0f);
   m_Camera.SetViewportSize((float)m_WindowRef->GetWidth(), (float)m_WindowRef->GetHeight());
-  m_Camera.SetOrthographic(10.0f, 0.1f, 1000.0f);
-  m_Camera.SetProjectionType(Camera::ProjectionType::Perspective);
 
   FramebufferSpecification fbSpec;
 	fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::Depth };
@@ -42,41 +40,38 @@ void GAME::OnEvent(Event& e)
 
 void GAME::OnUpdate(DeltaTime dt)
 {
-	Renderer2D::ResetStats();
+	Renderer::ResetStats();
 	m_Framebuffer->Bind();
 	RendererAPI::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
 	RendererAPI::Clear();
 	m_Framebuffer->ClearAttachment(1, -1);
 
-  Renderer2D::BeginScene(m_Camera);
+  Renderer::BeginScene(m_Camera);
+    Renderer::DrawLine(glm::vec3(2.0f), glm::vec3(1.0f,1.0f,0.0f), glm::vec4(1.0f));
+    Renderer::DrawCubeContour(glm::vec3(2.0f), glm::vec3(1.0f), glm::vec4(1.0f));
+    Renderer::DrawCube({glm::vec3(2.0f,0.0f,0.0f)});
+    Renderer::DrawSkybox();
+    Renderer::Draw2DQuad(glm::vec2(50.0f),glm::vec2(50.0f),glm::vec4(1.0f));
+    Renderer::Draw3DText("FPS: " + std::to_string(dt.GetFPS()), glm::vec2(0.0f), 0.01f, glm::vec4(2.0f,1.0f,1.0f,1.0f));
+    Renderer::Draw2DText("FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f,50.0f), 0.5f, glm::vec4(2.0f,1.0f,1.0f,1.0f));
+  Renderer::EndScene();
 
-  Renderer2D::DrawText("FPS: " + std::to_string(dt.GetFPS()), glm::vec2(0.0f), 0.01f, glm::vec4(2.0f,1.0f,1.0f,1.0f));
-  Renderer2D::DrawLine(glm::vec3(2.0f), glm::vec3(1.0f,1.0f,0.0f), glm::vec4(1.0f));
-
-  Renderer2D::EndScene();
-
-  Renderer3D::BeginScene(m_Camera);
-
-  Renderer3D::DrawCube({glm::vec3(0.0f)});
-
-  Renderer3D::EndScene();
 
 	m_Framebuffer->Unbind();
+  m_Camera.OnUpdate(dt);
 
   switch (m_SceneState)
 	{
 		case SceneState::Edit:
 		{
-      m_Camera.OnUpdate(dt);
-
+      m_Camera.SetCursor(true);
       m_Editor.OnImGuiRender(m_Framebuffer->GetColorAttachmentRendererID());
 			break;
 		}
 		case SceneState::Play:
 		{
-      m_Camera.OnUpdate(dt);
-
-      Renderer2D::RenderFullscreenFramebufferTexture(m_Framebuffer->GetColorAttachmentRendererID());
+      m_Camera.SetCursor(false);
+      Renderer::RenderFullscreenFramebufferTexture(m_Framebuffer->GetColorAttachmentRendererID());
 			break;
 		}
 	}

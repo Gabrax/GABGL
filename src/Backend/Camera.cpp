@@ -3,11 +3,18 @@
 #include "../backend/BackendLogger.h"
 #include "../input/UserInput.h"
 #include "../input/KeyEvent.h"
+#include "../engine.h"
 
 #include <glfw/glfw3.h>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
+
+Camera::Camera(const glm::vec3& position) : m_Position(position)
+{
+    RecalculateProjection();
+    UpdateView();
+};
 
 Camera::Camera(float fov, float aspectRatio, float nearClip, float farClip)
     : m_ProjectionType(ProjectionType::Perspective),
@@ -23,6 +30,13 @@ Camera::Camera(float fov, float aspectRatio, float nearClip, float farClip)
     UpdateView();
 }
 
+Camera::Camera(const glm::mat4& projection) : m_Projection(projection)
+{
+    RecalculateProjection();
+    UpdateView();
+};
+
+
 void Camera::UpdateProjection()
 {
     // Deprecated, you can call RecalculateProjection() instead
@@ -34,10 +48,9 @@ void Camera::UpdateProjection()
 void Camera::UpdateView()
 {
     m_Position = CalculatePosition();
-
     glm::quat orientation = GetOrientation();
-    m_ViewMatrix = glm::translate(glm::mat4(1.0f), m_Position) * glm::toMat4(orientation);
-    m_ViewMatrix = glm::inverse(m_ViewMatrix);
+    glm::mat4 transform = glm::translate(glm::mat4(1.0f), m_Position) * glm::toMat4(orientation);
+    m_ViewMatrix = glm::inverse(transform);
 }
 
 std::pair<float, float> Camera::PanSpeed() const
@@ -67,12 +80,12 @@ float Camera::ZoomSpeed() const
 
 void Camera::OnUpdate(DeltaTime dt)
 {
+  const glm::vec2& mouse{ Input::GetMouseX(), Input::GetMouseY() };
+  glm::vec2 delta = (mouse - m_InitialMousePosition) * 0.003f;
+  m_InitialMousePosition = mouse;
+
 	if (Input::IsKeyPressed(Key::LeftAlt))
 	{
-		const glm::vec2& mouse{ Input::GetMouseX(), Input::GetMouseY() };
-		glm::vec2 delta = (mouse - m_InitialMousePosition) * 0.003f;
-		m_InitialMousePosition = mouse;
-
 		if (Input::IsMouseButtonPressed(Mouse::ButtonMiddle))
 			MousePan(delta);
 		else if (Input::IsMouseButtonPressed(Mouse::ButtonLeft))
@@ -202,7 +215,11 @@ void Camera::RecalculateProjection()
         float orthoBottom = -m_OrthographicSize * 0.5f;
         float orthoTop = m_OrthographicSize * 0.5f;
 
-        m_Projection = glm::ortho(orthoLeft, orthoRight,
-            orthoBottom, orthoTop, m_OrthographicNear, m_OrthographicFar);
+        m_Projection = glm::ortho(orthoLeft, orthoRight, orthoBottom, orthoTop, m_OrthographicNear, m_OrthographicFar);
     }
+}
+
+void Camera::SetCursor(bool enable)
+{
+  glfwSetInputMode(Engine::GetInstance().GetMainWindow().GetWindowPtr(), GLFW_CURSOR, enable ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
 }

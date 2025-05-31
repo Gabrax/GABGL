@@ -55,7 +55,7 @@ Editor::Editor() : m_GizmoType(ImGuizmo::OPERATION::TRANSLATE)
 
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 410");
-	Renderer2D::SetLineWidth(4.0f);
+	Renderer::SetLineWidth(4.0f);
 };
 
 Editor::~Editor()

@@ -2,8 +2,9 @@
 
 #include "Camera.h"
 #include "Texture.h"
+#include "Transform.hpp"
 
-struct Renderer2D
+struct Renderer
 {
 	static void Init();
 	static void Shutdown();
@@ -13,35 +14,48 @@ struct Renderer2D
 	static void EndScene();
 	static void Flush();
 
-	// Primitives
-	static void DrawQuad(const glm::vec2& position, const glm::vec2& size, const glm::vec4& color);
-	static void DrawQuad(const glm::vec3& position, const glm::vec2& size, const glm::vec4& color);
-	static void DrawQuad(const glm::vec2& position, const glm::vec2& size, const std::shared_ptr<Texture>& texture, float tilingFactor = 1.0f, const glm::vec4& tintColor = glm::vec4(1.0f));
-	static void DrawQuad(const glm::vec3& position, const glm::vec2& size, const std::shared_ptr<Texture>& texture, float tilingFactor = 1.0f, const glm::vec4& tintColor = glm::vec4(1.0f));
-	static void DrawQuad(const glm::mat4& transform, const glm::vec4& color, int entityID = -1);
-	static void DrawQuad(const glm::mat4& transform, const std::shared_ptr<Texture>& texture, float tilingFactor = 1.0f, const glm::vec4& tintColor = glm::vec4(1.0f), int entityID = -1);
+	// 3D space
+	static void Draw3DQuad(const glm::vec2& position, const glm::vec2& size, const glm::vec4& color);
+	static void Draw3DQuad(const glm::vec3& position, const glm::vec2& size, const glm::vec4& color);
+	static void Draw3DQuad(const glm::vec2& position, const glm::vec2& size, const std::shared_ptr<Texture>& texture, float tilingFactor = 1.0f, const glm::vec4& tintColor = glm::vec4(1.0f));
+	static void Draw3DQuad(const glm::vec3& position, const glm::vec2& size, const std::shared_ptr<Texture>& texture, float tilingFactor = 1.0f, const glm::vec4& tintColor = glm::vec4(1.0f));
+	static void Draw3DQuad(const glm::mat4& transform, const glm::vec4& color, int entityID = -1);
+	static void Draw3DQuad(const glm::mat4& transform, const std::shared_ptr<Texture>& texture, float tilingFactor = 1.0f, const glm::vec4& tintColor = glm::vec4(1.0f), int entityID = -1);
+	static void DrawRotated3DQuad(const glm::vec2& position, const glm::vec2& size, float rotation, const glm::vec4& color);
+	static void DrawRotated3DQuad(const glm::vec3& position, const glm::vec2& size, float rotation, const glm::vec4& color);
+	static void DrawRotated3DQuad(const glm::vec2& position, const glm::vec2& size, float rotation, const std::shared_ptr<Texture>& texture, float tilingFactor = 1.0f, const glm::vec4& tintColor = glm::vec4(1.0f));
+	static void DrawRotated3DQuad(const glm::vec3& position, const glm::vec2& size, float rotation, const std::shared_ptr<Texture>& texture, float tilingFactor = 1.0f, const glm::vec4& tintColor = glm::vec4(1.0f));
+	static void Draw3DCircle(const glm::mat4& transform, const glm::vec4& color, float thickness = 1.0f, float fade = 0.005f, int entityID = -1);
+	static void Draw3DRect(const glm::vec3& position, const glm::vec2& size, const glm::vec4& color, int entityID = -1);
+	static void Draw3DRect(const glm::mat4& transform, const glm::vec4& color, int entityID = -1);
+  static void Draw3DText(const std::string& text,  const glm::vec2& position, float size, const glm::vec4& color, int entityID = -1);
+  static void DrawCube(const TransformComponent& transform, int entityID = -1);
+  static void DrawCubeContour(const glm::vec3& position, const glm::vec3& size, const glm::vec4& color, int entityID = -1);
 
-	static void DrawRotatedQuad(const glm::vec2& position, const glm::vec2& size, float rotation, const glm::vec4& color);
-	static void DrawRotatedQuad(const glm::vec3& position, const glm::vec2& size, float rotation, const glm::vec4& color);
-	static void DrawRotatedQuad(const glm::vec2& position, const glm::vec2& size, float rotation, const std::shared_ptr<Texture>& texture, float tilingFactor = 1.0f, const glm::vec4& tintColor = glm::vec4(1.0f));
-	static void DrawRotatedQuad(const glm::vec3& position, const glm::vec2& size, float rotation, const std::shared_ptr<Texture>& texture, float tilingFactor = 1.0f, const glm::vec4& tintColor = glm::vec4(1.0f));
+  // 2D space
+  static void Draw2DQuad(const glm::vec2& position, const glm::vec2& size, const glm::vec4& color);
+	static void Draw2DQuad(const glm::vec3& position, const glm::vec2& size, const glm::vec4& color);
+	static void Draw2DQuad(const glm::vec2& position, const glm::vec2& size, const std::shared_ptr<Texture>& texture, float tilingFactor = 1.0f, const glm::vec4& tintColor = glm::vec4(1.0f));
+	static void Draw2DQuad(const glm::vec3& position, const glm::vec2& size, const std::shared_ptr<Texture>& texture, float tilingFactor = 1.0f, const glm::vec4& tintColor = glm::vec4(1.0f));
+	static void Draw2DQuad(const glm::mat4& transform, const glm::vec4& color, int entityID = -1);
+	static void Draw2DQuad(const glm::mat4& transform, const std::shared_ptr<Texture>& texture, float tilingFactor = 1.0f, const glm::vec4& tintColor = glm::vec4(1.0f), int entityID = -1);
+	static void DrawRotated2DQuad(const glm::vec2& position, const glm::vec2& size, float rotation, const glm::vec4& color);
+	static void DrawRotated2DQuad(const glm::vec3& position, const glm::vec2& size, float rotation, const glm::vec4& color);
+	static void DrawRotated2DQuad(const glm::vec2& position, const glm::vec2& size, float rotation, const std::shared_ptr<Texture>& texture, float tilingFactor = 1.0f, const glm::vec4& tintColor = glm::vec4(1.0f));
+	static void DrawRotated2DQuad(const glm::vec3& position, const glm::vec2& size, float rotation, const std::shared_ptr<Texture>& texture, float tilingFactor = 1.0f, const glm::vec4& tintColor = glm::vec4(1.0f));
+	static void Draw2DCircle(const glm::mat4& transform, const glm::vec4& color, float thickness = 1.0f, float fade = 0.005f, int entityID = -1);
+	static void Draw2DRect(const glm::vec3& position, const glm::vec2& size, const glm::vec4& color, int entityID = -1);
+	static void Draw2DRect(const glm::mat4& transform, const glm::vec4& color, int entityID = -1);
+  static void Draw2DText(const std::string& text,  const glm::vec2& position, float size, const glm::vec4& color, int entityID = -1);
 
-	static void DrawCircle(const glm::mat4& transform, const glm::vec4& color, float thickness = 1.0f, float fade = 0.005f, int entityID = -1);
-
+  static void DrawSkybox();
 	static void DrawLine(const glm::vec3& p0, const glm::vec3& p1, const glm::vec4& color, int entityID = -1);
-
-	static void DrawRect(const glm::vec3& position, const glm::vec2& size, const glm::vec4& color, int entityID = -1);
-	static void DrawRect(const glm::mat4& transform, const glm::vec4& color, int entityID = -1);
-
   static void RenderFullscreenFramebufferTexture(uint32_t textureID);
-
-  static void DrawText(const std::string& text,  const glm::vec2& position, float size, const glm::vec4& color, int entityID = -1);
 
 	static float GetLineWidth();
 	static void SetLineWidth(float width);
 	static void LoadShaders();
 
-	// Stats
 	struct Statistics
 	{
 		uint32_t DrawCalls = 0;

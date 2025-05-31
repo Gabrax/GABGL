@@ -43,13 +43,8 @@ void Window::Init(const WindowDefaultData& props)
   m_Window = glfwCreateWindow((int)m_Data.Width, (int)m_Data.Height, m_Data.title.c_str(), nullptr, nullptr);
   m_Monitor = glfwGetPrimaryMonitor();
   m_Mode = glfwGetVideoMode(m_Monitor);
-  CenterWindowPos();
-
-  //glfwSetWindowAttrib(m_Window, GLFW_RESIZABLE, false);
-
-  SetWindowIcon("res/engineTextures/gabglicon.png", m_Window);
-
   glfwMakeContextCurrent(m_Window);
+
 	int status = gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 	GABGL_ASSERT(status, "Failed to initialize Glad!");
 
@@ -61,6 +56,10 @@ void Window::Init(const WindowDefaultData& props)
 	GABGL_ASSERT(GLVersion.major > 4 || (GLVersion.major == 4 && GLVersion.minor >= 5), "GABGL requires at least OpenGL version 4.5!");
 
   glfwSetWindowUserPointer(m_Window, &m_Data);
+
+  SetWindowIcon("res/engineTextures/gabglicon.png", m_Window);
+  SetResizable(false);
+  CenterWindowPos();
   SetVSync(true);
   Maximize(false);
 
@@ -216,4 +215,9 @@ void Window::Maximize(bool maximize)
     glfwMaximizeWindow(m_Window);
   else
     NULL;
+}
+
+void Window::SetResizable(bool enable)
+{
+  glfwSetWindowAttrib(m_Window, GLFW_RESIZABLE, enable);
 }

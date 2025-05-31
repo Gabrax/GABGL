@@ -12,11 +12,9 @@ struct Camera
     enum class ProjectionType { Perspective = 0, Orthographic = 1 };
 
     Camera() = default;
-    
+    Camera(const glm::vec3& position);
     Camera(float fov, float aspectRatio, float nearClip, float farClip);
-    Camera(const glm::mat4& projection)
-        : m_Projection(projection)
-    {}
+    Camera(const glm::mat4& projection);
 
     ~Camera() = default;
 
@@ -32,6 +30,9 @@ struct Camera
     const glm::mat4& GetViewMatrix() const { return m_ViewMatrix; }
     const glm::mat4& GetProjection() const { return m_Projection; }
     glm::mat4 GetViewProjection() const { return m_Projection * m_ViewMatrix; }
+    glm::mat4 GetNonRotationViewProjection() const { return m_Projection * glm::mat4(glm::mat3(m_ViewMatrix)); }
+    glm::mat4 GetOrtoProjection() const { return glm::ortho(0.0f, static_cast<float>(m_ViewportWidth), 0.0f, static_cast<float>(m_ViewportHeight)); }
+
     void UpdateProjection();
 
     glm::vec3 GetUpDirection() const;
@@ -63,6 +64,8 @@ struct Camera
     ProjectionType GetProjectionType() const { return m_ProjectionType; }
     void SetProjectionType(ProjectionType type) { m_ProjectionType = type; RecalculateProjection(); }
 
+    void SetCursor(bool enable);
+
 private:
     void RecalculateProjection();
     void UpdateView();
@@ -84,8 +87,8 @@ private:
 
     // Perspective parameters
     float m_PerspectiveFOV = glm::radians(45.0f);
-    float m_PerspectiveNear = 0.01f;
-    float m_PerspectiveFar = 1000.0f;
+    float m_PerspectiveNear = 0.001f;
+    float m_PerspectiveFar = 2000.0f;
 
     // Orthographic parameters
     float m_OrthographicSize = 10.0f;

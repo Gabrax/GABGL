@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <glad/glad.h>
+#include <array>
 
 enum class ImageFormat
 {
@@ -38,6 +39,7 @@ struct Texture
 	void SetData(void* data, uint32_t size);
 	void Bind(uint32_t slot = 0) const;
 	inline bool IsLoaded() const { return m_IsLoaded; }
+  static uint32_t loadCubemap(std::array<std::string,6>& faces);
 
 	bool operator==(const Texture& other) const 
 	{

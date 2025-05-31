@@ -17,6 +17,7 @@ struct Window : WindowBase
   void Maximize(bool maximize) override;
   void SetResolution(uint32_t width, uint32_t height) override;
 	void SetFullscreen(bool full) override;
+	void SetResizable(bool enable);
   void CenterWindowPos() override;
 
 private:

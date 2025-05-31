@@ -1,6 +1,5 @@
 #include "RendererAPI.h"
 #include "Renderer2D.h"
-#include "Renderer3D.h"
 #include "BackendLogger.h"
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -44,13 +43,12 @@ void RendererAPI::Init()
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_LINE_SMOOTH);
 
-	Renderer2D::Init();
-	Renderer3D::Init();
+	Renderer::Init();
 }
 
 void RendererAPI::Shutdown()
 {
-	Renderer2D::Shutdown();
+	Renderer::Shutdown();
 }
 
 void RendererAPI::OnWindowResize(uint32_t width, uint32_t height)
