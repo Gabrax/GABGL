@@ -1,6 +1,6 @@
 #include "game.h"
 
-#include "../backend/Renderer2D.h"
+#include "../backend/Renderer.h"
 #include "../input/KeyCodes.h"
 #include "../input/UserInput.h"
 #include "../engine.h"
@@ -28,10 +28,7 @@ void GAME::OnDetach()
 
 void GAME::OnEvent(Event& e)
 {
-	if (m_SceneState == SceneState::Edit)
-	{
-		m_Camera.OnEvent(e);
-	}
+	if (m_SceneState == SceneState::Edit) m_Camera.OnEvent(e);
 
 	EventDispatcher dispatcher(e);
 	dispatcher.Dispatch<KeyPressedEvent>(BIND_EVENT(GAME::OnKeyPressed));
@@ -50,9 +47,9 @@ void GAME::OnUpdate(DeltaTime dt)
     Renderer::DrawLine(glm::vec3(2.0f), glm::vec3(1.0f,1.0f,0.0f), glm::vec4(1.0f));
     Renderer::DrawCubeContour(glm::vec3(2.0f), glm::vec3(1.0f), glm::vec4(1.0f));
     Renderer::DrawCube({glm::vec3(2.0f,0.0f,0.0f)});
-    Renderer::DrawSkybox();
-    Renderer::Draw2DQuad(glm::vec2(50.0f),glm::vec2(50.0f),glm::vec4(1.0f));
     Renderer::Draw3DText("FPS: " + std::to_string(dt.GetFPS()), glm::vec2(0.0f), 0.01f, glm::vec4(2.0f,1.0f,1.0f,1.0f));
+    Renderer::DrawSkybox();
+    Renderer::Draw2DQuad(glm::vec2(50.0f),glm::vec2(50.0f),45.0f,glm::vec4(1.0f));
     Renderer::Draw2DText("FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f,50.0f), 0.5f, glm::vec4(2.0f,1.0f,1.0f,1.0f));
   Renderer::EndScene();
 

@@ -1,5 +1,5 @@
 #include "RendererAPI.h"
-#include "Renderer2D.h"
+#include "Renderer.h"
 #include "BackendLogger.h"
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>

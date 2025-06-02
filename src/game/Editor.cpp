@@ -25,7 +25,7 @@
 
 #include "../engine.h"
 
-#include "../backend/Renderer2D.h"
+#include "../backend/Renderer.h"
 
 Editor::Editor() : m_GizmoType(ImGuizmo::OPERATION::TRANSLATE)
 {

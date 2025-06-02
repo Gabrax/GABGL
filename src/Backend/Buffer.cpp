@@ -197,3 +197,54 @@ void UniformBuffer::SetData(const void* data, uint32_t size, uint32_t offset)
 {
 	glNamedBufferSubData(m_RendererID, offset, size, data);
 }
+
+StorageBuffer::StorageBuffer(uint32_t size, uint32_t binding)
+{
+  Allocate(size);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding, m_RendererID);
+}
+
+StorageBuffer::~StorageBuffer()
+{
+  if (m_RendererID != 0) {
+      glDeleteBuffers(1, &m_RendererID);
+      m_RendererID = 0;
+      bufferSize = 0;
+  }
+}
+
+void StorageBuffer::Allocate(size_t size)
+{
+  if (m_RendererID != 0) { SetData(size, nullptr); return; }
+
+  glCreateBuffers(1, &m_RendererID);
+  glNamedBufferStorage(m_RendererID, (GLsizeiptr)size, nullptr, GL_DYNAMIC_STORAGE_BIT);
+  bufferSize = size;
+}
+
+void StorageBuffer::SetData(size_t size, void* data)
+{
+  if (size == 0) return;
+
+  if (m_RendererID == 0) Allocate(size);
+
+  if (bufferSize < size) {
+      glDeleteBuffers(1, &m_RendererID);
+      Allocate(size);  // Reallocate the buffer with new size
+  }
+
+  // Update buffer data (you could use glMapBufferRange for performance gains with large data)
+  if (data != nullptr) glNamedBufferSubData(m_RendererID, 0, (GLsizeiptr)size, data); 
+}
+
+void* StorageBuffer::MapBuffer()
+{
+  if (m_RendererID == 0) return nullptr;
+  return glMapNamedBuffer(m_RendererID, GL_READ_WRITE);
+}
+
+void StorageBuffer::UnmapBuffer()
+{
+  if (m_RendererID != 0) glUnmapNamedBuffer(m_RendererID);
+}
+

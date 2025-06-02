@@ -167,3 +167,18 @@ struct UniformBuffer
 private:
 	uint32_t m_RendererID = 0;
 };
+
+struct StorageBuffer
+{
+  StorageBuffer(uint32_t size, uint32_t binding);
+  virtual ~StorageBuffer();
+  void Allocate(size_t size);
+  void SetData(size_t size, void* data);
+  void CleanUp();
+  void* MapBuffer();
+  void UnmapBuffer();
+  inline static std::shared_ptr<StorageBuffer> Create(uint32_t size, uint32_t binding) { return std::make_shared<StorageBuffer>(size, binding); }
+private:
+  uint32_t m_RendererID = 0;
+  size_t bufferSize = 0;
+};

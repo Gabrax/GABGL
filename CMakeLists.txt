@@ -71,9 +71,9 @@ FetchContent_Declare(
 
 # Freetype
 FetchContent_Declare(
-  freetype
-  GIT_REPOSITORY https://gitlab.freedesktop.org/freetype/freetype.git
-  GIT_TAG VER-2-13-2 # You can change this to another stable tag
+    freetype
+    GIT_REPOSITORY https://gitlab.freedesktop.org/freetype/freetype.git
+    GIT_TAG VER-2-13-2 # You can change this to another stable tag
 )
 
 FetchContent_MakeAvailable(assimp meshoptimizer imguizmo spdlog openal-soft freetype)
@@ -94,7 +94,6 @@ add_subdirectory(vendor/raudio)
 add_subdirectory(vendor/glm)
 add_subdirectory(vendor/imgui-docking)
 add_subdirectory(vendor/tinyobj)
-add_subdirectory(vendor/EnTT)
 add_subdirectory(vendor/nlohmann-json)
 add_subdirectory(vendor/physx)
 
@@ -134,4 +133,4 @@ file(MAKE_DIRECTORY ${RES_FOLDER})
 # )
 
 # Target link libraries
-target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp tinyOBJ meshoptimizer EnTT JSONparser PhysX spdlog::spdlog OpenAL::OpenAL freetype)
+target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp tinyOBJ meshoptimizer JSONparser PhysX spdlog::spdlog OpenAL::OpenAL freetype)
