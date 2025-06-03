@@ -10,3 +10,5 @@ Makefile
 *.dll
 .cache/
 *.log
+.GABGL.txt
+.imgui.ini

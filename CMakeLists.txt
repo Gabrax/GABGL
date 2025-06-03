@@ -34,12 +34,15 @@ endif()
 
 project(gl_engine)
 
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries only" FORCE)
 # Assimp 
 FetchContent_Declare(
     assimp
     GIT_REPOSITORY https://github.com/assimp/assimp.git
     GIT_TAG v5.3.0
 )
+set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "Disable Assimp tests" FORCE)
+set(ASSIMP_BUILD_DOCS OFF CACHE BOOL "Disable Assimp documentation" FORCE)
 
 # Meshoptimizer
 FetchContent_Declare(
@@ -61,33 +64,37 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/gabime/spdlog.git
     GIT_TAG v1.11.0 
 )
+set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "Build spdlog as static library" FORCE)
+
+# libsndfile
+FetchContent_Declare(
+    libsndfile
+    GIT_REPOSITORY https://github.com/libsndfile/libsndfile
+    GIT_TAG 1.2.2
+)
 
 # OpenAL Soft
 FetchContent_Declare(
     openal-soft
     GIT_REPOSITORY https://github.com/kcat/openal-soft.git
-    GIT_TAG 1.23.1 # Replace with the desired version
+    GIT_TAG 1.23.1 
 )
 
+set(LIBTYPE STATIC CACHE STRING "Build static OpenAL Soft" FORCE)
 # Freetype
 FetchContent_Declare(
     freetype
     GIT_REPOSITORY https://gitlab.freedesktop.org/freetype/freetype.git
-    GIT_TAG VER-2-13-2 # You can change this to another stable tag
+    GIT_TAG VER-2-13-2 
 )
 
-FetchContent_MakeAvailable(assimp meshoptimizer imguizmo spdlog openal-soft freetype)
+FetchContent_MakeAvailable(assimp meshoptimizer imguizmo spdlog libsndfile openal-soft freetype)
 
+add_subdirectory(vendor/glfw-3.3.2)
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries only" FORCE)
-set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "Build spdlog as static library" FORCE)
-set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "Disable Assimp tests" FORCE)
-set(ASSIMP_BUILD_DOCS OFF CACHE BOOL "Disable Assimp documentation" FORCE)
-
-add_subdirectory(vendor/glfw-3.3.2)
 add_subdirectory(vendor/glad)
 add_subdirectory(vendor/stb_image)
 add_subdirectory(vendor/raudio)
@@ -133,4 +140,4 @@ file(MAKE_DIRECTORY ${RES_FOLDER})
 # )
 
 # Target link libraries
-target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp tinyOBJ meshoptimizer JSONparser PhysX spdlog::spdlog OpenAL::OpenAL freetype)
+target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp tinyOBJ meshoptimizer JSONparser PhysX spdlog::spdlog SndFile::sndfile OpenAL::OpenAL freetype)

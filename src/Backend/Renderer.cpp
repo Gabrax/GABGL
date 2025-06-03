@@ -153,15 +153,6 @@ struct RendererData
 
   Renderer::Statistics _3DStats;
 
-  std::array<std::string,6> skyboxfaces
-  {
-      "res/skybox/NightSky_Right.png",
-      "res/skybox/NightSky_Left.png",
-      "res/skybox/NightSky_Top.png",
-      "res/skybox/NightSky_Bottom.png",
-      "res/skybox/NightSky_Front.png",
-      "res/skybox/NightSky_Back.png"
-  };
   uint32_t skyboxTexture;
 
   MeshVertex cubeVertices[8] = {
@@ -346,7 +337,15 @@ void Renderer::Init()
 
   LoadFont("res/fonts/dpcomic.ttf"); 
 
-  s_RendererData.skyboxTexture = Texture::loadCubemap(s_RendererData.skyboxfaces);
+  s_RendererData.skyboxTexture = Texture::loadCubemap
+  ({ 
+      "res/skybox/NightSky_Right.png",
+      "res/skybox/NightSky_Left.png",
+      "res/skybox/NightSky_Top.png",
+      "res/skybox/NightSky_Bottom.png",
+      "res/skybox/NightSky_Front.png",
+      "res/skybox/NightSky_Back.png"
+  });
 
   LoadShaders();
 }

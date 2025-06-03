@@ -7,6 +7,7 @@
 #include "../backend/RendererAPI.h"
 #include "glad/glad.h"
 #include "glm/fwd.hpp"
+#include "../backend/Audio.h"
 
 void GAME::OnAttach()
 {
