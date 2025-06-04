@@ -3,6 +3,7 @@
 #include "backend/BackendLogger.h"
 #include "backend/RendererAPI.h"
 #include "backend/Audio.h"
+#include "game/AssetManager.h"
 
 Engine* Engine::s_Instance = nullptr;
 
@@ -20,8 +21,9 @@ void Engine::Run()
   m_Window = WindowBase::Create<Window>({ "GABGL", 1000, 600 });
 	m_Window->SetEventCallback(BIND_EVENT(OnEvent));
 
-	RendererAPI::Init();
   AudioSystem::Init();
+	RendererAPI::Init();
+  AssetManager::LoadAssets();
 
   m_Game = new Application;
   PushLayer(m_Game);

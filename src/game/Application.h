@@ -2,13 +2,11 @@
 
 #include "../backend/Layer.h"
 #include "../input/Event.h"
-#include "../input/EngineEvent.h"
 #include "../input/KeyEvent.h"
 #include "../backend/Camera.h"
 #include "../backend/windowbase.h"
 #include "../backend/FrameBuffer.h"
 #include "Editor.h"
-#include "../backend/Audio.h"
 
 struct Application : Layer
 {
@@ -23,8 +21,6 @@ private:
 	bool OnKeyPressed(KeyPressedEvent& e);
 	bool OnMouseButtonPressed(MouseButtonPressedEvent& e);
 private:
-  ALuint buffer;
-  ALuint buffer2;
 
   enum class SceneState
 	{

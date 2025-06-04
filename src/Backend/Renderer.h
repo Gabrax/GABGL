@@ -3,7 +3,6 @@
 #include "Camera.h"
 #include "Texture.h"
 #include "Transform.hpp"
-#include <string_view>
 
 struct Renderer
 {
@@ -37,7 +36,8 @@ struct Renderer
 	static void Draw2DRect(const glm::mat4& transform, const glm::vec4& color, int entityID = -1);
   static void Draw2DText(const std::string& text,  const glm::vec2& position, float size, const glm::vec4& color, int entityID = -1);
 
-  static void DrawSkybox();
+  static void UploadSkybox(const std::string& path,const std::shared_ptr<Texture>& texture);
+  static void DrawSkybox(const std::string& name);
 	static void DrawLine(const glm::vec3& p0, const glm::vec3& p1, const glm::vec4& color, int entityID = -1);
   static void RenderFullscreenFramebufferTexture(uint32_t textureID);
 

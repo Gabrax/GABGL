@@ -11,4 +11,4 @@ Makefile
 .cache/
 *.log
 .GABGL.txt
-.imgui.ini
+imgui.ini

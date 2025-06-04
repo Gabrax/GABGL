@@ -55,7 +55,6 @@ Texture::Texture(const std::string& path)
 	{
 		data = stbi_load(path.c_str(), &width, &height, &channels, 0);
 	}
-
 	if (data)
 	{
 		m_RawData = data;
@@ -96,10 +95,43 @@ Texture::Texture(const std::string& path)
 	}
 }
 
-Texture::~Texture() {
-    if (m_OwnsTexture && m_RendererID != 0) {
-        glDeleteTextures(1, &m_RendererID);
-    }
+Texture::Texture(const std::vector<std::string>& faces)
+{
+  GABGL_ASSERT(faces.size() == 6, "Cubemap must have exactly 6 faces!");
+
+  stbi_set_flip_vertically_on_load(false); 
+
+  for (int i = 0; i < 6; ++i)
+  {
+      int w, h, c;
+      unsigned char* data = stbi_load(faces[i].c_str(), &w, &h, &c, 0);
+      if (!data)
+      {
+          GABGL_ERROR("Failed to load cubemap face: " + faces[i]);
+          continue;
+      }
+      if (i == 0)
+      {
+          m_Width = w;
+          m_Height = h;
+          channels = c;
+      }
+      else if (w != m_Width || h != m_Height || c != channels)
+      {
+          stbi_image_free(data);
+          GABGL_ERROR("Cubemap face size or channels mismatch: " + faces[i]);
+          continue;
+      }
+
+      pixels[i] = data;
+  }
+
+  stbi_set_flip_vertically_on_load(true); 
+}
+
+Texture::~Texture()
+{
+  if (m_OwnsTexture && m_RendererID != 0) glDeleteTextures(1, &m_RendererID);
 }
 
 void Texture::SetData(void* data, uint32_t size)
@@ -116,55 +148,21 @@ void Texture::Bind(uint32_t slot) const
 
 std::shared_ptr<Texture> Texture::WrapExisting(uint32_t rendererID)
 {
-    if (rendererID == 0)
-    {
-        GABGL_ERROR("ID IS NULL");
-        return nullptr;
-    }
+  if (rendererID == 0)
+  {
+      GABGL_ERROR("ID IS NULL");
+      return nullptr;
+  }
 
-    std::shared_ptr<Texture> texture(new Texture());
-    texture->m_RendererID = rendererID;
-    texture->m_InternalFormat = GL_RED;
-    texture->m_DataFormat = GL_RED;
-    texture->m_IsLoaded = true;
-    texture->m_OwnsTexture = false; // <== Prevent deletion
+  std::shared_ptr<Texture> texture(new Texture());
+  texture->m_RendererID = rendererID;
+  texture->m_InternalFormat = GL_RED;
+  texture->m_DataFormat = GL_RED;
+  texture->m_IsLoaded = true;
+  texture->m_OwnsTexture = false; // <== Prevent deletion
 
-    return texture;
+  return texture;
 }
-
-uint32_t Texture::loadCubemap(const std::initializer_list<std::string>& faces)
-{
-    stbi_set_flip_vertically_on_load(false);
-
-    unsigned int textureID;
-    glGenTextures(1, &textureID);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
-
-    int width, height, nrChannels;
-    int i = 0;
-    for (const auto& face : faces) {
-        unsigned char* data = stbi_load(face.c_str(), &width, &height, &nrChannels, 0);
-        if (data) {
-            GLenum format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
-            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-            stbi_image_free(data);
-        } else {
-            GABGL_ERROR("Cubemap texture failed to load at path: " + face);
-        }
-        i++;
-    }
-
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-    glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
-
-    stbi_set_flip_vertically_on_load(true);
-    return textureID;
-}
-
 
 std::shared_ptr<Texture> Texture::Create(const TextureSpecification& specification)
 {
@@ -174,4 +172,9 @@ std::shared_ptr<Texture> Texture::Create(const TextureSpecification& specificati
 std::shared_ptr<Texture> Texture::Create(const std::string& path)
 {
 	return std::make_shared<Texture>(path);
+}
+
+std::shared_ptr<Texture> Texture::CreateCubemap(const std::vector<std::string>& faces)
+{
+	return std::make_shared<Texture>(faces);
 }

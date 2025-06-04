@@ -8,6 +8,8 @@
 #include "Shader.h"
 #include "Texture.h"
 #include "glm/fwd.hpp"
+#include <cstdint>
+#include <stb_image.h>
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
@@ -153,7 +155,7 @@ struct RendererData
 
   Renderer::Statistics _3DStats;
 
-  uint32_t skyboxTexture;
+  std::unordered_map<std::string, std::shared_ptr<Texture>> skyboxes;
 
   MeshVertex cubeVertices[8] = {
       {{-0.5f, -0.5f,  0.5f}, {0, 0, 1}, {1.0f, 1.0f, 1.0f, 1.0f}, 0},
@@ -334,18 +336,6 @@ void Renderer::Init()
   s_RendererData.LightTypeStorageBuffer= StorageBuffer::Create(sizeof(uint32_t) * 10, 3);
 
   GABGL_ASSERT(!FT_Init_FreeType(&s_RendererData.ft), "Could not init FreeType Library");
-
-  LoadFont("res/fonts/dpcomic.ttf"); 
-
-  s_RendererData.skyboxTexture = Texture::loadCubemap
-  ({ 
-      "res/skybox/NightSky_Right.png",
-      "res/skybox/NightSky_Left.png",
-      "res/skybox/NightSky_Top.png",
-      "res/skybox/NightSky_Bottom.png",
-      "res/skybox/NightSky_Front.png",
-      "res/skybox/NightSky_Back.png"
-  });
 
   LoadShaders();
 }
@@ -863,7 +853,54 @@ void Renderer::RenderFullscreenFramebufferTexture(uint32_t textureID)
     glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
-void Renderer::DrawSkybox()
+void Renderer::UploadSkybox(const std::string& name, const std::shared_ptr<Texture>& cubemap)
+{
+  auto channels = cubemap->GetChannels();
+  auto width = cubemap->GetWidth();
+  auto height = cubemap->GetHeight();
+  auto pixels = cubemap->GetPixels();
+
+  uint32_t rendererID = 0;
+  glGenTextures(1, &rendererID);
+  GABGL_ASSERT(rendererID != 0, "Failed to generate texture ID!");
+
+  cubemap->SetRendererID(rendererID); // ✅ assign generated ID to the Texture
+
+  glBindTexture(GL_TEXTURE_CUBE_MAP, rendererID);
+
+  GLenum format = (channels == 4) ? GL_RGBA : GL_RGB;
+
+  for (int i = 0; i < 6; ++i)
+  {
+      glTexImage2D(
+          GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
+          0,
+          format,
+          width,
+          height,
+          0,
+          format,
+          GL_UNSIGNED_BYTE,
+          pixels[i]
+      );
+
+      stbi_image_free(pixels[i]); // ✅ free after upload
+      pixels[i] = nullptr;
+  }
+
+  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+  glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
+
+  glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+
+  s_RendererData.skyboxes[name] = std::move(cubemap);
+}
+
+void Renderer::DrawSkybox(const std::string& name)
 {
   static uint32_t SkyboxVAO = 0, SkyboxVBO = 0;
   if (SkyboxVAO == 0)
@@ -932,7 +969,16 @@ void Renderer::DrawSkybox()
   s_RendererData._shaders3D.skyboxShader->setMat4("u_ViewProjection", s_RendererData._3DCameraBuffer.NonRotViewProjection);
 
   glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_CUBE_MAP, s_RendererData.skyboxTexture);
+  auto it = s_RendererData.skyboxes.find(name);
+  if (it != s_RendererData.skyboxes.end())
+  {
+      glBindTexture(GL_TEXTURE_CUBE_MAP, it->second->GetRendererID());
+  }
+  else
+  {
+      GABGL_ERROR("Skybox texture not found: " + name);
+      return;
+  }
   glBindVertexArray(SkyboxVAO);
   glDrawArrays(GL_TRIANGLES, 0, 36);
   glBindVertexArray(0);
@@ -1155,7 +1201,6 @@ void Renderer::LoadFont(const std::string& path)
     GABGL_WARN("FONT LOADED");
   }
 }
-
 
 float Renderer::GetLineWidth()
 {

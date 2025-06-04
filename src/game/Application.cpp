@@ -6,6 +6,7 @@
 #include "../engine.h"
 #include "../backend/RendererAPI.h"
 #include "glm/fwd.hpp"
+#include "../backend/Audio.h"
 
 Application::Application() : Layer("Game") 
 {
@@ -20,9 +21,6 @@ Application::Application() : Layer("Game")
 	m_Framebuffer = Framebuffer::Create(fbSpec);
 
   AudioSystem::SetListenerVolume(0.1f);
-  AudioSystem::LoadSound("res/audio/select1.wav");
-  AudioSystem::LoadSound("res/audio/select2.wav");
-  AudioSystem::LoadMusic("res/audio/music.wav");
   AudioSystem::PlayMusic("music");
 }
 
@@ -39,14 +37,13 @@ void Application::OnUpdate(DeltaTime dt)
     Renderer::DrawCubeContour(glm::vec3(2.0f), glm::vec3(1.0f), glm::vec4(1.0f));
     Renderer::DrawCube({glm::vec3(2.0f,0.0f,0.0f)});
     Renderer::Draw3DText("FPS: " + std::to_string(dt.GetFPS()), glm::vec2(0.0f), 0.01f, glm::vec4(2.0f,1.0f,1.0f,1.0f));
-    Renderer::DrawSkybox();
+    Renderer::DrawSkybox("night");
     Renderer::Draw2DQuad(glm::vec2(50.0f),glm::vec2(50.0f),45.0f,glm::vec4(1.0f));
     Renderer::Draw2DText("FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f,50.0f), 0.5f, glm::vec4(2.0f,1.0f,1.0f,1.0f));
   Renderer::EndScene();
 
 	m_Framebuffer->Unbind();
   m_Camera.OnUpdate(dt);
-
 
   AudioSystem::UpdateAllMusic();
 

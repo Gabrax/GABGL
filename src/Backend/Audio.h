@@ -7,6 +7,7 @@
 
 struct AudioSystem
 {
+  // LISTENER
   static void Init();
   static void Terminate();
 	static void SetListenerLocation(const glm::vec3& position);
@@ -29,7 +30,6 @@ struct AudioSystem
   static void ResumeSound(const std::string& name);
 	static void ResumeAllSounds();
   static void SetSoundLoop(const std::string& name, bool loop);
-	static void SetSoundsLoopALL(bool loop);
 	static bool isAnySoundsPlaying();
   static bool IsSoundPlaying(const std::string& name);
 
