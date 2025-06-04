@@ -4,93 +4,59 @@
 #include <al.h>
 #include <vector>
 #include <sndfile.h>
+#include <glm/glm.hpp>
 
-#define SD_INIT SoundDevice::Init();
-#define LISTENER SoundDevice::Get()
-
-class SoundDevice
+struct AudioSystem
 {
-public:
-	static SoundDevice* Get();
-	static void Init();
+  static void Init();
+  static void Terminate();
+	static void GetLocation(float &x, float& y, float& z);
+	static void GetOrientation(float &ori);
+	static float GetVolume();
 
-	void GetLocation(float &x, float& y, float& z);
-	void GetOrientation(float &ori);
-	float GetGain();
-
-	void SetAttunation(int key);
-	void SetLocation(const float& x, const float& y, const float& z);
-	void SetOrientation(
-		const float& atx, const float& aty, const float& atz,
-		const float& upx, const float& upy, const float& upz);
-	void SetGain(const float& val);
-
-private:
-	SoundDevice();
-	~SoundDevice();
-
-	ALCdevice* p_ALCDevice;
-	ALCcontext* p_ALCContext;
+	static void SetAttunation(int key);
+	static void SetLocation(const glm::vec3& position);
+	static void SetOrientation(const glm::vec3& forward, const glm::vec3& up);
+	static void SetVolume(const float& val);
 };
 
-#define SE_LOAD SoundEffectsLibrary::Get()->Load
-#define SE_UNLOAD SoundEffectsLibrary::Get()->UnLoad
-
-class SoundEffectsPlayer
+struct SoundPlayer
 {
-public:
-	SoundEffectsPlayer();
-	~SoundEffectsPlayer();
+  static void Init();
+  static void Terminate();
+	static void Play(const ALuint& buffer_to_play);
+  static void Play(const ALuint& buffer_to_play, const glm::vec3& position);
+  static void Stop(ALuint buffer);
+	static void StopAll();
+  static void Pause(ALuint buffer);
+	static void PauseAll();
+  static void Resume(ALuint buffer);
+	static void ResumeAll();
+  static void SetLoop(ALuint buffer, bool loop);
+	static void SetLoopALL(bool loop);
 
-	void Play(const ALuint& buffer_to_play);
-	void Stop();
-	void Pause();
-	void Resume();
-
-	void SetBufferToPlay(const ALuint& buffer_to_play);
-	void SetLooping(const bool& loop);
-	void SetPosition(const float& x, const float& y, const float& z);
-
-	bool isPlaying();
-
-private:
-	ALuint p_Source;
-	ALuint p_Buffer = 0;
+	static bool isAnyPlaying();
+  static bool IsPlaying(ALuint buffer);
+	static ALuint Load(const char* filename);
+	static bool UnLoad(const ALuint& bufferId);
 };
 
-class SoundEffectsLibrary
+struct MusicSource
 {
-public:
-	static SoundEffectsLibrary* Get();
-
-	ALuint Load(const char* filename);
-	bool UnLoad(const ALuint& bufferId);
-
-private:
-	SoundEffectsLibrary();
-	~SoundEffectsLibrary();
-
-	std::vector<ALuint> p_SoundEffectBuffers;
-};
-
-class MusicBuffer
-{
-public:
+	MusicSource(const char* filename);
+	~MusicSource();
 	void Play();
+	void Play(const glm::vec3& position);
 	void Pause();
 	void Stop();
 	void Resume();
+  void SetLoop(bool loop);
+	bool isPlaying();
 
 	void UpdateBufferStream();
-
 	ALint getSource();
+	void SetVolume(const float& val);
 
-	bool isPlaying();
-
-	void SetGain(const float& val);
-
-	MusicBuffer(const char* filename);
-	~MusicBuffer();
 private:
 	ALuint p_Source;
 	static const int BUFFER_SAMPLES = 8192;
@@ -100,6 +66,17 @@ private:
 	SF_INFO p_Sfinfo;
 	short* p_Membuf;
 	ALenum p_Format;
+};
 
-	MusicBuffer() = delete;
+struct MusicPlayer
+{
+  static void Load(const char* filename);
+  static void Play(size_t index);
+  static void Play(size_t index, const glm::vec3& position);
+  static void Pause(size_t index);
+  static void Stop(size_t index);
+  static void SetLoop(size_t index, bool loop);
+  static void Resume(size_t index);
+  static void UpdateAll();
+  static size_t GetNumTracks();
 };

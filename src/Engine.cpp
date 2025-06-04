@@ -1,9 +1,8 @@
 #include "engine.h"
 
-#include <iostream>
-
 #include "backend/BackendLogger.h"
 #include "backend/RendererAPI.h"
+#include "backend/Audio.h"
 
 Engine* Engine::s_Instance = nullptr;
 
@@ -20,10 +19,13 @@ void Engine::Run()
 {
   m_Window = WindowBase::Create<Window>({ "GABGL", 1000, 600 });
 	m_Window->SetEventCallback(BIND_EVENT(OnEvent));
-  m_Game = new GAME;
-  PushLayer(m_Game);
 
 	RendererAPI::Init();
+  AudioSystem::Init();
+  SoundPlayer::Init();
+
+  m_Game = new Application;
+  PushLayer(m_Game);
 
   while(m_isRunning)
   {
@@ -34,7 +36,6 @@ void Engine::Run()
     if (!m_Minimized)
 		{
 			RenderLayers(dt);
-			/*RenderEditorLayers();*/
 		}
 
     m_Window->Update();
