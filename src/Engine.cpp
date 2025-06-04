@@ -22,7 +22,6 @@ void Engine::Run()
 
 	RendererAPI::Init();
   AudioSystem::Init();
-  SoundPlayer::Init();
 
   m_Game = new Application;
   PushLayer(m_Game);

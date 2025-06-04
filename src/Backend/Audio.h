@@ -2,81 +2,45 @@
 
 #include <alc.h>
 #include <al.h>
-#include <vector>
-#include <sndfile.h>
 #include <glm/glm.hpp>
+#include <string>
 
 struct AudioSystem
 {
   static void Init();
   static void Terminate();
-	static void GetLocation(float &x, float& y, float& z);
-	static void GetOrientation(float &ori);
-	static float GetVolume();
-
+	static void SetListenerLocation(const glm::vec3& position);
+	static void GetListenerLocation(float &x, float& y, float& z);
+	static void SetListenerOrientation(const glm::vec3& forward, const glm::vec3& up);
+	static void GetListenerOrientation(float &ori);
+	static void SetListenerVolume(const float& val);
+	static float GetListenerVolume();
 	static void SetAttunation(int key);
-	static void SetLocation(const glm::vec3& position);
-	static void SetOrientation(const glm::vec3& forward, const glm::vec3& up);
-	static void SetVolume(const float& val);
-};
 
-struct SoundPlayer
-{
-  static void Init();
-  static void Terminate();
-	static void Play(const ALuint& buffer_to_play);
-  static void Play(const ALuint& buffer_to_play, const glm::vec3& position);
-  static void Stop(ALuint buffer);
-	static void StopAll();
-  static void Pause(ALuint buffer);
-	static void PauseAll();
-  static void Resume(ALuint buffer);
-	static void ResumeAll();
-  static void SetLoop(ALuint buffer, bool loop);
-	static void SetLoopALL(bool loop);
+  // SOUND
+	static void LoadSound(const char* filename);
+	static bool UnLoadSound(const std::string& name);
+	static void PlaySound(const std::string& name, const float& volume = 1.0f);
+  static void PlaySound(const std::string& name, const glm::vec3& position, const float& volume = 1.0f);
+  static void StopSound(const std::string& name);
+	static void StopAllSounds();
+  static void PauseSound(const std::string& name);
+	static void PauseAllSounds();
+  static void ResumeSound(const std::string& name);
+	static void ResumeAllSounds();
+  static void SetSoundLoop(const std::string& name, bool loop);
+	static void SetSoundsLoopALL(bool loop);
+	static bool isAnySoundsPlaying();
+  static bool IsSoundPlaying(const std::string& name);
 
-	static bool isAnyPlaying();
-  static bool IsPlaying(ALuint buffer);
-	static ALuint Load(const char* filename);
-	static bool UnLoad(const ALuint& bufferId);
-};
-
-struct MusicSource
-{
-	MusicSource(const char* filename);
-	~MusicSource();
-	void Play();
-	void Play(const glm::vec3& position);
-	void Pause();
-	void Stop();
-	void Resume();
-  void SetLoop(bool loop);
-	bool isPlaying();
-
-	void UpdateBufferStream();
-	ALint getSource();
-	void SetVolume(const float& val);
-
-private:
-	ALuint p_Source;
-	static const int BUFFER_SAMPLES = 8192;
-	static const int NUM_BUFFERS = 4;
-	ALuint p_Buffers[NUM_BUFFERS];
-	SNDFILE* p_SndFile;
-	SF_INFO p_Sfinfo;
-	short* p_Membuf;
-	ALenum p_Format;
-};
-
-struct MusicPlayer
-{
-  static void Load(const char* filename);
-  static void Play(size_t index);
-  static void Play(size_t index, const glm::vec3& position);
-  static void Pause(size_t index);
-  static void Stop(size_t index);
-  static void SetLoop(size_t index, bool loop);
-  static void Resume(size_t index);
-  static void UpdateAll();
-  static size_t GetNumTracks();
+  // MUSIC
+  static void LoadMusic(const char* filename);
+  static void PlayMusic(const std::string& name, const float& volume = 1.0f);
+  static void PlayMusic(const std::string& name, const glm::vec3& position, const float& volume = 1.0f);
+  static void PauseMusic(const std::string& name);
+  static void StopMusic(const std::string& name);
+  static void SetMusicLoop(const std::string& name, bool loop);
+  static void ResumeMusic(const std::string& name);
+  static void UpdateAllMusic();
+  static size_t GetMusicNumTracks();
 };

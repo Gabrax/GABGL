@@ -19,10 +19,11 @@ Application::Application() : Layer("Game")
 	fbSpec.Height = Engine::GetInstance().GetMainWindow().GetHeight();
 	m_Framebuffer = Framebuffer::Create(fbSpec);
 
-  buffer = SoundPlayer::Load("res/audio/select1.wav");
-  buffer2 = SoundPlayer::Load("res/audio/select2.wav");
-  MusicPlayer::Load("res/audio/music.wav");
-  MusicPlayer::Play(0);
+  AudioSystem::SetListenerVolume(0.1f);
+  AudioSystem::LoadSound("res/audio/select1.wav");
+  AudioSystem::LoadSound("res/audio/select2.wav");
+  AudioSystem::LoadMusic("res/audio/music.wav");
+  AudioSystem::PlayMusic("music");
 }
 
 void Application::OnUpdate(DeltaTime dt)
@@ -47,7 +48,7 @@ void Application::OnUpdate(DeltaTime dt)
   m_Camera.OnUpdate(dt);
 
 
-  MusicPlayer::UpdateAll();
+  AudioSystem::UpdateAllMusic();
 
   switch (m_SceneState)
 	{
@@ -91,7 +92,7 @@ bool Application::OnKeyPressed(KeyPressedEvent& e)
       m_WindowRef->SetFullscreen(true);
       m_Framebuffer->Resize((uint32_t)m_WindowRef->GetWidth(), (uint32_t)m_WindowRef->GetHeight());
       m_Camera.SetViewportSize((uint32_t)m_WindowRef->GetWidth(), (uint32_t)m_WindowRef->GetHeight());
-      SoundPlayer::Play(buffer);
+      AudioSystem::PlaySound("select1");
 			break;
 		}
 		case Key::T:
@@ -99,7 +100,7 @@ bool Application::OnKeyPressed(KeyPressedEvent& e)
       m_WindowRef->SetFullscreen(false);
       m_Framebuffer->Resize((uint32_t)m_WindowRef->GetWidth(), (uint32_t)m_WindowRef->GetHeight());
       m_Camera.SetViewportSize((uint32_t)m_WindowRef->GetWidth(), (uint32_t)m_WindowRef->GetHeight());
-      SoundPlayer::Play(buffer2);
+      AudioSystem::PlaySound("select2");
 			break;
 		}
 		case Key::Q:

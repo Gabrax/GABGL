@@ -2,19 +2,22 @@
     <img src="https://github.com/user-attachments/assets/35a03295-7d87-471c-8f86-cd28b3f4d5ea" alt="GABGLlogo" width="200"/>
 </p>
 
-<p align="center"> 3D OpenGL engine with C++ for learning purposes </p>
+<p align="center"> 3D C++ OpenGL engine </p>
 
 ## Getting started
 > [!WARNING]
-> To run this project, CMake needs to be installed <br>
+> Dependencies: CMake, C++17 <br>
+
+For general build script info run ```sh build.sh --help```
 
 - Windows <br><br>
-  Visual Studio is recommended. CMakeSettings.json configures project for VS (Ninja generator is recommended - MSBuild not tested).
-  In repository directory click right mouse button and open with VS, or open terminal and type ```start devenv . ```
-
+Use VS2022 PS/CMD
+```bash
+sh build.sh -Ccl -Drelease
+```
 - Linux & MacOS
 ```bash
-sh build.sh
+sh build.sh -Cclang -Drelease
 ```
 
 ## 👨‍💻 Tech stack
