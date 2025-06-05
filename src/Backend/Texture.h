@@ -24,11 +24,11 @@ struct TextureSpecification
 	bool GenerateMips = true;
 };
 
-struct Texture
+struct Texture 
 {
   Texture() = default;
 	Texture(const TextureSpecification& specification);
-	Texture(const std::string& path);
+  Texture(const std::string& path, bool isGL);
   Texture(const std::vector<std::string>& faces);
 	~Texture();
 
@@ -49,8 +49,9 @@ struct Texture
 	{
 		return m_RendererID == other.GetRendererID();
 	}
-	static std::shared_ptr<Texture> Create(const TextureSpecification& specification);
-	static std::shared_ptr<Texture> Create(const std::string& path);
+	static std::shared_ptr<Texture> CreateGL(const TextureSpecification& specification);
+	static std::shared_ptr<Texture> CreateGL(const std::string& path);
+	static std::shared_ptr<Texture> CreateRAW(const std::string& path);
   static std::shared_ptr<Texture> WrapExisting(uint32_t rendererID);
   static std::shared_ptr<Texture> CreateCubemap(const std::vector<std::string>& faces);
 

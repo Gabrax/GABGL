@@ -46,53 +46,53 @@ Texture::Texture(const TextureSpecification& specification)
 	glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_T, GL_REPEAT);
 }
 
-Texture::Texture(const std::string& path)
-	: m_Path(path)
+Texture::Texture(const std::string& path, bool isGL) : m_Path(path)
 {
-	int width, height, channels;
-	stbi_set_flip_vertically_on_load(1);
-	stbi_uc* data = nullptr;
-	{
-		data = stbi_load(path.c_str(), &width, &height, &channels, 0);
-	}
-	if (data)
-	{
-		m_RawData = data;
-		m_IsLoaded = true;
+  int width, height, channels;
+  stbi_set_flip_vertically_on_load(1);
+  stbi_uc* data = stbi_load(path.c_str(), &width, &height, &channels, 0);
 
-		m_Width = width;
-		m_Height = height;
+  if (data)
+  {
+      m_RawData = data;
+      m_IsLoaded = true;
 
-		GLenum internalFormat = 0, dataFormat = 0;
-		if (channels == 4)
-		{
-			internalFormat = GL_RGBA8;
-			dataFormat = GL_RGBA;
-		}
-		else if (channels == 3)
-		{
-			internalFormat = GL_RGB8;
-			dataFormat = GL_RGB;
-		}
+      m_Width = width;
+      m_Height = height;
 
-		m_InternalFormat = internalFormat;
-		m_DataFormat = dataFormat;
+      GLenum internalFormat = 0, dataFormat = 0;
+      if (channels == 4)
+      {
+          internalFormat = GL_RGBA8;
+          dataFormat = GL_RGBA;
+      }
+      else if (channels == 3)
+      {
+          internalFormat = GL_RGB8;
+          dataFormat = GL_RGB;
+      }
 
-		GABGL_ASSERT(internalFormat & dataFormat, "Format not supported!");
+      m_InternalFormat = internalFormat;
+      m_DataFormat = dataFormat;
 
-		glCreateTextures(GL_TEXTURE_2D, 1, &m_RendererID);
-		glTextureStorage2D(m_RendererID, 1, internalFormat, m_Width, m_Height);
+      if (isGL)
+      {
+          GABGL_ASSERT(internalFormat & dataFormat, "Format not supported!");
 
-		glTextureParameteri(m_RendererID, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTextureParameteri(m_RendererID, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+          glCreateTextures(GL_TEXTURE_2D, 1, &m_RendererID);
+          glTextureStorage2D(m_RendererID, 1, internalFormat, m_Width, m_Height);
 
-		glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_S, GL_REPEAT);
-		glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_T, GL_REPEAT);
+          glTextureParameteri(m_RendererID, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+          glTextureParameteri(m_RendererID, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-		glTextureSubImage2D(m_RendererID, 0, 0, 0, m_Width, m_Height, dataFormat, GL_UNSIGNED_BYTE, data);
+          glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_S, GL_REPEAT);
+          glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-		stbi_image_free(data);
-	}
+          glTextureSubImage2D(m_RendererID, 0, 0, 0, m_Width, m_Height, dataFormat, GL_UNSIGNED_BYTE, data);
+      }
+
+      stbi_image_free(data);
+  }
 }
 
 Texture::Texture(const std::vector<std::string>& faces)
@@ -164,14 +164,19 @@ std::shared_ptr<Texture> Texture::WrapExisting(uint32_t rendererID)
   return texture;
 }
 
-std::shared_ptr<Texture> Texture::Create(const TextureSpecification& specification)
+std::shared_ptr<Texture> Texture::CreateGL(const TextureSpecification& specification)
 {
 	return std::make_shared<Texture>(specification);
 }
 
-std::shared_ptr<Texture> Texture::Create(const std::string& path)
+std::shared_ptr<Texture> Texture::CreateGL(const std::string& path)
 {
-	return std::make_shared<Texture>(path);
+	return std::make_shared<Texture>(path,true);
+}
+
+std::shared_ptr<Texture> Texture::CreateRAW(const std::string& path)
+{
+	return std::make_shared<Texture>(path,false);
 }
 
 std::shared_ptr<Texture> Texture::CreateCubemap(const std::vector<std::string>& faces)

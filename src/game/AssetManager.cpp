@@ -18,6 +18,7 @@ void AssetManager::LoadAssets()
     "res/audio/music.wav", 
   };
 
+  bool cubemapUploaded = false;
   std::vector<std::string> skybox = 
   { 
       "res/skybox/NightSky_Right.png",
@@ -34,15 +35,11 @@ void AssetManager::LoadAssets()
   for(auto& sound : sounds) m_Void.push_back(std::async(std::launch::async,AudioSystem::LoadSound,sound)); 
   for(auto& music : music) m_Void.push_back(std::async(std::launch::async,AudioSystem::LoadMusic,music));
 
-  auto future = std::async(std::launch::async, [skybox]() {
-    return Texture::CreateCubemap(skybox);
-  });
+  auto future = std::async(std::launch::async, [skybox]() { return Texture::CreateCubemap(skybox); });
   m_Textures.push_back(std::move(future));
 
   auto texture = m_Textures.back().get();  
-  Renderer::UploadSkybox("night", texture);
-
-  Renderer::LoadFont("res/fonts/dpcomic.ttf");
+  Renderer::UploadSkybox("night", texture);  
 }
 
 

@@ -52,6 +52,14 @@ struct MeshVertex
   int EntityID;        
 };
 
+struct Character
+{
+  uint32_t TextureID;
+  glm::ivec2 Size;
+  glm::ivec2 Bearing;
+  uint32_t Advance;
+};
+
 struct CameraData
 {
 	glm::mat4 ViewProjection;
@@ -96,11 +104,15 @@ struct RendererData
 	LineVertex* LineVertexBufferBase = nullptr;
 	LineVertex* LineVertexBufferPtr = nullptr;
 
-	float LineWidth = 20.0f;
+  std::shared_ptr<VertexArray> CubeVertexArray;
+  std::shared_ptr<VertexBuffer> CubeVertexBuffer;
+  std::shared_ptr<IndexBuffer> CubeIndexBuffer;
+  MeshVertex* CubeVertexBufferBase = nullptr;
+  MeshVertex* CubeVertexBufferPtr = nullptr;
+  uint32_t CubeIndexCount = 0;
+  uint32_t CubeVertexCount = 0;
 
-	Renderer::Statistics _2DStats;
-
-	struct Shaders2D
+  struct Shaders2D
 	{
 		std::shared_ptr<Shader> _3DQuadShader;
 		std::shared_ptr<Shader> _2DQuadShader;
@@ -109,15 +121,28 @@ struct RendererData
 		std::shared_ptr<Shader> _FramebufferShader;
 	} _shaders2D;
 
-  struct Character {
-    uint32_t TextureID;
-    glm::ivec2 Size;
-    glm::ivec2 Bearing;
-    uint32_t Advance;
-  };
+  struct Shaders3D
+  {
+      std::shared_ptr<Shader> modelShader;
+      std::shared_ptr<Shader> skyboxShader;
+  } _shaders3D;
 
-  std::unordered_map<char, Character> Characters;
-  bool FontInitialized = false;
+  
+	float LineWidth = 20.0f;
+
+	Renderer::Statistics _2DStats;
+  Renderer::Statistics _3DStats;
+
+  CameraData _3DCameraBuffer;
+  std::shared_ptr<UniformBuffer> _3DCameraUniformBuffer;
+
+  CameraData _2DCameraBuffer;
+  std::shared_ptr<UniformBuffer> _2DCameraUniformBuffer;
+
+  std::shared_ptr<StorageBuffer> LightPosStorageBuffer;
+  std::shared_ptr<StorageBuffer> LightQuantityStorageBuffer;
+  std::shared_ptr<StorageBuffer> LightColorStorageBuffer;
+  std::shared_ptr<StorageBuffer> LightTypeStorageBuffer;
 
   glm::vec3 quadPositions[4] = {
       { 0.0f, 0.0f, 0.0f },
@@ -133,30 +158,6 @@ struct RendererData
       { 0.0f, 0.0f }
   };
 
-  CameraData _2DCameraBuffer;
-  std::shared_ptr<UniformBuffer> _2DCameraUniformBuffer;
-
-  std::shared_ptr<VertexArray> CubeVertexArray;
-  std::shared_ptr<VertexBuffer> CubeVertexBuffer;
-  std::shared_ptr<IndexBuffer> CubeIndexBuffer;
-  MeshVertex* CubeVertexBufferBase = nullptr;
-  MeshVertex* CubeVertexBufferPtr = nullptr;
-  uint32_t CubeIndexCount = 0;
-  uint32_t CubeVertexCount = 0;
-
-  std::array<std::shared_ptr<Texture>, MaxTextureSlots> TextureSlots;
-  uint32_t TextureSlotIndex = 1;
-
-  struct Shaders3D
-  {
-      std::shared_ptr<Shader> modelShader;
-      std::shared_ptr<Shader> skyboxShader;
-  } _shaders3D;
-
-  Renderer::Statistics _3DStats;
-
-  std::unordered_map<std::string, std::shared_ptr<Texture>> skyboxes;
-
   MeshVertex cubeVertices[8] = {
       {{-0.5f, -0.5f,  0.5f}, {0, 0, 1}, {1.0f, 1.0f, 1.0f, 1.0f}, 0},
       {{ 0.5f, -0.5f,  0.5f}, {0, 0, 1}, {1.0f, 1.0f, 1.0f, 1.0f}, 0},
@@ -168,14 +169,12 @@ struct RendererData
       {{ 0.5f,  0.5f, -0.5f}, {0, 0, -1}, {1.0f, 1.0f, 1.0f, 1.0f}, 0},
       {{-0.5f,  0.5f, -0.5f}, {0, 0, -1}, {1.0f, 1.0f, 1.0f, 1.0f}, 0},
   };
+  
+  std::array<std::shared_ptr<Texture>, MaxTextureSlots> TextureSlots;
+  uint32_t TextureSlotIndex = 1;
 
-  CameraData _3DCameraBuffer;
-  std::shared_ptr<UniformBuffer> _3DCameraUniformBuffer;
-
-  std::shared_ptr<StorageBuffer> LightPosStorageBuffer;
-  std::shared_ptr<StorageBuffer> LightQuantityStorageBuffer;
-  std::shared_ptr<StorageBuffer> LightColorStorageBuffer;
-  std::shared_ptr<StorageBuffer> LightTypeStorageBuffer;
+  std::unordered_map<std::string, std::shared_ptr<Texture>> skyboxes;
+  std::unordered_map<char, Character> Characters;
 
   FT_Library ft;
 
@@ -271,7 +270,7 @@ void Renderer::Init()
 	s_RendererData.LineVertexArray->AddVertexBuffer(s_RendererData.LineVertexBuffer);
 	s_RendererData.LineVertexBufferBase = new LineVertex[s_RendererData.MaxVertices];
 
-	s_RendererData.WhiteTexture = Texture::Create(TextureSpecification());
+	s_RendererData.WhiteTexture = Texture::CreateGL(TextureSpecification());
 	uint32_t whiteTextureData = 0xffffffff;
 	s_RendererData.WhiteTexture->SetData(&whiteTextureData, sizeof(uint32_t));
 
@@ -338,6 +337,8 @@ void Renderer::Init()
   GABGL_ASSERT(!FT_Init_FreeType(&s_RendererData.ft), "Could not init FreeType Library");
 
   LoadShaders();
+
+  LoadFont("res/fonts/dpcomic.ttf");
 }
 
 void Renderer::Shutdown()
@@ -988,8 +989,7 @@ void Renderer::DrawSkybox(const std::string& name)
 
 void Renderer::Draw3DText(const std::string& text, const glm::vec2& position, float size, const glm::vec4& color, int entityID)
 {
-    if (!s_RendererData.FontInitialized)
-        return;
+    if (s_RendererData.Characters.empty()) return;
 
     // --- Precompute total width and height for centering ---
     float textWidth = 0.0f;
@@ -1025,7 +1025,7 @@ void Renderer::Draw3DText(const std::string& text, const glm::vec2& position, fl
         if (it == s_RendererData.Characters.end())
             continue;
 
-        RendererData::Character& ch = it->second;
+        Character& ch = it->second;
 
         if (s_RendererData._3DQuadIndexCount >= RendererData::MaxIndices)
             NextBatch();
@@ -1074,8 +1074,7 @@ void Renderer::Draw3DText(const std::string& text, const glm::vec2& position, fl
 
 void Renderer::Draw2DText(const std::string& text, const glm::vec2& position, float size, const glm::vec4& color, int entityID)
 {
-    if (!s_RendererData.FontInitialized)
-        return;
+    if (s_RendererData.Characters.empty()) return;
 
     // --- Precompute total width and height for centering ---
     float textWidth = 0.0f;
@@ -1111,7 +1110,7 @@ void Renderer::Draw2DText(const std::string& text, const glm::vec2& position, fl
         if (it == s_RendererData.Characters.end())
             continue;
 
-        RendererData::Character& ch = it->second;
+        Character& ch = it->second;
 
         if (s_RendererData._2DQuadIndexCount >= RendererData::MaxIndices)
             NextBatch();
@@ -1183,7 +1182,7 @@ void Renderer::LoadFont(const std::string& path)
       GLint swizzleMask[] = {GL_ONE, GL_ONE, GL_ONE, GL_RED};
       glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
 
-      RendererData::Character character = {
+      Character character = {
           texture,
           { face->glyph->bitmap.width, face->glyph->bitmap.rows },
           { face->glyph->bitmap_left, face->glyph->bitmap_top },
@@ -1197,7 +1196,6 @@ void Renderer::LoadFont(const std::string& path)
     FT_Done_Face(face);
     FT_Done_FreeType(s_RendererData.ft);
 
-    s_RendererData.FontInitialized = true;
     GABGL_WARN("FONT LOADED");
   }
 }

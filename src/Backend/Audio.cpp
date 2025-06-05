@@ -72,26 +72,26 @@ struct AudioSystemData
 
   std::mutex s_AudioMutex;
 
-} s_AudioData;
+} s_Data;
 
 void AudioSystem::Init()
 {
-	s_AudioData.p_ALCDevice = alcOpenDevice(nullptr); // nullptr = get default device
-	if (!s_AudioData.p_ALCDevice)
+	s_Data.p_ALCDevice = alcOpenDevice(nullptr); // nullptr = get default device
+	if (!s_Data.p_ALCDevice)
 		throw("failed to get sound device");
 
-	s_AudioData.p_ALCContext = alcCreateContext(s_AudioData.p_ALCDevice, nullptr);  // create context
-	if (!s_AudioData.p_ALCContext)
+	s_Data.p_ALCContext = alcCreateContext(s_Data.p_ALCDevice, nullptr);  // create context
+	if (!s_Data.p_ALCContext)
 		throw("Failed to set sound context");
 
-	if (!alcMakeContextCurrent(s_AudioData.p_ALCContext))   // make context current
+	if (!alcMakeContextCurrent(s_Data.p_ALCContext))   // make context current
 		throw("failed to make context current");
 
 	const ALCchar* name = nullptr;
-	if (alcIsExtensionPresent(s_AudioData.p_ALCDevice, "ALC_ENUMERATE_ALL_EXT"))
-		name = alcGetString(s_AudioData.p_ALCDevice, ALC_ALL_DEVICES_SPECIFIER);
-	if (!name || alcGetError(s_AudioData.p_ALCDevice) != AL_NO_ERROR)
-		name = alcGetString(s_AudioData.p_ALCDevice, ALC_DEVICE_SPECIFIER);
+	if (alcIsExtensionPresent(s_Data.p_ALCDevice, "ALC_ENUMERATE_ALL_EXT"))
+		name = alcGetString(s_Data.p_ALCDevice, ALC_ALL_DEVICES_SPECIFIER);
+	if (!name || alcGetError(s_Data.p_ALCDevice) != AL_NO_ERROR)
+		name = alcGetString(s_Data.p_ALCDevice, ALC_DEVICE_SPECIFIER);
 	/*printf("Opened \"%s\"\n", name);*/
   GABGL_INFO((const char*)name);
 
@@ -101,29 +101,29 @@ void AudioSystem::Init()
 	if (!currentCtx)
 		std::cerr << "ERROR: No OpenAL context is active!\n";
 
-	s_AudioData.m_Sources.resize(SOURCE_POOL_SIZE);
-	alGenSources(SOURCE_POOL_SIZE, s_AudioData.m_Sources.data());
+	s_Data.m_Sources.resize(SOURCE_POOL_SIZE);
+	alGenSources(SOURCE_POOL_SIZE, s_Data.m_Sources.data());
 	AL_CheckAndThrow();
 
-	s_AudioData.p_SoundEffectBuffers.clear();
+	s_Data.p_SoundEffectBuffers.clear();
 
 }
 
 void AudioSystem::Terminate()
 {
   alcMakeContextCurrent(nullptr);
-  alcDestroyContext(s_AudioData.p_ALCContext);
-  alcCloseDevice(s_AudioData.p_ALCDevice);
+  alcDestroyContext(s_Data.p_ALCContext);
+  alcCloseDevice(s_Data.p_ALCDevice);
 
-  alDeleteSources((ALsizei)s_AudioData.m_Sources.size(), s_AudioData.m_Sources.data());
+  alDeleteSources((ALsizei)s_Data.m_Sources.size(), s_Data.m_Sources.data());
 
   std::vector<ALuint> allBuffers;
-  for (auto& [name, buffer] : s_AudioData.p_SoundEffectBuffers)
+  for (auto& [name, buffer] : s_Data.p_SoundEffectBuffers)
       allBuffers.push_back(buffer);
   alDeleteBuffers((ALsizei)allBuffers.size(), allBuffers.data());
 
-  s_AudioData.p_SoundEffectBuffers.clear();
-  s_AudioData.m_Sources.clear();
+  s_Data.p_SoundEffectBuffers.clear();
+  s_Data.m_Sources.clear();
 }
 
 void AudioSystem::GetListenerLocation(float& x, float& y, float& z)
@@ -187,13 +187,13 @@ void AudioSystem::SetListenerVolume(const float& val)
 
 void AudioSystem::PlaySound(const std::string& name, const float& volume)
 {
-  auto it = s_AudioData.p_SoundEffectBuffers.find(name);
-  if (it == s_AudioData.p_SoundEffectBuffers.end())
+  auto it = s_Data.p_SoundEffectBuffers.find(name);
+  if (it == s_Data.p_SoundEffectBuffers.end())
       return;
 
   ALuint buffer = it->second;
 
-  for (ALuint source : s_AudioData.m_Sources) {
+  for (ALuint source : s_Data.m_Sources) {
       ALint state;
       alGetSourcei(source, AL_SOURCE_STATE, &state);
       if (state != AL_PLAYING) {
@@ -201,7 +201,7 @@ void AudioSystem::PlaySound(const std::string& name, const float& volume)
           alSourcef(source, AL_GAIN, volume);  // Set volume before playing
           alSourcePlay(source);
           AL_CheckAndThrow();
-          s_AudioData.m_LastUsedBuffer = buffer;
+          s_Data.m_LastUsedBuffer = buffer;
           return;
       }
   }
@@ -212,13 +212,13 @@ void AudioSystem::PlaySound(const std::string& name, const float& volume)
 
 void AudioSystem::PlaySound(const std::string& name, const glm::vec3& position, const float& volume)
 {
-  auto it = s_AudioData.p_SoundEffectBuffers.find(name);
-  if (it == s_AudioData.p_SoundEffectBuffers.end())
+  auto it = s_Data.p_SoundEffectBuffers.find(name);
+  if (it == s_Data.p_SoundEffectBuffers.end())
       return;
 
   ALuint buffer = it->second;
 
-  for (ALuint source : s_AudioData.m_Sources) {
+  for (ALuint source : s_Data.m_Sources) {
       ALint state;
       alGetSourcei(source, AL_SOURCE_STATE, &state);
       if (state != AL_PLAYING) {
@@ -227,7 +227,7 @@ void AudioSystem::PlaySound(const std::string& name, const glm::vec3& position, 
           alSource3f(source, AL_POSITION, position.x, position.y, position.z);
           alSourcePlay(source);
           AL_CheckAndThrow();
-          s_AudioData.m_LastUsedBuffer = buffer;
+          s_Data.m_LastUsedBuffer = buffer;
           return;
       }
   }
@@ -237,13 +237,13 @@ void AudioSystem::PlaySound(const std::string& name, const glm::vec3& position, 
 
 void AudioSystem::StopSound(const std::string& name)
 {
-  auto it = s_AudioData.p_SoundEffectBuffers.find(name);
-  if (it == s_AudioData.p_SoundEffectBuffers.end())
+  auto it = s_Data.p_SoundEffectBuffers.find(name);
+  if (it == s_Data.p_SoundEffectBuffers.end())
       return;
 
   ALuint buffer = it->second;
 
-  for (ALuint source : s_AudioData.m_Sources) {
+  for (ALuint source : s_Data.m_Sources) {
       ALint currentBuffer;
       alGetSourcei(source, AL_BUFFER, &currentBuffer);
       if ((ALuint)currentBuffer == buffer) {
@@ -254,19 +254,19 @@ void AudioSystem::StopSound(const std::string& name)
 
 void AudioSystem::StopAllSounds()
 {
-	for (ALuint source : s_AudioData.m_Sources)
+	for (ALuint source : s_Data.m_Sources)
 		alSourceStop(source);
 }
 
 void AudioSystem::PauseSound(const std::string& name)
 {
-  auto it = s_AudioData.p_SoundEffectBuffers.find(name);
-  if (it == s_AudioData.p_SoundEffectBuffers.end())
+  auto it = s_Data.p_SoundEffectBuffers.find(name);
+  if (it == s_Data.p_SoundEffectBuffers.end())
       return;  // sound not found
 
   ALuint buffer = it->second;
 
-  for (ALuint source : s_AudioData.m_Sources)
+  for (ALuint source : s_Data.m_Sources)
   {
       ALint currentBuffer;
       alGetSourcei(source, AL_BUFFER, &currentBuffer);
@@ -279,19 +279,19 @@ void AudioSystem::PauseSound(const std::string& name)
 
 void AudioSystem::PauseAllSounds()
 {
-	for (ALuint source : s_AudioData.m_Sources)
+	for (ALuint source : s_Data.m_Sources)
 		alSourcePause(source);
 }
 
 void AudioSystem::ResumeSound(const std::string& name)
 {
-  auto it = s_AudioData.p_SoundEffectBuffers.find(name);
-  if (it == s_AudioData.p_SoundEffectBuffers.end())
+  auto it = s_Data.p_SoundEffectBuffers.find(name);
+  if (it == s_Data.p_SoundEffectBuffers.end())
       return;
 
   ALuint buffer = it->second;
 
-  for (ALuint source : s_AudioData.m_Sources)
+  for (ALuint source : s_Data.m_Sources)
   {
       ALint currentBuffer, state;
       alGetSourcei(source, AL_BUFFER, &currentBuffer);
@@ -305,7 +305,7 @@ void AudioSystem::ResumeSound(const std::string& name)
 
 void AudioSystem::ResumeAllSounds()
 {
-	for (ALuint source : s_AudioData.m_Sources)
+	for (ALuint source : s_Data.m_Sources)
 	{
 		ALint state;
 		alGetSourcei(source, AL_SOURCE_STATE, &state);
@@ -316,13 +316,13 @@ void AudioSystem::ResumeAllSounds()
 
 bool AudioSystem::IsSoundPlaying(const std::string& name)
 {
-  auto it = s_AudioData.p_SoundEffectBuffers.find(name);
-  if (it == s_AudioData.p_SoundEffectBuffers.end())
+  auto it = s_Data.p_SoundEffectBuffers.find(name);
+  if (it == s_Data.p_SoundEffectBuffers.end())
       return false;
 
   ALuint buffer = it->second;
 
-  for (ALuint source : s_AudioData.m_Sources)
+  for (ALuint source : s_Data.m_Sources)
   {
       ALint currentBuffer, state;
       alGetSourcei(source, AL_BUFFER, &currentBuffer);
@@ -337,7 +337,7 @@ bool AudioSystem::IsSoundPlaying(const std::string& name)
 
 bool AudioSystem::isAnySoundsPlaying()
 {
-	for (ALuint source : s_AudioData.m_Sources)
+	for (ALuint source : s_Data.m_Sources)
 	{
 		ALint state;
 		alGetSourcei(source, AL_SOURCE_STATE, &state);
@@ -349,13 +349,13 @@ bool AudioSystem::isAnySoundsPlaying()
 
 void AudioSystem::SetSoundLoop(const std::string& name, bool loop)
 {
-  auto it = s_AudioData.p_SoundEffectBuffers.find(name);
-  if (it == s_AudioData.p_SoundEffectBuffers.end())
+  auto it = s_Data.p_SoundEffectBuffers.find(name);
+  if (it == s_Data.p_SoundEffectBuffers.end())
       return;
 
   ALuint buffer = it->second;
 
-  for (ALuint source : s_AudioData.m_Sources)
+  for (ALuint source : s_Data.m_Sources)
   {
       ALint currentBuffer;
       alGetSourcei(source, AL_BUFFER, &currentBuffer);
@@ -372,8 +372,8 @@ void AudioSystem::LoadSound(const char* filename)
   std::string name = std::filesystem::path(filename).stem().string();
 
   {
-      std::lock_guard<std::mutex> lock(s_AudioData.s_AudioMutex);
-      if (s_AudioData.p_SoundEffectBuffers.contains(name)) {
+      std::lock_guard<std::mutex> lock(s_Data.s_AudioMutex);
+      if (s_Data.p_SoundEffectBuffers.contains(name)) {
           GABGL_ERROR("Sound '" + name + "' already loaded");
           return;
       }
@@ -445,17 +445,17 @@ void AudioSystem::LoadSound(const char* filename)
   }
 
   {
-      std::lock_guard<std::mutex> lock(s_AudioData.s_AudioMutex);
-      s_AudioData.p_SoundEffectBuffers[name] = buffer;
+      std::lock_guard<std::mutex> lock(s_Data.s_AudioMutex);
+      s_Data.p_SoundEffectBuffers[name] = buffer;
   }
 }
 
 bool AudioSystem::UnLoadSound(const std::string& name)
 {
-  auto it = s_AudioData.p_SoundEffectBuffers.find(name);
-  if (it != s_AudioData.p_SoundEffectBuffers.end()) {
+  auto it = s_Data.p_SoundEffectBuffers.find(name);
+  if (it != s_Data.p_SoundEffectBuffers.end()) {
       alDeleteBuffers(1, &it->second);
-      s_AudioData.p_SoundEffectBuffers.erase(it);
+      s_Data.p_SoundEffectBuffers.erase(it);
       return true;
   }
   return false;
@@ -658,60 +658,60 @@ void AudioSystem::LoadMusic(const char* filename)
 {
   std::string name = std::filesystem::path(filename).stem().string();
 
-  std::lock_guard<std::mutex> lock(s_AudioData.s_AudioMutex);
-  auto [it, inserted] = s_AudioData.players.emplace(name, nullptr);
+  std::lock_guard<std::mutex> lock(s_Data.s_AudioMutex);
+  auto [it, inserted] = s_Data.players.emplace(name, nullptr);
   if (inserted) it->second = std::make_unique<MusicSource>(filename);
 }
 
 void AudioSystem::PlayMusic(const std::string& name, const float& volume)
 {
-  auto it = s_AudioData.players.find(name);
-  if (it != s_AudioData.players.end())
+  auto it = s_Data.players.find(name);
+  if (it != s_Data.players.end())
       it->second->Play(volume);
 }
 
 void AudioSystem::PlayMusic(const std::string& name, const glm::vec3& position, const float& volume)
 {
-  auto it = s_AudioData.players.find(name);
-  if (it != s_AudioData.players.end())
+  auto it = s_Data.players.find(name);
+  if (it != s_Data.players.end())
       it->second->Play(position,volume);
 }
 
 void AudioSystem::PauseMusic(const std::string& name)
 {
-  auto it = s_AudioData.players.find(name);
-  if (it != s_AudioData.players.end())
+  auto it = s_Data.players.find(name);
+  if (it != s_Data.players.end())
       it->second->Pause();
 }
 
 void AudioSystem::StopMusic(const std::string& name)
 {
-  auto it = s_AudioData.players.find(name);
-  if (it != s_AudioData.players.end())
+  auto it = s_Data.players.find(name);
+  if (it != s_Data.players.end())
       it->second->Stop();
 }
 
 void AudioSystem::ResumeMusic(const std::string& name)
 {
-  auto it = s_AudioData.players.find(name);
-  if (it != s_AudioData.players.end())
+  auto it = s_Data.players.find(name);
+  if (it != s_Data.players.end())
       it->second->Resume();
 }
 
 void AudioSystem::SetMusicLoop(const std::string& name, bool loop)
 {
-  auto it = s_AudioData.players.find(name);
-  if (it != s_AudioData.players.end())
+  auto it = s_Data.players.find(name);
+  if (it != s_Data.players.end())
       it->second->SetLoop(loop);
 }
 
 void AudioSystem::UpdateAllMusic()
 {
-  for (auto& [name, player] : s_AudioData.players)
+  for (auto& [name, player] : s_Data.players)
       player->UpdateBufferStream();
 }
 
 size_t AudioSystem::GetMusicNumTracks()
 { 
-  return s_AudioData.players.size();
+  return s_Data.players.size();
 }

@@ -33,6 +33,7 @@ void Application::OnUpdate(DeltaTime dt)
 	m_Framebuffer->ClearAttachment(1, -1);
 
   Renderer::BeginScene(m_Camera);
+
     Renderer::DrawLine(glm::vec3(2.0f), glm::vec3(1.0f,1.0f,0.0f), glm::vec4(1.0f));
     Renderer::DrawCubeContour(glm::vec3(2.0f), glm::vec3(1.0f), glm::vec4(1.0f));
     Renderer::DrawCube({glm::vec3(2.0f,0.0f,0.0f)});
@@ -40,6 +41,7 @@ void Application::OnUpdate(DeltaTime dt)
     Renderer::DrawSkybox("night");
     Renderer::Draw2DQuad(glm::vec2(50.0f),glm::vec2(50.0f),45.0f,glm::vec4(1.0f));
     Renderer::Draw2DText("FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f,50.0f), 0.5f, glm::vec4(2.0f,1.0f,1.0f,1.0f));
+
   Renderer::EndScene();
 
 	m_Framebuffer->Unbind();
