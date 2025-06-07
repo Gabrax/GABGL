@@ -33,6 +33,13 @@ struct Mesh
   std::vector<Vertex> m_Vertices;
   std::vector<GLuint> m_Indices;
   std::vector<std::shared_ptr<Texture>> m_Textures;
+  GLuint VAO, VBO, EBO;
+};
+
+struct BoneInfo
+{
+  int id;
+  glm::mat4 offset;
 };
 
 struct Model
@@ -41,6 +48,8 @@ struct Model
 
   static std::shared_ptr<Model> CreateSTATIC(const char* path);
   static std::shared_ptr<Model> CreateANIMATED(const char* path);
+
+  inline std::vector<Mesh>& GetMeshes() { return meshes; }
 
 private:
 
@@ -56,8 +65,8 @@ private:
   std::vector<GLuint> processIndices(aiMesh* mesh);
   std::vector<std::shared_ptr<Texture>> processTextures(aiMesh* mesh, const aiScene* scene);
   void loadMaterialTextures(aiMaterial* mat, aiTextureType type, const std::string& typeName, std::vector<std::shared_ptr<Texture>>& textures);
-  void OptimizeMesh(Mesh& mesh);
-  void CreatePhysXStaticMesh(Mesh& mesh);
+  void OptimizeMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m_Indices);
+  void CreatePhysXStaticMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m_Indices);
 
   glm::mat4 ConvertMatrixToGLMFormat(const aiMatrix4x4& from);
 	glm::vec3 GetGLMVec(const aiVector3D& vec); 

@@ -4,6 +4,7 @@
 #include "../backend/Audio.h"
 #include "../backend/Texture.h"
 #include "../backend/Renderer.h"
+#include "../backend/Model.h"
 
 void AssetManager::LoadAssets()
 {
@@ -21,25 +22,38 @@ void AssetManager::LoadAssets()
   bool cubemapUploaded = false;
   std::vector<std::string> skybox = 
   { 
-      "res/skybox/NightSky_Right.png",
-      "res/skybox/NightSky_Left.png",
-      "res/skybox/NightSky_Top.png",
-      "res/skybox/NightSky_Bottom.png",
-      "res/skybox/NightSky_Front.png",
-      "res/skybox/NightSky_Back.png"
+    "res/skybox/NightSky_Right.png",
+    "res/skybox/NightSky_Left.png",
+    "res/skybox/NightSky_Top.png",
+    "res/skybox/NightSky_Bottom.png",
+    "res/skybox/NightSky_Front.png",
+    "res/skybox/NightSky_Back.png"
   };
 
-  std::vector<std::future<void>> m_Void;
-  std::vector<std::future<std::shared_ptr<Texture>>> m_Textures;
+  std::vector<const char*> models = 
+  { 
+    "res/map/objHouse.obj",
+  };
 
-  for(auto& sound : sounds) m_Void.push_back(std::async(std::launch::async,AudioSystem::LoadSound,sound)); 
-  for(auto& music : music) m_Void.push_back(std::async(std::launch::async,AudioSystem::LoadMusic,music));
+  std::vector<std::future<void>> m_FutureVoid;
+  std::vector<std::future<std::shared_ptr<Texture>>> m_FutureTextures;
+  std::vector<std::future<std::shared_ptr<Model>>> m_FutureModels;
+
+  for(auto& sound : sounds) m_FutureVoid.push_back(std::async(std::launch::async, AudioSystem::LoadSound, sound)); 
+  for(auto& music : music) m_FutureVoid.push_back(std::async(std::launch::async, AudioSystem::LoadMusic, music));
 
   auto future = std::async(std::launch::async, [skybox]() { return Texture::CreateCubemap(skybox); });
-  m_Textures.push_back(std::move(future));
+  m_FutureTextures.push_back(std::move(future));
 
-  auto texture = m_Textures.back().get();  
-  Renderer::UploadSkybox("night", texture);  
+  for(auto& model : models) m_FutureModels.push_back(std::async(std::launch::async, Model::CreateSTATIC, model));
+  for (size_t i = 0; i < models.size(); ++i)
+  {
+      std::shared_ptr<Model> model = m_FutureModels[i].get(); // wait and get the model
+      Renderer::UploadModel(models[i], model); // use the model name as the key
+  }
+
+  auto texture = m_FutureTextures.back().get();  
+  Renderer::UploadSkybox("night", texture);
 }
 
 

@@ -18,6 +18,8 @@ Model::Model(const char* path)
   std::string dirStr = std::filesystem::path(path).parent_path().string();
   directory = dirStr.c_str();  
   processNode(scene->mRootNode, scene);
+
+  GABGL_WARN("MODEL LOADED");
 }
 
 void Model::processNode(aiNode* node, const aiScene* scene)
@@ -36,6 +38,9 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
     std::vector<Vertex> vertices = processVertices(mesh);
     std::vector<GLuint> indices = processIndices(mesh);
     std::vector<std::shared_ptr<Texture>> textures = processTextures(mesh, scene);
+
+    OptimizeMesh(vertices, indices);
+    CreatePhysXStaticMesh(vertices, indices);
 
     return Mesh(vertices, indices, textures);
 }
@@ -96,57 +101,55 @@ void Model::loadMaterialTextures(aiMaterial* mat, aiTextureType type, const std:
       std::string texturePath = str.C_Str();
 
       // Check if texture is already loaded
-      /*if (textures_loaded.find(texturePath) != textures_loaded.end()) {*/
-      /*    textures.emplace_back(textures_loaded[texturePath]);*/
-      /*    continue;*/
-      /*}*/
-      /**/
-      /*// Load texture*/
-      /*Texture texture;*/
-      /*texture.id = TextureFromFile(texturePath.c_str(), directory);*/
-      /*texture.type = typeName;*/
-      /*texture.path = texturePath;*/
-      /**/
-      /*textures.emplace_back(texture);*/
-      /*textures_loaded[texturePath] = texture;*/
+      if (textures_loaded.find(texturePath) != textures_loaded.end()) {
+          textures.emplace_back(textures_loaded[texturePath]);
+          continue;
+      }
+
+      // Load texture
+      std::shared_ptr<Texture> texture = Texture::CreateRAW(texturePath, directory);
+      texture->SetType(typeName);
+
+      textures.emplace_back(texture);
+      textures_loaded[texturePath] = texture;
   }
 }
 
-void Model::OptimizeMesh(Mesh& mesh)
+void Model::OptimizeMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m_Indices)
 {
-  meshopt_optimizeVertexCache(mesh.m_Indices.data(), mesh.m_Indices.data(), mesh.m_Indices.size(), mesh.m_Vertices.size());
+  meshopt_optimizeVertexCache(m_Indices.data(), m_Indices.data(), m_Indices.size(), m_Vertices.size());
 
   meshopt_optimizeOverdraw(
-      mesh.m_Indices.data(), 
-      mesh.m_Indices.data(), 
-      mesh.m_Indices.size(), 
-      &mesh.m_Vertices[0].Position.x, 
-      mesh.m_Vertices.size(), 
+      m_Indices.data(), 
+      m_Indices.data(), 
+      m_Indices.size(), 
+      &m_Vertices[0].Position.x, 
+      m_Vertices.size(), 
       sizeof(Vertex), 
       1.05f // Overdraw threshold (1.0 = minimal overdraw)
   );
 
-  std::vector<Vertex> optimizedVertices(mesh.m_Vertices.size());
+  std::vector<Vertex> optimizedVertices(m_Vertices.size());
   meshopt_optimizeVertexFetch(
       optimizedVertices.data(), 
-      mesh.m_Indices.data(), 
-      mesh.m_Indices.size(), 
-      mesh.m_Vertices.data(), 
-      mesh.m_Vertices.size(), 
+      m_Indices.data(), 
+      m_Indices.size(), 
+      m_Vertices.data(), 
+      m_Vertices.size(), 
       sizeof(Vertex)
   );
 
-  mesh.m_Vertices = std::move(optimizedVertices);
+  m_Vertices = std::move(optimizedVertices);
 }
 
-void Model::CreatePhysXStaticMesh(Mesh& mesh)
+void Model::CreatePhysXStaticMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m_Indices)
 {
-  std::vector<PxVec3> physxVertices(mesh.m_Vertices.size());
-  for (size_t i = 0; i < mesh.m_Vertices.size(); ++i) {
-      physxVertices[i] = PxVec3(mesh.m_Vertices[i].Position.x, mesh.m_Vertices[i].Position.y, mesh.m_Vertices[i].Position.z);
+  std::vector<PxVec3> physxVertices(m_Vertices.size());
+  for (size_t i = 0; i < m_Vertices.size(); ++i) {
+      physxVertices[i] = PxVec3(m_Vertices[i].Position.x, m_Vertices[i].Position.y, m_Vertices[i].Position.z);
   }
 
-  PxTriangleMesh* physxMesh = PhysX::CreateTriangleMesh(static_cast<PxU32>(physxVertices.size()), physxVertices.data(), static_cast<PxU32>(mesh.m_Indices.size() / 3), mesh.m_Indices.data());
+  PxTriangleMesh* physxMesh = PhysX::CreateTriangleMesh(static_cast<PxU32>(physxVertices.size()), physxVertices.data(), static_cast<PxU32>(m_Indices.size() / 3), m_Indices.data());
 
   if (!physxMesh) GABGL_ERROR("Failed to create PhysX triangle mesh");
 
@@ -159,7 +162,7 @@ void Model::CreatePhysXStaticMesh(Mesh& mesh)
   geom.triangleMesh = physxMesh;
 
   PxRigidDynamic* meshActor = physics->createRigidDynamic(pose);
-  PxShape* meshShape;
+  PxShape* meshShape = nullptr;
   if(meshActor){
       meshActor->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, true);
 
@@ -188,6 +191,16 @@ glm::vec3 Model::GetGLMVec(const aiVector3D& vec)
 glm::quat Model::GetGLMQuat(const aiQuaternion& pOrientation)
 {
   return glm::quat(pOrientation.w, pOrientation.x, pOrientation.y, pOrientation.z);
+}
+
+std::shared_ptr<Model> Model::CreateSTATIC(const char* path)
+{
+	return std::make_shared<Model>(path);
+}
+
+std::shared_ptr<Model> Model::CreateANIMATED(const char* path)
+{
+	return std::make_shared<Model>(path);
 }
 
 

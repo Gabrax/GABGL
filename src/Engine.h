@@ -19,11 +19,9 @@ private:
   bool OnWindowClose(WindowCloseEvent& e);
 	bool OnWindowResize(WindowResizeEvent& e);
 
-	float m_LastFrameTime = 0.0f;
 	bool m_Minimized = false;
 	bool m_isRunning = true;
 	bool m_closed = false;
 private:
-
 	static Engine* s_Instance;
 };

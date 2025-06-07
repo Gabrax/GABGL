@@ -38,14 +38,14 @@ void Application::OnUpdate(DeltaTime& dt)
     Renderer::DrawCube({glm::vec3(2.0f,0.0f,0.0f)});
     Renderer::Draw3DText("FPS: " + std::to_string(dt.GetFPS()), glm::vec2(0.0f), 0.01f, glm::vec4(2.0f,1.0f,1.0f,1.0f));
     Renderer::DrawSkybox("night");
-    Renderer::Draw2DQuad(glm::vec2(50.0f),glm::vec2(50.0f),45.0f,glm::vec4(1.0f));
-    Renderer::Draw2DText("FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f,50.0f), 0.5f, glm::vec4(2.0f,1.0f,1.0f,1.0f));
+    Renderer::Draw2DQuad(glm::vec2(50.0f),glm::vec2(50.0f),45.0f,glm::vec4(2.0f));
+    Renderer::Draw2DText("FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f,50.0f), 0.5f, glm::vec4(1.0f,1.0f,3.0f,1.0f));
 
   Renderer::EndScene();
 
 	m_Framebuffer->Unbind();
-  m_Camera.OnUpdate(dt);
 
+  m_Camera.OnUpdate(dt);
   AudioSystem::UpdateAllMusic();
 
   switch (m_SceneState)

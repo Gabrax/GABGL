@@ -93,6 +93,65 @@ Texture::Texture(const std::string& path, bool isGL) : m_Path(path)
 
       stbi_image_free(data);
   }
+  else
+  {
+    GABGL_ERROR("COUDLNT LOAD TEXTURE!");
+  }
+}
+
+Texture::Texture(const std::string& path, const std::string& directory, bool isGL) : m_Path(path)
+{
+  std::string filename = directory + '/' + path;
+  int width, height, channels;
+  stbi_set_flip_vertically_on_load(true);
+  stbi_uc* data = stbi_load(filename.c_str(), &width, &height, &channels, 0);
+  if (data)
+  {
+      m_RawData = new uint8_t[width * height * channels];
+      memcpy(m_RawData, data, width * height * channels);
+      m_IsLoaded = true;
+
+      m_Width = width;
+      m_Height = height;
+
+      GLenum internalFormat = 0, dataFormat = 0;
+      if (channels == 4)
+      {
+          internalFormat = GL_RGBA8;
+          dataFormat = GL_RGBA;
+      }
+      else if (channels == 3)
+      {
+          internalFormat = GL_RGB8;
+          dataFormat = GL_RGB;
+      }
+
+      m_InternalFormat = internalFormat;
+      m_DataFormat = dataFormat;
+
+      if (isGL)
+      {
+          GABGL_ASSERT(internalFormat & dataFormat, "Format not supported!");
+
+          glCreateTextures(GL_TEXTURE_2D, 1, &m_RendererID);
+          glTextureStorage2D(m_RendererID, 1, internalFormat, m_Width, m_Height);
+
+          glTextureParameteri(m_RendererID, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+          glTextureParameteri(m_RendererID, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+          glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_S, GL_REPEAT);
+          glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+          glTextureSubImage2D(m_RendererID, 0, 0, 0, m_Width, m_Height, dataFormat, GL_UNSIGNED_BYTE, data);
+      }
+
+      stbi_image_free(data);
+      stbi_set_flip_vertically_on_load(false);
+  }
+  else
+  {
+    GABGL_ERROR("COUDLNT LOAD TEXTURE!");
+  }
 }
 
 Texture::Texture(const std::vector<std::string>& faces)
@@ -177,6 +236,11 @@ std::shared_ptr<Texture> Texture::CreateGL(const std::string& path)
 std::shared_ptr<Texture> Texture::CreateRAW(const std::string& path)
 {
 	return std::make_shared<Texture>(path,false);
+}
+
+std::shared_ptr<Texture> Texture::CreateRAW(const std::string& filename, const std::string& directory)
+{
+	return std::make_shared<Texture>(filename,directory,false);
 }
 
 std::shared_ptr<Texture> Texture::CreateCubemap(const std::vector<std::string>& faces)

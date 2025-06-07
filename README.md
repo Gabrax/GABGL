@@ -6,7 +6,7 @@
 
 ## Getting started
 > [!WARNING]
-> Dependencies: CMake, C++17 <br>
+> Dependencies: CMake, C++20 <br>
 
 For general build script info run ```sh build.sh --help```
 

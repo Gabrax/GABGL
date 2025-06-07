@@ -101,16 +101,12 @@ struct RendererData
 	QuadVertex* _3DQuadVertexBufferBase = nullptr;
 	QuadVertex* _3DQuadVertexBufferPtr = nullptr;
 	glm::vec4 _3DQuadVertexPositions[4];
-	std::array<std::shared_ptr<Texture>, MaxTextureSlots> _3DTextureSlots;
-	uint32_t _3DTextureSlotIndex = 1; // 0 = white texture
 
 	std::shared_ptr<VertexArray> _2DQuadVertexArray;
 	std::shared_ptr<VertexBuffer> _2DQuadVertexBuffer;
 	uint32_t _2DQuadIndexCount = 0;
 	QuadVertex* _2DQuadVertexBufferBase = nullptr;
 	QuadVertex* _2DQuadVertexBufferPtr = nullptr;
-	std::array<std::shared_ptr<Texture>, MaxTextureSlots> _2DTextureSlots;
-	uint32_t _2DTextureSlotIndex = 1; // 0 = white texture
 
 	std::shared_ptr<VertexArray> CircleVertexArray;
 	std::shared_ptr<VertexBuffer> CircleVertexBuffer;
@@ -123,6 +119,7 @@ struct RendererData
 	uint32_t LineVertexCount = 0;
 	LineVertex* LineVertexBufferBase = nullptr;
 	LineVertex* LineVertexBufferPtr = nullptr;
+	float LineWidth = 2.0f;
 
   std::shared_ptr<VertexArray> CubeVertexArray;
   std::shared_ptr<VertexBuffer> CubeVertexBuffer;
@@ -146,9 +143,6 @@ struct RendererData
       std::shared_ptr<Shader> modelShader;
       std::shared_ptr<Shader> skyboxShader;
   } _shaders3D;
-
-  
-	float LineWidth = 2.0f;
 
 	Renderer::Statistics _2DStats;
   Renderer::Statistics _3DStats;
@@ -190,10 +184,13 @@ struct RendererData
       {{-0.5f,  0.5f, -0.5f}, {0, 0, -1}, {1.0f, 1.0f, 1.0f, 1.0f}, 0},
   };
   
-  std::array<std::shared_ptr<Texture>, MaxTextureSlots> TextureSlots;
-  uint32_t TextureSlotIndex = 1;
+	std::array<std::shared_ptr<Texture>, MaxTextureSlots> _3DTextureSlots;
+	uint32_t _3DTextureSlotIndex = 1; // 0 = white texture
+	std::array<std::shared_ptr<Texture>, MaxTextureSlots> _2DTextureSlots;
+	uint32_t _2DTextureSlotIndex = 1; // 0 = white texture
 
   std::unordered_map<std::string, std::shared_ptr<Texture>> skyboxes;
+  std::unordered_map<std::string, std::shared_ptr<Model>> models;
   std::unordered_map<char, Character> Characters;
 
   FT_Library ft;
@@ -407,8 +404,6 @@ void Renderer::StartBatch()
   s_RendererData.CubeVertexCount = 0;
   s_RendererData.CubeIndexCount = 0;
   s_RendererData.CubeVertexBufferPtr = s_RendererData.CubeVertexBufferBase;
-
-  s_RendererData.TextureSlotIndex = 1;
 }
 
 void Renderer::BeginScene(const Camera& camera, const glm::mat4& transform)
@@ -647,8 +642,7 @@ void Renderer::Draw3DRect(const glm::vec3& position, const glm::vec2& size, cons
 void Renderer::Draw3DRect(const glm::mat4& transform, const glm::vec4& color, int entityID)
 {
 	glm::vec3 lineVertices[4];
-	for (size_t i = 0; i < 4; i++)
-		lineVertices[i] = transform * s_RendererData._3DQuadVertexPositions[i];
+	for (size_t i = 0; i < 4; i++) lineVertices[i] = transform * s_RendererData._3DQuadVertexPositions[i];
 
 	DrawLine(lineVertices[0], lineVertices[1], color, entityID);
 	DrawLine(lineVertices[1], lineVertices[2], color, entityID);
@@ -672,8 +666,7 @@ void Renderer::Draw2DQuad(const glm::mat4& transform, const glm::vec4& color, in
 	constexpr glm::vec2 textureCoords[] = { { 0.0f, 0.0f }, { 1.0f, 0.0f }, { 1.0f, 1.0f }, { 0.0f, 1.0f } };
 	const float tilingFactor = 1.0f;
 
-	if (s_RendererData._2DQuadIndexCount >= RendererData::MaxIndices)
-		NextBatch();
+	if (s_RendererData._2DQuadIndexCount >= RendererData::MaxIndices) NextBatch();
 
 	for (size_t i = 0; i < quadVertexCount; i++)
 	{
@@ -705,8 +698,7 @@ void Renderer::Draw2DQuad(const glm::mat4& transform, const std::shared_ptr<Text
 	constexpr size_t quadVertexCount = 4;
 	constexpr glm::vec2 textureCoords[] = { { 0.0f, 0.0f }, { 1.0f, 0.0f }, { 1.0f, 1.0f }, { 0.0f, 1.0f } };
 
-	if (s_RendererData._2DQuadIndexCount >= RendererData::MaxIndices)
-		NextBatch();
+	if (s_RendererData._2DQuadIndexCount >= RendererData::MaxIndices) NextBatch();
 
 	float textureIndex = 0.0f;
 	for (uint32_t i = 1; i < s_RendererData._2DTextureSlotIndex; i++)
@@ -720,8 +712,7 @@ void Renderer::Draw2DQuad(const glm::mat4& transform, const std::shared_ptr<Text
 
 	if (textureIndex == 0.0f)
 	{
-		if (s_RendererData._2DTextureSlotIndex >= RendererData::MaxTextureSlots)
-			NextBatch();
+		if (s_RendererData._2DTextureSlotIndex >= RendererData::MaxTextureSlots) NextBatch();
 
 		textureIndex = (float)s_RendererData._2DTextureSlotIndex;
 		s_RendererData._2DTextureSlots[s_RendererData._2DTextureSlotIndex] = texture;
@@ -789,29 +780,28 @@ void Renderer::Draw2DRect(const glm::mat4& transform, const glm::vec4& color, in
 
 void Renderer::DrawCube(const TransformComponent& transform, int entityID)
 {
-    if (s_RendererData.CubeIndexCount >= RendererData::MaxIndices)
-        NextBatch(); // Flush batch if full
+  if (s_RendererData.CubeIndexCount >= RendererData::MaxIndices) NextBatch(); // Flush batch if full
 
-    glm::mat4 model = transform.GetTransform();
-    glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
+  glm::mat4 model = transform.GetTransform();
+  glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
 
-    for (int i = 0; i < 8; i++)
-    {
-        MeshVertex vertex = s_RendererData.cubeVertices[i];
+  for (int i = 0; i < 8; i++)
+  {
+      MeshVertex vertex = s_RendererData.cubeVertices[i];
 
-        // Transform position
-        glm::vec4 transformedPos = model * glm::vec4(vertex.Position, 1.0f);
-        vertex.Position = glm::vec3(transformedPos);
-        vertex.Normal = glm::normalize(normalMatrix * vertex.Normal);
-        vertex.Color = glm::vec4(2.0f);
-        vertex.EntityID = entityID;
+      // Transform position
+      glm::vec4 transformedPos = model * glm::vec4(vertex.Position, 1.0f);
+      vertex.Position = glm::vec3(transformedPos);
+      vertex.Normal = glm::normalize(normalMatrix * vertex.Normal);
+      vertex.Color = glm::vec4(2.0f);
+      vertex.EntityID = entityID;
 
-        *s_RendererData.CubeVertexBufferPtr = vertex;
-        s_RendererData.CubeVertexBufferPtr++;
-    }
+      *s_RendererData.CubeVertexBufferPtr = vertex;
+      s_RendererData.CubeVertexBufferPtr++;
+  }
 
-    s_RendererData.CubeVertexCount += 8;
-    s_RendererData.CubeIndexCount += 36; // 6 faces * 2 triangles * 3 indices = 36 indices per cube
+  s_RendererData.CubeVertexCount += 8;
+  s_RendererData.CubeIndexCount += 36; // 6 faces * 2 triangles * 3 indices = 36 indices per cube
 }
 
 void Renderer::DrawCubeContour(const glm::vec3& position, const glm::vec3& size, const glm::vec4& color, int entityID)
@@ -851,41 +841,145 @@ void Renderer::DrawCubeContour(const glm::vec3& position, const glm::vec3& size,
 
 void Renderer::RenderFullscreenFramebufferTexture(uint32_t textureID)
 {
-    s_RendererData._shaders2D._FramebufferShader->Use();
-    s_RendererData._shaders2D._FramebufferShader->setInt("u_Texture", 0);
+  s_RendererData._shaders2D._FramebufferShader->Use();
+  s_RendererData._shaders2D._FramebufferShader->setInt("u_Texture", 0);
 
-    static uint32_t quadVAO = 0, quadVBO = 0;
-    if (quadVAO == 0)
-    {
-        float quadVertices[] = {
-            // positions   // texCoords
-            -1.0f,  1.0f,  0.0f, 1.0f,
-            -1.0f, -1.0f,  0.0f, 0.0f,
-             1.0f, -1.0f,  1.0f, 0.0f,
+  static uint32_t quadVAO = 0, quadVBO = 0;
+  if (quadVAO == 0)
+  {
+      float quadVertices[] = {
+          // positions   // texCoords
+          -1.0f,  1.0f,  0.0f, 1.0f,
+          -1.0f, -1.0f,  0.0f, 0.0f,
+           1.0f, -1.0f,  1.0f, 0.0f,
 
-            -1.0f,  1.0f,  0.0f, 1.0f,
-             1.0f, -1.0f,  1.0f, 0.0f,
-             1.0f,  1.0f,  1.0f, 1.0f
-        };
+          -1.0f,  1.0f,  0.0f, 1.0f,
+           1.0f, -1.0f,  1.0f, 0.0f,
+           1.0f,  1.0f,  1.0f, 1.0f
+      };
 
-        glGenVertexArrays(1, &quadVAO);
-        glGenBuffers(1, &quadVBO);
-        glBindVertexArray(quadVAO);
-        glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+      glGenVertexArrays(1, &quadVAO);
+      glGenBuffers(1, &quadVBO);
+      glBindVertexArray(quadVAO);
+      glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+      glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+      glEnableVertexAttribArray(0);
+      glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+      glEnableVertexAttribArray(1);
+      glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+  }
+
+  glDisable(GL_DEPTH_TEST);
+
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, textureID);
+
+  glBindVertexArray(quadVAO);
+  glDrawArrays(GL_TRIANGLES, 0, 6);
+}
+
+void Renderer::UploadModel(const std::string& name, const std::shared_ptr<Model>& model)
+{
+  for(auto& mesh : model->GetMeshes())
+  {
+    auto VAO = mesh.VAO;
+    auto VBO = mesh.VBO;
+    auto EBO = mesh.EBO;
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    glGenBuffers(1, &EBO);
+
+    glBindVertexArray(VAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, mesh.m_Vertices.size() * sizeof(Vertex), &mesh.m_Vertices[0], GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.m_Indices.size() * sizeof(unsigned int), &mesh.m_Indices[0], GL_STATIC_DRAW);
+
+    struct Attribute {
+        GLint size;
+        GLenum type;
+        GLboolean normalized;
+        size_t offset;
+    };
+
+    std::array<Attribute, 7> attributes = { {
+        {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Position)},
+        {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Normal)},
+        {2, GL_FLOAT, GL_FALSE, offsetof(Vertex, TexCoords)},
+        {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Tangent)},
+        {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Bitangent)},
+        {4, GL_INT, GL_FALSE, offsetof(Vertex, m_BoneIDs)},
+        {4, GL_FLOAT, GL_FALSE, offsetof(Vertex, m_Weights)}
+    } };
+
+    for (size_t i = 0; i < attributes.size(); ++i) {
+        glEnableVertexAttribArray(static_cast<GLuint>(i));
+        if (attributes[i].type == GL_INT) {
+            glVertexAttribIPointer(static_cast<GLuint>(i), attributes[i].size, attributes[i].type, sizeof(Vertex), (void*)attributes[i].offset);
+        } else {
+            glVertexAttribPointer(static_cast<GLuint>(i), attributes[i].size, attributes[i].type, attributes[i].normalized, sizeof(Vertex), (void*)attributes[i].offset);
+        }
     }
 
-    glDisable(GL_DEPTH_TEST);
+    glBindVertexArray(0);
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, textureID);
+    for (auto& texture : mesh.m_Textures)
+    {
+      GLuint id = 0;
+      glGenTextures(1, &id);
+      texture->SetRendererID(id);
 
-    glBindVertexArray(quadVAO);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
+      glBindTexture(GL_TEXTURE_2D, id);
+      glTexImage2D(GL_TEXTURE_2D, 0, texture->GetDataFormat(), texture->GetWidth(), texture->GetHeight(), 0, texture->GetDataFormat(), GL_UNSIGNED_BYTE, texture->GetRawData());
+
+      glGenerateMipmap(GL_TEXTURE_2D);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    }
+  }
+
+  s_RendererData.models[name] = std::move(model);
+}
+
+void Renderer::DrawModel(const std::string& name)
+{
+  auto it = s_RendererData.models.find(name);
+  if (it != s_RendererData.models.end())
+  {
+    for(auto& mesh : it->second->GetMeshes())
+    {
+      std::unordered_map<std::string, GLuint> textureCounters = {
+          {"texture_diffuse", 1},
+          {"texture_specular", 1},
+          {"texture_normal", 1},
+          {"texture_height", 1}
+      };
+
+      auto& textures = mesh.m_Textures;
+      for (GLuint i = 0; i < textures.size(); i++) {
+          glActiveTexture(GL_TEXTURE0 + i);
+
+          std::string number = std::to_string(textureCounters[textures[i]->GetType()]++);
+          /*shader.setInt(textures[i].type + number, i);*/
+          glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
+      }
+
+      glBindVertexArray(mesh.VAO);
+      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
+      glBindVertexArray(0);
+      glActiveTexture(GL_TEXTURE0);
+    }
+  }
+  else
+  {
+      GABGL_ERROR("Model not found: " + name);
+      return;
+  }
+
 }
 
 void Renderer::UploadSkybox(const std::string& name, const std::shared_ptr<Texture>& cubemap)

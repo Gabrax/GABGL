@@ -28,6 +28,7 @@ struct Texture
   Texture() = default;
 	Texture(const TextureSpecification& specification);
   Texture(const std::string& path, bool isGL);
+  Texture(const std::string& filename, const std::string& directory, bool isGL);
   Texture(const std::vector<std::string>& faces);
 	~Texture();
 
@@ -40,6 +41,10 @@ struct Texture
   inline uint32_t& GetRendererID() { return m_RendererID; }
 	inline const uint8_t* GetRawData() const { return m_RawData; }
 	inline const std::string& GetPath() const { return m_Path; }
+  inline const GLenum GetDataFormat() const { return m_DataFormat; }
+  inline const GLenum GetInternalFormat() const { return m_InternalFormat; }
+  inline void SetType(const std::string& type) { m_Type = type; }
+  inline std::string& GetType() { return m_Type; }
 	void SetData(void* data, uint32_t size);
 	void Bind(uint32_t slot = 0) const;
 	inline bool IsLoaded() const { return m_IsLoaded; }
@@ -48,9 +53,11 @@ struct Texture
 	{
 		return m_RendererID == other.GetRendererID();
 	}
+
 	static std::shared_ptr<Texture> CreateGL(const TextureSpecification& specification);
 	static std::shared_ptr<Texture> CreateGL(const std::string& path);
 	static std::shared_ptr<Texture> CreateRAW(const std::string& path);
+  static std::shared_ptr<Texture> CreateRAW(const std::string& path, const std::string& directory);
   static std::shared_ptr<Texture> WrapExisting(uint32_t rendererID);
   static std::shared_ptr<Texture> CreateCubemap(const std::vector<std::string>& faces);
 
@@ -64,6 +71,7 @@ private:
   int32_t channels;
 
 	std::string m_Path;
+	std::string m_Directory;
   std::string m_Type;
 	bool m_IsLoaded = false;
   bool m_OwnsTexture = true;
