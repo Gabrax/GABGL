@@ -1,6 +1,5 @@
 #pragma once
 
-#include <initializer_list>
 #include <memory>
 #include <string>
 #include <glad/glad.h>
@@ -65,6 +64,7 @@ private:
   int32_t channels;
 
 	std::string m_Path;
+  std::string m_Type;
 	bool m_IsLoaded = false;
   bool m_OwnsTexture = true;
 	uint32_t m_Width, m_Height;

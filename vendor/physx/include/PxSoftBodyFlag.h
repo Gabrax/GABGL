@@ -22,50 +22,42 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// Copyright (c) 2008-2023 NVIDIA Corporation. All rights reserved.
+// Copyright (c) 2008-2025 NVIDIA Corporation. All rights reserved.
 // Copyright (c) 2004-2008 AGEIA Technologies, Inc. All rights reserved.
 // Copyright (c) 2001-2004 NovodeX AG. All rights reserved.
 
 #ifndef PX_SOFT_BODY_FLAG_H
 #define PX_SOFT_BODY_FLAG_H
 
-#include "PxPhysXConfig.h"
-#include "foundation/PxFlags.h"
+#include "PxDeformableVolumeFlag.h"
 
 #if !PX_DOXYGEN
 namespace physx
 {
 #endif
-	
+
 /**
-\brief Identifies the buffers of a PxSoftBody.
-
-@see PxSoftBody::markDirty()
+\brief Deprecated
+\see PxDeformableVolumeDataFlag
 */
-struct PxSoftBodyDataFlag
-{
-	enum Enum
-	{
-		eNONE = 0,
+typedef PX_DEPRECATED PxDeformableVolumeDataFlag PxSoftBodyDataFlag;
 
-		ePOSITION_INVMASS = 1 << 0,             //!< The collision mesh's positions
-		eSIM_POSITION_INVMASS = 1 << 1,         //!< The simulation mesh's positions and inverse masses
-		eSIM_VELOCITY = 1 << 2,                 //!< The simulation mesh's velocities
-		eREST_POSITION_INVMASS = 1 << 3,        //!< The collision mesh's rest positions
-
-		eALL = ePOSITION_INVMASS | eSIM_POSITION_INVMASS | eSIM_VELOCITY | eREST_POSITION_INVMASS
-	};
-};
-
-typedef PxFlags<PxSoftBodyDataFlag::Enum, PxU32> PxSoftBodyDataFlags;
+/**
+\brief Deprecated
+\see PxDeformableVolumeDataFlags
+*/
+typedef PX_DEPRECATED PxDeformableVolumeDataFlags PxSoftBodyDataFlags;
 
 /**
 \brief These flags determine what data is read or written when using PxScene::copySoftBodyData()
 or PxScene::applySoftBodyData.
 
-@see PxScene::copySoftBodyData, PxScene::applySoftBodyData
+\see PxScene::copySoftBodyData, PxScene::applySoftBodyData
+
+\deprecated There is no direct replacement. The data is exposed in the PxSoftBody interface, accessible directly from GPU.
+There is no replacement for eTET_REST_POSES, as the data is constant and can be derived from the input collision mesh.
 */
-class PxSoftBodyGpuDataFlag
+PX_DEPRECATED class PxSoftBodyGpuDataFlag
 {
 public:
 	enum Enum

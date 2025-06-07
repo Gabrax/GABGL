@@ -3,6 +3,8 @@
 #include "Camera.h"
 #include "Texture.h"
 #include "Transform.hpp"
+#include "Buffer.h"
+#include "Shader.h"
 
 struct Renderer
 {
@@ -40,11 +42,19 @@ struct Renderer
   static void DrawSkybox(const std::string& name);
 	static void DrawLine(const glm::vec3& p0, const glm::vec3& p1, const glm::vec4& color, int entityID = -1);
   static void RenderFullscreenFramebufferTexture(uint32_t textureID);
+	static void LoadFont(const std::string& path);
 
 	static float GetLineWidth();
 	static void SetLineWidth(float width);
+
 	static void LoadShaders();
-	static void LoadFont(const std::string& path);
+
+  static void OnWindowResize(uint32_t width, uint32_t height);
+  static void Submit3D(const std::shared_ptr<Shader>& shader, const std::shared_ptr<VertexArray>& vertexArray, const glm::mat4& transform = glm::mat4(1.0f));
+  static void Submit2D(const std::shared_ptr<Shader>& shader, const std::shared_ptr<VertexArray>& vertexArray, const glm::mat4& transform = glm::mat4(1.0f));
+	static void SetViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height);
+	static void SetClearColor(const glm::vec4& color);
+	static void Clear();
 
 	struct Statistics
 	{
@@ -60,6 +70,8 @@ struct Renderer
 	static Statistics Get3DStats();
 
 private:
+	static void DrawIndexed(const std::shared_ptr<VertexArray>& vertexArray, uint32_t indexCount = 0);
+	static void DrawLines(const std::shared_ptr<VertexArray>& vertexArray, uint32_t vertexCount);
 	static void StartBatch();
 	static void NextBatch();
 };

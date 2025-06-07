@@ -4,11 +4,10 @@
 #include "../input/KeyCodes.h"
 #include "../input/UserInput.h"
 #include "../engine.h"
-#include "../backend/RendererAPI.h"
 #include "glm/fwd.hpp"
 #include "../backend/Audio.h"
 
-Application::Application() : Layer("Game") 
+Application::Application() 
 {
   m_WindowRef = &Engine::GetInstance().GetMainWindow();
   m_Camera = Camera(45.0f, (float)m_WindowRef->GetWidth() / (float)m_WindowRef->GetHeight(), 0.001f, 2000.0f);
@@ -24,12 +23,12 @@ Application::Application() : Layer("Game")
   AudioSystem::PlayMusic("music");
 }
 
-void Application::OnUpdate(DeltaTime dt)
+void Application::OnUpdate(DeltaTime& dt)
 {
 	Renderer::ResetStats();
 	m_Framebuffer->Bind();
-	RendererAPI::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
-	RendererAPI::Clear();
+	Renderer::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
+	Renderer::Clear();
 	m_Framebuffer->ClearAttachment(1, -1);
 
   Renderer::BeginScene(m_Camera);

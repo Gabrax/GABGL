@@ -4,7 +4,7 @@
 
 #include "BackendLogger.h"
 #include "Buffer.h"
-#include "RendererAPI.h"
+#include "Renderer.h"
 #include "Shader.h"
 #include "Texture.h"
 #include "glm/fwd.hpp"
@@ -12,6 +12,26 @@
 #include <stb_image.h>
 #include <ft2build.h>
 #include FT_FREETYPE_H
+
+void MessageCallback(
+	unsigned source,
+	unsigned type,
+	unsigned id,
+	unsigned severity,
+	int length,
+	const char* message,
+	const void* userParam)
+{
+	switch (severity)
+	{
+		case GL_DEBUG_SEVERITY_HIGH:         GABGL_CRITICAL(message); return;
+		case GL_DEBUG_SEVERITY_MEDIUM:       GABGL_ERROR(message); return;
+		case GL_DEBUG_SEVERITY_LOW:          GABGL_WARN(message); return;
+		case GL_DEBUG_SEVERITY_NOTIFICATION: GABGL_TRACE(message); return;
+	}
+
+	GABGL_ASSERT(false, "Unknown severity level!");
+}
 
 struct QuadVertex
 {
@@ -128,7 +148,7 @@ struct RendererData
   } _shaders3D;
 
   
-	float LineWidth = 20.0f;
+	float LineWidth = 2.0f;
 
 	Renderer::Statistics _2DStats;
   Renderer::Statistics _3DStats;
@@ -193,6 +213,20 @@ void Renderer::LoadShaders()
 
 void Renderer::Init()
 {
+#ifdef DEBUG
+	glEnable(GL_DEBUG_OUTPUT);
+	glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+	glDebugMessageCallback(MessageCallback, nullptr);
+
+	glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, NULL, GL_FALSE);
+#endif
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_LINE_SMOOTH);
+
 	s_RendererData._3DQuadVertexArray = VertexArray::Create();
 	s_RendererData._3DQuadVertexBuffer = VertexBuffer::Create(s_RendererData.MaxVertices * sizeof(QuadVertex));
 	s_RendererData._3DQuadVertexBuffer->SetLayout({
@@ -413,7 +447,7 @@ void Renderer::Flush()
 			s_RendererData._3DTextureSlots[i]->Bind(i);
 
 		s_RendererData._shaders2D._3DQuadShader->Use();
-		RendererAPI::DrawIndexed(s_RendererData._3DQuadVertexArray, s_RendererData._3DQuadIndexCount);
+		Renderer::DrawIndexed(s_RendererData._3DQuadVertexArray, s_RendererData._3DQuadIndexCount);
 		s_RendererData._2DStats.DrawCalls++;
 	}
 	if (s_RendererData._2DQuadIndexCount)
@@ -426,7 +460,7 @@ void Renderer::Flush()
 			s_RendererData._2DTextureSlots[i]->Bind(i);
 
 		s_RendererData._shaders2D._2DQuadShader->Use();
-		RendererAPI::DrawIndexed(s_RendererData._2DQuadVertexArray, s_RendererData._2DQuadIndexCount);
+		Renderer::DrawIndexed(s_RendererData._2DQuadVertexArray, s_RendererData._2DQuadIndexCount);
 		s_RendererData._2DStats.DrawCalls++;
 	}
 	if (s_RendererData.CircleIndexCount)
@@ -435,7 +469,7 @@ void Renderer::Flush()
 		s_RendererData.CircleVertexBuffer->SetData(s_RendererData.CircleVertexBufferBase, dataSize);
 
 		s_RendererData._shaders2D._CircleShader->Use();
-		RendererAPI::DrawIndexed(s_RendererData.CircleVertexArray, s_RendererData.CircleIndexCount);
+		Renderer::DrawIndexed(s_RendererData.CircleVertexArray, s_RendererData.CircleIndexCount);
 		s_RendererData._2DStats.DrawCalls++;
 	}
 	if (s_RendererData.LineVertexCount)
@@ -444,8 +478,8 @@ void Renderer::Flush()
 		s_RendererData.LineVertexBuffer->SetData(s_RendererData.LineVertexBufferBase, dataSize);
 
 		s_RendererData._shaders2D._LineShader->Use();
-		RendererAPI::SetLineWidth(s_RendererData.LineWidth);
-		RendererAPI::DrawLines(s_RendererData.LineVertexArray, s_RendererData.LineVertexCount);
+		Renderer::SetLineWidth(s_RendererData.LineWidth);
+		Renderer::DrawLines(s_RendererData.LineVertexArray, s_RendererData.LineVertexCount);
 		s_RendererData._2DStats.DrawCalls++;
 	}
   if (s_RendererData.CubeIndexCount) 
@@ -456,7 +490,7 @@ void Renderer::Flush()
     s_RendererData._shaders3D.modelShader->Use();
     s_RendererData.CubeVertexArray->Bind();
 
-    RendererAPI::DrawIndexed(s_RendererData.CubeVertexArray, s_RendererData.CubeIndexCount);
+    Renderer::DrawIndexed(s_RendererData.CubeVertexArray, s_RendererData.CubeIndexCount);
 
     s_RendererData._3DStats.DrawCalls++;
   }
@@ -1200,14 +1234,67 @@ void Renderer::LoadFont(const std::string& path)
   }
 }
 
-float Renderer::GetLineWidth()
+void Renderer::OnWindowResize(uint32_t width, uint32_t height)
 {
-	return s_RendererData.LineWidth;
+	SetViewport(0, 0, width, height);
+}
+
+void Renderer::Submit3D(const std::shared_ptr<Shader>& shader, const std::shared_ptr<VertexArray>& vertexArray, const glm::mat4& transform)
+{
+	shader->Use();
+	shader->setMat4("u_ViewProjection", s_RendererData._3DCameraBuffer.ViewProjection);
+	shader->setMat4("u_Transform", transform);
+
+	vertexArray->Bind();
+	DrawIndexed(vertexArray);
+}
+
+void Renderer::Submit2D(const std::shared_ptr<Shader>& shader, const std::shared_ptr<VertexArray>& vertexArray, const glm::mat4& transform)
+{
+	shader->Use();
+	shader->setMat4("u_ViewProjection", s_RendererData._2DCameraBuffer.ViewProjection);
+	shader->setMat4("u_Transform", transform);
+
+	vertexArray->Bind();
+	DrawIndexed(vertexArray);
+}
+
+void Renderer::SetViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height)
+{
+	glViewport(x, y, width, height);
+}
+
+void Renderer::SetClearColor(const glm::vec4& color)
+{
+	glClearColor(color.r, color.g, color.b, color.a);
+}
+
+void Renderer::Clear()
+{
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+}
+
+void Renderer::DrawIndexed(const std::shared_ptr<VertexArray>& vertexArray, uint32_t indexCount)
+{
+	vertexArray->Bind();
+	uint32_t count = indexCount ? indexCount : vertexArray->GetIndexBuffer()->GetCount();
+	glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, nullptr);
+}
+
+void Renderer::DrawLines(const std::shared_ptr<VertexArray>& vertexArray, uint32_t vertexCount)
+{
+	vertexArray->Bind();
+	glDrawArrays(GL_LINES, 0, vertexCount);
 }
 
 void Renderer::SetLineWidth(float width)
 {
-	s_RendererData.LineWidth = width;
+	glLineWidth(width);
+}
+
+float Renderer::GetLineWidth()
+{
+	return s_RendererData.LineWidth;
 }
 
 void Renderer::ResetStats()

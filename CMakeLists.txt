@@ -7,28 +7,17 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Compiler settings for Clang, MSVC, and GCC
 if(MSVC)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:RelWithDebInfo>:RelWithDebInfo>")
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
     add_compile_options(/MP)
     target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC _CRT_SECURE_NO_WARNINGS)
 
-    file(COPY
-      "${CMAKE_BINARY_DIR}/_deps/assimp-build/bin/assimp-vc143-mt.dll"
-      "${CMAKE_SOURCE_DIR}/vendor/physx/lib/release/PhysX_64.dll"
-      "${CMAKE_SOURCE_DIR}/vendor/physx/lib/release/PhysXCommon_64.dll"
-      "${CMAKE_SOURCE_DIR}/vendor/physx/lib/release/PhysXCooking_64.dll"
-      "${CMAKE_SOURCE_DIR}/vendor/physx/lib/release/PhysXFoundation_64.dll"
-      "${CMAKE_SOURCE_DIR}/vendor/physx/lib/release/PVDRuntime_64.dll"
-
-       DESTINATION "${CMAKE_BINARY_DIR}"
-    )
-
-  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     add_compile_options(
         -Wall -Wextra -Wpedantic
         -Wno-unused-function
         -Wno-unused-parameter
         -ferror-limit=0
-        -std=c++17
+        -std=c++20
     )
 endif()
 
@@ -133,11 +122,4 @@ set(IMGUI_INI_FILE "${CMAKE_BINARY_DIR}/imgui.ini")
 set(RES_FOLDER "${CMAKE_BINARY_DIR}/../res")
 file(MAKE_DIRECTORY ${RES_FOLDER})
 
-# add_custom_command(
-#    TARGET "${CMAKE_PROJECT_NAME}" POST_BUILD
-#    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${IMGUI_INI_FILE} ${RES_FOLDER}
-#    COMMENT "Copying imgui.ini to ../res folder..."
-# )
-
-# Target link libraries
 target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image raudio imgui assimp tinyOBJ meshoptimizer JSONparser PhysX spdlog::spdlog SndFile::sndfile OpenAL::OpenAL freetype)

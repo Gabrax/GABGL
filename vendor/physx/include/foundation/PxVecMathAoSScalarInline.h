@@ -22,7 +22,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// Copyright (c) 2008-2023 NVIDIA Corporation. All rights reserved.
+// Copyright (c) 2008-2025 NVIDIA Corporation. All rights reserved.
 // Copyright (c) 2004-2008 AGEIA Technologies, Inc. All rights reserved.
 // Copyright (c) 2001-2004 NovodeX AG. All rights reserved.
 
@@ -358,12 +358,12 @@ PX_FORCE_INLINE FloatV FEps6()
 	return FLoad(1e-6f);
 }
 
-//! @cond
+//! \cond
 PX_FORCE_INLINE FloatV FMax()
 {
 	return FLoad(PX_MAX_REAL);
 }
-//! @endcond
+//! \endcond
 
 PX_FORCE_INLINE FloatV FNegMax()
 {
@@ -1933,12 +1933,12 @@ PX_FORCE_INLINE VecU32V V4IsGrtrV32u(const Vec4V a, const Vec4V b)
 	               a.w > b.w ? 0xFFFFffff : 0);
 }
 
-PX_FORCE_INLINE VecU16V V4U16LoadAligned(VecU16V* addr)
+PX_FORCE_INLINE VecU16V V4U16LoadAligned(const VecU16V* addr)
 {
 	return *addr;
 }
 
-PX_FORCE_INLINE VecU16V V4U16LoadUnaligned(VecU16V* addr)
+PX_FORCE_INLINE VecU16V V4U16LoadUnaligned(const VecU16V* addr)
 {
 	return *addr;
 }

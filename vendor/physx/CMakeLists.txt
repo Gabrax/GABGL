@@ -8,12 +8,12 @@ set(PHYSX_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib/release")
 
 # PhysX libraries
 set(PHYSX_LIBS
-  PhysX_64
-  PhysXCooking_64
-  PhysXCommon_64
-  PhysXFoundation_64
-  PhysXTask_static_64
+  PhysX_static_64
+  PhysXCooking_static_64
+  PhysXCommon_static_64
+  PhysXFoundation_static_64
   PhysXPvdSDK_static_64
+  PhysXTask_static_64
   PVDRuntime_64
   PhysXExtensions_static_64
   PhysXCharacterKinematic_static_64

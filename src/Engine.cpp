@@ -1,9 +1,12 @@
 #include "engine.h"
 
 #include "backend/BackendLogger.h"
-#include "backend/RendererAPI.h"
 #include "backend/Audio.h"
+#include "backend/LayerStack.h"
+#include "backend/Renderer.h"
+#include "game/Application.h"
 #include "game/AssetManager.h"
+#include "backend/PhysX.h"
 
 Engine* Engine::s_Instance = nullptr;
 
@@ -22,21 +25,22 @@ void Engine::Run()
 	m_Window->SetEventCallback(BIND_EVENT(OnEvent));
 
   AudioSystem::Init();
-	RendererAPI::Init();
+  PhysX::Init();
+	Renderer::Init();
   AssetManager::LoadAssets();
 
-  m_Game = new Application;
-  PushLayer(m_Game);
+  Application* m_Game = new Application;
+  LayerStack::PushLayer(m_Game);
 
   while(m_isRunning)
   {
     DeltaTime dt;
 
-    RendererAPI::Clear();
+    Renderer::Clear();
 
     if (!m_Minimized)
 		{
-			RenderLayers(dt);
+      LayerStack::OnUpdate(dt);
 		}
 
     m_Window->Update();
@@ -49,6 +53,7 @@ void Engine::OnEvent(Event& e)
 	dispatcher.Dispatch<WindowCloseEvent>(BIND_EVENT(OnWindowClose));
 	dispatcher.Dispatch<WindowResizeEvent>(BIND_EVENT(OnWindowResize));
 
+  auto& m_LayerStack = LayerStack::GetLayers();
 	for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
 	{
 		if (e.Handled)
@@ -73,42 +78,8 @@ bool Engine::OnWindowResize(WindowResizeEvent& e)
 	}
 
 	m_Minimized = false;
-	RendererAPI::OnWindowResize(e.GetWidth(), e.GetHeight());
+	Renderer::OnWindowResize(e.GetWidth(), e.GetHeight());
 
 	return false;
-}
-
-void Engine::PushLayer(Layer* layer)
-{
-	m_LayerStack.PushLayer(layer);
-	layer->OnAttach();
-}
-
-void Engine::PushOverlay(Layer* layer)
-{
-	m_LayerStack.PushOverlay(layer);
-	layer->OnAttach();
-}
-
-/*void Engine::SetupMainWindow()*/
-/*{*/
-/*	m_MainWindow = Window::Create<MainWindow>({ "GABGL", 1000, 600 });*/
-/*	m_MainWindow->SetEventCallback(BIND_EVENT(OnEvent));*/
-/*	m_ImGuiLayer = new ImGuiLayer(m_MainWindow.get());*/
-/*	PushOverlay(m_ImGuiLayer);*/
-/*	m_MainEditorlayer = new MainEditor;*/
-/*	PushLayer(m_MainEditorlayer);*/
-/*}*/
-
-void Engine::RenderLayers(DeltaTime& dt)
-{
-	for (Layer* layer : m_LayerStack)
-		layer->OnUpdate(dt);
-}
-
-void Engine::RenderEditorLayers()
-{
-  for (Layer* layer : m_LayerStack)
-    layer->OnImGuiRender();
 }
 

@@ -193,23 +193,7 @@ namespace Utilities {
       return true;
   }
 
-  inline glm::mat4 PxMat44ToGlmMat4(physx::PxMat44 pxMatrix)
-  {
-    glm::mat4 matrix;
-    for (int x = 0; x < 4; x++)
-        for (int y = 0; y < 4; y++)
-            matrix[x][y] = pxMatrix[x][y];
-    return matrix;
-  }
-
-  inline physx::PxMat44 GlmMat4ToPxMat44(glm::mat4 glmMatrix)
-  {
-      physx::PxMat44 matrix;
-      for (int x = 0; x < 4; x++)
-          for (int y = 0; y < 4; y++)
-              matrix[x][y] = glmMatrix[x][y];
-      return matrix;
-  }
+  
   struct Transform
   {
       glm::vec3 position = glm::vec3(0);

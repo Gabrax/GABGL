@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../backend/Layer.h"
+#include "../backend/LayerStack.h"
 #include "../input/Event.h"
 #include "../input/KeyEvent.h"
 #include "../backend/Camera.h"
@@ -14,7 +14,7 @@ struct Application : Layer
   virtual ~Application() = default;
   
 	void OnEvent(Event& e) override;
-	void OnUpdate(DeltaTime dt) override;
+	void OnUpdate(DeltaTime& dt) override;
   inline std::shared_ptr<Framebuffer> GetFramebuffer() const { return m_Framebuffer; }
 
 private:

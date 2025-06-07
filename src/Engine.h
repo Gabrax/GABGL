@@ -4,10 +4,6 @@
 
 #include "backend/window.h"
 #include "input/EngineEvent.h"
-#include "backend/LayerStack.h"
-#include "backend/DeltaTime.h"
-#include "game/Application.h"
-#include "game/Editor.h"
 
 struct Engine
 {
@@ -22,14 +18,6 @@ private:
   std::unique_ptr<WindowBase> m_Window;
   bool OnWindowClose(WindowCloseEvent& e);
 	bool OnWindowResize(WindowResizeEvent& e);
-
-  LayerStack m_LayerStack;
-	void PushLayer(Layer* layer);
-	void PushOverlay(Layer* layer);
-  void RenderLayers(DeltaTime& dt);
-  void RenderEditorLayers();
-
-  Application* m_Game;
 
 	float m_LastFrameTime = 0.0f;
 	bool m_Minimized = false;
