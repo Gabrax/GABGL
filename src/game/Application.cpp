@@ -34,6 +34,7 @@ void Application::OnUpdate(DeltaTime& dt)
   Renderer::BeginScene(m_Camera);
 
     Renderer::DrawLine(glm::vec3(2.0f), glm::vec3(1.0f,1.0f,0.0f), glm::vec4(1.0f));
+    Renderer::DrawModel("res/backpack/backpack.obj",glm::vec3(0.0f),glm::vec3(2.0f),90.0f);
     Renderer::DrawCubeContour(glm::vec3(2.0f), glm::vec3(1.0f), glm::vec4(1.0f));
     Renderer::DrawCube({glm::vec3(2.0f,0.0f,0.0f)});
     Renderer::Draw3DText("FPS: " + std::to_string(dt.GetFPS()), glm::vec2(0.0f), 0.01f, glm::vec4(2.0f,1.0f,1.0f,1.0f));

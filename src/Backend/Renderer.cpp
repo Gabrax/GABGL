@@ -92,6 +92,8 @@ struct RendererData
 	static constexpr uint32_t MaxVertices = MaxQuads * 4;
 	static constexpr uint32_t MaxIndices = MaxQuads * 6;
 	static constexpr uint32_t MaxTextureSlots = 32; // TODO: RenderCaps
+  static constexpr uint32_t MaxModelVertexCount = 50000;
+  static constexpr uint32_t MaxModelIndices  = 75000;
 
 	std::shared_ptr<Texture> WhiteTexture;
 
@@ -129,6 +131,14 @@ struct RendererData
   uint32_t CubeIndexCount = 0;
   uint32_t CubeVertexCount = 0;
 
+  std::shared_ptr<VertexArray> ModelVertexArray;
+  std::shared_ptr<VertexBuffer> ModelVertexBuffer;
+  std::shared_ptr<IndexBuffer> ModelIndexBuffer;
+  Vertex* ModelVertexBufferBase = nullptr;
+  Vertex* ModelVertexBufferPtr = nullptr;
+  uint32_t ModelIndexCount = 0;
+  uint32_t ModelVertexCount = 0;
+
   struct Shaders2D
 	{
 		std::shared_ptr<Shader> _3DQuadShader;
@@ -142,6 +152,7 @@ struct RendererData
   {
       std::shared_ptr<Shader> modelShader;
       std::shared_ptr<Shader> skyboxShader;
+      std::shared_ptr<Shader> ModelShader;
   } _shaders3D;
 
 	Renderer::Statistics _2DStats;
@@ -206,6 +217,7 @@ void Renderer::LoadShaders()
 	s_RendererData._shaders2D._FramebufferShader = Shader::Create("res/shaders/FB.glsl");
   s_RendererData._shaders3D.modelShader = Shader::Create("res/shaders/Renderer3D_static.glsl");
   s_RendererData._shaders3D.skyboxShader = Shader::Create("res/shaders/skybox.glsl");
+  s_RendererData._shaders3D.ModelShader = Shader::Create("res/shaders/Renderer3D_Model.glsl");
 }
 
 void Renderer::Init()
@@ -318,7 +330,6 @@ void Renderer::Init()
 	s_RendererData._3DQuadVertexPositions[3] = { -0.5f,  0.5f, 0.0f, 1.0f };
 
   s_RendererData.CubeVertexBufferBase = new MeshVertex[s_RendererData.MaxVertices];
-
   s_RendererData.CubeVertexBuffer = VertexBuffer::Create(nullptr, s_RendererData.MaxVertices * sizeof(MeshVertex));
   s_RendererData.CubeVertexBuffer->SetLayout({
       { ShaderDataType::Float3, "a_Position" },   // 0
@@ -354,9 +365,24 @@ void Renderer::Init()
   s_RendererData.CubeVertexArray = VertexArray::Create();
   s_RendererData.CubeVertexArray->AddVertexBuffer(s_RendererData.CubeVertexBuffer);
   s_RendererData.CubeVertexArray->SetIndexBuffer(s_RendererData.CubeIndexBuffer);
-  s_RendererData.CubeIndexCount = 0;
-  s_RendererData.CubeVertexCount = 0;
   s_RendererData.CubeVertexBufferPtr = s_RendererData.CubeVertexBufferBase;
+
+  s_RendererData.ModelVertexBufferBase = new Vertex[s_RendererData.MaxModelVertexCount];
+  s_RendererData.ModelVertexBuffer = VertexBuffer::Create(s_RendererData.MaxModelVertexCount * sizeof(Vertex));
+  s_RendererData.ModelVertexBuffer->SetLayout({
+      { ShaderDataType::Float3, "a_Position"   },
+      { ShaderDataType::Float3, "a_Normal"     },
+      { ShaderDataType::Float2, "a_TexCoords"  },
+      { ShaderDataType::Float3, "a_Tangent"    },
+      { ShaderDataType::Float3, "a_Bitangent"  },
+      { ShaderDataType::Float4, "a_TexIndices" }, 
+      { ShaderDataType::Int4,   "a_BoneIDs"    },
+      { ShaderDataType::Float4, "a_Weights"    },
+      { ShaderDataType::Int,    "a_EntityID"   }  
+  });
+  s_RendererData.ModelVertexArray = VertexArray::Create();
+  s_RendererData.ModelVertexArray->AddVertexBuffer(s_RendererData.ModelVertexBuffer);
+  s_RendererData.ModelVertexBufferPtr = s_RendererData.ModelVertexBufferBase;
 
   s_RendererData._3DCameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 0);
   s_RendererData._2DCameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 1);
@@ -365,9 +391,9 @@ void Renderer::Init()
   s_RendererData.LightColorStorageBuffer= StorageBuffer::Create(sizeof(glm::vec4) * 10, 2);
   s_RendererData.LightTypeStorageBuffer= StorageBuffer::Create(sizeof(uint32_t) * 10, 3);
 
-  GABGL_ASSERT(!FT_Init_FreeType(&s_RendererData.ft), "Could not init FreeType Library");
-
   LoadShaders();
+
+  GABGL_ASSERT(!FT_Init_FreeType(&s_RendererData.ft), "Could not init FreeType Library");
 
   LoadFont("res/fonts/dpcomic.ttf");
 }
@@ -437,7 +463,6 @@ void Renderer::Flush()
 		uint32_t dataSize = (uint32_t)((uint8_t*)s_RendererData._3DQuadVertexBufferPtr - (uint8_t*)s_RendererData._3DQuadVertexBufferBase);
 		s_RendererData._3DQuadVertexBuffer->SetData(s_RendererData._3DQuadVertexBufferBase, dataSize);
 
-		// Bind textures
 		for (uint32_t i = 0; i < s_RendererData._3DTextureSlotIndex; i++)
 			s_RendererData._3DTextureSlots[i]->Bind(i);
 
@@ -445,12 +470,23 @@ void Renderer::Flush()
 		Renderer::DrawIndexed(s_RendererData._3DQuadVertexArray, s_RendererData._3DQuadIndexCount);
 		s_RendererData._2DStats.DrawCalls++;
 	}
+	/* if (s_RendererData.ModelIndexCount)*/
+	/*{*/
+	/*	uint32_t dataSize = (uint32_t)((uint8_t*)s_RendererData.ModelVertexBufferPtr - (uint8_t*)s_RendererData.ModelVertexBufferBase);*/
+	/*	s_RendererData.ModelVertexBuffer->SetData(s_RendererData.ModelVertexBufferBase, dataSize);*/
+	/**/
+	/*	for (uint32_t i = 0; i < s_RendererData._3DTextureSlotIndex; i++)*/
+	/*		s_RendererData._3DTextureSlots[i]->Bind(i);*/
+	/**/
+	/*	s_RendererData._shaders3D.ModelShader->Use();*/
+	/*	Renderer::DrawIndexed(s_RendererData.ModelVertexArray, s_RendererData.ModelIndexCount);*/
+	/*	s_RendererData._3DStats.DrawCalls++;*/
+	/*}*/
 	if (s_RendererData._2DQuadIndexCount)
 	{
 		uint32_t dataSize = (uint32_t)((uint8_t*)s_RendererData._2DQuadVertexBufferPtr - (uint8_t*)s_RendererData._2DQuadVertexBufferBase);
 		s_RendererData._2DQuadVertexBuffer->SetData(s_RendererData._2DQuadVertexBufferBase, dataSize);
 
-		// Bind textures
 		for (uint32_t i = 0; i < s_RendererData._2DTextureSlotIndex; i++)
 			s_RendererData._2DTextureSlots[i]->Bind(i);
 
@@ -882,19 +918,16 @@ void Renderer::UploadModel(const std::string& name, const std::shared_ptr<Model>
 {
   for(auto& mesh : model->GetMeshes())
   {
-    auto VAO = mesh.VAO;
-    auto VBO = mesh.VBO;
-    auto EBO = mesh.EBO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glGenBuffers(1, &EBO);
+    glGenVertexArrays(1, &mesh.VAO);
+    glGenBuffers(1, &mesh.VBO);
+    glGenBuffers(1, &mesh.EBO);
 
-    glBindVertexArray(VAO);
+    glBindVertexArray(mesh.VAO);
 
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, mesh.VBO);
     glBufferData(GL_ARRAY_BUFFER, mesh.m_Vertices.size() * sizeof(Vertex), &mesh.m_Vertices[0], GL_STATIC_DRAW);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.m_Indices.size() * sizeof(unsigned int), &mesh.m_Indices[0], GL_STATIC_DRAW);
 
     struct Attribute {
@@ -927,11 +960,11 @@ void Renderer::UploadModel(const std::string& name, const std::shared_ptr<Model>
 
     for (auto& texture : mesh.m_Textures)
     {
-      GLuint id = 0;
+      GLuint id;
       glGenTextures(1, &id);
       texture->SetRendererID(id);
 
-      glBindTexture(GL_TEXTURE_2D, id);
+      glBindTexture(GL_TEXTURE_2D,id);
       glTexImage2D(GL_TEXTURE_2D, 0, texture->GetDataFormat(), texture->GetWidth(), texture->GetHeight(), 0, texture->GetDataFormat(), GL_UNSIGNED_BYTE, texture->GetRawData());
 
       glGenerateMipmap(GL_TEXTURE_2D);
@@ -945,33 +978,44 @@ void Renderer::UploadModel(const std::string& name, const std::shared_ptr<Model>
   s_RendererData.models[name] = std::move(model);
 }
 
-void Renderer::DrawModel(const std::string& name)
+void Renderer::DrawModel(const std::string& name, const glm::vec3& position, const glm::vec3& size, float rotation)
+{
+	glm::mat4 transform = glm::translate(glm::mat4(1.0f), position)
+		* glm::scale(glm::mat4(1.0f), { size.x, size.y, size.z });
+
+	DrawModel(name,transform);
+}
+
+void Renderer::DrawModel(const std::string& name, const glm::mat4& transform, int entityID)
 {
   auto it = s_RendererData.models.find(name);
   if (it != s_RendererData.models.end())
   {
-    for(auto& mesh : it->second->GetMeshes())
+    s_RendererData._shaders3D.ModelShader->Use();
+    s_RendererData._shaders3D.ModelShader->setMat4("model", transform);
+    for (auto& mesh : it->second->GetMeshes())
     {
-      std::unordered_map<std::string, GLuint> textureCounters = {
-          {"texture_diffuse", 1},
-          {"texture_specular", 1},
-          {"texture_normal", 1},
-          {"texture_height", 1}
-      };
 
-      auto& textures = mesh.m_Textures;
-      for (GLuint i = 0; i < textures.size(); i++) {
-          glActiveTexture(GL_TEXTURE0 + i);
+        std::unordered_map<std::string, GLuint> textureCounters = {
+            {"texture_diffuse", 1},
+            {"texture_specular", 1},
+            {"texture_normal", 1},
+            {"texture_height", 1}
+        };
 
-          std::string number = std::to_string(textureCounters[textures[i]->GetType()]++);
-          /*shader.setInt(textures[i].type + number, i);*/
-          glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
-      }
+        auto& textures = mesh.m_Textures;
+        for (GLuint i = 0; i < textures.size(); i++) {
+            glActiveTexture(GL_TEXTURE0 + i);
 
-      glBindVertexArray(mesh.VAO);
-      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
-      glBindVertexArray(0);
-      glActiveTexture(GL_TEXTURE0);
+            std::string number = std::to_string(textureCounters[textures[i]->GetType()]++);
+            s_RendererData._shaders3D.ModelShader->setInt(textures[i]->GetType() + number, i);
+            glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
+        }
+
+        glBindVertexArray(mesh.VAO);
+        glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
+        glActiveTexture(GL_TEXTURE0);
     }
   }
   else
@@ -979,7 +1023,6 @@ void Renderer::DrawModel(const std::string& name)
       GABGL_ERROR("Model not found: " + name);
       return;
   }
-
 }
 
 void Renderer::UploadSkybox(const std::string& name, const std::shared_ptr<Texture>& cubemap)

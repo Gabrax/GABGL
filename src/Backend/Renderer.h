@@ -28,6 +28,9 @@ struct Renderer
   static void Draw3DText(const std::string& text,  const glm::vec2& position, float size, const glm::vec4& color, int entityID = -1);
   static void DrawCube(const TransformComponent& transform, int entityID = -1);
   static void DrawCubeContour(const glm::vec3& position, const glm::vec3& size, const glm::vec4& color, int entityID = -1);
+  static void UploadModel(const std::string& name, const std::shared_ptr<Model>& model);
+  static void DrawModel(const std::string& name, const glm::vec3& position, const glm::vec3& size, float rotation);
+  static void DrawModel(const std::string& name, const glm::mat4& transform, int entityID = -1);
 
   // 2D space
   static void Draw2DQuad(const glm::vec2& position, const glm::vec2& size, float rotation, const glm::vec4& color);
@@ -39,17 +42,14 @@ struct Renderer
 	static void Draw2DRect(const glm::mat4& transform, const glm::vec4& color, int entityID = -1);
   static void Draw2DText(const std::string& text,  const glm::vec2& position, float size, const glm::vec4& color, int entityID = -1);
 
-
-  static void UploadModel(const std::string& name, const std::shared_ptr<Model>& model);
-  static void DrawModel(const std::string& name);
   static void UploadSkybox(const std::string& name,const std::shared_ptr<Texture>& texture);
   static void DrawSkybox(const std::string& name);
-	static void DrawLine(const glm::vec3& p0, const glm::vec3& p1, const glm::vec4& color, int entityID = -1);
-  static void RenderFullscreenFramebufferTexture(uint32_t textureID);
 	static void LoadFont(const std::string& path);
+  static void RenderFullscreenFramebufferTexture(uint32_t textureID);
 
 	static float GetLineWidth();
 	static void SetLineWidth(float width);
+	static void DrawLine(const glm::vec3& p0, const glm::vec3& p1, const glm::vec4& color, int entityID = -1);
 
 	static void LoadShaders();
 

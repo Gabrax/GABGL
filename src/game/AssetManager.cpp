@@ -33,6 +33,7 @@ void AssetManager::LoadAssets()
   std::vector<const char*> models = 
   { 
     "res/map/objHouse.obj",
+    "res/backpack/backpack.obj",
   };
 
   std::vector<std::future<void>> m_FutureVoid;
@@ -44,16 +45,15 @@ void AssetManager::LoadAssets()
 
   auto future = std::async(std::launch::async, [skybox]() { return Texture::CreateCubemap(skybox); });
   m_FutureTextures.push_back(std::move(future));
+  auto texture = m_FutureTextures.back().get();  
+  Renderer::UploadSkybox("night", texture);
 
   for(auto& model : models) m_FutureModels.push_back(std::async(std::launch::async, Model::CreateSTATIC, model));
   for (size_t i = 0; i < models.size(); ++i)
   {
-      std::shared_ptr<Model> model = m_FutureModels[i].get(); // wait and get the model
-      Renderer::UploadModel(models[i], model); // use the model name as the key
+      std::shared_ptr<Model> model = m_FutureModels[i].get(); 
+      Renderer::UploadModel(models[i], model); 
   }
-
-  auto texture = m_FutureTextures.back().get();  
-  Renderer::UploadSkybox("night", texture);
 }
 
 
