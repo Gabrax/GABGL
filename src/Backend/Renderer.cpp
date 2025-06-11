@@ -10,6 +10,7 @@
 #include "glm/fwd.hpp"
 #include <cstdint>
 #include <stb_image.h>
+#include <filesystem>
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
@@ -914,7 +915,7 @@ void Renderer::RenderFullscreenFramebufferTexture(uint32_t textureID)
   glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
-void Renderer::UploadModel(const std::string& name, const std::shared_ptr<Model>& model)
+void Renderer::UploadModel(const std::string& path, const std::shared_ptr<Model>& model)
 {
   for(auto& mesh : model->GetMeshes())
   {
@@ -974,7 +975,7 @@ void Renderer::UploadModel(const std::string& name, const std::shared_ptr<Model>
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     }
   }
-
+  std::string name = std::filesystem::path(path).stem().string();
   s_RendererData.models[name] = std::move(model);
 }
 

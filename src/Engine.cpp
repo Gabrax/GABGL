@@ -4,8 +4,8 @@
 #include "backend/Audio.h"
 #include "backend/LayerStack.h"
 #include "backend/Renderer.h"
-#include "game/Application.h"
-#include "game/AssetManager.h"
+#include "app/Application.h"
+#include "app/AssetManager.h"
 #include "backend/PhysX.h"
 
 Engine* Engine::s_Instance = nullptr;

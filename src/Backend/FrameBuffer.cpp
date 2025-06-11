@@ -1,5 +1,6 @@
 #include "FrameBuffer.h"
 #include "BackendLogger.h"
+#include "Renderer.h"
 
 #include <glad/glad.h>
 
@@ -74,7 +75,7 @@ namespace Utils {
 		return false;
 	}
 
-	static GLenum HazelFBTextureFormatToGL(FramebufferTextureFormat format)
+	static GLenum FBTextureFormatToGL(FramebufferTextureFormat format)
 	{
 		switch (format)
 		{
@@ -182,11 +183,21 @@ void Framebuffer::Bind()
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, m_RendererID);
 	glViewport(0, 0, m_Specification.Width, m_Specification.Height);
+  Renderer::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
+	Renderer::Clear();
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_CULL_FACE);
+  glCullFace(GL_FRONT);
+  glFrontFace(GL_CW);
 }
 
 void Framebuffer::Unbind()
 {
+  glDisable(GL_CULL_FACE);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  Renderer::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
+	Renderer::Clear();
+  glDisable(GL_DEPTH_TEST);
 }
 
 void Framebuffer::Resize(uint32_t width, uint32_t height)
@@ -219,7 +230,7 @@ void Framebuffer::ClearAttachment(uint32_t attachmentIndex, int value)
 
 	auto& spec = m_ColorAttachmentSpecifications[attachmentIndex];
 	glClearTexImage(m_ColorAttachments[attachmentIndex], 0,
-		Utils::HazelFBTextureFormatToGL(spec.TextureFormat), GL_INT, &value);
+		Utils::FBTextureFormatToGL(spec.TextureFormat), GL_INT, &value);
 }
 
 std::shared_ptr<Framebuffer> Framebuffer::Create(const FramebufferSpecification& spec)

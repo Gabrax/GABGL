@@ -12,10 +12,87 @@
 #include <meshoptimizer.h>
 
 #include <unordered_map>
+#include <map>
 
 #include "Texture.h"
 
 #define MAX_BONE_INFLUENCE 4
+
+struct KeyPosition {
+    glm::vec3 position;
+    float timeStamp;
+};
+
+struct KeyRotation {
+    glm::quat orientation;
+    float timeStamp;
+};
+
+struct KeyScale {
+    glm::vec3 scale;
+    float timeStamp;
+};
+
+struct Bone
+{
+  Bone(const std::string& name, int ID, const aiNodeAnim* channel);
+
+  void Update(float animationTime);
+
+  glm::mat4 GetInterpolatedTransform(float animationTime) const;
+
+  inline void SetTransform(const glm::mat4& transform) { m_LocalTransform = transform; }
+  inline glm::mat4 GetLocalTransform() const { return m_LocalTransform; }
+  inline std::string GetBoneName() const { return m_Name; }
+  inline int GetBoneID() const { return m_ID; }
+
+private:
+  float GetScaleFactor(float lastTimeStamp, float nextTimeStamp, float animationTime) const;
+  glm::mat4 InterpolatePosition(float animationTime) const;
+  glm::mat4 InterpolateRotation(float animationTime) const;
+  glm::mat4 InterpolateScaling(float animationTime) const;
+  int GetPositionIndex(float animationTime) const;
+  int GetRotationIndex(float animationTime) const;
+  int GetScaleIndex(float animationTime) const;
+
+  std::vector<KeyPosition> m_Positions;
+  std::vector<KeyRotation> m_Rotations;
+  std::vector<KeyScale> m_Scales;
+
+  int m_NumPositions;
+  int m_NumRotations;
+  int m_NumScalings;
+
+  glm::mat4 m_LocalTransform;
+  std::string m_Name;
+  int m_ID;
+};
+
+struct BoneInfo
+{
+  int id;
+  glm::mat4 offset;
+};
+
+struct AssimpNodeData
+{
+    glm::mat4 transformation;
+    std::string name;
+    int childrenCount;
+    std::vector<AssimpNodeData> children;
+};
+
+struct AnimationData {
+    std::string name;
+    float duration;
+    float ticksPerSecond;
+    std::vector<Bone> bones;  // Preprocessed bone data for the animation.
+    AssimpNodeData hierarchy; // Precomputed node hierarchy for the animation.
+};
+
+static glm::mat4 ConvertMatrixToGLMFormat(const aiMatrix4x4& from);
+static glm::vec3 GetGLMVec(const aiVector3D& vec); 
+static glm::quat GetGLMQuat(const aiQuaternion& pOrientation);
 
 struct Vertex
 {
@@ -36,14 +113,10 @@ struct Mesh
   std::vector<Vertex> m_Vertices;
   std::vector<GLuint> m_Indices;
   std::vector<std::shared_ptr<Texture>> m_Textures;
+
   GLuint VAO, VBO, EBO;
 };
 
-struct BoneInfo
-{
-  int id;
-  glm::mat4 offset;
-};
 
 struct Model
 {
@@ -58,6 +131,9 @@ private:
 
   std::unordered_map<std::string, std::shared_ptr<Texture>> textures_loaded; 
   std::vector<Mesh> meshes;
+  std::map<std::string, BoneInfo> boneInfoMap; 
+  int boneCounter = 0;
+
   std::string directory;
 
 private:
@@ -70,8 +146,8 @@ private:
   void loadMaterialTextures(aiMaterial* mat, aiTextureType type, const std::string& typeName, std::vector<std::shared_ptr<Texture>>& textures);
   void OptimizeMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m_Indices);
   void CreatePhysXStaticMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m_Indices);
-
-  glm::mat4 ConvertMatrixToGLMFormat(const aiMatrix4x4& from);
-	glm::vec3 GetGLMVec(const aiVector3D& vec); 
-	glm::quat GetGLMQuat(const aiQuaternion& pOrientation);
+  void ExtractBoneWeightForVertices(std::vector<Vertex>& vertices, aiMesh* mesh);
+  void SetDefaultBoneData(Vertex& vertex);
+  void SetBoneData(Vertex& vertex, int boneID, float weight);
 };
+

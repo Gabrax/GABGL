@@ -1,7 +1,31 @@
 #include "Model.h"
 #include "PhysX.h"
 #include "BackendLogger.h"
+#include "meshoptimizer.h"
 #include <filesystem>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/quaternion.hpp>
+
+
+glm::mat4 ConvertMatrixToGLMFormat(const aiMatrix4x4& from)
+{
+  glm::mat4 to;
+  //the a,b,c,d in assimp is the row ; the 1,2,3,4 is the column
+  to[0][0] = from.a1; to[1][0] = from.a2; to[2][0] = from.a3; to[3][0] = from.a4;
+  to[0][1] = from.b1; to[1][1] = from.b2; to[2][1] = from.b3; to[3][1] = from.b4;
+  to[0][2] = from.c1; to[1][2] = from.c2; to[2][2] = from.c3; to[3][2] = from.c4;
+  to[0][3] = from.d1; to[1][3] = from.d2; to[2][3] = from.d3; to[3][3] = from.d4;
+  return to;
+}
+
+glm::vec3 GetGLMVec(const aiVector3D& vec) 
+{ 
+  return glm::vec3(vec.x, vec.y, vec.z); 
+}
+glm::quat GetGLMQuat(const aiQuaternion& pOrientation)
+{
+  return glm::quat(pOrientation.w, pOrientation.x, pOrientation.y, pOrientation.z);
+}
 
 Model::Model(const char* path)
 {
@@ -117,29 +141,27 @@ void Model::loadMaterialTextures(aiMaterial* mat, aiTextureType type, const std:
 
 void Model::OptimizeMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m_Indices)
 {
-  meshopt_optimizeVertexCache(m_Indices.data(), m_Indices.data(), m_Indices.size(), m_Vertices.size());
+  std::vector<GLuint> remap(m_Indices.size());
 
-  meshopt_optimizeOverdraw(
-      m_Indices.data(), 
-      m_Indices.data(), 
-      m_Indices.size(), 
-      &m_Vertices[0].Position.x, 
-      m_Vertices.size(), 
-      sizeof(Vertex), 
-      1.05f // Overdraw threshold (1.0 = minimal overdraw)
-  );
+  size_t OptVertexCount = meshopt_generateVertexRemap(remap.data(),m_Indices.data(),m_Indices.size(),m_Vertices.data(),m_Vertices.size(),sizeof(Vertex));
 
-  std::vector<Vertex> optimizedVertices(m_Vertices.size());
-  meshopt_optimizeVertexFetch(
-      optimizedVertices.data(), 
-      m_Indices.data(), 
-      m_Indices.size(), 
-      m_Vertices.data(), 
-      m_Vertices.size(), 
-      sizeof(Vertex)
-  );
+  std::vector<Vertex> OptVertices;
+  std::vector<GLuint> OptIndices;
+  OptVertices.resize(OptVertexCount);
+  OptIndices.resize(m_Indices.size());
 
-  m_Vertices = std::move(optimizedVertices);
+  meshopt_remapIndexBuffer(OptIndices.data(),m_Indices.data(),m_Indices.size(),remap.data());
+  meshopt_remapVertexBuffer(OptVertices.data(),m_Vertices.data(),m_Vertices.size(),sizeof(Vertex),remap.data());
+  meshopt_optimizeVertexCache(OptIndices.data(), OptIndices.data(), m_Indices.size(), OptVertexCount);
+  meshopt_optimizeOverdraw(OptIndices.data(), OptIndices.data(), m_Indices.size(), &OptVertices[0].Position.x, OptVertexCount, sizeof(Vertex), 1.05f);  // Overdraw threshold (1.0 = minimal overdraw)
+  meshopt_optimizeVertexFetch(OptVertices.data(), OptIndices.data(), m_Indices.size(), OptVertices.data(), OptVertexCount, sizeof(Vertex));
+
+  std::vector<GLuint> SimplifiedIndices(OptIndices.size());
+  size_t OptIndexCount = meshopt_simplify(SimplifiedIndices.data(),OptIndices.data(),m_Indices.size(),&OptVertices[0].Position.x,OptVertexCount,sizeof(Vertex),(size_t)(m_Indices.size() * 0.1f),0.2f);
+  SimplifiedIndices.resize(OptIndexCount);
+
+  m_Indices = std::move(SimplifiedIndices);
+  m_Vertices = std::move(OptVertices);
 }
 
 void Model::CreatePhysXStaticMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m_Indices)
@@ -173,25 +195,53 @@ void Model::CreatePhysXStaticMesh(std::vector<Vertex>& m_Vertices, std::vector<G
   }
 }
 
-glm::mat4 Model::ConvertMatrixToGLMFormat(const aiMatrix4x4& from)
+void Model::ExtractBoneWeightForVertices(std::vector<Vertex>& vertices, aiMesh* mesh)
 {
-  glm::mat4 to;
-  //the a,b,c,d in assimp is the row ; the 1,2,3,4 is the column
-  to[0][0] = from.a1; to[1][0] = from.a2; to[2][0] = from.a3; to[3][0] = from.a4;
-  to[0][1] = from.b1; to[1][1] = from.b2; to[2][1] = from.b3; to[3][1] = from.b4;
-  to[0][2] = from.c1; to[1][2] = from.c2; to[2][2] = from.c3; to[3][2] = from.c4;
-  to[0][3] = from.d1; to[1][3] = from.d2; to[2][3] = from.d3; to[3][3] = from.d4;
-  return to;
+    for (unsigned int i = 0; i < mesh->mNumBones; ++i) {
+        std::string boneName = mesh->mBones[i]->mName.C_Str();
+        int boneID = -1;
+
+        if (boneInfoMap.find(boneName) == boneInfoMap.end()) {
+            boneID = boneCounter++;
+            boneInfoMap[boneName] = { boneID, ConvertMatrixToGLMFormat(mesh->mBones[i]->mOffsetMatrix) };
+        } else {
+            boneID = boneInfoMap[boneName].id;
+        }
+
+        for (unsigned int j = 0; j < mesh->mBones[i]->mNumWeights; ++j) {
+            int vertexID = mesh->mBones[i]->mWeights[j].mVertexId;
+            float weight = mesh->mBones[i]->mWeights[j].mWeight;
+
+            if (vertexID < vertices.size()) {
+                SetBoneData(vertices[vertexID], boneID, weight);
+            }
+        }
+    }
 }
 
-glm::vec3 Model::GetGLMVec(const aiVector3D& vec) 
-{ 
-  return glm::vec3(vec.x, vec.y, vec.z); 
-}
-glm::quat Model::GetGLMQuat(const aiQuaternion& pOrientation)
+// Set default bone data for a vertex
+void Model::SetDefaultBoneData(Vertex& vertex)
 {
-  return glm::quat(pOrientation.w, pOrientation.x, pOrientation.y, pOrientation.z);
+    for (int i = 0; i < MAX_BONE_INFLUENCE; ++i) {
+        vertex.m_BoneIDs[i] = -1;
+        vertex.m_Weights[i] = 0.0f;
+    }
 }
+
+// Set bone data for a vertex
+void Model::SetBoneData(Vertex& vertex, int boneID, float weight)
+{
+    if (weight <= 0.0f) return;
+
+    for (int i = 0; i < MAX_BONE_INFLUENCE; ++i) {
+        if (vertex.m_BoneIDs[i] < 0) {
+            vertex.m_BoneIDs[i] = boneID;
+            vertex.m_Weights[i] = weight;
+            return;
+        }
+    }
+}
+
 
 std::shared_ptr<Model> Model::CreateSTATIC(const char* path)
 {
@@ -201,6 +251,137 @@ std::shared_ptr<Model> Model::CreateSTATIC(const char* path)
 std::shared_ptr<Model> Model::CreateANIMATED(const char* path)
 {
 	return std::make_shared<Model>(path);
+}
+
+Bone::Bone(const std::string& name, int ID, const aiNodeAnim* channel) : m_Name(name), m_ID(ID), m_LocalTransform(1.0f)
+{
+  // Extract position keyframes
+  m_NumPositions = channel->mNumPositionKeys;
+  for (unsigned int i = 0; i < m_NumPositions; ++i) {
+      aiVector3D aiPosition = channel->mPositionKeys[i].mValue;
+      float timeStamp = static_cast<float>(channel->mPositionKeys[i].mTime);
+      KeyPosition data = { GetGLMVec(aiPosition), timeStamp };
+      m_Positions.emplace_back(data);
+  }
+
+  // Extract rotation keyframes
+  m_NumRotations = channel->mNumRotationKeys;
+  for (unsigned int i = 0; i < m_NumRotations; ++i) {
+      aiQuaternion aiOrientation = channel->mRotationKeys[i].mValue;
+      float timeStamp = static_cast<float>(channel->mRotationKeys[i].mTime);
+      KeyRotation data = { GetGLMQuat(aiOrientation), timeStamp };
+      m_Rotations.emplace_back(data);
+  }
+
+  // Extract scaling keyframes
+  m_NumScalings = channel->mNumScalingKeys;
+  for (unsigned int i = 0; i < m_NumScalings; ++i) {
+      aiVector3D aiScale = channel->mScalingKeys[i].mValue;
+      float timeStamp = static_cast<float>(channel->mScalingKeys[i].mTime);
+      KeyScale data = { GetGLMVec(aiScale), timeStamp };
+      m_Scales.emplace_back(data);
+  }
+}
+
+void Bone::Update(float animationTime)
+{
+    glm::mat4 translation = InterpolatePosition(animationTime);
+    glm::mat4 rotation = InterpolateRotation(animationTime);
+    glm::mat4 scale = InterpolateScaling(animationTime);
+    m_LocalTransform = translation * rotation * scale;
+}
+
+glm::mat4 Bone::GetInterpolatedTransform(float animationTime) const
+{
+    glm::mat4 translation = InterpolatePosition(animationTime);
+    glm::mat4 rotation = InterpolateRotation(animationTime);
+    glm::mat4 scale = InterpolateScaling(animationTime);
+    return translation * rotation * scale;
+}
+
+// Interpolation helper functions
+float Bone::GetScaleFactor(float lastTimeStamp, float nextTimeStamp, float animationTime) const
+{
+    float scaleFactor = (animationTime - lastTimeStamp) / (nextTimeStamp - lastTimeStamp);
+    return glm::clamp(scaleFactor, 0.0f, 1.0f); // Ensure it's in the valid range
+}
+
+glm::mat4 Bone::InterpolatePosition(float animationTime) const
+{
+    if (m_NumPositions == 1) {
+        return glm::translate(glm::mat4(1.0f), m_Positions[0].position);
+    }
+
+    int p0Index = GetPositionIndex(animationTime);
+    int p1Index = p0Index + 1;
+
+    float scaleFactor = GetScaleFactor(m_Positions[p0Index].timeStamp, m_Positions[p1Index].timeStamp, animationTime);
+    glm::vec3 finalPosition = glm::mix(m_Positions[p0Index].position, m_Positions[p1Index].position, scaleFactor);
+
+    return glm::translate(glm::mat4(1.0f), finalPosition);
+}
+
+glm::mat4 Bone::InterpolateRotation(float animationTime) const
+{
+    if (m_NumRotations == 1) {
+        return glm::toMat4(glm::normalize(m_Rotations[0].orientation));
+    }
+
+    int p0Index = GetRotationIndex(animationTime);
+    int p1Index = p0Index + 1;
+
+    float scaleFactor = GetScaleFactor(m_Rotations[p0Index].timeStamp, m_Rotations[p1Index].timeStamp, animationTime);
+    glm::quat finalRotation = glm::slerp(m_Rotations[p0Index].orientation, m_Rotations[p1Index].orientation, scaleFactor);
+
+    return glm::toMat4(glm::normalize(finalRotation));
+}
+
+glm::mat4 Bone::InterpolateScaling(float animationTime) const
+{
+    if (m_NumScalings == 1) {
+        return glm::scale(glm::mat4(1.0f), m_Scales[0].scale);
+    }
+
+    int p0Index = GetScaleIndex(animationTime);
+    int p1Index = p0Index + 1;
+
+    float scaleFactor = GetScaleFactor(m_Scales[p0Index].timeStamp, m_Scales[p1Index].timeStamp, animationTime);
+    glm::vec3 finalScale = glm::mix(m_Scales[p0Index].scale, m_Scales[p1Index].scale, scaleFactor);
+
+    return glm::scale(glm::mat4(1.0f), finalScale);
+}
+
+int Bone::GetPositionIndex(float animationTime) const
+{
+    for (int i = 0; i < m_NumPositions - 1; ++i) {
+        if (animationTime < m_Positions[i + 1].timeStamp) {
+            return i;
+        }
+    }
+    assert(false && "Invalid position index");
+    return -1;
+}
+
+int Bone::GetRotationIndex(float animationTime) const
+{
+    for (int i = 0; i < m_NumRotations - 1; ++i) {
+        if (animationTime < m_Rotations[i + 1].timeStamp) {
+            return i;
+        }
+    }
+    assert(false && "Invalid rotation index");
+    return -1;
+}
+
+int Bone::GetScaleIndex(float animationTime) const
+{
+    for (int i = 0; i < m_NumScalings - 1; ++i) {
+        if (animationTime < m_Scales[i + 1].timeStamp) {
+            return i;
+        }
+    }
+    assert(false && "Invalid scaling index");
+    return -1;
 }
 
 
