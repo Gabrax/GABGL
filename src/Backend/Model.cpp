@@ -27,35 +27,35 @@ glm::quat GetGLMQuat(const aiQuaternion& pOrientation)
   return glm::quat(pOrientation.w, pOrientation.x, pOrientation.y, pOrientation.z);
 }
 
-Model::Model(const char* path, bool isAnimated) : m_isAnimated(isAnimated)
+Model::Model(const char* path, float optimizerStrength, bool isAnimated) : m_OptimizerStrength(optimizerStrength), m_isAnimated(isAnimated)
 {
   Timer timer;
 
   Assimp::Importer importer;
-  scene = importer.ReadFile(
+  m_Scene = importer.ReadFile(
       path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
 
-  if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
+  if (!m_Scene || m_Scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !m_Scene->mRootNode)
   {
     GABGL_ERROR("[MODEL]: {0}", (std::string)importer.GetErrorString());
     return;
   }
   std::string dirStr = std::filesystem::path(path).parent_path().string();
-  directory = dirStr.c_str();  
-  processNode(scene->mRootNode, scene);
+  m_Directory = dirStr.c_str();  
+  processNode(m_Scene->mRootNode, m_Scene);
 
   if(isAnimated)
   {
-    for (unsigned int i = 0; i < scene->mNumAnimations; ++i)
+    for (unsigned int i = 0; i < m_Scene->mNumAnimations; ++i)
     {
-        aiAnimation* animation = scene->mAnimations[i];
+        aiAnimation* animation = m_Scene->mAnimations[i];
 
         AnimationData animData;
         animData.name = animation->mName.C_Str();
         animData.duration = animation->mDuration;
         animData.ticksPerSecond = animation->mTicksPerSecond;
 
-        ReadHierarchyData(animData.hierarchy, scene->mRootNode);
+        ReadHierarchyData(animData.hierarchy, m_Scene->mRootNode);
         ReadMissingBones(animation);
 
         animData.bones = m_Bones;
@@ -80,7 +80,7 @@ void Model::processNode(aiNode* node, const aiScene* scene)
 {
     for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
         aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-        meshes.emplace_back(processMesh(mesh, scene));
+        m_Meshes.emplace_back(processMesh(mesh, scene));
     }
     for (unsigned int i = 0; i < node->mNumChildren; ++i) {
         processNode(node->mChildren[i], scene);
@@ -126,9 +126,9 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
       loadMaterialTextures(material, aiTextureType_AMBIENT, "texture_height", textures);
   }
 
+  if(m_isAnimated) ExtractBoneWeightForVertices(vertices, mesh);
   OptimizeMesh(vertices, indices);
   CreatePhysXStaticMesh(vertices, indices);
-  if(m_isAnimated) ExtractBoneWeightForVertices(vertices, mesh);
 
   return Mesh(vertices, indices, textures);
 }
@@ -141,28 +141,28 @@ void Model::loadMaterialTextures(aiMaterial* mat, aiTextureType type, const std:
       std::string texturePath = str.C_Str();
 
       // Check if texture is already loaded
-      if (textures_loaded.find(texturePath) != textures_loaded.end()) {
-          textures.emplace_back(textures_loaded[texturePath]);
+      if (m_TexturesLoaded.find(texturePath) != m_TexturesLoaded.end()) {
+          textures.emplace_back(m_TexturesLoaded[texturePath]);
           continue;
       }
 
       if (texturePath[0] == '*') {
-        const aiTexture* aitexture = scene->GetEmbeddedTexture(str.C_Str());
+        const aiTexture* aitexture = m_Scene->GetEmbeddedTexture(str.C_Str());
         if (aitexture) {
             std::shared_ptr<Texture> texture = Texture::CreateRAWEMBEDDED(aitexture,texturePath);
             texture->SetType(typeName);
 
             textures.emplace_back(texture);
-            textures_loaded[texturePath] = texture;
+            m_TexturesLoaded[texturePath] = texture;
         }
       }
       else
       {
-        std::shared_ptr<Texture> texture = Texture::CreateRAW(texturePath, directory);
+        std::shared_ptr<Texture> texture = Texture::CreateRAW(texturePath, m_Directory);
         texture->SetType(typeName);
 
         textures.emplace_back(texture);
-        textures_loaded[texturePath] = texture;
+        m_TexturesLoaded[texturePath] = texture;
       }
   }
 }
@@ -185,7 +185,7 @@ void Model::OptimizeMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m
   meshopt_optimizeVertexFetch(OptVertices.data(), OptIndices.data(), m_Indices.size(), OptVertices.data(), OptVertexCount, sizeof(Vertex));
 
   std::vector<GLuint> SimplifiedIndices(OptIndices.size());
-  size_t OptIndexCount = meshopt_simplify(SimplifiedIndices.data(),OptIndices.data(),m_Indices.size(),&OptVertices[0].Position.x,OptVertexCount,sizeof(Vertex),(size_t)(m_Indices.size() * 0.5f),0.2f);
+  size_t OptIndexCount = meshopt_simplify(SimplifiedIndices.data(),OptIndices.data(),m_Indices.size(),&OptVertices[0].Position.x,OptVertexCount,sizeof(Vertex),(size_t)(m_Indices.size() * m_OptimizerStrength),0.2f);
   SimplifiedIndices.resize(OptIndexCount);
 
   m_Indices = std::move(SimplifiedIndices);
@@ -229,11 +229,11 @@ void Model::ExtractBoneWeightForVertices(std::vector<Vertex>& vertices, aiMesh* 
         std::string boneName = mesh->mBones[i]->mName.C_Str();
         int boneID = -1;
 
-        if (boneInfoMap.find(boneName) == boneInfoMap.end()) {
-            boneID = boneCounter++;
-            boneInfoMap[boneName] = { boneID, ConvertMatrixToGLMFormat(mesh->mBones[i]->mOffsetMatrix) };
+        if (m_BoneInfoMap.find(boneName) == m_BoneInfoMap.end()) {
+            boneID = m_BoneCounter++;
+            m_BoneInfoMap[boneName] = { boneID, ConvertMatrixToGLMFormat(mesh->mBones[i]->mOffsetMatrix) };
         } else {
-            boneID = boneInfoMap[boneName].id;
+            boneID = m_BoneInfoMap[boneName].id;
         }
 
         for (unsigned int j = 0; j < mesh->mBones[i]->mNumWeights; ++j) {
@@ -328,9 +328,8 @@ void Model::CalculateBoneTransform(const AssimpNodeData* node, const glm::mat4& 
     glm::mat4 globalTransformation = parentTransform * nodeTransform;
 
     // Look up the bone in the boneInfoMap to get the offset matrix
-    const auto& boneInfoMap = GetBoneIDMap();
-    auto it = boneInfoMap.find(nodeName);
-    if (it != boneInfoMap.end())
+    auto it = m_BoneInfoMap.find(nodeName);
+    if (it != m_BoneInfoMap.end())
     {
         int index = it->second.id;
         glm::mat4 offset = it->second.offset;
@@ -357,8 +356,7 @@ Bone* Model::FindBone(const std::string& name)
 
 void Model::ResizeFinalBoneMatrices()
 {
-  const auto& boneInfoMap = GetBoneIDMap();
-  m_FinalBoneMatrices.resize(boneInfoMap.size(), glm::mat4(1.0f));
+  m_FinalBoneMatrices.resize(m_BoneInfoMap.size(), glm::mat4(1.0f));
 }
 
 void Model::ReadHierarchyData(AssimpNodeData& dest, const aiNode* src)
@@ -390,39 +388,34 @@ void Model::ReadHierarchyData(AssimpNodeData& dest, const aiNode* src)
 void Model::ReadMissingBones(const aiAnimation* animation)
 {
     assert(animation);  
-    assert(&model);
-    auto& _boneInfoMap = GetBoneInfoMap();
-    int& _boneCount = GetBoneCount();
 
     m_Bones.clear();
-    _boneCount = 0;
+    m_BoneCounter = 0;
 
     for (int i = 0; i < animation->mNumChannels; i++)
     {
         auto channel = animation->mChannels[i];
         std::string boneName = channel->mNodeName.data;
 
-        if (_boneInfoMap.find(boneName) == _boneInfoMap.end())
+        if (m_BoneInfoMap.find(boneName) == m_BoneInfoMap.end())
         {
-            boneInfoMap[boneName].id = _boneCount;
-            _boneCount++;
+            m_BoneInfoMap[boneName].id = m_BoneCounter;
+            m_BoneCounter++;
         }
 
-        m_Bones.emplace_back(Bone(channel->mNodeName.data, boneInfoMap[boneName].id, channel));
+        m_Bones.emplace_back(Bone(channel->mNodeName.data, m_BoneInfoMap[boneName].id, channel));
     }
-
-    m_BoneInfoMap = _boneInfoMap;
 }
 
 
-std::shared_ptr<Model> Model::CreateSTATIC(const char* path)
+std::shared_ptr<Model> Model::CreateSTATIC(const char* path, float optimizerStrength)
 {
-	return std::make_shared<Model>(path,false);
+	return std::make_shared<Model>(path,optimizerStrength,false);
 }
 
-std::shared_ptr<Model> Model::CreateANIMATED(const char* path)
+std::shared_ptr<Model> Model::CreateANIMATED(const char* path, float optimizerStrength)
 {
-	return std::make_shared<Model>(path,true);
+	return std::make_shared<Model>(path,optimizerStrength,true);
 }
 
 Bone::Bone(const std::string& name, int ID, const aiNodeAnim* channel) : m_Name(name), m_ID(ID), m_LocalTransform(1.0f)

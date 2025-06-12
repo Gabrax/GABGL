@@ -121,19 +121,18 @@ struct Mesh
 
 struct Model
 {
-  Model(const char* path, bool isAnimated);
+  Model(const char* path, float optimizerStrength, bool isAnimated);
 
-  static std::shared_ptr<Model> CreateSTATIC(const char* path);
-  static std::shared_ptr<Model> CreateANIMATED(const char* path);
+  static std::shared_ptr<Model> CreateSTATIC(const char* path, float optimizerStrength);
+  static std::shared_ptr<Model> CreateANIMATED(const char* path, float optimizerStrength);
 
   void UpdateAnimation(DeltaTime& dt);
   void SetAnimationbyIndex(int animationIndex);
   void SetAnimationByName(const std::string& animationName);
 
-  inline std::vector<Mesh>& GetMeshes() { return meshes; }
-  inline std::map<std::string,BoneInfo>& GetBoneIDMap() { return m_BoneInfoMap; }
-  inline const std::map<std::string, BoneInfo>& GetBoneInfoMap() { return boneInfoMap; }
-  inline int& GetBoneCount() { return boneCounter; }
+  inline std::vector<Mesh>& GetMeshes() { return m_Meshes; }
+  inline std::map<std::string,BoneInfo>& GetBoneInfoMap() { return m_BoneInfoMap; }
+  inline int& GetBoneCount() { return m_BoneCounter; }
   inline float GetTicksPerSecond() { return m_TicksPerSecond; }
   inline float GetDuration() { return m_Duration; }
   inline const AssimpNodeData& GetRootNode() { return m_RootNode; }
@@ -142,19 +141,17 @@ struct Model
 
 private:
 
-  std::unordered_map<std::string, std::shared_ptr<Texture>> textures_loaded; 
-  std::vector<Mesh> meshes;
-  std::map<std::string, BoneInfo> boneInfoMap; 
-  int boneCounter = 0;
+  std::unordered_map<std::string, std::shared_ptr<Texture>> m_TexturesLoaded; 
+  std::vector<Mesh> m_Meshes;
   std::vector<Bone> m_Bones;
   std::vector<const aiAnimation*> m_Animations;
   std::vector<AnimationData> m_ProcessedAnimations;
-  AssimpNodeData m_RootNode;
   std::map<std::string, BoneInfo> m_BoneInfoMap;
   std::vector<glm::mat4> m_FinalBoneMatrices;
 
-  std::string directory;
-
+  AssimpNodeData m_RootNode;
+  int m_BoneCounter = 0;
+  std::string m_Directory;
   float m_BlendFactor = 0.0f; // 0 -> 1 
   bool m_IsBlending = false;
   int m_NextAnimationIndex = -1;
@@ -164,8 +161,9 @@ private:
   float m_CurrentTime = 0.0f;
   float m_DeltaTime = 0.0f;
 
+  float m_OptimizerStrength;
   bool m_isAnimated;
-  const aiScene* scene;
+  const aiScene* m_Scene;
 
 private:
 
