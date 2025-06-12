@@ -48,6 +48,8 @@ Texture::Texture(const TextureSpecification& specification)
 
 Texture::Texture(const std::string& path, bool isGL) : m_Path(path)
 {
+  Timer timer;
+
   int width, height, channels;
   stbi_set_flip_vertically_on_load(1);
   stbi_uc* data = stbi_load(path.c_str(), &width, &height, &channels, 0);
@@ -92,6 +94,7 @@ Texture::Texture(const std::string& path, bool isGL) : m_Path(path)
       }
 
       stbi_image_free(data);
+      GABGL_WARN("Texture loading took {0} ms", timer.ElapsedMillis());
   }
   else
   {
@@ -101,6 +104,8 @@ Texture::Texture(const std::string& path, bool isGL) : m_Path(path)
 
 Texture::Texture(const std::string& path, const std::string& directory, bool isGL) : m_Path(path)
 {
+  Timer timer;
+
   std::string filename = directory + '/' + path;
   int width, height, channels;
   stbi_set_flip_vertically_on_load(true);
@@ -153,15 +158,88 @@ Texture::Texture(const std::string& path, const std::string& directory, bool isG
 
       stbi_image_free(data);
       stbi_set_flip_vertically_on_load(false);
+      GABGL_WARN("Texture loading took {0} ms", timer.ElapsedMillis());
   }
   else
   {
     GABGL_ERROR("COUDLNT LOAD TEXTURE!");
   }
+
+}
+
+Texture::Texture(const aiTexture* paiTexture, const std::string& path, bool isGL) : paiTexture(paiTexture), m_Path(path)
+{
+  if (paiTexture->mHeight == 0)
+  {
+      int width, height, channels;
+      unsigned char* data = stbi_load_from_memory(reinterpret_cast<const unsigned char*>(paiTexture->pcData),
+                                                  paiTexture->mWidth, &width, &height, &channels, 0);
+      if (data)
+      {
+          m_RawData = new uint8_t[width * height * channels];
+          memcpy(m_RawData, data, width * height * channels);
+          m_IsLoaded = true;
+
+          m_Width = width;
+          m_Height = height;
+
+          GLenum internalFormat = 0, dataFormat = 0;
+          if (channels == 4)
+          {
+              internalFormat = GL_RGBA8;
+              dataFormat = GL_RGBA;
+          }
+          else if (channels == 3)
+          {
+              internalFormat = GL_RGB8;
+              dataFormat = GL_RGB;
+          }
+          else if (channels == 1)
+          {
+              internalFormat = GL_R8;
+              dataFormat = GL_RED;
+          }
+
+
+          m_InternalFormat = internalFormat;
+          m_DataFormat = dataFormat;
+
+          if(isGL)
+          {
+            glTexImage2D(GL_TEXTURE_2D, 0, dataFormat, width, height, 0, dataFormat, GL_UNSIGNED_BYTE, data);
+            glGenerateMipmap(GL_TEXTURE_2D);
+          }
+          stbi_image_free(data);
+      }
+      else
+      {
+          GABGL_ERROR("Failed to load compressed embedded texture!");
+      }
+  }
+  else
+  {
+      m_IsEmbeddedUnCompressed = true;
+      if(isGL)
+      {
+        printf("Loading uncompressed embedded texture\n");
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, paiTexture->mWidth, paiTexture->mHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, paiTexture->pcData);
+        glGenerateMipmap(GL_TEXTURE_2D);
+      }
+  }
+
+  if(isGL)
+  {
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  }
 }
 
 Texture::Texture(const std::vector<std::string>& faces)
 {
+  Timer timer;
+
   GABGL_ASSERT(faces.size() == 6, "Cubemap must have exactly 6 faces!");
 
   stbi_set_flip_vertically_on_load(false); 
@@ -191,7 +269,8 @@ Texture::Texture(const std::vector<std::string>& faces)
       pixels[i] = data;
   }
 
-  stbi_set_flip_vertically_on_load(true); 
+  stbi_set_flip_vertically_on_load(true);
+  GABGL_WARN("Texture loading took {0} ms", timer.ElapsedMillis());
 }
 
 Texture::~Texture()
@@ -229,12 +308,12 @@ std::shared_ptr<Texture> Texture::WrapExisting(uint32_t rendererID)
   return texture;
 }
 
-std::shared_ptr<Texture> Texture::CreateGL(const TextureSpecification& specification)
+std::shared_ptr<Texture> Texture::Create(const TextureSpecification& specification)
 {
 	return std::make_shared<Texture>(specification);
 }
 
-std::shared_ptr<Texture> Texture::CreateGL(const std::string& path)
+std::shared_ptr<Texture> Texture::Create(const std::string& path)
 {
 	return std::make_shared<Texture>(path,true);
 }
@@ -249,7 +328,17 @@ std::shared_ptr<Texture> Texture::CreateRAW(const std::string& filename, const s
 	return std::make_shared<Texture>(filename,directory,false);
 }
 
-std::shared_ptr<Texture> Texture::CreateCubemap(const std::vector<std::string>& faces)
+std::shared_ptr<Texture> Texture::CreateRAWEMBEDDED(const aiTexture* paiTexture, const std::string& path)
+{
+	return std::make_shared<Texture>(paiTexture,path,false);
+}
+
+std::shared_ptr<Texture> Texture::CreateEMBEDDED(const aiTexture* paiTexture, const std::string& path)
+{
+	return std::make_shared<Texture>(paiTexture,path,true);
+}
+
+std::shared_ptr<Texture> Texture::CreateRAWCUBEMAP(const std::vector<std::string>& faces)
 {
 	return std::make_shared<Texture>(faces);
 }

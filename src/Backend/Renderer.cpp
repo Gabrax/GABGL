@@ -314,7 +314,7 @@ void Renderer::Init()
 	s_RendererData.LineVertexArray->AddVertexBuffer(s_RendererData.LineVertexBuffer);
 	s_RendererData.LineVertexBufferBase = new LineVertex[s_RendererData.MaxVertices];
 
-	s_RendererData.WhiteTexture = Texture::CreateGL(TextureSpecification());
+	s_RendererData.WhiteTexture = Texture::Create(TextureSpecification());
 	uint32_t whiteTextureData = 0xffffffff;
 	s_RendererData.WhiteTexture->SetData(&whiteTextureData, sizeof(uint32_t));
 
@@ -917,6 +917,8 @@ void Renderer::RenderFullscreenFramebufferTexture(uint32_t textureID)
 
 void Renderer::UploadModel(const std::string& path, const std::shared_ptr<Model>& model)
 {
+  Timer timer;
+
   for(auto& mesh : model->GetMeshes())
   {
     glGenVertexArrays(1, &mesh.VAO);
@@ -965,8 +967,16 @@ void Renderer::UploadModel(const std::string& path, const std::shared_ptr<Model>
       glGenTextures(1, &id);
       texture->SetRendererID(id);
 
-      glBindTexture(GL_TEXTURE_2D,id);
-      glTexImage2D(GL_TEXTURE_2D, 0, texture->GetDataFormat(), texture->GetWidth(), texture->GetHeight(), 0, texture->GetDataFormat(), GL_UNSIGNED_BYTE, texture->GetRawData());
+      if(texture->IsUnCompressed())
+      {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture->GetEmbeddedTexture()->mWidth, texture->GetEmbeddedTexture()->mHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture->GetEmbeddedTexture()->pcData);
+        glGenerateMipmap(GL_TEXTURE_2D);
+      }
+      else
+      {
+        glBindTexture(GL_TEXTURE_2D,id);
+        glTexImage2D(GL_TEXTURE_2D, 0, texture->GetDataFormat(), texture->GetWidth(), texture->GetHeight(), 0, texture->GetDataFormat(), GL_UNSIGNED_BYTE, texture->GetRawData());
+      }
 
       glGenerateMipmap(GL_TEXTURE_2D);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -977,23 +987,25 @@ void Renderer::UploadModel(const std::string& path, const std::shared_ptr<Model>
   }
   std::string name = std::filesystem::path(path).stem().string();
   s_RendererData.models[name] = std::move(model);
+  GABGL_WARN("Model: {0} uploading took {1} ms", name, timer.ElapsedMillis());
 }
 
-void Renderer::DrawModel(const std::string& name, const glm::vec3& position, const glm::vec3& size, float rotation)
+void Renderer::DrawModel(DeltaTime& dt,const std::string& name, const glm::vec3& position, const glm::vec3& size, float rotation)
 {
 	glm::mat4 transform = glm::translate(glm::mat4(1.0f), position)
 		* glm::scale(glm::mat4(1.0f), { size.x, size.y, size.z });
 
-	DrawModel(name,transform);
+	DrawModel(dt,name,transform);
 }
 
-void Renderer::DrawModel(const std::string& name, const glm::mat4& transform, int entityID)
+void Renderer::DrawModel(DeltaTime& dt, const std::string& name, const glm::mat4& transform, int entityID)
 {
   auto it = s_RendererData.models.find(name);
   if (it != s_RendererData.models.end())
   {
     s_RendererData._shaders3D.ModelShader->Use();
     s_RendererData._shaders3D.ModelShader->setMat4("model", transform);
+    s_RendererData._shaders3D.ModelShader->setBool("isAnimated", it->second->IsAnimated());
     for (auto& mesh : it->second->GetMeshes())
     {
 
@@ -1018,16 +1030,28 @@ void Renderer::DrawModel(const std::string& name, const glm::mat4& transform, in
         glBindVertexArray(0);
         glActiveTexture(GL_TEXTURE0);
     }
+
+    if(it->second->IsAnimated())
+    {
+      auto& transforms = it->second->GetFinalBoneMatrices();
+      for (size_t i = 0; i < transforms.size(); ++i) {
+          s_RendererData._shaders3D.ModelShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+      }
+
+      it->second->UpdateAnimation(dt);
+    } 
   }
   else
   {
-      GABGL_ERROR("Model not found: " + name);
+      GABGL_ERROR("Model not found: {0}", name);
       return;
   }
 }
 
 void Renderer::UploadSkybox(const std::string& name, const std::shared_ptr<Texture>& cubemap)
 {
+  Timer timer;
+
   auto channels = cubemap->GetChannels();
   auto width = cubemap->GetWidth();
   auto height = cubemap->GetHeight();
@@ -1071,6 +1095,7 @@ void Renderer::UploadSkybox(const std::string& name, const std::shared_ptr<Textu
   glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 
   s_RendererData.skyboxes[name] = std::move(cubemap);
+  GABGL_WARN("Skybox uploading took {0} ms", timer.ElapsedMillis());
 }
 
 void Renderer::DrawSkybox(const std::string& name)
@@ -1331,6 +1356,8 @@ void Renderer::Draw2DText(const std::string& text, const glm::vec2& position, fl
 
 void Renderer::LoadFont(const std::string& path)
 {
+  Timer timer;
+
   FT_Face face;
   if (FT_New_Face(s_RendererData.ft, path.c_str(), 0, &face)) GABGL_ERROR("Failed to load font");
   else
@@ -1368,7 +1395,7 @@ void Renderer::LoadFont(const std::string& path)
     FT_Done_Face(face);
     FT_Done_FreeType(s_RendererData.ft);
 
-    GABGL_WARN("FONT LOADED");
+    GABGL_WARN("Font uploading took {0} ms", timer.ElapsedMillis());
   }
 }
 

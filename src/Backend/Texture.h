@@ -5,6 +5,7 @@
 #include <glad/glad.h>
 #include <vector>
 #include <array>
+#include <assimp/scene.h>
 
 enum class ImageFormat
 {
@@ -29,6 +30,7 @@ struct Texture
 	Texture(const TextureSpecification& specification);
   Texture(const std::string& path, bool isGL);
   Texture(const std::string& filename, const std::string& directory, bool isGL);
+  Texture(const aiTexture* paiTexture, const std::string& path, bool isGL);
   Texture(const std::vector<std::string>& faces);
 	~Texture();
 
@@ -45,6 +47,8 @@ struct Texture
   inline const GLenum GetInternalFormat() const { return m_InternalFormat; }
   inline void SetType(const std::string& type) { m_Type = type; }
   inline std::string& GetType() { return m_Type; }
+  inline bool IsUnCompressed() { return m_IsEmbeddedUnCompressed; }
+  inline const aiTexture* GetEmbeddedTexture() { return paiTexture; }
 	void SetData(void* data, uint32_t size);
 	void Bind(uint32_t slot = 0) const;
 	inline bool IsLoaded() const { return m_IsLoaded; }
@@ -54,12 +58,15 @@ struct Texture
 		return m_RendererID == other.GetRendererID();
 	}
 
-	static std::shared_ptr<Texture> CreateGL(const TextureSpecification& specification);
-	static std::shared_ptr<Texture> CreateGL(const std::string& path);
+	static std::shared_ptr<Texture> Create(const TextureSpecification& specification);
+	static std::shared_ptr<Texture> Create(const std::string& path);
 	static std::shared_ptr<Texture> CreateRAW(const std::string& path);
   static std::shared_ptr<Texture> CreateRAW(const std::string& path, const std::string& directory);
+  static std::shared_ptr<Texture> CreateRAWEMBEDDED(const aiTexture* paiTexture, const std::string& directory);
+  static std::shared_ptr<Texture> CreateEMBEDDED(const aiTexture* paiTexture, const std::string& directory);
+  static std::shared_ptr<Texture> CreateRAWCUBEMAP(const std::vector<std::string>& faces);
+  static std::shared_ptr<Texture> CreateCUBEMAP(const std::vector<std::string>& faces);
   static std::shared_ptr<Texture> WrapExisting(uint32_t rendererID);
-  static std::shared_ptr<Texture> CreateCubemap(const std::vector<std::string>& faces);
 
   inline std::array<unsigned char*, 6> GetPixels() { return pixels; }
   inline int32_t GetChannels() { return channels; }
@@ -70,10 +77,13 @@ private:
   std::array<unsigned char*, 6> pixels;
   int32_t channels;
 
+  const aiTexture* paiTexture;
+
 	std::string m_Path;
 	std::string m_Directory;
   std::string m_Type;
 	bool m_IsLoaded = false;
+	bool m_IsEmbeddedUnCompressed = false;
   bool m_OwnsTexture = true;
 	uint32_t m_Width, m_Height;
 	uint32_t m_RendererID;

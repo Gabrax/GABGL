@@ -27,23 +27,53 @@ glm::quat GetGLMQuat(const aiQuaternion& pOrientation)
   return glm::quat(pOrientation.w, pOrientation.x, pOrientation.y, pOrientation.z);
 }
 
-Model::Model(const char* path)
+Model::Model(const char* path, bool isAnimated) : m_isAnimated(isAnimated)
 {
+  Timer timer;
+
   Assimp::Importer importer;
-  const aiScene* scene = importer.ReadFile(
-      path, aiProcess_Triangulate | aiProcess_GenSmoothNormals |
-            aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
+  scene = importer.ReadFile(
+      path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
 
   if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
   {
-    GABGL_ERROR("ERROR::ASSIMP:: " + (std::string)importer.GetErrorString());
+    GABGL_ERROR("[MODEL]: {0}", (std::string)importer.GetErrorString());
     return;
   }
   std::string dirStr = std::filesystem::path(path).parent_path().string();
   directory = dirStr.c_str();  
   processNode(scene->mRootNode, scene);
 
-  GABGL_WARN("MODEL LOADED");
+  if(isAnimated)
+  {
+    for (unsigned int i = 0; i < scene->mNumAnimations; ++i)
+    {
+        aiAnimation* animation = scene->mAnimations[i];
+
+        AnimationData animData;
+        animData.name = animation->mName.C_Str();
+        animData.duration = animation->mDuration;
+        animData.ticksPerSecond = animation->mTicksPerSecond;
+
+        ReadHierarchyData(animData.hierarchy, scene->mRootNode);
+        ReadMissingBones(animation);
+
+        animData.bones = m_Bones;
+
+        GABGL_INFO("Animation at index: " + std::to_string(i) + " " + animData.name);
+
+        m_ProcessedAnimations.emplace_back(animData);
+    }
+
+    assert(!m_ProcessedAnimations.empty());
+    GABGL_ASSERT(!m_ProcessedAnimations.empty(),"[MODEL]: Model doesnt contain animations");
+
+    SetAnimationByName("IDLE");
+
+    ResizeFinalBoneMatrices();
+  }
+
+  GABGL_WARN("Model loading took {0} ms", timer.ElapsedMillis());
 }
 
 void Model::processNode(aiNode* node, const aiScene* scene)
@@ -59,23 +89,12 @@ void Model::processNode(aiNode* node, const aiScene* scene)
 
 Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
 {
-    std::vector<Vertex> vertices = processVertices(mesh);
-    std::vector<GLuint> indices = processIndices(mesh);
-    std::vector<std::shared_ptr<Texture>> textures = processTextures(mesh, scene);
-
-    OptimizeMesh(vertices, indices);
-    CreatePhysXStaticMesh(vertices, indices);
-
-    return Mesh(vertices, indices, textures);
-}
-
-std::vector<Vertex> Model::processVertices(aiMesh* mesh)
-{
   std::vector<Vertex> vertices;
   vertices.reserve(mesh->mNumVertices);
 
   for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
       Vertex vertex;
+      if(m_isAnimated) SetDefaultBoneData(vertex);
       vertex.Position = {mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z};
       vertex.Normal = mesh->HasNormals()
                           ? glm::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z)
@@ -89,32 +108,29 @@ std::vector<Vertex> Model::processVertices(aiMesh* mesh)
       }
       vertices.emplace_back(std::move(vertex));
   }
-  return vertices;
-}
 
-std::vector<GLuint> Model::processIndices(aiMesh* mesh)
-{
   std::vector<GLuint> indices;
   for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {
       const aiFace& face = mesh->mFaces[i];
       indices.insert(indices.end(), face.mIndices, face.mIndices + face.mNumIndices);
   }
-  return indices;
-}
 
-std::vector<std::shared_ptr<Texture>> Model::processTextures(aiMesh* mesh, const aiScene* scene)
-{
-    std::vector<std::shared_ptr<Texture>> textures;
-    if (mesh->mMaterialIndex >= 0) {
-        aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+  std::vector<std::shared_ptr<Texture>> textures;
+  if (mesh->mMaterialIndex >= 0) {
+      aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
 
-        // Load textures of each type
-        loadMaterialTextures(material, aiTextureType_DIFFUSE, "texture_diffuse", textures);
-        loadMaterialTextures(material, aiTextureType_SPECULAR, "texture_specular", textures);
-        loadMaterialTextures(material, aiTextureType_HEIGHT, "texture_normal", textures);
-        loadMaterialTextures(material, aiTextureType_AMBIENT, "texture_height", textures);
-    }
-    return textures;
+      // Load textures of each type
+      loadMaterialTextures(material, aiTextureType_DIFFUSE, "texture_diffuse", textures);
+      loadMaterialTextures(material, aiTextureType_SPECULAR, "texture_specular", textures);
+      loadMaterialTextures(material, aiTextureType_HEIGHT, "texture_normal", textures);
+      loadMaterialTextures(material, aiTextureType_AMBIENT, "texture_height", textures);
+  }
+
+  OptimizeMesh(vertices, indices);
+  CreatePhysXStaticMesh(vertices, indices);
+  if(m_isAnimated) ExtractBoneWeightForVertices(vertices, mesh);
+
+  return Mesh(vertices, indices, textures);
 }
 
 void Model::loadMaterialTextures(aiMaterial* mat, aiTextureType type, const std::string& typeName, std::vector<std::shared_ptr<Texture>>& textures)
@@ -130,12 +146,24 @@ void Model::loadMaterialTextures(aiMaterial* mat, aiTextureType type, const std:
           continue;
       }
 
-      // Load texture
-      std::shared_ptr<Texture> texture = Texture::CreateRAW(texturePath, directory);
-      texture->SetType(typeName);
+      if (texturePath[0] == '*') {
+        const aiTexture* aitexture = scene->GetEmbeddedTexture(str.C_Str());
+        if (aitexture) {
+            std::shared_ptr<Texture> texture = Texture::CreateRAWEMBEDDED(aitexture,texturePath);
+            texture->SetType(typeName);
 
-      textures.emplace_back(texture);
-      textures_loaded[texturePath] = texture;
+            textures.emplace_back(texture);
+            textures_loaded[texturePath] = texture;
+        }
+      }
+      else
+      {
+        std::shared_ptr<Texture> texture = Texture::CreateRAW(texturePath, directory);
+        texture->SetType(typeName);
+
+        textures.emplace_back(texture);
+        textures_loaded[texturePath] = texture;
+      }
   }
 }
 
@@ -157,7 +185,7 @@ void Model::OptimizeMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m
   meshopt_optimizeVertexFetch(OptVertices.data(), OptIndices.data(), m_Indices.size(), OptVertices.data(), OptVertexCount, sizeof(Vertex));
 
   std::vector<GLuint> SimplifiedIndices(OptIndices.size());
-  size_t OptIndexCount = meshopt_simplify(SimplifiedIndices.data(),OptIndices.data(),m_Indices.size(),&OptVertices[0].Position.x,OptVertexCount,sizeof(Vertex),(size_t)(m_Indices.size() * 0.1f),0.2f);
+  size_t OptIndexCount = meshopt_simplify(SimplifiedIndices.data(),OptIndices.data(),m_Indices.size(),&OptVertices[0].Position.x,OptVertexCount,sizeof(Vertex),(size_t)(m_Indices.size() * 0.5f),0.2f);
   SimplifiedIndices.resize(OptIndexCount);
 
   m_Indices = std::move(SimplifiedIndices);
@@ -242,15 +270,159 @@ void Model::SetBoneData(Vertex& vertex, int boneID, float weight)
     }
 }
 
+void Model::UpdateAnimation(DeltaTime& dt)
+{
+    m_DeltaTime = dt;
+    m_CurrentTime += GetTicksPerSecond() * dt;
+    m_CurrentTime = fmod(m_CurrentTime, GetDuration());
+    CalculateBoneTransform(&GetRootNode(), glm::mat4(1.0f));
+}
+
+void Model::SetAnimationbyIndex(int animationIndex)
+{
+    assert(animationIndex >= 0 && animationIndex < m_ProcessedAnimations.size());
+    
+    const AnimationData& animData = m_ProcessedAnimations[animationIndex];
+    const AnimationData& animData2 = m_ProcessedAnimations[0];
+
+    m_Duration = animData.duration;
+    m_TicksPerSecond = animData.ticksPerSecond;
+
+    m_RootNode = animData.hierarchy;
+    m_Bones = animData.bones;
+
+
+    ResizeFinalBoneMatrices();
+}
+
+void Model::SetAnimationByName(const std::string& animationName)
+{
+    auto it = std::find_if(m_ProcessedAnimations.begin(), m_ProcessedAnimations.end(),
+        [&animationName](const AnimationData& animData) {
+            return animData.name == animationName;
+        });
+
+    if (it != m_ProcessedAnimations.end()) {
+        // Get the index of the found animation
+        int animationIndex = std::distance(m_ProcessedAnimations.begin(), it);
+        SetAnimationbyIndex(animationIndex); 
+    } else {
+        GABGL_ERROR("Animation not found: " + animationName);
+    }
+}
+
+void Model::CalculateBoneTransform(const AssimpNodeData* node, const glm::mat4& parentTransform)
+{
+    std::string nodeName = node->name;
+    glm::mat4 nodeTransform = node->transformation;
+
+    // Check if this node has a corresponding bone in the animation
+    Bone* bone = FindBone(nodeName);
+    if (bone)
+    {
+        bone->Update(m_CurrentTime);
+        nodeTransform = bone->GetLocalTransform();
+    }
+
+    // Calculate the global transformation for this node
+    glm::mat4 globalTransformation = parentTransform * nodeTransform;
+
+    // Look up the bone in the boneInfoMap to get the offset matrix
+    const auto& boneInfoMap = GetBoneIDMap();
+    auto it = boneInfoMap.find(nodeName);
+    if (it != boneInfoMap.end())
+    {
+        int index = it->second.id;
+        glm::mat4 offset = it->second.offset;
+        m_FinalBoneMatrices[index] = globalTransformation * offset;
+    }
+
+    // Recursively calculate transformations for the children
+    for (size_t i = 0; i < node->children.size(); ++i)
+    {
+        CalculateBoneTransform(&node->children[i], globalTransformation);
+    }
+}
+
+Bone* Model::FindBone(const std::string& name)
+{
+    auto iter = std::find_if(m_Bones.begin(), m_Bones.end(),
+        [&](const Bone& Bone) {
+            return Bone.GetBoneName() == name;
+        }
+    );
+    if (iter == m_Bones.end()) return nullptr;
+    else return &(*iter);
+}
+
+void Model::ResizeFinalBoneMatrices()
+{
+  const auto& boneInfoMap = GetBoneIDMap();
+  m_FinalBoneMatrices.resize(boneInfoMap.size(), glm::mat4(1.0f));
+}
+
+void Model::ReadHierarchyData(AssimpNodeData& dest, const aiNode* src)
+{
+    assert(src);  
+
+    dest.name = "";
+    dest.transformation = glm::mat4(1.0f);  // Reset to identity matrix
+    dest.children.clear();  // Clear previous children
+
+    dest.name = src->mName.data;
+    dest.transformation = ConvertMatrixToGLMFormat(src->mTransformation);
+    dest.childrenCount = src->mNumChildren;
+
+    for (int i = 0; i < src->mNumChildren; i++)
+    {
+        if (src->mChildren[i] == nullptr) 
+        {
+            GABGL_ERROR("Null child node found at index " + std::to_string(i));
+            continue;  // Skip if child node is null
+        }
+
+        AssimpNodeData newData;
+        ReadHierarchyData(newData, src->mChildren[i]);
+        dest.children.emplace_back(newData);
+    }
+}
+
+void Model::ReadMissingBones(const aiAnimation* animation)
+{
+    assert(animation);  
+    assert(&model);
+    auto& _boneInfoMap = GetBoneInfoMap();
+    int& _boneCount = GetBoneCount();
+
+    m_Bones.clear();
+    _boneCount = 0;
+
+    for (int i = 0; i < animation->mNumChannels; i++)
+    {
+        auto channel = animation->mChannels[i];
+        std::string boneName = channel->mNodeName.data;
+
+        if (_boneInfoMap.find(boneName) == _boneInfoMap.end())
+        {
+            boneInfoMap[boneName].id = _boneCount;
+            _boneCount++;
+        }
+
+        m_Bones.emplace_back(Bone(channel->mNodeName.data, boneInfoMap[boneName].id, channel));
+    }
+
+    m_BoneInfoMap = _boneInfoMap;
+}
+
 
 std::shared_ptr<Model> Model::CreateSTATIC(const char* path)
 {
-	return std::make_shared<Model>(path);
+	return std::make_shared<Model>(path,false);
 }
 
 std::shared_ptr<Model> Model::CreateANIMATED(const char* path)
 {
-	return std::make_shared<Model>(path);
+	return std::make_shared<Model>(path,true);
 }
 
 Bone::Bone(const std::string& name, int ID, const aiNodeAnim* channel) : m_Name(name), m_ID(ID), m_LocalTransform(1.0f)

@@ -6,6 +6,7 @@
 #include "Buffer.h"
 #include "Shader.h"
 #include "Model.h"
+#include "DeltaTime.h"
 
 struct Renderer
 {
@@ -29,8 +30,8 @@ struct Renderer
   static void DrawCube(const TransformComponent& transform, int entityID = -1);
   static void DrawCubeContour(const glm::vec3& position, const glm::vec3& size, const glm::vec4& color, int entityID = -1);
   static void UploadModel(const std::string& path, const std::shared_ptr<Model>& model);
-  static void DrawModel(const std::string& name, const glm::vec3& position, const glm::vec3& size, float rotation);
-  static void DrawModel(const std::string& name, const glm::mat4& transform, int entityID = -1);
+  static void DrawModel(DeltaTime& dt, const std::string& name, const glm::vec3& position, const glm::vec3& size, float rotation);
+  static void DrawModel(DeltaTime& dt, const std::string& name, const glm::mat4& transform, int entityID = -1);
 
   // 2D space
   static void Draw2DQuad(const glm::vec2& position, const glm::vec2& size, float rotation, const glm::vec4& color);
