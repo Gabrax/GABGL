@@ -248,3 +248,62 @@ void StorageBuffer::UnmapBuffer()
   if (m_RendererID != 0) glUnmapNamedBuffer(m_RendererID);
 }
 
+PixelBuffer::PixelBuffer(size_t size) : m_Size(size)
+{
+    glGenBuffers(1, &m_ID);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, m_ID);
+    glBufferData(GL_PIXEL_UNPACK_BUFFER, m_Size, nullptr, GL_STREAM_DRAW);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+}
+
+PixelBuffer::~PixelBuffer()
+{
+    if (m_ID) glDeleteBuffers(1, &m_ID);
+    if (m_Sync)
+    {
+        glDeleteSync(m_Sync);
+        m_Sync = nullptr;
+    }
+}
+
+void* PixelBuffer::Map()
+{
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, m_ID);
+    return glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, m_Size,
+        GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT | GL_MAP_UNSYNCHRONIZED_BIT);
+}
+
+void PixelBuffer::Unmap()
+{
+    glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+
+    // Insert a fence sync after upload for later wait
+    if (m_Sync)
+        glDeleteSync(m_Sync);
+    m_Sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+}
+
+void PixelBuffer::WaitForCompletion()
+{
+    if (m_Sync)
+    {
+        GLenum result = glClientWaitSync(m_Sync, GL_SYNC_FLUSH_COMMANDS_BIT, 1'000'000); // 1ms
+        if (result == GL_TIMEOUT_EXPIRED || result == GL_WAIT_FAILED)
+        {
+            glWaitSync(m_Sync, 0, GL_TIMEOUT_IGNORED); // Block until done
+        }
+        glDeleteSync(m_Sync);
+        m_Sync = nullptr;
+    }
+}
+
+void PixelBuffer::Bind() const
+{
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, m_ID);
+}
+
+void PixelBuffer::Unbind() const
+{
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+}

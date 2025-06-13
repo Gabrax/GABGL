@@ -355,6 +355,8 @@ void Editor::ComponentsPanel()
 	ImGui::Begin("Components", nullptr, ImGuiWindowFlags_NoCollapse);
 	CenteredText("Components");
 
+	if (ImGui::Button("Reload Shaders")) Renderer::LoadShaders();
+
 	ImGui::End();
 }
 

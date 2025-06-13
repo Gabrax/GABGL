@@ -7,6 +7,7 @@
 #include "Renderer.h"
 #include "Shader.h"
 #include "Texture.h"
+#include "glad/glad.h"
 #include "glm/fwd.hpp"
 #include <cstdint>
 #include <stb_image.h>
@@ -471,18 +472,6 @@ void Renderer::Flush()
 		Renderer::DrawIndexed(s_RendererData._3DQuadVertexArray, s_RendererData._3DQuadIndexCount);
 		s_RendererData._2DStats.DrawCalls++;
 	}
-	/* if (s_RendererData.ModelIndexCount)*/
-	/*{*/
-	/*	uint32_t dataSize = (uint32_t)((uint8_t*)s_RendererData.ModelVertexBufferPtr - (uint8_t*)s_RendererData.ModelVertexBufferBase);*/
-	/*	s_RendererData.ModelVertexBuffer->SetData(s_RendererData.ModelVertexBufferBase, dataSize);*/
-	/**/
-	/*	for (uint32_t i = 0; i < s_RendererData._3DTextureSlotIndex; i++)*/
-	/*		s_RendererData._3DTextureSlots[i]->Bind(i);*/
-	/**/
-	/*	s_RendererData._shaders3D.ModelShader->Use();*/
-	/*	Renderer::DrawIndexed(s_RendererData.ModelVertexArray, s_RendererData.ModelIndexCount);*/
-	/*	s_RendererData._3DStats.DrawCalls++;*/
-	/*}*/
 	if (s_RendererData._2DQuadIndexCount)
 	{
 		uint32_t dataSize = (uint32_t)((uint8_t*)s_RendererData._2DQuadVertexBufferPtr - (uint8_t*)s_RendererData._2DQuadVertexBufferBase);
@@ -906,8 +895,6 @@ void Renderer::RenderFullscreenFramebufferTexture(uint32_t textureID)
       glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
   }
 
-  glDisable(GL_DEPTH_TEST);
-
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, textureID);
 
@@ -915,57 +902,71 @@ void Renderer::RenderFullscreenFramebufferTexture(uint32_t textureID)
   glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
-void Renderer::UploadModel(const std::string& path, const std::shared_ptr<Model>& model)
+void Renderer::BakeModelBuffers(const std::string& name)
+{
+  Timer timer;
+
+  auto it = s_RendererData.models.find(name);
+  if (it != s_RendererData.models.end())
+  {
+    for(auto& mesh : it->second->GetMeshes())
+    {
+      glGenVertexArrays(1, &mesh.VAO);
+      glGenBuffers(1, &mesh.VBO);
+      glGenBuffers(1, &mesh.EBO);
+
+      glBindVertexArray(mesh.VAO);
+
+      glBindBuffer(GL_ARRAY_BUFFER, mesh.VBO);
+      glBufferData(GL_ARRAY_BUFFER, mesh.m_Vertices.size() * sizeof(Vertex), &mesh.m_Vertices[0], GL_STATIC_DRAW);
+
+      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.EBO);
+      glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.m_Indices.size() * sizeof(unsigned int), &mesh.m_Indices[0], GL_STATIC_DRAW);
+
+      struct Attribute {
+          GLint size;
+          GLenum type;
+          GLboolean normalized;
+          size_t offset;
+      };
+
+      std::array<Attribute, 7> attributes = { {
+          {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Position)},
+          {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Normal)},
+          {2, GL_FLOAT, GL_FALSE, offsetof(Vertex, TexCoords)},
+          {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Tangent)},
+          {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Bitangent)},
+          {4, GL_INT, GL_FALSE, offsetof(Vertex, m_BoneIDs)},
+          {4, GL_FLOAT, GL_FALSE, offsetof(Vertex, m_Weights)}
+      } };
+
+      for (size_t i = 0; i < attributes.size(); ++i) {
+          glEnableVertexAttribArray(static_cast<GLuint>(i));
+          if (attributes[i].type == GL_INT) {
+              glVertexAttribIPointer(static_cast<GLuint>(i), attributes[i].size, attributes[i].type, sizeof(Vertex), (void*)attributes[i].offset);
+          } else {
+              glVertexAttribPointer(static_cast<GLuint>(i), attributes[i].size, attributes[i].type, attributes[i].normalized, sizeof(Vertex), (void*)attributes[i].offset);
+          }
+      }
+
+      glBindVertexArray(0);
+    }
+  }
+  GABGL_WARN("Model: {0} buffers baking took {1} ms", name, timer.ElapsedMillis());
+}
+
+void Renderer::BakeModelTextures(const std::string& path, const std::shared_ptr<Model>& model)
 {
   Timer timer;
 
   for(auto& mesh : model->GetMeshes())
   {
-    glGenVertexArrays(1, &mesh.VAO);
-    glGenBuffers(1, &mesh.VBO);
-    glGenBuffers(1, &mesh.EBO);
-
-    glBindVertexArray(mesh.VAO);
-
-    glBindBuffer(GL_ARRAY_BUFFER, mesh.VBO);
-    glBufferData(GL_ARRAY_BUFFER, mesh.m_Vertices.size() * sizeof(Vertex), &mesh.m_Vertices[0], GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.m_Indices.size() * sizeof(unsigned int), &mesh.m_Indices[0], GL_STATIC_DRAW);
-
-    struct Attribute {
-        GLint size;
-        GLenum type;
-        GLboolean normalized;
-        size_t offset;
-    };
-
-    std::array<Attribute, 7> attributes = { {
-        {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Position)},
-        {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Normal)},
-        {2, GL_FLOAT, GL_FALSE, offsetof(Vertex, TexCoords)},
-        {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Tangent)},
-        {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Bitangent)},
-        {4, GL_INT, GL_FALSE, offsetof(Vertex, m_BoneIDs)},
-        {4, GL_FLOAT, GL_FALSE, offsetof(Vertex, m_Weights)}
-    } };
-
-    for (size_t i = 0; i < attributes.size(); ++i) {
-        glEnableVertexAttribArray(static_cast<GLuint>(i));
-        if (attributes[i].type == GL_INT) {
-            glVertexAttribIPointer(static_cast<GLuint>(i), attributes[i].size, attributes[i].type, sizeof(Vertex), (void*)attributes[i].offset);
-        } else {
-            glVertexAttribPointer(static_cast<GLuint>(i), attributes[i].size, attributes[i].type, attributes[i].normalized, sizeof(Vertex), (void*)attributes[i].offset);
-        }
-    }
-
-    glBindVertexArray(0);
-
     for (auto& texture : mesh.m_Textures)
     {
       GLuint id;
       glGenTextures(1, &id);
       texture->SetRendererID(id);
+      glBindTexture(GL_TEXTURE_2D,id);
 
       if(texture->IsUnCompressed())
       {
@@ -974,11 +975,10 @@ void Renderer::UploadModel(const std::string& path, const std::shared_ptr<Model>
       }
       else
       {
-        glBindTexture(GL_TEXTURE_2D,id);
         glTexImage2D(GL_TEXTURE_2D, 0, texture->GetDataFormat(), texture->GetWidth(), texture->GetHeight(), 0, texture->GetDataFormat(), GL_UNSIGNED_BYTE, texture->GetRawData());
+        glGenerateMipmap(GL_TEXTURE_2D);
       }
 
-      glGenerateMipmap(GL_TEXTURE_2D);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
@@ -987,8 +987,116 @@ void Renderer::UploadModel(const std::string& path, const std::shared_ptr<Model>
   }
   std::string name = std::filesystem::path(path).stem().string();
   s_RendererData.models[name] = std::move(model);
-  GABGL_WARN("Model: {0} uploading took {1} ms", name, timer.ElapsedMillis());
+  GABGL_WARN("Model: {0} textures baking took {1} ms", name, timer.ElapsedMillis());
 }
+
+/*void Renderer::BakeModelTextures(const std::string& path, const std::shared_ptr<Model>& model)*/
+/*{*/
+/*    Timer timer;*/
+/**/
+/*    constexpr int NumPBOs = 2;*/
+/*    int pboIndex = 0;*/
+/*    PixelBuffer* pbos[NumPBOs] = { nullptr, nullptr };*/
+/**/
+/*    struct PendingUpload*/
+/*    {*/
+/*        PixelBuffer* pbo;*/
+/*        GLuint textureID;*/
+/*        int width, height;*/
+/*        GLenum internalFormat, dataFormat;*/
+/*    };*/
+/*    std::vector<PendingUpload> pendingUploads;*/
+/**/
+/*    // === Pass 1: Upload all data to PBOs ===*/
+/*    for (auto& mesh : model->GetMeshes())*/
+/*    {*/
+/*        for (auto& texture : mesh.m_Textures)*/
+/*        {*/
+/*            GLuint id;*/
+/*            glGenTextures(1, &id);*/
+/*            texture->SetRendererID(id); // store for later*/
+/*            // We'll bind and upload in second pass*/
+/**/
+/*            int width, height;*/
+/*            GLenum internalFormat, dataFormat;*/
+/*            const void* srcData = nullptr;*/
+/*            size_t dataSize = 0;*/
+/**/
+/*            if (texture->IsUnCompressed())*/
+/*            {*/
+/*                width = texture->GetEmbeddedTexture()->mWidth;*/
+/*                height = texture->GetEmbeddedTexture()->mHeight;*/
+/*                internalFormat = GL_RGBA8;*/
+/*                dataFormat = GL_RGBA;*/
+/*                srcData = texture->GetEmbeddedTexture()->pcData;*/
+/*                dataSize = width * height * 4;*/
+/*            }*/
+/*            else*/
+/*            {*/
+/*                width = texture->GetWidth();*/
+/*                height = texture->GetHeight();*/
+/*                internalFormat = texture->GetInternalFormat();*/
+/*                dataFormat = texture->GetDataFormat();*/
+/*                srcData = texture->GetRawData();*/
+/*                dataSize = width * height * (dataFormat == GL_RGBA ? 4 : 3);*/
+/*            }*/
+/**/
+/*            if (!pbos[pboIndex])*/
+/*                pbos[pboIndex] = new PixelBuffer(dataSize);*/
+/**/
+/*            PixelBuffer* currentPBO = pbos[pboIndex];*/
+/*            pboIndex = (pboIndex + 1) % NumPBOs;*/
+/**/
+/*            currentPBO->WaitForCompletion();*/
+/**/
+/*            void* dst = currentPBO->Map();*/
+/*            if (dst)*/
+/*            {*/
+/*                memcpy(dst, srcData, dataSize);*/
+/*                currentPBO->Unmap(); // sets sync*/
+/*            }*/
+/**/
+/*            pendingUploads.push_back({*/
+/*                currentPBO,*/
+/*                id,*/
+/*                width,*/
+/*                height,*/
+/*                internalFormat,*/
+/*                dataFormat*/
+/*            });*/
+/*        }*/
+/*    }*/
+/**/
+/*    // === Pass 2: Create GL textures from PBOs ===*/
+/*    for (auto& upload : pendingUploads)*/
+/*    {*/
+/*        upload.pbo->WaitForCompletion(); // Ensure ready to read*/
+/**/
+/*        glBindTexture(GL_TEXTURE_2D, upload.textureID);*/
+/*        upload.pbo->Bind();*/
+/**/
+/*        glTexImage2D(GL_TEXTURE_2D, 0, upload.internalFormat, upload.width, upload.height,*/
+/*                     0, upload.dataFormat, GL_UNSIGNED_BYTE, nullptr);*/
+/**/
+/*        glGenerateMipmap(GL_TEXTURE_2D);*/
+/**/
+/*        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);*/
+/*        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);*/
+/*        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);*/
+/*        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);*/
+/**/
+/*        upload.pbo->Unbind();*/
+/*    }*/
+/**/
+/*    // Clean up*/
+/*    for (int i = 0; i < NumPBOs; ++i)*/
+/*        delete pbos[i];*/
+/**/
+/*    std::string name = std::filesystem::path(path).stem().string();*/
+/*    s_RendererData.models[name] = std::move(model);*/
+/**/
+/*    GABGL_WARN("Model: {0} textures baking took {1} ms", name, timer.ElapsedMillis());*/
+/*}*/
 
 void Renderer::DrawModel(DeltaTime& dt,const std::string& name, const glm::vec3& position, const glm::vec3& size, float rotation)
 {
@@ -1024,7 +1132,7 @@ void Renderer::DrawModel(DeltaTime& dt, const std::string& name, const glm::mat4
             s_RendererData._shaders3D.ModelShader->setInt(textures[i]->GetType() + number, i);
             glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
         }
-
+        
         glBindVertexArray(mesh.VAO);
         glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
         glBindVertexArray(0);
@@ -1037,9 +1145,9 @@ void Renderer::DrawModel(DeltaTime& dt, const std::string& name, const glm::mat4
       for (size_t i = 0; i < transforms.size(); ++i) {
           s_RendererData._shaders3D.ModelShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
       }
-
       it->second->UpdateAnimation(dt);
-    } 
+    }
+    /*it->second->UpdatePhysXActor(transform);*/
   }
   else
   {

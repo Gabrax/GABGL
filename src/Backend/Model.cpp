@@ -1,5 +1,4 @@
 #include "Model.h"
-#include "PhysX.h"
 #include "BackendLogger.h"
 #include "meshoptimizer.h"
 #include <filesystem>
@@ -27,13 +26,13 @@ glm::quat GetGLMQuat(const aiQuaternion& pOrientation)
   return glm::quat(pOrientation.w, pOrientation.x, pOrientation.y, pOrientation.z);
 }
 
-Model::Model(const char* path, float optimizerStrength, bool isAnimated) : m_OptimizerStrength(optimizerStrength), m_isAnimated(isAnimated)
+Model::Model(const char* path, float optimizerStrength, bool isAnimated, bool isKinematic, PhysXMeshType type) :  m_isKinematic(isKinematic), m_OptimizerStrength(optimizerStrength), m_isAnimated(isAnimated)
 {
   Timer timer;
 
   Assimp::Importer importer;
-  m_Scene = importer.ReadFile(
-      path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
+  if(m_isAnimated) m_Scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_CalcTangentSpace);
+  else m_Scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
 
   if (!m_Scene || m_Scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !m_Scene->mRootNode)
   {
@@ -65,7 +64,6 @@ Model::Model(const char* path, float optimizerStrength, bool isAnimated) : m_Opt
         m_ProcessedAnimations.emplace_back(animData);
     }
 
-    assert(!m_ProcessedAnimations.empty());
     GABGL_ASSERT(!m_ProcessedAnimations.empty(),"[MODEL]: Model doesnt contain animations");
 
     SetAnimationByName("IDLE");
@@ -96,9 +94,7 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
       Vertex vertex;
       if(m_isAnimated) SetDefaultBoneData(vertex);
       vertex.Position = {mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z};
-      vertex.Normal = mesh->HasNormals()
-                          ? glm::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z)
-                          : glm::vec3(0.0f);
+      vertex.Normal = mesh->HasNormals() ? glm::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z) : glm::vec3(0.0f);
       if (mesh->mTextureCoords[0]) {
           vertex.TexCoords = {mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y};
           vertex.Tangent = {mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z};
@@ -119,7 +115,6 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
   if (mesh->mMaterialIndex >= 0) {
       aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
 
-      // Load textures of each type
       loadMaterialTextures(material, aiTextureType_DIFFUSE, "texture_diffuse", textures);
       loadMaterialTextures(material, aiTextureType_SPECULAR, "texture_specular", textures);
       loadMaterialTextures(material, aiTextureType_HEIGHT, "texture_normal", textures);
@@ -192,6 +187,23 @@ void Model::OptimizeMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m
   m_Vertices = std::move(OptVertices);
 }
 
+void Model::UpdatePhysXActor(const glm::mat4& transform)
+{
+  const PxU32 nbShapes = m_MeshActor->getNbShapes();
+  PxShape* shapes[32];
+  m_MeshActor->getShapes(shapes, nbShapes);
+
+  for (PxU32 j = 0; j < nbShapes; j++) {
+      const PxMat44 shapePose(PxShapeExt::getGlobalPose(*shapes[j], *m_MeshActor));
+      const PxGeometry& geom = shapes[j]->getGeometry();
+
+      if (geom.getType() == PxGeometryType::eTRIANGLEMESH) {
+          if(m_isKinematic) m_MeshActor->setKinematicTarget(PxTransform(PhysX::GlmMat4ToPxTransform(transform)));
+          else m_MeshActor->setGlobalPose(PxTransform(PhysX::GlmMat4ToPxTransform(transform)));
+      }
+  }
+}
+
 void Model::CreatePhysXStaticMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m_Indices)
 {
   std::vector<PxVec3> physxVertices(m_Vertices.size());
@@ -211,15 +223,15 @@ void Model::CreatePhysXStaticMesh(std::vector<Vertex>& m_Vertices, std::vector<G
   PxTransform pose = PxTransform(PxVec3(0));
   geom.triangleMesh = physxMesh;
 
-  PxRigidDynamic* meshActor = physics->createRigidDynamic(pose);
+  m_MeshActor = physics->createRigidDynamic(pose);
   PxShape* meshShape = nullptr;
-  if(meshActor){
-      meshActor->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, true);
+  if(m_MeshActor){
+      m_MeshActor->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, m_isKinematic);
 
       PxTriangleMeshGeometry triGeom;
       triGeom.triangleMesh = physxMesh;
-      meshShape = PxRigidActorExt::createExclusiveShape(*meshActor, triGeom, *material);
-      scene->addActor(*meshActor);
+      meshShape = PxRigidActorExt::createExclusiveShape(*m_MeshActor, triGeom, *material);
+      scene->addActor(*m_MeshActor);
   }
 }
 
@@ -283,7 +295,6 @@ void Model::SetAnimationbyIndex(int animationIndex)
     assert(animationIndex >= 0 && animationIndex < m_ProcessedAnimations.size());
     
     const AnimationData& animData = m_ProcessedAnimations[animationIndex];
-    const AnimationData& animData2 = m_ProcessedAnimations[0];
 
     m_Duration = animData.duration;
     m_TicksPerSecond = animData.ticksPerSecond;
@@ -408,14 +419,14 @@ void Model::ReadMissingBones(const aiAnimation* animation)
 }
 
 
-std::shared_ptr<Model> Model::CreateSTATIC(const char* path, float optimizerStrength)
+std::shared_ptr<Model> Model::CreateSTATIC(const char* path, float optimizerStrength, bool isKinematic, PhysXMeshType type)
 {
-	return std::make_shared<Model>(path,optimizerStrength,false);
+	return std::make_shared<Model>(path,optimizerStrength,false,isKinematic,type);
 }
 
-std::shared_ptr<Model> Model::CreateANIMATED(const char* path, float optimizerStrength)
+std::shared_ptr<Model> Model::CreateANIMATED(const char* path, float optimizerStrength, bool isKinematic, PhysXMeshType type)
 {
-	return std::make_shared<Model>(path,optimizerStrength,true);
+	return std::make_shared<Model>(path,optimizerStrength,true,isKinematic,type);
 }
 
 Bone::Bone(const std::string& name, int ID, const aiNodeAnim* channel) : m_Name(name), m_ID(ID), m_LocalTransform(1.0f)

@@ -16,6 +16,7 @@
 
 #include "Texture.h"
 #include "DeltaTime.h"
+#include "PhysX.h"
 
 #define MAX_BONE_INFLUENCE 4
 
@@ -118,17 +119,23 @@ struct Mesh
   GLuint VAO, VBO, EBO;
 };
 
+enum class PhysXMeshType : int32_t {
+    BOX = 0,
+    TRIANGLEMESH = 1,
+    CONVEXMESH = 2
+};
 
 struct Model
 {
-  Model(const char* path, float optimizerStrength, bool isAnimated);
+  Model(const char* path, float optimizerStrength, bool isAnimated, bool isKinematic, PhysXMeshType type);
 
-  static std::shared_ptr<Model> CreateSTATIC(const char* path, float optimizerStrength);
-  static std::shared_ptr<Model> CreateANIMATED(const char* path, float optimizerStrength);
+  static std::shared_ptr<Model> CreateSTATIC(const char* path, float optimizerStrength, bool isKinematic, PhysXMeshType type);
+  static std::shared_ptr<Model> CreateANIMATED(const char* path, float optimizerStrength, bool isKinematic, PhysXMeshType type);
 
   void UpdateAnimation(DeltaTime& dt);
   void SetAnimationbyIndex(int animationIndex);
   void SetAnimationByName(const std::string& animationName);
+  void UpdatePhysXActor(const glm::mat4& transform);
 
   inline std::vector<Mesh>& GetMeshes() { return m_Meshes; }
   inline std::map<std::string,BoneInfo>& GetBoneInfoMap() { return m_BoneInfoMap; }
@@ -161,9 +168,11 @@ private:
   float m_CurrentTime = 0.0f;
   float m_DeltaTime = 0.0f;
 
+  bool m_isKinematic;
   float m_OptimizerStrength;
   bool m_isAnimated;
   const aiScene* m_Scene;
+  PxRigidDynamic* m_MeshActor;
 
 private:
 

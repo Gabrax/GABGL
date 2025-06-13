@@ -1,5 +1,7 @@
 #include "PhysX.h"
 #include "BackendLogger.h"
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/matrix_decompose.hpp>
 
 struct UserErrorCallback : public PxErrorCallback
 {
@@ -60,18 +62,6 @@ void PhysX::Init()
 
     PxRigidStatic* groundPlane = PxCreatePlane(*s_PhysXData.gPhysics, PxPlane(0,1,0,0), *s_PhysXData.gMaterial);
     s_PhysXData.gScene->addActor(*groundPlane);
-
-    /*for (int i = 0; i < 5; i++) {*/
-    /*    float halfExtent = 1.1f; // Half the side length of the cube*/
-    /*    float gap = 0.1f; // Small gap between cubes*/
-    /*    PxTransform t = PxTransform(PxVec3(i * (4.0f * halfExtent + gap), 0.0f, 13.5f));*/
-    /*    PxShape* shape = gPhysics->createShape(PxBoxGeometry(halfExtent, halfExtent, halfExtent), *gMaterial);*/
-    /*    PxRigidDynamic* body = gPhysics->createRigidDynamic(t);*/
-    /*    body->attachShape(*shape);*/
-    /*    PxRigidBodyExt::updateMassAndInertia(*body, 10.0f);*/
-    /*    gScene->addActor(*body);*/
-    /*    shape->release();*/
-    /*}*/
 }
 
 void PhysX::RenderActors(unsigned int vao)
@@ -109,9 +99,9 @@ void PhysX::RenderActors(unsigned int vao)
     /*}*/
 }
 
-void PhysX::Simulate(float deltatime)
+void PhysX::Simulate(DeltaTime& dt)
 {
-    s_PhysXData.gScene->simulate(deltatime);
+    s_PhysXData.gScene->simulate(dt);
     s_PhysXData.gScene->fetchResults(true);
 }
 
@@ -246,6 +236,20 @@ void PhysX::raycastAndApplyForce(PxScene* scene, const glm::vec3& origin, const 
             } 
         } 
     } 
+}
+
+PxTransform PhysX::GlmMat4ToPxTransform(const glm::mat4& mat)
+{
+    glm::vec3 scale, translation, skew;
+    glm::vec4 perspective;
+    glm::quat rotation;
+
+    glm::decompose(mat, scale, rotation, translation, skew, perspective);
+
+    return physx::PxTransform(
+        physx::PxVec3(translation.x, translation.y, translation.z),
+        physx::PxQuat(rotation.x, rotation.y, rotation.z, rotation.w)
+    );
 }
 
 glm::mat4 PhysX::PxMat44ToGlmMat4(physx::PxMat44 pxMatrix)

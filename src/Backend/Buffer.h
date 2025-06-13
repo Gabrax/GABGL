@@ -3,6 +3,7 @@
 #include "BackendLogger.h"
 #include <string>
 #include <vector>
+#include <glad/glad.h>
 
 enum class ShaderDataType
 {
@@ -181,4 +182,27 @@ struct StorageBuffer
 private:
   uint32_t m_RendererID = 0;
   size_t bufferSize = 0;
+};
+
+struct PixelBuffer
+{
+  explicit PixelBuffer(size_t size);
+  ~PixelBuffer();
+
+  void* Map();
+  void Unmap();
+  void Bind() const;
+  void Unbind() const;
+  void WaitForCompletion();
+
+  GLuint GetID() const { return m_ID; }
+  size_t GetSize() const { return m_Size; }
+
+private:
+  PixelBuffer(const PixelBuffer&) = delete;
+  PixelBuffer& operator=(const PixelBuffer&) = delete;
+
+  GLuint m_ID = 0;
+  size_t m_Size = 0;
+  GLsync m_Sync = nullptr;
 };

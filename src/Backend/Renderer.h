@@ -29,7 +29,8 @@ struct Renderer
   static void Draw3DText(const std::string& text,  const glm::vec2& position, float size, const glm::vec4& color, int entityID = -1);
   static void DrawCube(const TransformComponent& transform, int entityID = -1);
   static void DrawCubeContour(const glm::vec3& position, const glm::vec3& size, const glm::vec4& color, int entityID = -1);
-  static void UploadModel(const std::string& path, const std::shared_ptr<Model>& model);
+  static void BakeModelTextures(const std::string& path, const std::shared_ptr<Model>& model);
+  static void BakeModelBuffers(const std::string& name);
   static void DrawModel(DeltaTime& dt, const std::string& name, const glm::vec3& position, const glm::vec3& size, float rotation);
   static void DrawModel(DeltaTime& dt, const std::string& name, const glm::mat4& transform, int entityID = -1);
 

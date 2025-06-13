@@ -34,8 +34,14 @@ struct Texture
   Texture(const std::vector<std::string>& faces);
 	~Texture();
 
-	inline const TextureSpecification& GetSpecification() const { return m_Specification; }
+	bool operator==(const Texture& other) const 
+	{
+		return m_RendererID == other.GetRendererID();
+	}
 
+	void SetData(void* data, uint32_t size);
+	void Bind(uint32_t slot = 0) const;
+	inline const TextureSpecification& GetSpecification() const { return m_Specification; }
 	inline uint32_t GetWidth() const { return m_Width; }
 	inline uint32_t GetHeight() const { return m_Height; }
   inline void SetRendererID(uint32_t id) { m_RendererID = id; }
@@ -49,14 +55,7 @@ struct Texture
   inline std::string& GetType() { return m_Type; }
   inline bool IsUnCompressed() { return m_IsEmbeddedUnCompressed; }
   inline const aiTexture* GetEmbeddedTexture() { return paiTexture; }
-	void SetData(void* data, uint32_t size);
-	void Bind(uint32_t slot = 0) const;
 	inline bool IsLoaded() const { return m_IsLoaded; }
-
-	bool operator==(const Texture& other) const 
-	{
-		return m_RendererID == other.GetRendererID();
-	}
 
 	static std::shared_ptr<Texture> Create(const TextureSpecification& specification);
 	static std::shared_ptr<Texture> Create(const std::string& path);

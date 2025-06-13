@@ -164,7 +164,6 @@ Texture::Texture(const std::string& path, const std::string& directory, bool isG
   {
     GABGL_ERROR("COUDLNT LOAD TEXTURE!");
   }
-
 }
 
 Texture::Texture(const aiTexture* paiTexture, const std::string& path, bool isGL) : paiTexture(paiTexture), m_Path(path)
@@ -199,7 +198,6 @@ Texture::Texture(const aiTexture* paiTexture, const std::string& path, bool isGL
               internalFormat = GL_R8;
               dataFormat = GL_RED;
           }
-
 
           m_InternalFormat = internalFormat;
           m_DataFormat = dataFormat;
@@ -276,6 +274,7 @@ Texture::Texture(const std::vector<std::string>& faces)
 Texture::~Texture()
 {
   if (m_OwnsTexture && m_RendererID != 0) glDeleteTextures(1, &m_RendererID);
+  delete[] m_RawData;
 }
 
 void Texture::SetData(void* data, uint32_t size)
