@@ -13,6 +13,7 @@ struct Renderer
 	static void Init();
 	static void Shutdown();
 
+  static void RenderScene(DeltaTime& dt, const std::function<void()>& pre);
 	static void BeginScene(const Camera& camera, const glm::mat4& transform);
 	static void BeginScene(const Camera& camera);
 	static void EndScene();
@@ -27,7 +28,7 @@ struct Renderer
 	static void Draw3DRect(const glm::vec3& position, const glm::vec2& size, const glm::vec4& color, int entityID = -1);
 	static void Draw3DRect(const glm::mat4& transform, const glm::vec4& color, int entityID = -1);
   static void Draw3DText(const std::string& text,  const glm::vec2& position, float size, const glm::vec4& color, int entityID = -1);
-  static void DrawCube(const TransformComponent& transform, int entityID = -1);
+  static void DrawCube(const Transform& transform, int entityID = -1);
   static void DrawCubeContour(const glm::vec3& position, const glm::vec3& size, const glm::vec4& color, int entityID = -1);
   static void BakeModelTextures(const std::string& path, const std::shared_ptr<Model>& model);
   static void BakeModelBuffers(const std::string& name);

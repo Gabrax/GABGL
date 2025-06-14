@@ -1,12 +1,11 @@
 
 
-#include "GLFW/glfw3.h"
-#include "Windowbase.h"
+#include <GLFW/glfw3.h>
 #include "window.h"
 #include "../Input/EngineEvent.h"
 #include "../Input/KeyEvent.h"
 #include "BackendLogger.h"
-#include <iostream>
+#include <stb_image.h>
 
 static void GLFWErrorCallback(int error, const char* description)
 {
@@ -168,6 +167,22 @@ void Window::Update()
 	glfwSwapBuffers(m_Window);
 }
 
+std::unique_ptr<Window> Window::Create(const WindowDefaultData& props)
+{
+  return std::make_unique<Window>(props);
+}
+
+void Window::SetWindowIcon(const char* iconpath, GLFWwindow* window)
+{
+  stbi_set_flip_vertically_on_load(0);
+  GLFWimage images[1];
+  images[0].pixels = stbi_load(iconpath, &images[0].width, &images[0].height, 0, 4);
+  if (images[0].pixels) {
+    glfwSetWindowIcon(window, 1, images);
+    stbi_image_free(images[0].pixels);
+  }
+}
+
 void Window::SetVSync(bool enabled)
 {
   if(enabled)
@@ -220,4 +235,9 @@ void Window::Maximize(bool maximize)
 void Window::SetResizable(bool enable)
 {
   glfwSetWindowAttrib(m_Window, GLFW_RESIZABLE, enable);
+}
+
+void Window::SetCursorVisible(bool enable)
+{
+  glfwSetInputMode(m_Window, GLFW_CURSOR, enable ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
 }

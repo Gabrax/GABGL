@@ -1,15 +1,18 @@
 #pragma once
 
 #include "../input/KeyEvent.h"
-#include "../backend/DeltaTime.h"
-#include "../backend/Texture.h"
+#include "DeltaTime.h"
+#include "Texture.h"
 /*#include "../Scene/Scene.h"*/
-#include "../backend/FrameBuffer.h"
+#include "FrameBuffer.h"
 /*#include "../Scene/Entity.hpp"*/
-#include "../backend/windowbase.h"
+#include "window.h"
 
 #include <filesystem>
 #include <glm/glm.hpp>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/matrix_decompose.hpp>
+
 
 struct Editor
 {
@@ -50,7 +53,9 @@ private:
 	void BlockEvents(bool block) { m_BlockEvents = block; }
 	void SetDarkThemeColors();
 	uint32_t GetActiveWidgetID() const;
+	bool DecomposeTransform(const glm::mat4& transform, glm::vec3& translation, glm::vec3& rotation, glm::vec3& scale);
+	
 private:
-	WindowBase* m_WindowRef;
+	Window* m_WindowRef;
 	bool m_BlockEvents = true;
 };

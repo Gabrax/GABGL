@@ -163,7 +163,7 @@ void AssetManager::LoadAssets()
 
     std::vector<std::tuple<const char*, float, bool, PhysXMeshType>> static_models = {
         { "res/map/objHouse.obj", 1.0f, true, PhysXMeshType::TRIANGLEMESH },
-        { "res/backpack/backpack.obj", 0.2f, true, PhysXMeshType::TRIANGLEMESH }
+        /*{ "res/backpack/backpack.obj", 0.2f, true, PhysXMeshType::TRIANGLEMESH }*/
     };
 
     std::vector<std::tuple<const char*, float, bool, PhysXMeshType>> animated_models = {
@@ -203,13 +203,15 @@ void AssetManager::LoadAssets()
         const std::string& path = std::get<0>(static_models[i]);
         std::string name = std::filesystem::path(path).stem().string();
 
+            /*Renderer::BakeModelTextures(path, model);*/
+            /*Renderer::BakeModelBuffers(name);*/
+        uploadManager.EnqueueUpload([path, model, name]() {
             Renderer::BakeModelTextures(path, model);
-            Renderer::BakeModelBuffers(name);
-        /*uploadManager.EnqueueUpload([path, model, name]() {*/
-        /**/
-        /*    ScheduleOnMainThread([name]() {*/
-        /*    });*/
-        /*});*/
+
+            ScheduleOnMainThread([name]() {
+              Renderer::BakeModelBuffers(name);
+            });
+        });
     }
 
     for (size_t i = 0; i < animated_models.size(); ++i) {
@@ -217,15 +219,15 @@ void AssetManager::LoadAssets()
         const std::string& path = std::get<0>(animated_models[i]);
         std::string name = std::filesystem::path(path).stem().string();
 
+            /*Renderer::BakeModelTextures(path, model);*/
+            /*Renderer::BakeModelBuffers(name);*/
+        uploadManager.EnqueueUpload([path, model, name]() {
             Renderer::BakeModelTextures(path, model);
-            Renderer::BakeModelBuffers(name);
-        /*uploadManager.EnqueueUpload([path, model, name]() {*/
-        /*    Renderer::BakeModelTextures(path, model);*/
-        /**/
-        /*    ScheduleOnMainThread([name]() {*/
-        /*        Renderer::BakeModelBuffers(name);*/
-        /*    });*/
-        /*});*/
+
+            ScheduleOnMainThread([name]() {
+                Renderer::BakeModelBuffers(name);
+            });
+        });
     }
 
     uploadManager.WaitIdle();

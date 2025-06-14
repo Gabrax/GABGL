@@ -12,10 +12,10 @@ struct Engine
 	void Run();
   void OnEvent(Event& e);
 	inline static Engine& GetInstance() { return *s_Instance; }
-	inline WindowBase& GetMainWindow() { return *m_Window; }
+	inline Window& GetMainWindow() { return *m_Window; }
 private:
 
-  std::unique_ptr<WindowBase> m_Window;
+  std::unique_ptr<Window> m_Window;
   bool OnWindowClose(WindowCloseEvent& e);
 	bool OnWindowResize(WindowResizeEvent& e);
 

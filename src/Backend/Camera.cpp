@@ -200,7 +200,6 @@ void Camera::SetViewportSize(float width, float height)
     RecalculateProjection();
 }
 
-
 void Camera::RecalculateProjection()
 {
     if (m_ProjectionType == ProjectionType::Perspective)
@@ -217,9 +216,4 @@ void Camera::RecalculateProjection()
 
         m_Projection = glm::ortho(orthoLeft, orthoRight, orthoBottom, orthoTop, m_OrthographicNear, m_OrthographicFar);
     }
-}
-
-void Camera::SetCursor(bool enable)
-{
-  glfwSetInputMode(Engine::GetInstance().GetMainWindow().GetWindowPtr(), GLFW_CURSOR, enable ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
 }

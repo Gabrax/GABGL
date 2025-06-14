@@ -14,6 +14,11 @@
 #include <filesystem>
 #include <ft2build.h>
 #include FT_FREETYPE_H
+#include "FrameBuffer.h"
+#include "../engine.h"
+#include "Audio.h"
+#include "Editor.h"
+#include "../input/UserInput.h"
 
 void MessageCallback(
 	unsigned source,
@@ -206,6 +211,17 @@ struct RendererData
   std::unordered_map<std::string, std::shared_ptr<Model>> models;
   std::unordered_map<char, Character> Characters;
 
+  std::shared_ptr<Framebuffer> m_Framebuffer;
+
+  /*Editor m_Editor;*/
+  Window* m_WindowRef = nullptr;
+  Camera m_Camera;
+
+  enum class SceneState
+	{
+		Edit = 0, Play = 1
+	} m_SceneState;
+
   FT_Library ft;
 
 } s_RendererData;
@@ -369,23 +385,6 @@ void Renderer::Init()
   s_RendererData.CubeVertexArray->SetIndexBuffer(s_RendererData.CubeIndexBuffer);
   s_RendererData.CubeVertexBufferPtr = s_RendererData.CubeVertexBufferBase;
 
-  s_RendererData.ModelVertexBufferBase = new Vertex[s_RendererData.MaxModelVertexCount];
-  s_RendererData.ModelVertexBuffer = VertexBuffer::Create(s_RendererData.MaxModelVertexCount * sizeof(Vertex));
-  s_RendererData.ModelVertexBuffer->SetLayout({
-      { ShaderDataType::Float3, "a_Position"   },
-      { ShaderDataType::Float3, "a_Normal"     },
-      { ShaderDataType::Float2, "a_TexCoords"  },
-      { ShaderDataType::Float3, "a_Tangent"    },
-      { ShaderDataType::Float3, "a_Bitangent"  },
-      { ShaderDataType::Float4, "a_TexIndices" }, 
-      { ShaderDataType::Int4,   "a_BoneIDs"    },
-      { ShaderDataType::Float4, "a_Weights"    },
-      { ShaderDataType::Int,    "a_EntityID"   }  
-  });
-  s_RendererData.ModelVertexArray = VertexArray::Create();
-  s_RendererData.ModelVertexArray->AddVertexBuffer(s_RendererData.ModelVertexBuffer);
-  s_RendererData.ModelVertexBufferPtr = s_RendererData.ModelVertexBufferBase;
-
   s_RendererData._3DCameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 0);
   s_RendererData._2DCameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 1);
   s_RendererData.LightPosStorageBuffer = StorageBuffer::Create(sizeof(glm::vec3) * 10, 0);
@@ -393,11 +392,24 @@ void Renderer::Init()
   s_RendererData.LightColorStorageBuffer= StorageBuffer::Create(sizeof(glm::vec4) * 10, 2);
   s_RendererData.LightTypeStorageBuffer= StorageBuffer::Create(sizeof(uint32_t) * 10, 3);
 
+  FramebufferSpecification fbSpec;
+	fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::Depth };
+	fbSpec.Width = Engine::GetInstance().GetMainWindow().GetWidth();
+	fbSpec.Height = Engine::GetInstance().GetMainWindow().GetHeight();
+	s_RendererData.m_Framebuffer = Framebuffer::Create(fbSpec);
+
   LoadShaders();
 
   GABGL_ASSERT(!FT_Init_FreeType(&s_RendererData.ft), "Could not init FreeType Library");
 
   LoadFont("res/fonts/dpcomic.ttf");
+
+  s_RendererData.m_SceneState = RendererData::SceneState::Edit;
+
+  s_RendererData.m_WindowRef = &Engine::GetInstance().GetMainWindow();
+
+  s_RendererData.m_Camera = Camera(45.0f, (float)s_RendererData.m_WindowRef->GetWidth() / (float)s_RendererData.m_WindowRef->GetHeight(), 0.01f, 1000.0f);
+  s_RendererData.m_Camera.SetViewportSize((float)s_RendererData.m_WindowRef->GetWidth(), (float)s_RendererData.m_WindowRef->GetHeight());
 }
 
 void Renderer::Shutdown()
@@ -411,6 +423,69 @@ void Renderer::Shutdown()
   s_RendererData.CubeVertexArray.reset();
   s_RendererData.CubeVertexBuffer.reset();
   s_RendererData.CubeIndexBuffer.reset();
+}
+
+void Renderer::RenderScene(DeltaTime& dt, const std::function<void()>& pre)
+{
+	ResetStats();
+	s_RendererData.m_Framebuffer->Bind();
+	s_RendererData.m_Framebuffer->ClearAttachment(1, -1);
+	BeginScene(s_RendererData.m_Camera);
+
+	 pre();
+
+	EndScene();
+	s_RendererData.m_Framebuffer->Unbind();
+
+	 s_RendererData.m_Camera.OnUpdate(dt);
+	 PhysX::Simulate(dt);
+	 AudioSystem::UpdateAllMusic();
+
+	 if(Input::IsKeyPressed(Key::E))
+	 {
+	    s_RendererData.m_SceneState = RendererData::SceneState::Edit;
+	 }
+	 if(Input::IsKeyPressed(Key::Q))
+	 {
+	    s_RendererData.m_SceneState = RendererData::SceneState::Play;
+	 }
+	 if(Input::IsKeyPressed(Key::R))
+	 {
+	     uint32_t width = (uint32_t)s_RendererData.m_WindowRef->GetWidth(); 
+	     uint32_t height = (uint32_t)s_RendererData.m_WindowRef->GetHeight(); 
+
+	     s_RendererData.m_WindowRef->SetFullscreen(false);
+	     s_RendererData.m_Framebuffer->Resize(width, height);
+	     s_RendererData.m_Camera.SetViewportSize(width, height);
+
+	     AudioSystem::PlaySound("select1");
+	 }
+	 if(Input::IsKeyPressed(Key::T))
+	 {
+	     uint32_t width = (uint32_t)s_RendererData.m_WindowRef->GetWidth(); 
+	     uint32_t height = (uint32_t)s_RendererData.m_WindowRef->GetHeight(); 
+
+	     s_RendererData.m_WindowRef->SetFullscreen(true);
+	     s_RendererData.m_Framebuffer->Resize(width, height);
+	     s_RendererData.m_Camera.SetViewportSize(width, height);
+	     AudioSystem::PlaySound("select2");
+	 }
+
+	switch (s_RendererData.m_SceneState)
+	{
+	   case RendererData::SceneState::Edit:
+		{
+	     s_RendererData.m_WindowRef->SetCursorVisible(true);
+	     /*s_RendererData.m_Editor.OnImGuiRender(s_RendererData.m_Framebuffer->GetColorAttachmentRendererID());*/
+			break;
+		}
+	   case RendererData::SceneState::Play:
+		{
+	     s_RendererData.m_WindowRef->SetCursorVisible(false);
+	     Renderer::RenderFullscreenFramebufferTexture(s_RendererData.m_Framebuffer->GetColorAttachmentRendererID());
+			break;
+		}
+	}
 }
 
 void Renderer::StartBatch()
@@ -804,7 +879,7 @@ void Renderer::Draw2DRect(const glm::mat4& transform, const glm::vec4& color, in
 	DrawLine(lineVertices[3], lineVertices[0], color, entityID);
 }
 
-void Renderer::DrawCube(const TransformComponent& transform, int entityID)
+void Renderer::DrawCube(const Transform& transform, int entityID)
 {
   if (s_RendererData.CubeIndexCount >= RendererData::MaxIndices) NextBatch(); // Flush batch if full
 

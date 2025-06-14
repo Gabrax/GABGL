@@ -5,7 +5,7 @@
 #include "backend/LayerStack.h"
 #include "backend/Renderer.h"
 #include "app/Application.h"
-#include "app/AssetManager.h"
+#include "backend/AssetManager.h"
 #include "backend/PhysX.h"
 
 Engine* Engine::s_Instance = nullptr;
@@ -21,13 +21,13 @@ Engine::~Engine() = default;
 
 void Engine::Run()
 {
-  m_Window = WindowBase::Create<Window>({ "GABGL", 1000, 600 });
+  m_Window = Window::Create({ "GABGL", 1000, 600 });
 	m_Window->SetEventCallback(BIND_EVENT(OnEvent));
 
   AudioSystem::Init();
   PhysX::Init();
 	Renderer::Init();
-  AssetManager::LoadAssets();
+	AssetManager::LoadAssets();
 
   Application* m_Game = new Application;
   LayerStack::PushLayer(m_Game);
@@ -39,9 +39,9 @@ void Engine::Run()
     Renderer::Clear();
 
     if (!m_Minimized)
-		{
+    {
       LayerStack::OnUpdate(dt);
-		}
+    }
 
     m_Window->Update();
   }
