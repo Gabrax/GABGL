@@ -1,7 +1,6 @@
 #include "Renderer.h"
 
 #include <array>
-
 #include "BackendLogger.h"
 #include "Buffer.h"
 #include "Renderer.h"
@@ -14,11 +13,21 @@
 #include <filesystem>
 #include <ft2build.h>
 #include FT_FREETYPE_H
-#include "FrameBuffer.h"
 #include "../engine.h"
 #include "Audio.h"
-#include "Editor.h"
 #include "../input/UserInput.h"
+#include <imgui.h>
+#include <imgui_internal.h>
+#include "backends/imgui_impl_glfw.h"
+#include "backends/imgui_impl_opengl3.h"
+#include <GLFW/glfw3.h>
+#include <glad/glad.h>
+#include "ImGuizmo.h"
+#include <glm/gtc/type_ptr.hpp>
+#include "json.hpp"
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/matrix_decompose.hpp>
+
 
 void MessageCallback(
 	unsigned source,
@@ -95,6 +104,13 @@ struct CameraData
 
 struct RendererData
 {
+  int m_GizmoType;
+	int selectedSceneIndex = -1;
+	bool m_ViewportFocused = false, m_ViewportHovered = false;
+	glm::vec2 m_ViewportSize = { 0.0f, 0.0f };
+	glm::vec2 m_ViewportBounds[2];
+	bool m_BlockEvents = true;
+
 	static constexpr uint32_t MaxQuads = 20000;
 	static constexpr uint32_t MaxVertices = MaxQuads * 4;
 	static constexpr uint32_t MaxIndices = MaxQuads * 6;
@@ -211,9 +227,8 @@ struct RendererData
   std::unordered_map<std::string, std::shared_ptr<Model>> models;
   std::unordered_map<char, Character> Characters;
 
-  std::shared_ptr<Framebuffer> m_Framebuffer;
+  std::shared_ptr<FrameBuffer> m_Framebuffer;
 
-  /*Editor m_Editor;*/
   Window* m_WindowRef = nullptr;
   Camera m_Camera;
 
@@ -396,11 +411,11 @@ void Renderer::Init()
 	fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::Depth };
 	fbSpec.Width = Engine::GetInstance().GetMainWindow().GetWidth();
 	fbSpec.Height = Engine::GetInstance().GetMainWindow().GetHeight();
-	s_RendererData.m_Framebuffer = Framebuffer::Create(fbSpec);
+	s_RendererData.m_Framebuffer = FrameBuffer::Create(fbSpec);
 
   LoadShaders();
 
-  GABGL_ASSERT(!FT_Init_FreeType(&s_RendererData.ft), "Could not init FreeType Library");
+  GABGL_ASSERT(!FT_Init_FreeType(&s_RendererData.ft), "Could not init FreeType");
 
   LoadFont("res/fonts/dpcomic.ttf");
 
@@ -410,6 +425,32 @@ void Renderer::Init()
 
   s_RendererData.m_Camera = Camera(45.0f, (float)s_RendererData.m_WindowRef->GetWidth() / (float)s_RendererData.m_WindowRef->GetHeight(), 0.01f, 1000.0f);
   s_RendererData.m_Camera.SetViewportSize((float)s_RendererData.m_WindowRef->GetWidth(), (float)s_RendererData.m_WindowRef->GetHeight());
+
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO(); (void)io;
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;       // Enable Keyboard Controls
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;           // Enable Docking
+	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;         // Enable Multi-Viewport / Platform Windows
+	//float fontSize = 18.0f;// *2.0f;
+	//io.Fonts->AddFontFromFileTTF("assets/fonts/opensans/OpenSans-Bold.ttf", fontSize);
+	//io.FontDefault = io.Fonts->AddFontFromFileTTF("assets/fonts/opensans/OpenSans-Regular.ttf", fontSize);
+
+	ImGui::StyleColorsDark();
+
+	ImGuiStyle& style = ImGui::GetStyle();
+	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+	{
+		style.WindowRounding = 0.0f;
+		style.Colors[ImGuiCol_WindowBg].w = 1.0f;
+	}
+
+	GLFWwindow* window = reinterpret_cast<GLFWwindow*>(s_RendererData.m_WindowRef->GetWindowPtr());
+
+	ImGui_ImplGlfw_InitForOpenGL(window, true);
+	ImGui_ImplOpenGL3_Init("#version 410");
+	SetLineWidth(4.0f);
+  s_RendererData.m_GizmoType = ImGuizmo::OPERATION::TRANSLATE;
 }
 
 void Renderer::Shutdown()
@@ -423,6 +464,10 @@ void Renderer::Shutdown()
   s_RendererData.CubeVertexArray.reset();
   s_RendererData.CubeVertexBuffer.reset();
   s_RendererData.CubeIndexBuffer.reset();
+
+  ImGui_ImplOpenGL3_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+	ImGui::DestroyContext();
 }
 
 void Renderer::RenderScene(DeltaTime& dt, const std::function<void()>& pre)
@@ -430,59 +475,71 @@ void Renderer::RenderScene(DeltaTime& dt, const std::function<void()>& pre)
 	ResetStats();
 	s_RendererData.m_Framebuffer->Bind();
 	s_RendererData.m_Framebuffer->ClearAttachment(1, -1);
+  SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
+	Clear();
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_CULL_FACE);
+  glCullFace(GL_FRONT);
+  glFrontFace(GL_CW);
+
 	BeginScene(s_RendererData.m_Camera);
 
 	 pre();
 
 	EndScene();
+  glDisable(GL_CULL_FACE);
 	s_RendererData.m_Framebuffer->Unbind();
+  SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
+	Clear();
+  glDisable(GL_DEPTH_TEST);
 
-	 s_RendererData.m_Camera.OnUpdate(dt);
-	 PhysX::Simulate(dt);
-	 AudioSystem::UpdateAllMusic();
 
-	 if(Input::IsKeyPressed(Key::E))
-	 {
-	    s_RendererData.m_SceneState = RendererData::SceneState::Edit;
-	 }
-	 if(Input::IsKeyPressed(Key::Q))
-	 {
-	    s_RendererData.m_SceneState = RendererData::SceneState::Play;
-	 }
-	 if(Input::IsKeyPressed(Key::R))
-	 {
-	     uint32_t width = (uint32_t)s_RendererData.m_WindowRef->GetWidth(); 
-	     uint32_t height = (uint32_t)s_RendererData.m_WindowRef->GetHeight(); 
+  s_RendererData.m_Camera.OnUpdate(dt);
+  PhysX::Simulate(dt);
+  AudioSystem::UpdateAllMusic();
 
-	     s_RendererData.m_WindowRef->SetFullscreen(false);
-	     s_RendererData.m_Framebuffer->Resize(width, height);
-	     s_RendererData.m_Camera.SetViewportSize(width, height);
+  if(Input::IsKeyPressed(Key::E))
+  {
+    s_RendererData.m_SceneState = RendererData::SceneState::Edit;
+  }
+  if(Input::IsKeyPressed(Key::Q))
+  {
+    s_RendererData.m_SceneState = RendererData::SceneState::Play;
+  }
+  if(Input::IsKeyPressed(Key::R))
+  {
+     uint32_t width = (uint32_t)s_RendererData.m_WindowRef->GetWidth(); 
+     uint32_t height = (uint32_t)s_RendererData.m_WindowRef->GetHeight(); 
 
-	     AudioSystem::PlaySound("select1");
-	 }
-	 if(Input::IsKeyPressed(Key::T))
-	 {
-	     uint32_t width = (uint32_t)s_RendererData.m_WindowRef->GetWidth(); 
-	     uint32_t height = (uint32_t)s_RendererData.m_WindowRef->GetHeight(); 
+     s_RendererData.m_WindowRef->SetFullscreen(false);
+     s_RendererData.m_Framebuffer->Resize(width, height);
+     s_RendererData.m_Camera.SetViewportSize(width, height);
 
-	     s_RendererData.m_WindowRef->SetFullscreen(true);
-	     s_RendererData.m_Framebuffer->Resize(width, height);
-	     s_RendererData.m_Camera.SetViewportSize(width, height);
-	     AudioSystem::PlaySound("select2");
-	 }
+     AudioSystem::PlaySound("select1");
+  }
+  if(Input::IsKeyPressed(Key::T))
+  {
+     uint32_t width = (uint32_t)s_RendererData.m_WindowRef->GetWidth(); 
+     uint32_t height = (uint32_t)s_RendererData.m_WindowRef->GetHeight(); 
+
+     s_RendererData.m_WindowRef->SetFullscreen(true);
+     s_RendererData.m_Framebuffer->Resize(width, height);
+     s_RendererData.m_Camera.SetViewportSize(width, height);
+     AudioSystem::PlaySound("select2");
+  }
 
 	switch (s_RendererData.m_SceneState)
 	{
 	   case RendererData::SceneState::Edit:
 		{
 	     s_RendererData.m_WindowRef->SetCursorVisible(true);
-	     /*s_RendererData.m_Editor.OnImGuiRender(s_RendererData.m_Framebuffer->GetColorAttachmentRendererID());*/
+       Renderer::DrawEditorFrameBuffer(s_RendererData.m_Framebuffer->GetColorAttachmentRendererID());
 			break;
 		}
 	   case RendererData::SceneState::Play:
 		{
 	     s_RendererData.m_WindowRef->SetCursorVisible(false);
-	     Renderer::RenderFullscreenFramebufferTexture(s_RendererData.m_Framebuffer->GetColorAttachmentRendererID());
+	     Renderer::DrawFramebuffer(s_RendererData.m_Framebuffer->GetColorAttachmentRendererID());
 			break;
 		}
 	}
@@ -940,7 +997,7 @@ void Renderer::DrawCubeContour(const glm::vec3& position, const glm::vec3& size,
     DrawLine(v3, v7, color, entityID);
 }
 
-void Renderer::RenderFullscreenFramebufferTexture(uint32_t textureID)
+void Renderer::DrawFramebuffer(uint32_t textureID)
 {
   s_RendererData._shaders2D._FramebufferShader->Use();
   s_RendererData._shaders2D._FramebufferShader->setInt("u_Texture", 0);
@@ -1025,6 +1082,8 @@ void Renderer::BakeModelBuffers(const std::string& name)
       }
 
       glBindVertexArray(0);
+
+      for(auto& tex : mesh.m_Textures) tex->ClearRawData();
     }
   }
   GABGL_WARN("Model: {0} buffers baking took {1} ms", name, timer.ElapsedMillis());
@@ -1659,5 +1718,189 @@ Renderer::Statistics Renderer::Get2DStats()
 Renderer::Statistics Renderer::Get3DStats()
 {
 	return s_RendererData._3DStats;
+}
+
+uint32_t Renderer::GetActiveWidgetID()
+{
+	return GImGui->ActiveId;
+}
+
+void Renderer::BlockEvents(bool block)
+{ 
+  s_RendererData.m_BlockEvents = block;
+}
+
+void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
+{
+	ImGui_ImplOpenGL3_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+	ImGuizmo::BeginFrame();
+	// Note: Switch this to true to enable dockspace
+	static bool dockspaceOpen = true;
+	static bool opt_fullscreen_persistant = true;
+	bool opt_fullscreen = opt_fullscreen_persistant;
+	static ImGuiDockNodeFlags dockspace_flags = ImGuiWindowFlags_NoCollapse | ImGuiDockNodeFlags_NoTabBar;
+
+	// We are using the ImGuiWindowFlags_NoDocking flag to make the parent window not dockable into,
+	// because it would be confusing to have two docking targets within each others.
+	ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDocking;
+	if (opt_fullscreen)
+	{
+		ImGuiViewport* viewport = ImGui::GetMainViewport();
+		ImGui::SetNextWindowPos(viewport->Pos);
+		ImGui::SetNextWindowSize(viewport->Size);
+		ImGui::SetNextWindowViewport(viewport->ID);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+		window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+		window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+	}
+
+	// When using ImGuiDockNodeFlags_PassthruCentralNode, DockSpace() will render our background and handle the pass-thru hole, so we ask Begin() to not render a background.
+	if (dockspace_flags & ImGuiDockNodeFlags_PassthruCentralNode)
+		window_flags |= ImGuiWindowFlags_NoBackground;
+
+	// Important: note that we proceed even if Begin() returns false (aka window is collapsed).
+	// This is because we want to keep our DockSpace() active. If a DockSpace() is inactive, 
+	// all active windows docked into it will lose their parent and become undocked.
+	// We cannot preserve the docking relationship between an active window and an inactive docking, otherwise 
+	// any change of dockspace/settings would lead to windows being stuck in limbo and never being visible.
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+	ImGui::Begin("DockSpace Demo", &dockspaceOpen, window_flags);
+	ImGui::PopStyleVar();
+	if (opt_fullscreen)
+		ImGui::PopStyleVar(2);
+
+	// DockSpace
+	ImGuiIO& io = ImGui::GetIO();
+	ImGuiStyle& style = ImGui::GetStyle();
+	float minWinSizeX = style.WindowMinSize.x;
+	style.WindowMinSize.x = 370.0f;
+	if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable)
+	{
+		ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+		ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
+	}
+
+	style.WindowMinSize.x = minWinSizeX;
+
+	ImGui::Begin("Scene Hierarchy", nullptr, ImGuiWindowFlags_NoCollapse);
+
+
+	ImGui::End();
+
+	ImGui::Begin("Components", nullptr, ImGuiWindowFlags_NoCollapse);
+
+	if (ImGui::Button("Reload Shaders")) LoadShaders();
+
+	ImGui::End();
+
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
+	ImGui::Begin("Viewport", nullptr, NULL);
+	auto viewportMinRegion = ImGui::GetWindowContentRegionMin();
+	auto viewportMaxRegion = ImGui::GetWindowContentRegionMax();
+	auto viewportOffset = ImGui::GetWindowPos();
+	s_RendererData.m_ViewportBounds[0] = { viewportMinRegion.x + viewportOffset.x, viewportMinRegion.y + viewportOffset.y };
+	s_RendererData.m_ViewportBounds[1] = { viewportMaxRegion.x + viewportOffset.x, viewportMaxRegion.y + viewportOffset.y };
+
+	s_RendererData.m_ViewportFocused = ImGui::IsWindowFocused();
+	s_RendererData.m_ViewportHovered = ImGui::IsWindowHovered();
+
+	BlockEvents(!s_RendererData.m_ViewportHovered);
+	ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
+	s_RendererData.m_ViewportSize = { viewportPanelSize.x, viewportPanelSize.y };
+
+	uint64_t textureID = static_cast<uint64_t>(framebufferTexture);
+	ImGui::Image(reinterpret_cast<void*>(textureID), ImVec2{ s_RendererData.m_ViewportSize.x, s_RendererData.m_ViewportSize.y }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
+
+	ImGui::End();
+	ImGui::PopStyleVar();
+
+	ImGui::End();
+	io.DisplaySize = ImVec2((float)s_RendererData.m_WindowRef->GetWidth(), (float)s_RendererData.m_WindowRef->GetHeight());
+
+	ImGui::Render();
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+	{
+		GLFWwindow* backup_current_context = glfwGetCurrentContext();
+		ImGui::UpdatePlatformWindows();
+		ImGui::RenderPlatformWindowsDefault();
+		glfwMakeContextCurrent(backup_current_context);
+	}
+}
+
+bool Renderer::DecomposeTransform(const glm::mat4& transform, glm::vec3& translation, glm::vec3& rotation, glm::vec3& scale)
+{
+  // From glm::decompose in matrix_decompose.inl
+
+  using namespace glm;
+  using T = float;
+
+  mat4 LocalMatrix(transform);
+
+  // Normalize the matrix.
+  if (epsilonEqual(LocalMatrix[3][3], static_cast<float>(0), epsilon<T>()))
+    return false;
+
+  // First, isolate perspective.  This is the messiest.
+  if (
+    epsilonNotEqual(LocalMatrix[0][3], static_cast<T>(0), epsilon<T>()) ||
+    epsilonNotEqual(LocalMatrix[1][3], static_cast<T>(0), epsilon<T>()) ||
+    epsilonNotEqual(LocalMatrix[2][3], static_cast<T>(0), epsilon<T>()))
+  {
+    // Clear the perspective partition
+    LocalMatrix[0][3] = LocalMatrix[1][3] = LocalMatrix[2][3] = static_cast<T>(0);
+    LocalMatrix[3][3] = static_cast<T>(1);
+  }
+
+  // Next take care of translation (easy).
+  translation = vec3(LocalMatrix[3]);
+  LocalMatrix[3] = vec4(0, 0, 0, LocalMatrix[3].w);
+
+  vec3 Row[3], Pdum3;
+
+  // Now get scale and shear.
+  for (length_t i = 0; i < 3; ++i)
+    for (length_t j = 0; j < 3; ++j)
+      Row[i][j] = LocalMatrix[i][j];
+
+  // Compute X scale factor and normalize first row.
+  scale.x = length(Row[0]);
+  Row[0] = detail::scale(Row[0], static_cast<T>(1));
+  scale.y = length(Row[1]);
+  Row[1] = detail::scale(Row[1], static_cast<T>(1));
+  scale.z = length(Row[2]);
+  Row[2] = detail::scale(Row[2], static_cast<T>(1));
+
+  // At this point, the matrix (in rows[]) is orthonormal.
+  // Check for a coordinate system flip.  If the determinant
+  // is -1, then negate the matrix and the scaling factors.
+#if 0
+  Pdum3 = cross(Row[1], Row[2]); // v3Cross(row[1], row[2], Pdum3);
+  if (dot(Row[0], Pdum3) < 0)
+  {
+    for (length_t i = 0; i < 3; i++)
+    {
+      scale[i] *= static_cast<T>(-1);
+      Row[i] *= static_cast<T>(-1);
+    }
+  }
+#endif
+
+  rotation.y = asin(-Row[0][2]);
+  if (cos(rotation.y) != 0) {
+    rotation.x = atan2(Row[1][2], Row[2][2]);
+    rotation.z = atan2(Row[0][1], Row[0][0]);
+  }
+  else {
+    rotation.x = atan2(-Row[2][0], Row[1][1]);
+    rotation.z = 0;
+  }
+
+
+  return true;
 }
 

@@ -48,7 +48,7 @@ struct Renderer
   static void UploadSkybox(const std::string& name,const std::shared_ptr<Texture>& texture);
   static void DrawSkybox(const std::string& name);
 	static void LoadFont(const std::string& path);
-  static void RenderFullscreenFramebufferTexture(uint32_t textureID);
+  static void DrawFramebuffer(uint32_t textureID);
 
 	static float GetLineWidth();
 	static void SetLineWidth(float width);
@@ -81,4 +81,10 @@ private:
 	static void DrawLines(const std::shared_ptr<VertexArray>& vertexArray, uint32_t vertexCount);
 	static void StartBatch();
 	static void NextBatch();
+
+	static void DrawEditorFrameBuffer(uint32_t framebufferTexture);
+  static uint32_t GetActiveWidgetID();
+	static void BlockEvents(bool block);
+	static bool DecomposeTransform(const glm::mat4& transform, glm::vec3& translation, glm::vec3& rotation, glm::vec3& scale);
+
 };

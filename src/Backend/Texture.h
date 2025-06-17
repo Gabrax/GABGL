@@ -48,6 +48,7 @@ struct Texture
 	inline uint32_t GetRendererID() const { return m_RendererID; }
   inline uint32_t& GetRendererID() { return m_RendererID; }
 	inline const uint8_t* GetRawData() const { return m_RawData; }
+  inline void ClearRawData() { delete[] m_RawData; m_RawData = nullptr; }
 	inline const std::string& GetPath() const { return m_Path; }
   inline const GLenum GetDataFormat() const { return m_DataFormat; }
   inline const GLenum GetInternalFormat() const { return m_InternalFormat; }

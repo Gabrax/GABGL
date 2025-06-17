@@ -22,7 +22,6 @@ void Application::OnUpdate(DeltaTime& dt)
        Renderer::DrawCube({glm::vec3(2.0f,0.0f,0.0f)});
 
        Renderer::DrawModel(dt,"objHouse",glm::vec3(0.0f),glm::vec3(1.0f),90.0f);
-       /*Renderer::DrawModel(dt,"backpack",glm::vec3(0.0f),glm::vec3(1.0f),90.0f);*/
        Renderer::DrawModel(dt,"MaleSurvivor1",glm::vec3(0.0f,0.0f,0.0f),glm::vec3(1.0f),90.0f);
        /*Renderer::DrawModel(dt,"guy",glm::vec3(3.0f,0.0f,0.0f),glm::vec3(1.0f),90.0f);*/
 

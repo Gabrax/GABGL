@@ -27,7 +27,8 @@ public:
 
     // Wait until all queued tasks are done
     void WaitIdle();
-
+    void ScheduleOnMainThread(std::function<void()> task);
+    void ProcessMainThreadTasks();
     // Stop the upload thread and destroy context
     void Shutdown();
 
@@ -41,6 +42,8 @@ private:
     std::queue<Task> m_TaskQueue;
     std::atomic<bool> m_Stop{ false };
     std::atomic<bool> m_Idle{ true };
+    std::mutex mainThreadQueueMutex;
+    std::queue<std::function<void()>> mainThreadTasks;
 };
 
 UploadContextManager::UploadContextManager(GLFWwindow* sharedContext) {
@@ -123,17 +126,15 @@ void UploadContextManager::ThreadFunc() {
     m_UploadWindow = nullptr;
 }
 
-static std::mutex mainThreadQueueMutex;
-static std::queue<std::function<void()>> mainThreadTasks;
 
 
-static void ScheduleOnMainThread(std::function<void()> task) {
+void UploadContextManager::ScheduleOnMainThread(std::function<void()> task) {
     std::lock_guard<std::mutex> lock(mainThreadQueueMutex);
     mainThreadTasks.push(std::move(task));
 }
 
 // Call this on main thread regularly (e.g. each frame)
-static void ProcessMainThreadTasks() {
+void UploadContextManager::ProcessMainThreadTasks() {
     std::lock_guard<std::mutex> lock(mainThreadQueueMutex);
     while (!mainThreadTasks.empty()) {
         mainThreadTasks.front()();
@@ -163,13 +164,11 @@ void AssetManager::LoadAssets()
 
     std::vector<std::tuple<const char*, float, bool, PhysXMeshType>> static_models = {
         { "res/map/objHouse.obj", 1.0f, true, PhysXMeshType::TRIANGLEMESH },
-        /*{ "res/backpack/backpack.obj", 0.2f, true, PhysXMeshType::TRIANGLEMESH }*/
     };
 
     std::vector<std::tuple<const char*, float, bool, PhysXMeshType>> animated_models = {
         { "res/lowpoly/MaleSurvivor1.glb", 1.0f, true, PhysXMeshType::TRIANGLEMESH },
-        { "res/lowpoly/MaleSurvivor2.glb", 1.0f, true, PhysXMeshType::TRIANGLEMESH },
-        { "res/guy/guy.dae", 1.0f, true, PhysXMeshType::TRIANGLEMESH }
+        /*{ "res/guy/guy.dae", 1.0f, true, PhysXMeshType::TRIANGLEMESH }*/
     };
 
     std::vector<std::future<void>> m_FutureVoid;
@@ -203,12 +202,10 @@ void AssetManager::LoadAssets()
         const std::string& path = std::get<0>(static_models[i]);
         std::string name = std::filesystem::path(path).stem().string();
 
-            /*Renderer::BakeModelTextures(path, model);*/
-            /*Renderer::BakeModelBuffers(name);*/
-        uploadManager.EnqueueUpload([path, model, name]() {
+        uploadManager.EnqueueUpload([&uploadManager, path, model, name]() {
             Renderer::BakeModelTextures(path, model);
 
-            ScheduleOnMainThread([name]() {
+            uploadManager.ScheduleOnMainThread([name]() {
               Renderer::BakeModelBuffers(name);
             });
         });
@@ -219,19 +216,17 @@ void AssetManager::LoadAssets()
         const std::string& path = std::get<0>(animated_models[i]);
         std::string name = std::filesystem::path(path).stem().string();
 
-            /*Renderer::BakeModelTextures(path, model);*/
-            /*Renderer::BakeModelBuffers(name);*/
-        uploadManager.EnqueueUpload([path, model, name]() {
+        uploadManager.EnqueueUpload([&uploadManager, path, model, name]() {
             Renderer::BakeModelTextures(path, model);
 
-            ScheduleOnMainThread([name]() {
+            uploadManager.ScheduleOnMainThread([name]() {
                 Renderer::BakeModelBuffers(name);
             });
         });
     }
 
     uploadManager.WaitIdle();
-    ProcessMainThreadTasks();
+    uploadManager.ProcessMainThreadTasks();
     uploadManager.Shutdown();
 }
 
