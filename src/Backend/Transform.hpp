@@ -30,8 +30,11 @@ struct Transform
         return glm::normalize(q * glm::vec3(1.0f, 0.0f, 0.0f));
     }
 
+    inline void SetPosition(const glm::vec3& position) { m_Position = position; }
     inline glm::vec3 GetPosition() { return m_Position; }
+    inline void SetRotation(const glm::vec3& rotation) { m_Rotation = rotation; }
     inline glm::vec3 GetRotation() { return m_Rotation; }
+    inline void SetScale(const glm::vec3& scale) { m_Scale = scale; }
     inline glm::vec3 GetScale() { return m_Scale; }
 
 private:

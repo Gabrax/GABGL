@@ -6,7 +6,7 @@
 #include <glm/gtx/quaternion.hpp>
 
 
-glm::mat4 ConvertMatrixToGLMFormat(const aiMatrix4x4& from)
+static glm::mat4 ConvertMatrixToGLMFormat(const aiMatrix4x4& from)
 {
   glm::mat4 to;
   //the a,b,c,d in assimp is the row ; the 1,2,3,4 is the column
@@ -17,11 +17,12 @@ glm::mat4 ConvertMatrixToGLMFormat(const aiMatrix4x4& from)
   return to;
 }
 
-glm::vec3 GetGLMVec(const aiVector3D& vec) 
+static glm::vec3 GetGLMVec(const aiVector3D& vec) 
 { 
   return glm::vec3(vec.x, vec.y, vec.z); 
 }
-glm::quat GetGLMQuat(const aiQuaternion& pOrientation)
+
+static glm::quat GetGLMQuat(const aiQuaternion& pOrientation)
 {
   return glm::quat(pOrientation.w, pOrientation.x, pOrientation.y, pOrientation.z);
 }

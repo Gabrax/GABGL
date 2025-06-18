@@ -33,42 +33,31 @@ void Application::OnUpdate(DeltaTime& dt)
 
 void Application::OnEvent(Event& e)
 {
-	/*if (m_SceneState == SceneState::Edit) m_Camera.OnEvent(e);*/
-
-	/*EventDispatcher dispatcher(e);*/
-	/*dispatcher.Dispatch<KeyPressedEvent>(BIND_EVENT(Application::OnKeyPressed));*/
-	/*dispatcher.Dispatch<MouseButtonPressedEvent>(BIND_EVENT(Application::OnMouseButtonPressed));*/
+	EventDispatcher dispatcher(e);
+	dispatcher.Dispatch<KeyPressedEvent>(BIND_EVENT(Application::OnKeyPressed));
+	dispatcher.Dispatch<MouseButtonPressedEvent>(BIND_EVENT(Application::OnMouseButtonPressed));
 }
 
 bool Application::OnKeyPressed(KeyPressedEvent& e)
 {
 	// Shortcuts
-	/*if (e.IsRepeat())*/
-	/*	return false;*/
-	/**/
-	/*bool control = Input::IsKeyPressed(Key::LeftControl) || Input::IsKeyPressed(Key::RightControl);*/
-	/*bool shift = Input::IsKeyPressed(Key::LeftShift) || Input::IsKeyPressed(Key::RightShift);*/
-	/**/
-	/*switch (e.GetKeyCode())*/
-	/*{*/
-	/*	case Key::R:*/
-	/*	{*/
-	/*		break;*/
-	/*	}*/
-	/*	case Key::T:*/
-	/*	{*/
-	/*		break;*/
-	/*	}*/
-	/*	case Key::Q:*/
-	/*	{*/
-	/*		break;*/
-	/*	}*/
-	/*	case Key::E:*/
-	/*	{*/
-	/*		break;*/
-	/*	}*/
-	/* }*/
-	/**/
+	if (e.IsRepeat())
+		return false;
+
+	switch (e.GetKeyCode())
+	{
+		case Key::R:
+		{
+      Renderer::SetFullscreen("sound1", true);
+			break;
+		}
+		case Key::T:
+		{
+      Renderer::SetFullscreen("sound2", false);
+			break;
+		}
+	}
+
 	return false;
 }
 

@@ -92,10 +92,6 @@ struct AnimationData {
     AssimpNodeData hierarchy; // Precomputed node hierarchy for the animation.
 };
 
-static glm::mat4 ConvertMatrixToGLMFormat(const aiMatrix4x4& from);
-static glm::vec3 GetGLMVec(const aiVector3D& vec); 
-static glm::quat GetGLMQuat(const aiQuaternion& pOrientation);
-
 struct Vertex
 {
   glm::vec3 Position;
@@ -117,12 +113,16 @@ struct Mesh
   std::vector<std::shared_ptr<Texture>> m_Textures;
 
   GLuint VAO, VBO, EBO;
+  GLuint instanceVBO = 0;
+  bool instanceAttribsConfigured = false;
+  bool instanceDataDirty = true;
 };
 
-enum class PhysXMeshType : int32_t {
-    BOX = 0,
-    TRIANGLEMESH = 1,
-    CONVEXMESH = 2
+enum class PhysXMeshType : int32_t
+{
+  BOX = 0,
+  TRIANGLEMESH = 1,
+  CONVEXMESH = 2
 };
 
 struct Model

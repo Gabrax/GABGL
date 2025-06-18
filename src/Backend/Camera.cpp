@@ -3,9 +3,8 @@
 #include "../backend/BackendLogger.h"
 #include "../input/UserInput.h"
 #include "../input/KeyEvent.h"
-#include "../engine.h"
 
-#include <glfw/glfw3.h>
+#include <GLFW/glfw3.h>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
@@ -40,17 +39,14 @@ Camera::Camera(const glm::mat4& projection) : m_Projection(projection)
 void Camera::UpdateProjection()
 {
     // Deprecated, you can call RecalculateProjection() instead
-    m_AspectRatio = m_ViewportWidth / m_ViewportHeight;
+  m_AspectRatio = m_ViewportWidth / m_ViewportHeight;
 
-    m_Projection = glm::perspective(m_PerspectiveFOV, m_AspectRatio, m_PerspectiveNear, m_PerspectiveFar);
+  m_Projection = glm::perspective(m_PerspectiveFOV, m_AspectRatio, m_PerspectiveNear, m_PerspectiveFar);
 }
 
 void Camera::UpdateView()
 {
-    m_Position = CalculatePosition();
-    glm::quat orientation = GetOrientation();
-    glm::mat4 transform = glm::translate(glm::mat4(1.0f), m_Position) * glm::toMat4(orientation);
-    m_ViewMatrix = glm::inverse(transform);
+  m_ViewMatrix = glm::lookAt(m_Position, m_Position + m_Front, m_Up);
 }
 
 std::pair<float, float> Camera::PanSpeed() const
@@ -80,21 +76,28 @@ float Camera::ZoomSpeed() const
 
 void Camera::OnUpdate(DeltaTime dt)
 {
-  const glm::vec2& mouse{ Input::GetMouseX(), Input::GetMouseY() };
-  glm::vec2 delta = (mouse - m_InitialMousePosition) * 0.003f;
+  glm::vec2 mouse{ Input::GetMouseX(), Input::GetMouseY() };
+  glm::vec2 delta = (mouse - m_InitialMousePosition) * 0.1f;
   m_InitialMousePosition = mouse;
 
-	if (Input::IsKeyPressed(Key::LeftAlt))
-	{
-		if (Input::IsMouseButtonPressed(Mouse::ButtonMiddle))
-			MousePan(delta);
-		else if (Input::IsMouseButtonPressed(Mouse::ButtonLeft))
-			MouseRotate(delta);
-		else if (Input::IsMouseButtonPressed(Mouse::ButtonRight))
-			MouseZoom(delta.y);
-	}
+  MouseRotate(delta.x, -delta.y);
 
-	UpdateView();
+  float velocity = m_MovementSpeed * dt;
+
+  if (Input::IsKeyPressed(Key::W))
+      m_Position += m_Front * velocity;
+  if (Input::IsKeyPressed(Key::S))
+      m_Position -= m_Front * velocity;
+  if (Input::IsKeyPressed(Key::A))
+      m_Position -= m_Right * velocity;
+  if (Input::IsKeyPressed(Key::D))
+      m_Position += m_Right * velocity;
+  if (Input::IsKeyPressed(Key::Space)) // Move up
+      m_Position += m_Up * velocity;
+  if (Input::IsKeyPressed(Key::LeftControl) || Input::IsKeyPressed(Key::RightControl)) // Move down
+      m_Position -= m_Up * velocity;
+
+  UpdateView();
 }
 
 void Camera::OnEvent(Event& e)
@@ -118,15 +121,21 @@ void Camera::MousePan(const glm::vec2& delta)
 	m_FocalPoint += GetUpDirection() * delta.y * ySpeed * m_Distance;
 }
 
-void Camera::MouseRotate(const glm::vec2& delta)
+void Camera::MouseRotate(float xoffset, float yoffset, bool constrainPitch)
 {
-    float yawSign = GetUpDirection().y < 0 ? -1.0f : 1.0f;
-    m_Yaw += yawSign * delta.x * RotationSpeed();
-    m_Pitch += delta.y * RotationSpeed();
+  xoffset *= m_MouseSensitivity;
+  yoffset *= m_MouseSensitivity;
 
-    // Clamp pitch to avoid flipping over
-    const float pitchLimit = glm::radians(89.0f);
-    m_Pitch = glm::clamp(m_Pitch, -pitchLimit, pitchLimit);
+  m_Yaw += xoffset;
+  m_Pitch += yoffset;
+
+  if (constrainPitch)
+  {
+    if (m_Pitch > 89.0f) m_Pitch = 89.0f;
+    if (m_Pitch < -89.0f) m_Pitch = -89.0f;
+  }
+
+  UpdateCameraVectors();
 }
 
 void Camera::MouseZoom(float delta)
@@ -137,6 +146,19 @@ void Camera::MouseZoom(float delta)
 		m_FocalPoint += GetForwardDirection();
 		m_Distance = 1.0f;
 	}
+}
+
+void Camera::UpdateCameraVectors()
+{
+  glm::vec3 front;
+  front.x = cos(glm::radians(m_Yaw)) * cos(glm::radians(m_Pitch));
+  front.y = sin(glm::radians(m_Pitch));
+  front.z = sin(glm::radians(m_Yaw)) * cos(glm::radians(m_Pitch));
+  m_Front = glm::normalize(front);
+
+  // Also re-calculate the Right and Up vector
+  m_Right = glm::normalize(glm::cross(m_Front, m_WorldUp));
+  m_Up = glm::normalize(glm::cross(m_Right, m_Front));
 }
 
 glm::vec3 Camera::GetUpDirection() const
@@ -184,36 +206,36 @@ void Camera::SetOrthographic(float size, float nearClip, float farClip)
 
 void Camera::SetViewportSize(uint32_t width, uint32_t height)
 {
-    GABGL_ASSERT(width > 0 && height > 0, "SIZE BELOW ZERO");
-    m_ViewportWidth = static_cast<float>(width);
-    m_ViewportHeight = static_cast<float>(height);
-    m_AspectRatio = m_ViewportWidth / m_ViewportHeight;
-    RecalculateProjection();
+  GABGL_ASSERT(width > 0 && height > 0, "SIZE BELOW ZERO");
+  m_ViewportWidth = static_cast<float>(width);
+  m_ViewportHeight = static_cast<float>(height);
+  m_AspectRatio = m_ViewportWidth / m_ViewportHeight;
+  RecalculateProjection();
 }
 
 void Camera::SetViewportSize(float width, float height)
 {
-    GABGL_ASSERT(width > 0 && height > 0, "SIZE BELOW ZERO");
-    m_ViewportWidth = width;
-    m_ViewportHeight = height;
-    m_AspectRatio = m_ViewportWidth / m_ViewportHeight;
-    RecalculateProjection();
+  GABGL_ASSERT(width > 0 && height > 0, "SIZE BELOW ZERO");
+  m_ViewportWidth = width;
+  m_ViewportHeight = height;
+  m_AspectRatio = m_ViewportWidth / m_ViewportHeight;
+  RecalculateProjection();
 }
 
 void Camera::RecalculateProjection()
 {
-    if (m_ProjectionType == ProjectionType::Perspective)
-    {
-        // m_PerspectiveFOV is already in radians
-        m_Projection = glm::perspective(m_PerspectiveFOV, m_AspectRatio, m_PerspectiveNear, m_PerspectiveFar);
-    }
-    else
-    {
-        float orthoLeft = -m_OrthographicSize * m_AspectRatio * 0.5f;
-        float orthoRight = m_OrthographicSize * m_AspectRatio * 0.5f;
-        float orthoBottom = -m_OrthographicSize * 0.5f;
-        float orthoTop = m_OrthographicSize * 0.5f;
+  if (m_ProjectionType == ProjectionType::Perspective)
+  {
+      // m_PerspectiveFOV is already in radians
+      m_Projection = glm::perspective(m_PerspectiveFOV, m_AspectRatio, m_PerspectiveNear, m_PerspectiveFar);
+  }
+  else
+  {
+      float orthoLeft = -m_OrthographicSize * m_AspectRatio * 0.5f;
+      float orthoRight = m_OrthographicSize * m_AspectRatio * 0.5f;
+      float orthoBottom = -m_OrthographicSize * 0.5f;
+      float orthoTop = m_OrthographicSize * 0.5f;
 
-        m_Projection = glm::ortho(orthoLeft, orthoRight, orthoBottom, orthoTop, m_OrthographicNear, m_OrthographicFar);
-    }
+      m_Projection = glm::ortho(orthoLeft, orthoRight, orthoBottom, orthoTop, m_OrthographicNear, m_OrthographicFar);
+  }
 }

@@ -70,7 +70,7 @@ private:
     bool OnMouseScroll(MouseScrolledEvent& e);
 
     void MousePan(const glm::vec2& delta);
-    void MouseRotate(const glm::vec2& delta);
+    void MouseRotate(float xoffset, float yoffset, bool constrainPitch = true);
     void MouseZoom(float delta);
 
     glm::vec3 CalculatePosition() const;
@@ -78,6 +78,7 @@ private:
     std::pair<float, float> PanSpeed() const;
     float RotationSpeed() const;
     float ZoomSpeed() const;
+    void UpdateCameraVectors();
 
 private:
     ProjectionType m_ProjectionType = ProjectionType::Orthographic;
@@ -97,10 +98,17 @@ private:
     glm::mat4 m_Projection = glm::mat4(1.0f);
     glm::mat4 m_ViewMatrix;
 
-    glm::vec3 m_Position = { 0.0f, 0.0f, 0.0f };
+    glm::vec3 m_Position = { 0.0f, 5.0f, 5.0f };
     glm::vec3 m_FocalPoint = { 0.0f, 0.0f, 0.0f };
 
     glm::vec2 m_InitialMousePosition = { 0.0f, 0.0f };
+
+    float m_MovementSpeed = 5.0f;
+    float m_MouseSensitivity = 1.0f;
+    glm::vec3 m_Front = glm::vec3(0.0f, 0.0f, -1.0f);
+    glm::vec3 m_Up = glm::vec3(0.0f, 1.0f, 0.0f);
+    glm::vec3 m_WorldUp = glm::vec3(0.0f, 1.0f, 0.0f);
+    glm::vec3 m_Right = glm::vec3(1.0f, 0.0f, 0.0f);
 
     float m_Distance = 10.0f;
     float m_Pitch = 0.0f;

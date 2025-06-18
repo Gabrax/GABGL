@@ -487,6 +487,7 @@ void Renderer::RenderScene(DeltaTime& dt, const std::function<void()>& pre)
 	 pre();
 
 	EndScene();
+
   glDisable(GL_CULL_FACE);
 	s_RendererData.m_Framebuffer->Unbind();
   SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
@@ -506,27 +507,6 @@ void Renderer::RenderScene(DeltaTime& dt, const std::function<void()>& pre)
   {
     s_RendererData.m_SceneState = RendererData::SceneState::Play;
   }
-  if(Input::IsKeyPressed(Key::R))
-  {
-     uint32_t width = (uint32_t)s_RendererData.m_WindowRef->GetWidth(); 
-     uint32_t height = (uint32_t)s_RendererData.m_WindowRef->GetHeight(); 
-
-     s_RendererData.m_WindowRef->SetFullscreen(false);
-     s_RendererData.m_Framebuffer->Resize(width, height);
-     s_RendererData.m_Camera.SetViewportSize(width, height);
-
-     AudioSystem::PlaySound("select1");
-  }
-  if(Input::IsKeyPressed(Key::T))
-  {
-     uint32_t width = (uint32_t)s_RendererData.m_WindowRef->GetWidth(); 
-     uint32_t height = (uint32_t)s_RendererData.m_WindowRef->GetHeight(); 
-
-     s_RendererData.m_WindowRef->SetFullscreen(true);
-     s_RendererData.m_Framebuffer->Resize(width, height);
-     s_RendererData.m_Camera.SetViewportSize(width, height);
-     AudioSystem::PlaySound("select2");
-  }
 
 	switch (s_RendererData.m_SceneState)
 	{
@@ -543,6 +523,18 @@ void Renderer::RenderScene(DeltaTime& dt, const std::function<void()>& pre)
 			break;
 		}
 	}
+}
+
+void Renderer::SetFullscreen(const std::string& sound, bool windowed)
+{
+  s_RendererData.m_WindowRef->SetFullscreen(windowed);
+
+  uint32_t width = (uint32_t)s_RendererData.m_WindowRef->GetWidth(); 
+  uint32_t height = (uint32_t)s_RendererData.m_WindowRef->GetHeight(); 
+
+  s_RendererData.m_Framebuffer->Resize(width, height);
+  s_RendererData.m_Camera.SetViewportSize(width, height);
+  AudioSystem::PlaySound(sound);
 }
 
 void Renderer::StartBatch()
@@ -1089,6 +1081,40 @@ void Renderer::BakeModelBuffers(const std::string& name)
   GABGL_WARN("Model: {0} buffers baking took {1} ms", name, timer.ElapsedMillis());
 }
 
+void Renderer::BakeModelInstancedBuffers(Mesh& mesh, const std::vector<Transform>& transforms)
+{
+    if (transforms.empty()) return;
+
+    // Convert transforms to matrices
+    std::vector<glm::mat4> instanceMatrices;
+    instanceMatrices.reserve(transforms.size());
+    for (const auto& t : transforms)
+        instanceMatrices.push_back(t.GetTransform());
+
+    if (mesh.instanceVBO == 0)
+        glGenBuffers(1, &mesh.instanceVBO);
+
+    glBindVertexArray(mesh.VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, mesh.instanceVBO);
+    glBufferData(GL_ARRAY_BUFFER, instanceMatrices.size() * sizeof(glm::mat4), instanceMatrices.data(), GL_STREAM_DRAW);
+
+    if (!mesh.instanceAttribsConfigured)
+    {
+        std::size_t vec4Size = sizeof(glm::vec4);
+        for (int i = 0; i < 4; ++i)
+        {
+            GLuint loc = 7 + i;
+            glEnableVertexAttribArray(loc);
+            glVertexAttribPointer(loc, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(i * vec4Size));
+            glVertexAttribDivisor(loc, 1);
+        }
+
+        mesh.instanceAttribsConfigured = true;
+    }
+
+    glBindVertexArray(0);
+}
+
 void Renderer::BakeModelTextures(const std::string& path, const std::shared_ptr<Model>& model)
 {
   Timer timer;
@@ -1124,114 +1150,6 @@ void Renderer::BakeModelTextures(const std::string& path, const std::shared_ptr<
   GABGL_WARN("Model: {0} textures baking took {1} ms", name, timer.ElapsedMillis());
 }
 
-/*void Renderer::BakeModelTextures(const std::string& path, const std::shared_ptr<Model>& model)*/
-/*{*/
-/*    Timer timer;*/
-/**/
-/*    constexpr int NumPBOs = 2;*/
-/*    int pboIndex = 0;*/
-/*    PixelBuffer* pbos[NumPBOs] = { nullptr, nullptr };*/
-/**/
-/*    struct PendingUpload*/
-/*    {*/
-/*        PixelBuffer* pbo;*/
-/*        GLuint textureID;*/
-/*        int width, height;*/
-/*        GLenum internalFormat, dataFormat;*/
-/*    };*/
-/*    std::vector<PendingUpload> pendingUploads;*/
-/**/
-/*    // === Pass 1: Upload all data to PBOs ===*/
-/*    for (auto& mesh : model->GetMeshes())*/
-/*    {*/
-/*        for (auto& texture : mesh.m_Textures)*/
-/*        {*/
-/*            GLuint id;*/
-/*            glGenTextures(1, &id);*/
-/*            texture->SetRendererID(id); // store for later*/
-/*            // We'll bind and upload in second pass*/
-/**/
-/*            int width, height;*/
-/*            GLenum internalFormat, dataFormat;*/
-/*            const void* srcData = nullptr;*/
-/*            size_t dataSize = 0;*/
-/**/
-/*            if (texture->IsUnCompressed())*/
-/*            {*/
-/*                width = texture->GetEmbeddedTexture()->mWidth;*/
-/*                height = texture->GetEmbeddedTexture()->mHeight;*/
-/*                internalFormat = GL_RGBA8;*/
-/*                dataFormat = GL_RGBA;*/
-/*                srcData = texture->GetEmbeddedTexture()->pcData;*/
-/*                dataSize = width * height * 4;*/
-/*            }*/
-/*            else*/
-/*            {*/
-/*                width = texture->GetWidth();*/
-/*                height = texture->GetHeight();*/
-/*                internalFormat = texture->GetInternalFormat();*/
-/*                dataFormat = texture->GetDataFormat();*/
-/*                srcData = texture->GetRawData();*/
-/*                dataSize = width * height * (dataFormat == GL_RGBA ? 4 : 3);*/
-/*            }*/
-/**/
-/*            if (!pbos[pboIndex])*/
-/*                pbos[pboIndex] = new PixelBuffer(dataSize);*/
-/**/
-/*            PixelBuffer* currentPBO = pbos[pboIndex];*/
-/*            pboIndex = (pboIndex + 1) % NumPBOs;*/
-/**/
-/*            currentPBO->WaitForCompletion();*/
-/**/
-/*            void* dst = currentPBO->Map();*/
-/*            if (dst)*/
-/*            {*/
-/*                memcpy(dst, srcData, dataSize);*/
-/*                currentPBO->Unmap(); // sets sync*/
-/*            }*/
-/**/
-/*            pendingUploads.push_back({*/
-/*                currentPBO,*/
-/*                id,*/
-/*                width,*/
-/*                height,*/
-/*                internalFormat,*/
-/*                dataFormat*/
-/*            });*/
-/*        }*/
-/*    }*/
-/**/
-/*    // === Pass 2: Create GL textures from PBOs ===*/
-/*    for (auto& upload : pendingUploads)*/
-/*    {*/
-/*        upload.pbo->WaitForCompletion(); // Ensure ready to read*/
-/**/
-/*        glBindTexture(GL_TEXTURE_2D, upload.textureID);*/
-/*        upload.pbo->Bind();*/
-/**/
-/*        glTexImage2D(GL_TEXTURE_2D, 0, upload.internalFormat, upload.width, upload.height,*/
-/*                     0, upload.dataFormat, GL_UNSIGNED_BYTE, nullptr);*/
-/**/
-/*        glGenerateMipmap(GL_TEXTURE_2D);*/
-/**/
-/*        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);*/
-/*        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);*/
-/*        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);*/
-/*        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);*/
-/**/
-/*        upload.pbo->Unbind();*/
-/*    }*/
-/**/
-/*    // Clean up*/
-/*    for (int i = 0; i < NumPBOs; ++i)*/
-/*        delete pbos[i];*/
-/**/
-/*    std::string name = std::filesystem::path(path).stem().string();*/
-/*    s_RendererData.models[name] = std::move(model);*/
-/**/
-/*    GABGL_WARN("Model: {0} textures baking took {1} ms", name, timer.ElapsedMillis());*/
-/*}*/
-
 void Renderer::DrawModel(DeltaTime& dt,const std::string& name, const glm::vec3& position, const glm::vec3& size, float rotation)
 {
 	glm::mat4 transform = glm::translate(glm::mat4(1.0f), position)
@@ -1248,6 +1166,7 @@ void Renderer::DrawModel(DeltaTime& dt, const std::string& name, const glm::mat4
     s_RendererData._shaders3D.ModelShader->Use();
     s_RendererData._shaders3D.ModelShader->setMat4("model", transform);
     s_RendererData._shaders3D.ModelShader->setBool("isAnimated", it->second->IsAnimated());
+    s_RendererData._shaders3D.ModelShader->setBool("isInstanced", false);
     for (auto& mesh : it->second->GetMeshes())
     {
 
@@ -1290,7 +1209,57 @@ void Renderer::DrawModel(DeltaTime& dt, const std::string& name, const glm::mat4
   }
 }
 
-void Renderer::UploadSkybox(const std::string& name, const std::shared_ptr<Texture>& cubemap)
+void Renderer::DrawModelInstanced(DeltaTime& dt, const std::string& name, const std::vector<Transform>& instances, int entityID)
+{
+    auto it = s_RendererData.models.find(name);
+    if (it == s_RendererData.models.end())
+    {
+        GABGL_ERROR("Model not found: {0}", name);
+        return;
+    }
+
+    auto& model = it->second;
+    s_RendererData._shaders3D.ModelShader->Use();
+    s_RendererData._shaders3D.ModelShader->setBool("isAnimated", model->IsAnimated());
+    s_RendererData._shaders3D.ModelShader->setBool("isInstanced", true);
+    for (auto& mesh : model->GetMeshes())
+    {
+        BakeModelInstancedBuffers(mesh, instances); // Upload instance data
+
+        // Bind all textures
+        std::unordered_map<std::string, GLuint> textureCounters = {
+            {"texture_diffuse", 1},
+            {"texture_specular", 1},
+            {"texture_normal", 1},
+            {"texture_height", 1}
+        };
+
+        auto& textures = mesh.m_Textures;
+        for (GLuint i = 0; i < textures.size(); i++) {
+            glActiveTexture(GL_TEXTURE0 + i);
+            std::string number = std::to_string(textureCounters[textures[i]->GetType()]++);
+            s_RendererData._shaders3D.ModelShader->setInt(textures[i]->GetType() + number, i);
+            glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
+        }
+
+        glBindVertexArray(mesh.VAO);
+        glDrawElementsInstanced(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0, static_cast<GLsizei>(instances.size()));
+        glBindVertexArray(0);
+        glActiveTexture(GL_TEXTURE0);
+    }
+  
+    if (model->IsAnimated())
+    {
+        auto& transforms = model->GetFinalBoneMatrices();
+        for (size_t i = 0; i < transforms.size(); ++i)
+        {
+            s_RendererData._shaders3D.ModelShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+        }
+        model->UpdateAnimation(dt);
+    }
+}
+
+void Renderer::BakeSkyboxTextures(const std::string& name, const std::shared_ptr<Texture>& cubemap)
 {
   Timer timer;
 

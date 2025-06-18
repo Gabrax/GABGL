@@ -194,7 +194,7 @@ void AssetManager::LoadAssets()
     UploadContextManager uploadManager(Engine::GetInstance().GetMainWindow().GetWindowPtr());
 
     uploadManager.EnqueueUpload([skyboxTexture]() {
-        Renderer::UploadSkybox("night", skyboxTexture);
+        Renderer::BakeSkyboxTextures("night", skyboxTexture);
     });
 
     for (size_t i = 0; i < static_models.size(); ++i) {
