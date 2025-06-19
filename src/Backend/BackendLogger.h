@@ -12,7 +12,7 @@
 
 #define DEBUG 1
 
-struct Log
+struct Logger
 {
 	static void Init();
 	inline static std::shared_ptr<spdlog::logger>& GetCoreLogger() { return s_CoreLogger; }
@@ -40,11 +40,11 @@ inline OStream& operator<<(OStream& os, glm::qua<T, Q> quaternion)
 
 // Core log macros
 #ifdef DEBUG
-	#define GABGL_TRACE(...)    ::Log::GetCoreLogger()->trace(__VA_ARGS__)
-	#define GABGL_INFO(...)     ::Log::GetCoreLogger()->info(__VA_ARGS__)
-	#define GABGL_WARN(...)     ::Log::GetCoreLogger()->warn(__VA_ARGS__)
-	#define GABGL_ERROR(...)    ::Log::GetCoreLogger()->error(__VA_ARGS__)
-	#define GABGL_CRITICAL(...) ::Log::GetCoreLogger()->critical(__VA_ARGS__)
+	#define GABGL_TRACE(...)    ::Logger::GetCoreLogger()->trace(__VA_ARGS__)
+	#define GABGL_INFO(...)     ::Logger::GetCoreLogger()->info(__VA_ARGS__)
+	#define GABGL_WARN(...)     ::Logger::GetCoreLogger()->warn(__VA_ARGS__)
+	#define GABGL_ERROR(...)    ::Logger::GetCoreLogger()->error(__VA_ARGS__)
+	#define GABGL_CRITICAL(...) ::Logger::GetCoreLogger()->critical(__VA_ARGS__)
 #else
 	#define GABGL_TRACE(...)    
 	#define GABGL_INFO(...)     

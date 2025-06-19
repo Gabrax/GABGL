@@ -13,7 +13,6 @@ Engine* Engine::s_Instance = nullptr;
 Engine::Engine()
 {
   s_Instance = this;
-  Log::Init();
   Run();
 }
 
@@ -21,65 +20,28 @@ Engine::~Engine() = default;
 
 void Engine::Run()
 {
+  Logger::Init();
+
   m_Window = Window::Create({ "GABGL", 1000, 600 });
-	m_Window->SetEventCallback(BIND_EVENT(OnEvent));
 
   AudioSystem::Init();
   PhysX::Init();
 	Renderer::Init();
 	AssetManager::LoadAssets();
 
-  Application* m_Game = new Application;
-  LayerStack::PushLayer(m_Game);
+  Application* m_App = new Application;
+  LayerStack::PushLayer(m_App);
 
-  while(m_isRunning)
+  while(m_Window->IsRunning())
   {
     DeltaTime dt;
 
     Renderer::Clear();
 
-    if (!m_Minimized)
-    {
-      LayerStack::OnUpdate(dt);
-    }
+    if (!m_Window->IsMinimized()) LayerStack::OnUpdate(dt);
 
     m_Window->Update();
   }
 }
 
-void Engine::OnEvent(Event& e)
-{
-	EventDispatcher dispatcher(e);
-	dispatcher.Dispatch<WindowCloseEvent>(BIND_EVENT(OnWindowClose));
-	dispatcher.Dispatch<WindowResizeEvent>(BIND_EVENT(OnWindowResize));
-
-  auto& m_LayerStack = LayerStack::GetLayers();
-	for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
-	{
-		if (e.Handled)
-			break;
-		(*it)->OnEvent(e);
-	}
-}
-
-bool Engine::OnWindowClose(WindowCloseEvent& e)
-{
-	m_isRunning = false;
-	return true;
-}
-
-bool Engine::OnWindowResize(WindowResizeEvent& e)
-{
-
-	if (e.GetWidth() == 0 || e.GetHeight() == 0)
-	{
-		m_Minimized = true;
-		return false;
-	}
-
-	m_Minimized = false;
-	Renderer::OnWindowResize(e.GetWidth(), e.GetHeight());
-
-	return false;
-}
 

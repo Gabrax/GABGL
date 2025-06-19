@@ -531,3 +531,23 @@ std::shared_ptr<FrameBuffer> FrameBuffer::Create(const FramebufferSpecification&
 {
 	return std::make_shared<FrameBuffer>(spec);
 }
+
+void FrameBuffer::Blit(const std::shared_ptr<FrameBuffer>& src, const std::shared_ptr<FrameBuffer>& dst)
+{
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, src->GetID());
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dst->GetID());
+
+  glReadBuffer(GL_COLOR_ATTACHMENT0);
+  glDrawBuffer(GL_COLOR_ATTACHMENT0);
+
+  const auto& srcSpec = src->GetSpecification();
+  const auto& dstSpec = dst->GetSpecification();
+
+  glBlitFramebuffer(
+      0, 0, srcSpec.Width, srcSpec.Height,
+      0, 0, dstSpec.Width, dstSpec.Height,
+      GL_COLOR_BUFFER_BIT, GL_NEAREST
+  );
+
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}

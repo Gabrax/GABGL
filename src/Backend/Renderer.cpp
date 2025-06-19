@@ -228,6 +228,7 @@ struct RendererData
   std::unordered_map<char, Character> Characters;
 
   std::shared_ptr<FrameBuffer> m_Framebuffer;
+  std::shared_ptr<FrameBuffer> m_MSAAFramebuffer;
 
   Window* m_WindowRef = nullptr;
   Camera m_Camera;
@@ -413,6 +414,14 @@ void Renderer::Init()
 	fbSpec.Height = Engine::GetInstance().GetMainWindow().GetHeight();
 	s_RendererData.m_Framebuffer = FrameBuffer::Create(fbSpec);
 
+  FramebufferSpecification fbSpec2;
+	fbSpec2.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::Depth };
+	fbSpec2.Width = Engine::GetInstance().GetMainWindow().GetWidth();
+	fbSpec2.Height = Engine::GetInstance().GetMainWindow().GetHeight();
+  fbSpec2.Samples = 4;
+	s_RendererData.m_MSAAFramebuffer = FrameBuffer::Create(fbSpec2);
+
+
   LoadShaders();
 
   GABGL_ASSERT(!FT_Init_FreeType(&s_RendererData.ft), "Could not init FreeType");
@@ -472,57 +481,59 @@ void Renderer::Shutdown()
 
 void Renderer::RenderScene(DeltaTime& dt, const std::function<void()>& pre)
 {
-	ResetStats();
-	s_RendererData.m_Framebuffer->Bind();
-	s_RendererData.m_Framebuffer->ClearAttachment(1, -1);
+  ResetStats();
+
+  s_RendererData.m_MSAAFramebuffer->Bind();
   SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
-	Clear();
+  Clear();
+
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_CULL_FACE);
   glCullFace(GL_FRONT);
   glFrontFace(GL_CW);
 
-	BeginScene(s_RendererData.m_Camera);
-
-	 pre();
-
-	EndScene();
+  BeginScene(s_RendererData.m_Camera);
+  pre();
+  EndScene();
 
   glDisable(GL_CULL_FACE);
-	s_RendererData.m_Framebuffer->Unbind();
-  SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
-	Clear();
   glDisable(GL_DEPTH_TEST);
+  s_RendererData.m_MSAAFramebuffer->Unbind();
 
+  FrameBuffer::Blit(s_RendererData.m_MSAAFramebuffer, s_RendererData.m_Framebuffer);
+
+  s_RendererData.m_Framebuffer->Bind();
+  s_RendererData.m_Framebuffer->ClearAttachment(1, -1);
+  s_RendererData.m_Framebuffer->Unbind();
+
+  SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
+  Clear();
 
   s_RendererData.m_Camera.OnUpdate(dt);
   PhysX::Simulate(dt);
   AudioSystem::UpdateAllMusic();
 
-  if(Input::IsKeyPressed(Key::E))
-  {
-    s_RendererData.m_SceneState = RendererData::SceneState::Edit;
-  }
-  if(Input::IsKeyPressed(Key::Q))
-  {
-    s_RendererData.m_SceneState = RendererData::SceneState::Play;
-  }
+  if (Input::IsKeyPressed(Key::E)) s_RendererData.m_SceneState = RendererData::SceneState::Edit;
+  if (Input::IsKeyPressed(Key::Q)) s_RendererData.m_SceneState = RendererData::SceneState::Play;
 
-	switch (s_RendererData.m_SceneState)
-	{
-	   case RendererData::SceneState::Edit:
-		{
-	     s_RendererData.m_WindowRef->SetCursorVisible(true);
-       Renderer::DrawEditorFrameBuffer(s_RendererData.m_Framebuffer->GetColorAttachmentRendererID());
-			break;
-		}
-	   case RendererData::SceneState::Play:
-		{
-	     s_RendererData.m_WindowRef->SetCursorVisible(false);
-	     Renderer::DrawFramebuffer(s_RendererData.m_Framebuffer->GetColorAttachmentRendererID());
-			break;
-		}
-	}
+  uint32_t finalTexture = s_RendererData.m_Framebuffer->GetColorAttachmentRendererID();
+
+  switch (s_RendererData.m_SceneState)
+  {
+    case RendererData::SceneState::Edit:
+    {
+      s_RendererData.m_WindowRef->SetCursorVisible(true);
+      Renderer::DrawEditorFrameBuffer(finalTexture);
+      break;
+    }
+
+    case RendererData::SceneState::Play:
+    {
+      s_RendererData.m_WindowRef->SetCursorVisible(false);
+      Renderer::DrawFramebuffer(finalTexture);
+      break;
+    }
+  }
 }
 
 void Renderer::SetFullscreen(const std::string& sound, bool windowed)
@@ -532,6 +543,7 @@ void Renderer::SetFullscreen(const std::string& sound, bool windowed)
   uint32_t width = (uint32_t)s_RendererData.m_WindowRef->GetWidth(); 
   uint32_t height = (uint32_t)s_RendererData.m_WindowRef->GetHeight(); 
 
+  s_RendererData.m_MSAAFramebuffer->Resize(width, height);
   s_RendererData.m_Framebuffer->Resize(width, height);
   s_RendererData.m_Camera.SetViewportSize(width, height);
   AudioSystem::PlaySound(sound);

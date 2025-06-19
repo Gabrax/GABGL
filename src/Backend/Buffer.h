@@ -266,8 +266,9 @@ struct FrameBuffer
 	void ClearAttachment(uint32_t attachmentIndex, int value);
 
 	inline uint32_t GetColorAttachmentRendererID(uint32_t index = 0) const { GABGL_ASSERT(index < m_ColorAttachments.size(),""); return m_ColorAttachments[index]; }
-
 	inline const FramebufferSpecification& GetSpecification() const { return m_Specification; };
+  inline const uint32_t GetID() { return m_RendererID; }
+  static void Blit(const std::shared_ptr<FrameBuffer>& src, const std::shared_ptr<FrameBuffer>& dst);
 
 	static std::shared_ptr<FrameBuffer> Create(const FramebufferSpecification& spec);
 

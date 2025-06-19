@@ -1,11 +1,11 @@
-
-
 #include <GLFW/glfw3.h>
 #include "window.h"
-#include "../Input/EngineEvent.h"
-#include "../Input/KeyEvent.h"
+#include "../input/EngineEvent.h"
+#include "../input/KeyEvent.h"
 #include "BackendLogger.h"
 #include <stb_image.h>
+#include "Renderer.h"
+#include "LayerStack.h"
 
 static void GLFWErrorCallback(int error, const char* description)
 {
@@ -14,7 +14,8 @@ static void GLFWErrorCallback(int error, const char* description)
 
 Window::Window(const WindowDefaultData& props)
 {
-    Init(props);
+  Init(props);
+  SetEventCallback(BIND_EVENT(OnEvent));
 }
 
 Window::~Window(){}
@@ -152,7 +153,6 @@ void Window::Init(const WindowDefaultData& props)
 		  data.EventCallback(event);
 	  });
 
-  /*glClearColor(0.2f, 0.2f, 0.2f, 1.0f);*/
   glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
@@ -240,4 +240,40 @@ void Window::SetResizable(bool enable)
 void Window::SetCursorVisible(bool enable)
 {
   glfwSetInputMode(m_Window, GLFW_CURSOR, enable ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
+}
+
+void Window::OnEvent(Event& e)
+{
+	EventDispatcher dispatcher(e);
+	dispatcher.Dispatch<WindowCloseEvent>(BIND_EVENT(OnWindowClose));
+	dispatcher.Dispatch<WindowResizeEvent>(BIND_EVENT(OnWindowResize));
+  
+  auto& m_LayerStack = LayerStack::GetLayers();
+	for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
+	{
+		if (e.Handled)
+			break;
+		(*it)->OnEvent(e);
+	}
+}
+
+bool Window::OnWindowClose(WindowCloseEvent& e)
+{
+	m_isRunning = false;
+	return true;
+}
+
+bool Window::OnWindowResize(WindowResizeEvent& e)
+{
+
+	if (e.GetWidth() == 0 || e.GetHeight() == 0)
+	{
+		m_isMinimized = true;
+		return false;
+	}
+
+	m_isMinimized = false;
+	Renderer::OnWindowResize(e.GetWidth(), e.GetHeight());
+
+	return false;
 }

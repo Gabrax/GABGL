@@ -7,6 +7,7 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include "../input/Event.h"
+#include "../input/EngineEvent.h"
 
 
 struct WindowDefaultData
@@ -25,6 +26,7 @@ struct Window
 
 	Window(const WindowDefaultData& data);
 	~Window();
+
 	void Update();
 	inline uint32_t GetWidth() const { return m_Data.Width; }
 	inline uint32_t GetHeight() const { return m_Data.Height; }
@@ -39,6 +41,9 @@ struct Window
 	void SetResizable(bool enable);
   void CenterWindowPos();
   void SetCursorVisible(bool enable);
+
+  inline bool IsRunning() { return m_isRunning; }
+  inline bool IsMinimized() { return m_isMinimized; }
 
 	static std::unique_ptr<Window> Create(const WindowDefaultData& props = WindowDefaultData());
 
@@ -63,5 +68,12 @@ private:
 		EventCallbackFn EventCallback;
 	} m_Data;
 
+  bool m_isMinimized = false;
+	bool m_isRunning = true;
+	bool m_closed = false;
+
   void SetWindowIcon(const char* iconpath, GLFWwindow* window);
+  void OnEvent(Event& e);
+  bool OnWindowClose(WindowCloseEvent& e);
+  bool OnWindowResize(WindowResizeEvent& e);
 };
