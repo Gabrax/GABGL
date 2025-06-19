@@ -5,7 +5,7 @@
 #include <glm/glm.hpp>
 #include <string>
 
-struct AudioSystem
+struct AudioManager
 {
   // LISTENER
   static void Init();

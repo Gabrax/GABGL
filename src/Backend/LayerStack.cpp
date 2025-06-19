@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include <iostream>
+
 static std::vector<Layer*> m_Layers;
 static uint32_t m_LayerInsertIndex = 0;
 

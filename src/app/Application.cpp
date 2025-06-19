@@ -8,8 +8,8 @@
 
 Application::Application() 
 {
-  AudioSystem::SetListenerVolume(0.1f);
-  AudioSystem::PlayMusic("menu");
+  AudioManager::SetListenerVolume(0.1f);
+  AudioManager::PlayMusic("menu");
 }
 
 void Application::OnUpdate(DeltaTime& dt)
@@ -23,6 +23,7 @@ void Application::OnUpdate(DeltaTime& dt)
 
        Renderer::DrawModel(dt,"objHouse",glm::vec3(0.0f),glm::vec3(1.0f),90.0f);
        Renderer::DrawModel(dt,"MaleSurvivor1",glm::vec3(0.0f,0.0f,0.0f),glm::vec3(1.0f),90.0f);
+       /*Renderer::DrawModel(dt,"guy",glm::vec3(0.0f,0.0f,0.0f),glm::vec3(1.0f),90.0f);*/
 
        Renderer::DrawSkybox("night");
        Renderer::Draw2DText("FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f,50.0f), 0.5f, glm::vec4(1.0f,1.0f,3.0f,1.0f));
@@ -47,12 +48,12 @@ bool Application::OnKeyPressed(KeyPressedEvent& e)
 	{
 		case Key::R:
 		{
-      Renderer::SetFullscreen("sound1", true);
+      Renderer::SetFullscreen("select1", true);
 			break;
 		}
 		case Key::T:
 		{
-      Renderer::SetFullscreen("sound2", false);
+      Renderer::SetFullscreen("select2", false);
 			break;
 		}
 	}

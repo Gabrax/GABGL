@@ -187,11 +187,6 @@ struct RendererData
   CameraData _2DCameraBuffer;
   std::shared_ptr<UniformBuffer> _2DCameraUniformBuffer;
 
-  std::shared_ptr<StorageBuffer> LightPosStorageBuffer;
-  std::shared_ptr<StorageBuffer> LightQuantityStorageBuffer;
-  std::shared_ptr<StorageBuffer> LightColorStorageBuffer;
-  std::shared_ptr<StorageBuffer> LightTypeStorageBuffer;
-
   glm::vec3 quadPositions[4] = {
       { 0.0f, 0.0f, 0.0f },
       { 1.0f, 0.0f, 0.0f },
@@ -403,10 +398,6 @@ void Renderer::Init()
 
   s_RendererData._3DCameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 0);
   s_RendererData._2DCameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 1);
-  s_RendererData.LightPosStorageBuffer = StorageBuffer::Create(sizeof(glm::vec3) * 10, 0);
-  s_RendererData.LightQuantityStorageBuffer= StorageBuffer::Create(sizeof(uint32_t) * 10, 1);
-  s_RendererData.LightColorStorageBuffer= StorageBuffer::Create(sizeof(glm::vec4) * 10, 2);
-  s_RendererData.LightTypeStorageBuffer= StorageBuffer::Create(sizeof(uint32_t) * 10, 3);
 
   FramebufferSpecification fbSpec;
 	fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::Depth };
@@ -484,7 +475,7 @@ void Renderer::RenderScene(DeltaTime& dt, const std::function<void()>& pre)
   ResetStats();
 
   s_RendererData.m_MSAAFramebuffer->Bind();
-  SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
+  SetClearColor(glm::vec4(0.0f));
   Clear();
 
   glEnable(GL_DEPTH_TEST);
@@ -506,12 +497,12 @@ void Renderer::RenderScene(DeltaTime& dt, const std::function<void()>& pre)
   s_RendererData.m_Framebuffer->ClearAttachment(1, -1);
   s_RendererData.m_Framebuffer->Unbind();
 
-  SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
+  SetClearColor(glm::vec4(0.0f));
   Clear();
 
   s_RendererData.m_Camera.OnUpdate(dt);
   PhysX::Simulate(dt);
-  AudioSystem::UpdateAllMusic();
+  AudioManager::UpdateAllMusic();
 
   if (Input::IsKeyPressed(Key::E)) s_RendererData.m_SceneState = RendererData::SceneState::Edit;
   if (Input::IsKeyPressed(Key::Q)) s_RendererData.m_SceneState = RendererData::SceneState::Play;
@@ -546,7 +537,7 @@ void Renderer::SetFullscreen(const std::string& sound, bool windowed)
   s_RendererData.m_MSAAFramebuffer->Resize(width, height);
   s_RendererData.m_Framebuffer->Resize(width, height);
   s_RendererData.m_Camera.SetViewportSize(width, height);
-  AudioSystem::PlaySound(sound);
+  AudioManager::PlaySound(sound);
 }
 
 void Renderer::StartBatch()

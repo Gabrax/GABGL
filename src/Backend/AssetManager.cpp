@@ -14,6 +14,7 @@
 #include <functional>
 #include <atomic>
 #include <filesystem>
+#include "BackendLogger.h"
 
 class UploadContextManager {
 public:
@@ -142,95 +143,146 @@ void UploadContextManager::ProcessMainThreadTasks() {
     }
 }
 
-void AssetManager::LoadAssets()
+struct AssetsData
 {
-    std::vector<const char*> sounds = {
-        "res/audio/select1.wav",
-        "res/audio/select2.wav",
-    };
+  std::vector<const char*> sounds = {
+      "res/audio/select1.wav",
+      "res/audio/select2.wav",
+      "res/audio/ak.wav",
+  };
 
-    std::vector<const char*> music = {
-        "res/audio/menu.wav",
-    };
+  std::vector<const char*> music = {
+      "res/audio/menu.wav",
+  };
 
-    std::vector<std::string> skybox = {
-        "res/skybox/NightSky_Right.png",
-        "res/skybox/NightSky_Left.png",
-        "res/skybox/NightSky_Top.png",
-        "res/skybox/NightSky_Bottom.png",
-        "res/skybox/NightSky_Front.png",
-        "res/skybox/NightSky_Back.png"
-    };
+  std::vector<std::string> skybox = {
+      "res/skybox/NightSky_Right.png",
+      "res/skybox/NightSky_Left.png",
+      "res/skybox/NightSky_Top.png",
+      "res/skybox/NightSky_Bottom.png",
+      "res/skybox/NightSky_Front.png",
+      "res/skybox/NightSky_Back.png"
+  };
 
-    std::vector<std::tuple<const char*, float, bool, PhysXMeshType>> static_models = {
-        { "res/map/objHouse.obj", 1.0f, true, PhysXMeshType::TRIANGLEMESH },
-    };
+  std::vector<std::tuple<const char*, float, bool, PhysXMeshType>> static_models = {
+      { "res/map/objHouse.obj", 1.0f, true, PhysXMeshType::TRIANGLEMESH },
+  };
 
-    std::vector<std::tuple<const char*, float, bool, PhysXMeshType>> animated_models = {
-        { "res/lowpoly/MaleSurvivor1.glb", 1.0f, true, PhysXMeshType::TRIANGLEMESH },
-        /*{ "res/guy/guy.dae", 1.0f, true, PhysXMeshType::TRIANGLEMESH }*/
-    };
+  std::vector<std::tuple<const char*, float, bool, PhysXMeshType>> animated_models = {
+      { "res/lowpoly/MaleSurvivor1.glb", 1.0f, true, PhysXMeshType::TRIANGLEMESH },
+      /*{ "res/guy/guy.dae", 1.0f, true, PhysXMeshType::TRIANGLEMESH }*/
+  };
 
-    std::vector<std::future<void>> m_FutureVoid;
-    std::vector<std::future<std::shared_ptr<Texture>>> m_FutureTextures;
-    std::vector<std::future<std::shared_ptr<Model>>> m_FutureStaticModels;
-    std::vector<std::future<std::shared_ptr<Model>>> m_FutureAnimModels;
+  std::vector<std::future<void>> m_FutureVoid;
+  std::vector<std::future<std::shared_ptr<Texture>>> m_FutureTextures;
+  std::vector<std::future<std::shared_ptr<Model>>> m_FutureStaticModels;
+  std::vector<std::future<std::shared_ptr<Model>>> m_FutureAnimModels;
 
-    for (auto& sound : sounds)
-        m_FutureVoid.push_back(std::async(std::launch::async, AudioSystem::LoadSound, sound));
-    for (auto& track : music)
-        m_FutureVoid.push_back(std::async(std::launch::async, AudioSystem::LoadMusic, track));
+} s_Data;
 
-    auto futureSkybox = std::async(std::launch::async, [skybox]() { return Texture::CreateRAWCUBEMAP(skybox); });
-    m_FutureTextures.push_back(std::move(futureSkybox));
-    auto skyboxTexture = m_FutureTextures.back().get();
+static inline bool s_UploadStarted = false;
+static inline bool s_LoadingStarted = false;
+static inline bool s_LoadingDone = false;
 
-    for (auto& [path, scale, flag, meshType] : static_models)
-        m_FutureStaticModels.push_back(std::async(std::launch::async, Model::CreateSTATIC, path, scale, flag, meshType));
+void AssetManager::StartLoadingAssets()
+{
+    if (s_LoadingStarted)
+        return; // Already started
 
-    for (auto& [path, scale, flag, meshType] : animated_models)
-        m_FutureAnimModels.push_back(std::async(std::launch::async, Model::CreateANIMATED, path, scale, flag, meshType));
+    s_LoadingStarted = true;
+    s_LoadingDone = false;
+    s_UploadStarted = false;
 
-    UploadContextManager uploadManager(Engine::GetInstance().GetMainWindow().GetWindowPtr());
+    for (auto& sound : s_Data.sounds)
+        s_Data.m_FutureVoid.push_back(std::async(std::launch::async, AudioManager::LoadSound, sound));
+    for (auto& track : s_Data.music)
+        s_Data.m_FutureVoid.push_back(std::async(std::launch::async, AudioManager::LoadMusic, track));
 
-    uploadManager.EnqueueUpload([skyboxTexture]() {
-        Renderer::BakeSkyboxTextures("night", skyboxTexture);
-    });
+    s_Data.m_FutureTextures.push_back(
+        std::async(std::launch::async, [skybox = s_Data.skybox]() {
+            return Texture::CreateRAWCUBEMAP(skybox);
+        })
+    );
 
-    for (size_t i = 0; i < static_models.size(); ++i) {
-        auto model = m_FutureStaticModels[i].get();
-        const std::string& path = std::get<0>(static_models[i]);
-        std::string name = std::filesystem::path(path).stem().string();
+    for (auto& [path, scale, flag, meshType] : s_Data.static_models)
+        s_Data.m_FutureStaticModels.push_back(std::async(std::launch::async, Model::CreateSTATIC, path, scale, flag, meshType));
 
-        uploadManager.EnqueueUpload([&uploadManager, path, model, name]() {
-            Renderer::BakeModelTextures(path, model);
-
-            uploadManager.ScheduleOnMainThread([name]() {
-              Renderer::BakeModelBuffers(name);
-            });
-        });
-    }
-
-    for (size_t i = 0; i < animated_models.size(); ++i) {
-        auto model = m_FutureAnimModels[i].get();
-        const std::string& path = std::get<0>(animated_models[i]);
-        std::string name = std::filesystem::path(path).stem().string();
-
-        uploadManager.EnqueueUpload([&uploadManager, path, model, name]() {
-            Renderer::BakeModelTextures(path, model);
-
-            uploadManager.ScheduleOnMainThread([name]() {
-                Renderer::BakeModelBuffers(name);
-            });
-        });
-    }
-
-    uploadManager.WaitIdle();
-    uploadManager.ProcessMainThreadTasks();
-    uploadManager.Shutdown();
+    for (auto& [path, scale, flag, meshType] : s_Data.animated_models)
+        s_Data.m_FutureAnimModels.push_back(std::async(std::launch::async, Model::CreateANIMATED, path, scale, flag, meshType));
 }
 
+void AssetManager::UpdateLoading()
+{
+    if (!s_LoadingStarted || s_LoadingDone)
+        return;
 
+    bool allReady = std::all_of(s_Data.m_FutureVoid.begin(), s_Data.m_FutureVoid.end(),
+        [](auto& f) { return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready; }) &&
+        std::all_of(s_Data.m_FutureTextures.begin(), s_Data.m_FutureTextures.end(),
+        [](auto& f) { return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready; }) &&
+        std::all_of(s_Data.m_FutureStaticModels.begin(), s_Data.m_FutureStaticModels.end(),
+        [](auto& f) { return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready; }) &&
+        std::all_of(s_Data.m_FutureAnimModels.begin(), s_Data.m_FutureAnimModels.end(),
+        [](auto& f) { return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready; });
 
+    if (!allReady)
+        return;
+
+    if (!s_UploadStarted)
+    {
+        s_UploadStarted = true;
+
+        UploadContextManager uploadManager(Engine::GetInstance().GetMainWindow().GetWindowPtr());
+
+        auto skyboxTexture = s_Data.m_FutureTextures[0].get();
+        uploadManager.EnqueueUpload([skyboxTexture]() {
+            Renderer::BakeSkyboxTextures("night", skyboxTexture);
+        });
+
+        for (size_t i = 0; i < s_Data.static_models.size(); ++i) {
+            auto model = s_Data.m_FutureStaticModels[i].get();
+            const std::string& path = std::get<0>(s_Data.static_models[i]);
+            std::string name = std::filesystem::path(path).stem().string();
+
+            uploadManager.EnqueueUpload([&uploadManager, path, model, name]() {
+                Renderer::BakeModelTextures(path, model);
+                uploadManager.ScheduleOnMainThread([name]() {
+                    Renderer::BakeModelBuffers(name);
+                });
+            });
+        }
+
+        for (size_t i = 0; i < s_Data.animated_models.size(); ++i) {
+            auto model = s_Data.m_FutureAnimModels[i].get();
+            const std::string& path = std::get<0>(s_Data.animated_models[i]);
+            std::string name = std::filesystem::path(path).stem().string();
+
+            uploadManager.EnqueueUpload([&uploadManager, path, model, name]() {
+                Renderer::BakeModelTextures(path, model);
+                uploadManager.ScheduleOnMainThread([name]() {
+                    Renderer::BakeModelBuffers(name);
+                });
+            });
+        }
+
+        uploadManager.WaitIdle();
+        uploadManager.ProcessMainThreadTasks();
+        uploadManager.Shutdown();
+
+        s_Data.m_FutureVoid.clear();
+        s_Data.m_FutureTextures.clear();
+        s_Data.m_FutureStaticModels.clear();
+        s_Data.m_FutureAnimModels.clear();
+
+        s_LoadingDone = true;
+        s_LoadingStarted = false;
+        s_UploadStarted = false;
+    }
+}
+
+bool AssetManager::LoadingComplete()
+{
+    return s_LoadingDone;
+}
 
 
