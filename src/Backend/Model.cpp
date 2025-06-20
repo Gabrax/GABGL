@@ -4,6 +4,8 @@
 #include <filesystem>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
+#include "Buffer.h"
 
 
 static glm::mat4 ConvertMatrixToGLMFormat(const aiMatrix4x4& from)
@@ -27,13 +29,20 @@ static glm::quat GetGLMQuat(const aiQuaternion& pOrientation)
   return glm::quat(pOrientation.w, pOrientation.x, pOrientation.y, pOrientation.z);
 }
 
+
+struct ModelsData
+{
+  std::unordered_map<std::string, std::shared_ptr<Model>> models;
+} s_Data; 
+
+
 Model::Model(const char* path, float optimizerStrength, bool isAnimated, bool isKinematic, PhysXMeshType type) :  m_isKinematic(isKinematic), m_OptimizerStrength(optimizerStrength), m_isAnimated(isAnimated)
 {
   Timer timer;
 
   Assimp::Importer importer;
-  if(m_isAnimated) m_Scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
-  else m_Scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
+  if(m_isAnimated) m_Scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_JoinIdenticalVertices | aiProcess_CalcTangentSpace);
+  else m_Scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_JoinIdenticalVertices | aiProcess_CalcTangentSpace);
 
   if (!m_Scene || m_Scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !m_Scene->mRootNode)
   {
@@ -48,26 +57,26 @@ Model::Model(const char* path, float optimizerStrength, bool isAnimated, bool is
   {
     for (unsigned int i = 0; i < m_Scene->mNumAnimations; ++i)
     {
-        aiAnimation* animation = m_Scene->mAnimations[i];
+      aiAnimation* animation = m_Scene->mAnimations[i];
 
-        AnimationData animData;
-        animData.name = animation->mName.C_Str();
-        animData.duration = animation->mDuration;
-        animData.ticksPerSecond = animation->mTicksPerSecond;
+      AnimationData animData;
+      animData.name = animation->mName.C_Str();
+      animData.duration = animation->mDuration;
+      animData.ticksPerSecond = animation->mTicksPerSecond;
 
-        ReadHierarchyData(animData.hierarchy, m_Scene->mRootNode);
-        ReadMissingBones(animation);
+      ReadHierarchyData(animData.hierarchy, m_Scene->mRootNode);
+      ReadMissingBones(animation);
 
-        animData.bones = m_Bones;
+      animData.bones = m_Bones;
 
-        GABGL_INFO("Animation at index: " + std::to_string(i) + " " + animData.name);
+      GABGL_INFO("Model: " + std::filesystem::path(path).stem().string() + " Animation at index: " + std::to_string(i) + " " + animData.name);
 
-        m_ProcessedAnimations.emplace_back(animData);
+      m_ProcessedAnimations.emplace_back(animData);
     }
 
     GABGL_ASSERT(!m_ProcessedAnimations.empty(),"[MODEL]: Model doesnt contain animations");
 
-    SetAnimationByName("IDLE");
+    SetAnimationbyIndex(0);
 
     ResizeFinalBoneMatrices();
   }
@@ -77,13 +86,13 @@ Model::Model(const char* path, float optimizerStrength, bool isAnimated, bool is
 
 void Model::processNode(aiNode* node, const aiScene* scene)
 {
-    for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
-        aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-        m_Meshes.emplace_back(processMesh(mesh, scene));
-    }
-    for (unsigned int i = 0; i < node->mNumChildren; ++i) {
-        processNode(node->mChildren[i], scene);
-    }
+  for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
+      aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+      m_Meshes.emplace_back(processMesh(mesh, scene));
+  }
+  for (unsigned int i = 0; i < node->mNumChildren; ++i) {
+      processNode(node->mChildren[i], scene);
+  }
 }
 
 Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
@@ -118,7 +127,7 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
 
       loadMaterialTextures(material, aiTextureType_DIFFUSE, "texture_diffuse", textures);
       loadMaterialTextures(material, aiTextureType_SPECULAR, "texture_specular", textures);
-      loadMaterialTextures(material, aiTextureType_HEIGHT, "texture_normal", textures);
+      loadMaterialTextures(material, aiTextureType_NORMALS, "texture_normal", textures);
       loadMaterialTextures(material, aiTextureType_AMBIENT, "texture_height", textures);
   }
 
@@ -285,10 +294,88 @@ void Model::SetBoneData(Vertex& vertex, int boneID, float weight)
 
 void Model::UpdateAnimation(DeltaTime& dt)
 {
-    m_DeltaTime = dt;
-    m_CurrentTime += GetTicksPerSecond() * dt;
-    m_CurrentTime = fmod(m_CurrentTime, GetDuration());
-    CalculateBoneTransform(&GetRootNode(), glm::mat4(1.0f));
+    float delta = dt;
+    m_DeltaTime = delta;
+
+    if (!m_IsBlending)
+    {
+        m_CurrentTime += m_TicksPerSecond * delta;
+        m_CurrentTime = fmod(m_CurrentTime, m_Duration);
+        CalculateBoneTransform(&m_RootNode, glm::mat4(1.0f));
+    }
+    else
+    {
+        m_BlendTime += delta;
+        float blendFactor = m_BlendTime / m_BlendDuration;
+
+        m_CurrentTime += m_TicksPerSecond * delta;
+        float nextTime = m_CurrentTime;
+
+        m_CurrentTime = fmod(m_CurrentTime, m_Duration);
+        nextTime = fmod(nextTime, m_DurationNext);
+
+        CalculateBoneTransform(&m_RootNode, glm::mat4(1.0f), m_FinalBoneMatricesCurrent, m_Bones);
+        CalculateBoneTransform(&m_RootNodeNext, glm::mat4(1.0f), m_FinalBoneMatricesNext, m_BonesNext);
+
+        for (size_t i = 0; i < m_FinalBoneMatrices.size(); ++i)
+        {
+            glm::vec3 translation1, scale1, skew1;
+            glm::quat rotation1;
+            glm::vec4 perspective1;
+            glm::decompose(m_FinalBoneMatricesCurrent[i], scale1, rotation1, translation1, skew1, perspective1);
+            rotation1 = glm::normalize(rotation1);
+
+            glm::vec3 translation2, scale2, skew2;
+            glm::quat rotation2;
+            glm::vec4 perspective2;
+            glm::decompose(m_FinalBoneMatricesNext[i], scale2, rotation2, translation2, skew2, perspective2);
+            rotation2 = glm::normalize(rotation2);
+
+            glm::vec3 blendedTranslation = glm::mix(translation1, translation2, blendFactor);
+            glm::vec3 blendedScale = glm::mix(scale1, scale2, blendFactor);
+            glm::quat blendedRotation = glm::normalize(glm::slerp(rotation1, rotation2, blendFactor));
+
+            glm::mat4 translationMat = glm::translate(glm::mat4(1.0f), blendedTranslation);
+            glm::mat4 rotationMat = glm::toMat4(blendedRotation);
+            glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), blendedScale);
+
+            m_FinalBoneMatrices[i] = translationMat * rotationMat * scaleMat;
+        }
+
+        if (blendFactor >= 1.0f)
+        {
+            m_IsBlending = false;
+            SetAnimationbyIndex(m_NextAnimationIndex);
+        }
+    }
+}
+
+bool Model::IsInAnimation(int index) const
+{
+    return (!m_IsBlending && m_CurrentAnimationIndex == index) ||
+           (m_IsBlending && m_NextAnimationIndex == index);
+}
+
+void Model::StartBlendToAnimation(int32_t nextAnimationIndex, float blendDuration)
+{
+    assert(nextAnimationIndex >= 0 && nextAnimationIndex < m_ProcessedAnimations.size());
+
+    m_BlendTime = 0.0f;
+    m_BlendDuration = blendDuration;
+    m_IsBlending = true;
+    m_NextAnimationIndex = nextAnimationIndex;
+
+    // Backup current animation pose
+    m_FinalBoneMatricesCurrent = m_FinalBoneMatrices;
+
+    // Setup next animation for blending
+    const AnimationData& animData = m_ProcessedAnimations[nextAnimationIndex];
+    m_RootNodeNext = animData.hierarchy;
+    m_BonesNext = animData.bones;
+    m_TicksPerSecondNext = animData.ticksPerSecond;
+    m_DurationNext = animData.duration;
+
+    m_FinalBoneMatricesNext.resize(MAX_BONES, glm::mat4(1.0f));
 }
 
 void Model::SetAnimationbyIndex(int animationIndex)
@@ -355,6 +442,37 @@ void Model::CalculateBoneTransform(const AssimpNodeData* node, const glm::mat4& 
     }
 }
 
+void Model::CalculateBoneTransform(const AssimpNodeData* node,
+                                   const glm::mat4& parentTransform,
+                                   std::vector<glm::mat4>& outMatrices,
+                                   std::vector<Bone>& bones)
+{
+    std::string nodeName = node->name;
+    glm::mat4 nodeTransform = node->transformation;
+
+    Bone* bone = FindBoneInList(nodeName, bones);
+    if (bone)
+    {
+        bone->Update(m_CurrentTime);
+        nodeTransform = bone->GetLocalTransform();
+    }
+
+    glm::mat4 globalTransformation = parentTransform * nodeTransform;
+
+    auto it = m_BoneInfoMap.find(nodeName);
+    if (it != m_BoneInfoMap.end())
+    {
+        int index = it->second.id;
+        glm::mat4 offset = it->second.offset;
+        outMatrices[index] = globalTransformation * offset;
+    }
+
+    for (size_t i = 0; i < node->children.size(); ++i)
+    {
+        CalculateBoneTransform(&node->children[i], globalTransformation, outMatrices, bones);
+    }
+}
+
 Bone* Model::FindBone(const std::string& name)
 {
     auto iter = std::find_if(m_Bones.begin(), m_Bones.end(),
@@ -364,6 +482,15 @@ Bone* Model::FindBone(const std::string& name)
     );
     if (iter == m_Bones.end()) return nullptr;
     else return &(*iter);
+}
+
+Bone* Model::FindBoneInList(const std::string& name, std::vector<Bone>& bones)
+{
+    auto iter = std::find_if(bones.begin(), bones.end(),
+        [&](const Bone& bone) {
+            return bone.GetBoneName() == name;
+        });
+    return iter != bones.end() ? &(*iter) : nullptr;
 }
 
 void Model::ResizeFinalBoneMatrices()
@@ -428,6 +555,181 @@ std::shared_ptr<Model> Model::CreateSTATIC(const char* path, float optimizerStre
 std::shared_ptr<Model> Model::CreateANIMATED(const char* path, float optimizerStrength, bool isKinematic, PhysXMeshType type)
 {
 	return std::make_shared<Model>(path,optimizerStrength,true,isKinematic,type);
+}
+
+void ModelManager::BakeModelInstancedBuffers(Mesh& mesh, const std::vector<Transform>& transforms)
+{
+    if (transforms.empty()) return;
+
+    std::vector<glm::mat4> instanceMatrices;
+    instanceMatrices.reserve(transforms.size());
+    for (const auto& t : transforms)
+        instanceMatrices.push_back(t.GetTransform());
+
+    if (mesh.instanceVBO == 0)
+        glGenBuffers(1, &mesh.instanceVBO);
+
+    glBindVertexArray(mesh.VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, mesh.instanceVBO);
+    glBufferData(GL_ARRAY_BUFFER, instanceMatrices.size() * sizeof(glm::mat4), instanceMatrices.data(), GL_STREAM_DRAW);
+
+    if (!mesh.instanceAttribsConfigured)
+    {
+        std::size_t vec4Size = sizeof(glm::vec4);
+        for (int i = 0; i < 4; ++i)
+        {
+            GLuint loc = 7 + i;
+            glEnableVertexAttribArray(loc);
+            glVertexAttribPointer(loc, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(i * vec4Size));
+            glVertexAttribDivisor(loc, 1);
+        }
+
+        mesh.instanceAttribsConfigured = true;
+    }
+
+    glBindVertexArray(0);
+}
+
+void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Model>& model)
+{
+  Timer timer;
+
+  constexpr int NUM_BUFFERS = 2;
+  std::array<std::unique_ptr<PixelBuffer>, NUM_BUFFERS> pboBuffers;
+  int currentPBO = 0;
+
+  for (auto& mesh : model->GetMeshes())
+  {
+    for (auto& texture : mesh.m_Textures)
+    {
+      if (!texture)
+          continue;
+
+      int width, height;
+      GLenum format;
+      const void* srcData;
+      GLsizei dataSize;
+
+      if (texture->IsUnCompressed())
+      {
+          auto* embeddedTex = texture->GetEmbeddedTexture();
+          if (!embeddedTex || !embeddedTex->pcData)
+              continue;
+
+          width = embeddedTex->mWidth;
+          height = embeddedTex->mHeight;
+          format = GL_RGBA;
+          dataSize = width * height * 4;
+          srcData = embeddedTex->pcData;
+      }
+      else
+      {
+          width = texture->GetWidth();
+          height = texture->GetHeight();
+          format = texture->GetDataFormat();
+          if (format != GL_RGB && format != GL_RGBA)
+              format = GL_RGBA;
+
+          int bytesPerPixel = (format == GL_RGBA) ? 4 : 3;
+          dataSize = width * height * bytesPerPixel;
+          srcData = texture->GetRawData();
+      }
+
+      if (!srcData || width <= 0 || height <= 0)
+          continue;
+
+      if (!pboBuffers[currentPBO] || pboBuffers[currentPBO]->GetSize() != dataSize)
+          pboBuffers[currentPBO] = std::make_unique<PixelBuffer>(dataSize);
+
+      auto& pbo = pboBuffers[currentPBO];
+
+      pbo->WaitForCompletion();
+
+      void* ptr = pbo->Map();
+      if (ptr)
+      {
+          memcpy(ptr, srcData, dataSize);
+          pbo->Unmap(); // Also inserts a sync
+      }
+      else
+      {
+          GABGL_ERROR("Failed to map PixelBuffer for texture upload.");
+          continue;
+      }
+
+      GLuint id;
+      glGenTextures(1, &id);
+      glBindTexture(GL_TEXTURE_2D, id);
+      texture->SetRendererID(id);
+
+      pbo->Bind();
+      glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, nullptr);
+      pbo->Unbind();
+
+      glGenerateMipmap(GL_TEXTURE_2D);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+      currentPBO = (currentPBO + 1) % NUM_BUFFERS;
+    }
+
+    glGenVertexArrays(1, &mesh.VAO);
+    glGenBuffers(1, &mesh.VBO);
+    glGenBuffers(1, &mesh.EBO);
+
+    glBindVertexArray(mesh.VAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, mesh.VBO);
+    glBufferData(GL_ARRAY_BUFFER, mesh.m_Vertices.size() * sizeof(Vertex), &mesh.m_Vertices[0], GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.m_Indices.size() * sizeof(unsigned int), &mesh.m_Indices[0], GL_STATIC_DRAW);
+
+    struct Attribute {
+        GLint size;
+        GLenum type;
+        GLboolean normalized;
+        size_t offset;
+    };
+
+    std::array<Attribute, 7> attributes = { {
+        {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Position)},
+        {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Normal)},
+        {2, GL_FLOAT, GL_FALSE, offsetof(Vertex, TexCoords)},
+        {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Tangent)},
+        {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Bitangent)},
+        {4, GL_INT, GL_FALSE, offsetof(Vertex, m_BoneIDs)},
+        {4, GL_FLOAT, GL_FALSE, offsetof(Vertex, m_Weights)}
+    } };
+
+    for (size_t i = 0; i < attributes.size(); ++i) {
+        glEnableVertexAttribArray(static_cast<GLuint>(i));
+        if (attributes[i].type == GL_INT) {
+            glVertexAttribIPointer(static_cast<GLuint>(i), attributes[i].size, attributes[i].type, sizeof(Vertex), (void*)attributes[i].offset);
+        } else {
+            glVertexAttribPointer(static_cast<GLuint>(i), attributes[i].size, attributes[i].type, attributes[i].normalized, sizeof(Vertex), (void*)attributes[i].offset);
+        }
+    }
+
+    glBindVertexArray(0);
+
+    for(auto& tex : mesh.m_Textures) tex->ClearRawData();
+  }
+
+  std::string name = std::filesystem::path(path).stem().string();
+  s_Data.models[name] = std::move(model);
+
+  GABGL_WARN("Model: {0} baking took {1} ms", name, timer.ElapsedMillis());
+}
+
+std::shared_ptr<Model> ModelManager::GetModel(const std::string& name)
+{
+  auto it = s_Data.models.find(name);
+  if (it != s_Data.models.end())
+      return it->second;
+  return nullptr;
 }
 
 Bone::Bone(const std::string& name, int ID, const aiNodeAnim* channel) : m_Name(name), m_ID(ID), m_LocalTransform(1.0f)

@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <optional>
-#include "Shader.h"
 
 enum class LightType : int32_t
 {
@@ -21,7 +20,6 @@ struct LightManager
              const std::optional<glm::vec3>& newRotation = std::nullopt,    
              const std::optional<glm::vec3>& newScale = std::nullopt);
   static void RemoveLight(int32_t index);
-  static void RenderLights(const std::shared_ptr<Shader>& lightshader);
 
 private:
   static void UpdateSSBOLightData();

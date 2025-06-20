@@ -51,12 +51,13 @@ Texture::Texture(const std::string& path, bool isGL) : m_Path(path)
   Timer timer;
 
   int width, height, channels;
-  stbi_set_flip_vertically_on_load(1);
   stbi_uc* data = stbi_load(path.c_str(), &width, &height, &channels, 0);
 
   if (data)
   {
-      m_RawData = data;
+      FlipImageVertically(data, width, height, channels);
+      m_RawData = new uint8_t[width * height * channels];
+      memcpy(m_RawData, data, width * height * channels);
       m_IsLoaded = true;
 
       m_Width = width;
@@ -108,10 +109,10 @@ Texture::Texture(const std::string& path, const std::string& directory, bool isG
 
   std::string filename = directory + '/' + path;
   int width, height, channels;
-  stbi_set_flip_vertically_on_load(true);
   stbi_uc* data = stbi_load(filename.c_str(), &width, &height, &channels, 0);
   if (data)
   {
+      FlipImageVertically(data, width, height, channels);
       m_RawData = new uint8_t[width * height * channels];
       memcpy(m_RawData, data, width * height * channels);
       m_IsLoaded = true;
@@ -136,7 +137,6 @@ Texture::Texture(const std::string& path, const std::string& directory, bool isG
           dataFormat = GL_RED;
       }
 
-
       m_InternalFormat = internalFormat;
       m_DataFormat = dataFormat;
 
@@ -157,7 +157,6 @@ Texture::Texture(const std::string& path, const std::string& directory, bool isG
       }
 
       stbi_image_free(data);
-      stbi_set_flip_vertically_on_load(false);
       GABGL_WARN("Texture loading took {0} ms", timer.ElapsedMillis());
   }
   else
@@ -175,6 +174,7 @@ Texture::Texture(const aiTexture* paiTexture, const std::string& path, bool isGL
                                                   paiTexture->mWidth, &width, &height, &channels, 0);
       if (data)
       {
+          FlipImageVertically(data, width, height, channels);
           m_RawData = new uint8_t[width * height * channels];
           memcpy(m_RawData, data, width * height * channels);
           m_IsLoaded = true;
@@ -240,10 +240,9 @@ Texture::Texture(const std::vector<std::string>& faces)
 
   GABGL_ASSERT(faces.size() == 6, "Cubemap must have exactly 6 faces!");
 
-  stbi_set_flip_vertically_on_load(false); 
-
   for (int i = 0; i < 6; ++i)
   {
+      stbi_set_flip_vertically_on_load(false);
       int w, h, c;
       unsigned char* data = stbi_load(faces[i].c_str(), &w, &h, &c, 0);
       if (!data)
@@ -266,7 +265,6 @@ Texture::Texture(const std::vector<std::string>& faces)
 
       pixels[i] = data;
   }
-
   stbi_set_flip_vertically_on_load(true);
   GABGL_WARN("Texture loading took {0} ms", timer.ElapsedMillis());
 }
@@ -275,6 +273,23 @@ Texture::~Texture()
 {
   if (m_OwnsTexture && m_RendererID != 0) glDeleteTextures(1, &m_RendererID);
   delete[] m_RawData;
+}
+
+void Texture::FlipImageVertically(unsigned char* data, int width, int height, int channels)
+{
+  int stride = width * channels;
+  std::vector<unsigned char> row(stride); // temporary buffer for a row
+
+  for (int y = 0; y < height / 2; ++y)
+  {
+      unsigned char* rowTop = data + y * stride;
+      unsigned char* rowBottom = data + (height - y - 1) * stride;
+
+      // Swap the two rows
+      std::memcpy(row.data(), rowTop, stride);
+      std::memcpy(rowTop, rowBottom, stride);
+      std::memcpy(rowBottom, row.data(), stride);
+  }
 }
 
 void Texture::SetData(void* data, uint32_t size)

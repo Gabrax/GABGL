@@ -14,7 +14,7 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include "../engine.h"
-#include "Audio.h"
+#include "AudioManager.h"
 #include "../input/UserInput.h"
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -100,6 +100,7 @@ struct CameraData
 {
 	glm::mat4 ViewProjection;
   glm::mat4 NonRotViewProjection;
+  glm::vec3 CameraPos;
 };
 
 struct RendererData
@@ -219,7 +220,6 @@ struct RendererData
 	uint32_t _2DTextureSlotIndex = 1; // 0 = white texture
 
   std::unordered_map<std::string, std::shared_ptr<Texture>> skyboxes;
-  std::unordered_map<std::string, std::shared_ptr<Model>> models;
   std::unordered_map<char, Character> Characters;
 
   std::shared_ptr<FrameBuffer> m_Framebuffer;
@@ -412,7 +412,6 @@ void Renderer::Init()
   fbSpec2.Samples = 4;
 	s_RendererData.m_MSAAFramebuffer = FrameBuffer::Create(fbSpec2);
 
-
   LoadShaders();
 
   GABGL_ASSERT(!FT_Init_FreeType(&s_RendererData.ft), "Could not init FreeType");
@@ -565,6 +564,7 @@ void Renderer::BeginScene(const Camera& camera, const glm::mat4& transform)
 {
 	s_RendererData._3DCameraBuffer.ViewProjection = camera.GetProjection() * glm::inverse(transform);
   s_RendererData._3DCameraBuffer.NonRotViewProjection = camera.GetNonRotationViewProjection();
+  s_RendererData._3DCameraBuffer.CameraPos = camera.GetPosition();
 	s_RendererData._3DCameraUniformBuffer->SetData(&s_RendererData._3DCameraBuffer, sizeof(CameraData));
 
 	s_RendererData._2DCameraBuffer.ViewProjection = camera.GetOrtoProjection() * glm::inverse(transform);
@@ -577,6 +577,7 @@ void Renderer::BeginScene(const Camera& camera)
 {
 	s_RendererData._3DCameraBuffer.ViewProjection = camera.GetViewProjection();
   s_RendererData._3DCameraBuffer.NonRotViewProjection = camera.GetNonRotationViewProjection();
+  s_RendererData._3DCameraBuffer.CameraPos = camera.GetPosition();
 	s_RendererData._3DCameraUniformBuffer->SetData(&s_RendererData._3DCameraBuffer, sizeof(CameraData));
 
 	s_RendererData._2DCameraBuffer.ViewProjection = camera.GetOrtoProjection();
@@ -1029,237 +1030,116 @@ void Renderer::DrawFramebuffer(uint32_t textureID)
   glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
-void Renderer::BakeModelBuffers(const std::string& name)
+
+void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, const glm::vec3& position, const glm::vec3& size, const glm::vec3& rotation)
 {
-  Timer timer;
-
-  auto it = s_RendererData.models.find(name);
-  if (it != s_RendererData.models.end())
+  if(model == nullptr)
   {
-    for(auto& mesh : it->second->GetMeshes())
-    {
-      glGenVertexArrays(1, &mesh.VAO);
-      glGenBuffers(1, &mesh.VBO);
-      glGenBuffers(1, &mesh.EBO);
+    GABGL_ERROR("Model doesnt exist");
+    return;
+  }
 
-      glBindVertexArray(mesh.VAO);
+  glm::mat4 transform = glm::translate(glm::mat4(1.0f), position);
 
-      glBindBuffer(GL_ARRAY_BUFFER, mesh.VBO);
-      glBufferData(GL_ARRAY_BUFFER, mesh.m_Vertices.size() * sizeof(Vertex), &mesh.m_Vertices[0], GL_STATIC_DRAW);
+  transform = glm::rotate(transform, rotation.z, glm::vec3(0.0f, 0.0f, 1.0f));
+  transform = glm::rotate(transform, rotation.y, glm::vec3(0.0f, 1.0f, 0.0f));
+  transform = glm::rotate(transform, rotation.x, glm::vec3(1.0f, 0.0f, 0.0f));
 
-      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.EBO);
-      glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.m_Indices.size() * sizeof(unsigned int), &mesh.m_Indices[0], GL_STATIC_DRAW);
+  transform = glm::scale(transform, size);
 
-      struct Attribute {
-          GLint size;
-          GLenum type;
-          GLboolean normalized;
-          size_t offset;
+  DrawModel(dt, model, transform);
+}
+
+void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, const glm::mat4& transform, int entityID)
+{
+  if(model == nullptr)
+  {
+    GABGL_ERROR("Model doesnt exist");
+    return;
+  }
+
+  s_RendererData._shaders3D.ModelShader->Use();
+  s_RendererData._shaders3D.ModelShader->setMat4("model", transform);
+  s_RendererData._shaders3D.ModelShader->setBool("isAnimated", model->IsAnimated());
+  s_RendererData._shaders3D.ModelShader->setBool("isInstanced", false);
+
+  if(model->IsAnimated())
+  {
+    auto& transforms = model->GetFinalBoneMatrices();
+    for (size_t i = 0; i < transforms.size(); ++i) {
+        s_RendererData._shaders3D.ModelShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+    }
+    model->UpdateAnimation(dt);
+  }
+  /*it->second->UpdatePhysXActor(transform);*/
+
+  for (auto& mesh : model->GetMeshes())
+  {
+
+      std::unordered_map<std::string, GLuint> textureCounters = {
+          {"texture_diffuse", 1},
+          {"texture_specular", 1},
+          {"texture_normal", 1},
+          {"texture_height", 1}
       };
 
-      std::array<Attribute, 7> attributes = { {
-          {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Position)},
-          {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Normal)},
-          {2, GL_FLOAT, GL_FALSE, offsetof(Vertex, TexCoords)},
-          {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Tangent)},
-          {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Bitangent)},
-          {4, GL_INT, GL_FALSE, offsetof(Vertex, m_BoneIDs)},
-          {4, GL_FLOAT, GL_FALSE, offsetof(Vertex, m_Weights)}
-      } };
+      auto& textures = mesh.m_Textures;
+      for (GLuint i = 0; i < textures.size(); i++) {
+          glActiveTexture(GL_TEXTURE0 + i);
 
-      for (size_t i = 0; i < attributes.size(); ++i) {
-          glEnableVertexAttribArray(static_cast<GLuint>(i));
-          if (attributes[i].type == GL_INT) {
-              glVertexAttribIPointer(static_cast<GLuint>(i), attributes[i].size, attributes[i].type, sizeof(Vertex), (void*)attributes[i].offset);
-          } else {
-              glVertexAttribPointer(static_cast<GLuint>(i), attributes[i].size, attributes[i].type, attributes[i].normalized, sizeof(Vertex), (void*)attributes[i].offset);
-          }
+          std::string number = std::to_string(textureCounters[textures[i]->GetType()]++);
+          s_RendererData._shaders3D.ModelShader->setInt(textures[i]->GetType() + number, i);
+          glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
       }
-
+      
+      glBindVertexArray(mesh.VAO);
+      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
       glBindVertexArray(0);
-
-      for(auto& tex : mesh.m_Textures) tex->ClearRawData();
-    }
+      glActiveTexture(GL_TEXTURE0);
   }
-  GABGL_WARN("Model: {0} buffers baking took {1} ms", name, timer.ElapsedMillis());
 }
 
-void Renderer::BakeModelInstancedBuffers(Mesh& mesh, const std::vector<Transform>& transforms)
+void Renderer::DrawModelInstanced(DeltaTime& dt, const std::shared_ptr<Model>& model, const std::vector<Transform>& instances, int entityID)
 {
-    if (transforms.empty()) return;
+  s_RendererData._shaders3D.ModelShader->Use();
+  s_RendererData._shaders3D.ModelShader->setBool("isAnimated", model->IsAnimated());
+  s_RendererData._shaders3D.ModelShader->setBool("isInstanced", true);
 
-    // Convert transforms to matrices
-    std::vector<glm::mat4> instanceMatrices;
-    instanceMatrices.reserve(transforms.size());
-    for (const auto& t : transforms)
-        instanceMatrices.push_back(t.GetTransform());
-
-    if (mesh.instanceVBO == 0)
-        glGenBuffers(1, &mesh.instanceVBO);
-
-    glBindVertexArray(mesh.VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, mesh.instanceVBO);
-    glBufferData(GL_ARRAY_BUFFER, instanceMatrices.size() * sizeof(glm::mat4), instanceMatrices.data(), GL_STREAM_DRAW);
-
-    if (!mesh.instanceAttribsConfigured)
-    {
-        std::size_t vec4Size = sizeof(glm::vec4);
-        for (int i = 0; i < 4; ++i)
-        {
-            GLuint loc = 7 + i;
-            glEnableVertexAttribArray(loc);
-            glVertexAttribPointer(loc, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(i * vec4Size));
-            glVertexAttribDivisor(loc, 1);
-        }
-
-        mesh.instanceAttribsConfigured = true;
-    }
-
-    glBindVertexArray(0);
-}
-
-void Renderer::BakeModelTextures(const std::string& path, const std::shared_ptr<Model>& model)
-{
-  Timer timer;
-
-  for(auto& mesh : model->GetMeshes())
+  if (model->IsAnimated())
   {
-    for (auto& texture : mesh.m_Textures)
-    {
-      GLuint id;
-      glGenTextures(1, &id);
-      texture->SetRendererID(id);
-      glBindTexture(GL_TEXTURE_2D,id);
-
-      if(texture->IsUnCompressed())
+      auto& transforms = model->GetFinalBoneMatrices();
+      for (size_t i = 0; i < transforms.size(); ++i)
       {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture->GetEmbeddedTexture()->mWidth, texture->GetEmbeddedTexture()->mHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture->GetEmbeddedTexture()->pcData);
-        glGenerateMipmap(GL_TEXTURE_2D);
-      }
-      else
-      {
-        glTexImage2D(GL_TEXTURE_2D, 0, texture->GetDataFormat(), texture->GetWidth(), texture->GetHeight(), 0, texture->GetDataFormat(), GL_UNSIGNED_BYTE, texture->GetRawData());
-        glGenerateMipmap(GL_TEXTURE_2D);
-      }
-
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    }
-  }
-  std::string name = std::filesystem::path(path).stem().string();
-  s_RendererData.models[name] = std::move(model);
-  GABGL_WARN("Model: {0} textures baking took {1} ms", name, timer.ElapsedMillis());
-}
-
-void Renderer::DrawModel(DeltaTime& dt,const std::string& name, const glm::vec3& position, const glm::vec3& size, float rotation)
-{
-	glm::mat4 transform = glm::translate(glm::mat4(1.0f), position)
-		* glm::scale(glm::mat4(1.0f), { size.x, size.y, size.z });
-
-	DrawModel(dt,name,transform);
-}
-
-void Renderer::DrawModel(DeltaTime& dt, const std::string& name, const glm::mat4& transform, int entityID)
-{
-  auto it = s_RendererData.models.find(name);
-  if (it != s_RendererData.models.end())
-  {
-    s_RendererData._shaders3D.ModelShader->Use();
-    s_RendererData._shaders3D.ModelShader->setMat4("model", transform);
-    s_RendererData._shaders3D.ModelShader->setBool("isAnimated", it->second->IsAnimated());
-    s_RendererData._shaders3D.ModelShader->setBool("isInstanced", false);
-    for (auto& mesh : it->second->GetMeshes())
-    {
-
-        std::unordered_map<std::string, GLuint> textureCounters = {
-            {"texture_diffuse", 1},
-            {"texture_specular", 1},
-            {"texture_normal", 1},
-            {"texture_height", 1}
-        };
-
-        auto& textures = mesh.m_Textures;
-        for (GLuint i = 0; i < textures.size(); i++) {
-            glActiveTexture(GL_TEXTURE0 + i);
-
-            std::string number = std::to_string(textureCounters[textures[i]->GetType()]++);
-            s_RendererData._shaders3D.ModelShader->setInt(textures[i]->GetType() + number, i);
-            glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
-        }
-        
-        glBindVertexArray(mesh.VAO);
-        glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
-        glBindVertexArray(0);
-        glActiveTexture(GL_TEXTURE0);
-    }
-
-    if(it->second->IsAnimated())
-    {
-      auto& transforms = it->second->GetFinalBoneMatrices();
-      for (size_t i = 0; i < transforms.size(); ++i) {
           s_RendererData._shaders3D.ModelShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
       }
-      it->second->UpdateAnimation(dt);
-    }
-    /*it->second->UpdatePhysXActor(transform);*/
+      model->UpdateAnimation(dt);
   }
-  else
+
+  for (auto& mesh : model->GetMeshes())
   {
-      GABGL_ERROR("Model not found: {0}", name);
-      return;
+      ModelManager::BakeModelInstancedBuffers(mesh, instances); // Upload instance data
+
+      // Bind all textures
+      std::unordered_map<std::string, GLuint> textureCounters = {
+          {"texture_diffuse", 1},
+          {"texture_specular", 1},
+          {"texture_normal", 1},
+          {"texture_height", 1}
+      };
+
+      auto& textures = mesh.m_Textures;
+      for (GLuint i = 0; i < textures.size(); i++) {
+          glActiveTexture(GL_TEXTURE0 + i);
+          std::string number = std::to_string(textureCounters[textures[i]->GetType()]++);
+          s_RendererData._shaders3D.ModelShader->setInt(textures[i]->GetType() + number, i);
+          glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
+      }
+
+      glBindVertexArray(mesh.VAO);
+      glDrawElementsInstanced(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0, static_cast<GLsizei>(instances.size()));
+      glBindVertexArray(0);
+      glActiveTexture(GL_TEXTURE0);
   }
-}
-
-void Renderer::DrawModelInstanced(DeltaTime& dt, const std::string& name, const std::vector<Transform>& instances, int entityID)
-{
-    auto it = s_RendererData.models.find(name);
-    if (it == s_RendererData.models.end())
-    {
-        GABGL_ERROR("Model not found: {0}", name);
-        return;
-    }
-
-    auto& model = it->second;
-    s_RendererData._shaders3D.ModelShader->Use();
-    s_RendererData._shaders3D.ModelShader->setBool("isAnimated", model->IsAnimated());
-    s_RendererData._shaders3D.ModelShader->setBool("isInstanced", true);
-    for (auto& mesh : model->GetMeshes())
-    {
-        BakeModelInstancedBuffers(mesh, instances); // Upload instance data
-
-        // Bind all textures
-        std::unordered_map<std::string, GLuint> textureCounters = {
-            {"texture_diffuse", 1},
-            {"texture_specular", 1},
-            {"texture_normal", 1},
-            {"texture_height", 1}
-        };
-
-        auto& textures = mesh.m_Textures;
-        for (GLuint i = 0; i < textures.size(); i++) {
-            glActiveTexture(GL_TEXTURE0 + i);
-            std::string number = std::to_string(textureCounters[textures[i]->GetType()]++);
-            s_RendererData._shaders3D.ModelShader->setInt(textures[i]->GetType() + number, i);
-            glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
-        }
-
-        glBindVertexArray(mesh.VAO);
-        glDrawElementsInstanced(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0, static_cast<GLsizei>(instances.size()));
-        glBindVertexArray(0);
-        glActiveTexture(GL_TEXTURE0);
-    }
-  
-    if (model->IsAnimated())
-    {
-        auto& transforms = model->GetFinalBoneMatrices();
-        for (size_t i = 0; i < transforms.size(); ++i)
-        {
-            s_RendererData._shaders3D.ModelShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
-        }
-        model->UpdateAnimation(dt);
-    }
 }
 
 void Renderer::BakeSkyboxTextures(const std::string& name, const std::shared_ptr<Texture>& cubemap)

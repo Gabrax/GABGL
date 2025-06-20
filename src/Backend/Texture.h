@@ -72,6 +72,9 @@ struct Texture
   inline int32_t GetChannels() { return channels; }
 
 private:
+
+  void FlipImageVertically(unsigned char* data, int width, int height, int channels);
+
 	TextureSpecification m_Specification;
 
   std::array<unsigned char*, 6> pixels;

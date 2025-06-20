@@ -93,22 +93,6 @@ void LightManager::RemoveLight(int32_t index)
   }
 }
 
-void LightManager::RenderLights(const std::shared_ptr<Shader>& lightshader)
-{
-  for (const auto& light : s_Data.lights)
-  {
-    lightshader->Use();
-    lightshader->setVec4("lightColor",light->color);
-
-    Transform transform;
-    transform.SetPosition(light->position);
-    transform.SetRotation(light->rotation);
-    transform.SetScale(light->scale);
-
-    lightshader->setMat4("model", transform.GetTransform());
-  }
-}
-
 void LightManager::UpdateSSBOLightData()
 {
   s_Data.LightQuantityStorageBuffer->SetData(sizeof(int32_t), &s_Data.numLights);

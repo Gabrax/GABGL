@@ -17,8 +17,10 @@
 #include "Texture.h"
 #include "DeltaTime.h"
 #include "PhysX.h"
+#include "Transform.hpp"
 
 #define MAX_BONE_INFLUENCE 4
+#define MAX_BONES 100
 
 struct KeyPosition {
     glm::vec3 position;
@@ -136,6 +138,8 @@ struct Model
   void SetAnimationbyIndex(int animationIndex);
   void SetAnimationByName(const std::string& animationName);
   void UpdatePhysXActor(const glm::mat4& transform);
+  void StartBlendToAnimation(int32_t nextAnimationIndex, float blendDuration);
+  bool IsInAnimation(int index) const;
 
   inline std::vector<Mesh>& GetMeshes() { return m_Meshes; }
   inline std::map<std::string,BoneInfo>& GetBoneInfoMap() { return m_BoneInfoMap; }
@@ -155,11 +159,19 @@ private:
   std::vector<AnimationData> m_ProcessedAnimations;
   std::map<std::string, BoneInfo> m_BoneInfoMap;
   std::vector<glm::mat4> m_FinalBoneMatrices;
+  std::vector<glm::mat4> m_FinalBoneMatricesCurrent;
+  std::vector<glm::mat4> m_FinalBoneMatricesNext;
+
+  AssimpNodeData m_RootNodeNext;
+  std::vector<Bone> m_BonesNext;
+  float m_TicksPerSecondNext = 0.0f;
+  float m_DurationNext = 0.0f;
 
   AssimpNodeData m_RootNode;
   int m_BoneCounter = 0;
   std::string m_Directory;
-  float m_BlendFactor = 0.0f; // 0 -> 1 
+  float m_BlendTime = 0.0f;
+  float m_BlendDuration = 0.5f; // Blend duration in seconds
   bool m_IsBlending = false;
   int m_NextAnimationIndex = -1;
   int m_CurrentAnimationIndex;
@@ -185,9 +197,19 @@ private:
   void SetDefaultBoneData(Vertex& vertex);
   void SetBoneData(Vertex& vertex, int boneID, float weight);
   void CalculateBoneTransform(const AssimpNodeData* node, const glm::mat4& parentTransform);
+  void CalculateBoneTransform(const AssimpNodeData* node, const glm::mat4& parentTransform, std::vector<glm::mat4>& outMatrices, std::vector<Bone>& bones);
+
   Bone* FindBone(const std::string& name);
+  Bone* FindBoneInList(const std::string& name, std::vector<Bone>& bones);
   void ResizeFinalBoneMatrices();
   void ReadHierarchyData(AssimpNodeData& dest, const aiNode* src);
   void ReadMissingBones(const aiAnimation* animation);
+};
+
+struct ModelManager
+{
+  static void BakeModel(const std::string& path, const std::shared_ptr<Model>& model);
+  static void BakeModelInstancedBuffers(Mesh& mesh, const std::vector<Transform>& instances);
+  static std::shared_ptr<Model> GetModel(const std::string& name);
 };
 

@@ -30,12 +30,9 @@ struct Renderer
   static void Draw3DText(const std::string& text,  const glm::vec2& position, float size, const glm::vec4& color, int entityID = -1);
   static void DrawCube(const Transform& transform, int entityID = -1);
   static void DrawCubeContour(const glm::vec3& position, const glm::vec3& size, const glm::vec4& color, int entityID = -1);
-  static void BakeModelTextures(const std::string& path, const std::shared_ptr<Model>& model);
-  static void BakeModelBuffers(const std::string& name);
-  static void BakeModelInstancedBuffers(Mesh& mesh, const std::vector<Transform>& instances);
-  static void DrawModel(DeltaTime& dt, const std::string& name, const glm::vec3& position, const glm::vec3& size, float rotation);
-  static void DrawModel(DeltaTime& dt, const std::string& name, const glm::mat4& transform, int entityID = -1);
-  static void DrawModelInstanced(DeltaTime& dt, const std::string& name, const std::vector<Transform>& instances, int entityID = -1);
+  static void DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, const glm::vec3& position, const glm::vec3& size, const glm::vec3& rotation);
+  static void DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, const glm::mat4& transform, int entityID = -1);
+  static void DrawModelInstanced(DeltaTime& dt, const std::shared_ptr<Model>& model, const std::vector<Transform>& instances, int entityID = -1);
 
   // 2D space
   static void Draw2DQuad(const glm::vec2& position, const glm::vec2& size, float rotation, const glm::vec4& color);
