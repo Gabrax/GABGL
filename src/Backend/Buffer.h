@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <glad/glad.h>
+#include "Shader.h"
 
 enum class ShaderDataType
 {
@@ -209,17 +210,17 @@ private:
 
 enum class FramebufferTextureFormat
 {
-	None = 0,
+  None = 0,
 
-	// Color
-	RGBA8,
-	RED_INTEGER,
+  // Color
+  RGBA8,
+  RGBA16F,          // <- Add this
+  R11F_G11F_B10F,   // <- Add this for mip chain
+  RED_INTEGER,
 
-	// Depth/stencil
-	DEPTH24STENCIL8,
-
-	// Defaults
-	Depth = DEPTH24STENCIL8
+  // Depth/stencil
+  DEPTH24STENCIL8,
+  Depth = DEPTH24STENCIL8
 };
 
 struct FramebufferTextureSpecification
@@ -258,7 +259,7 @@ struct FrameBuffer
 	void Invalidate();
 
 	void Bind();
-	void Unbind();
+	void UnBind();
 
 	void Resize(uint32_t width, uint32_t height);
 	int ReadPixel(uint32_t attachmentIndex, int x, int y);
@@ -281,4 +282,74 @@ private:
 
 	std::vector<uint32_t> m_ColorAttachments;
 	uint32_t m_DepthAttachment = 0;
+};
+
+struct BloomBuffer
+{
+  BloomBuffer(const std::shared_ptr<Shader>& downsampleShader, const std::shared_ptr<Shader>& upsampleShader, const std::shared_ptr<Shader>& finalShader);
+  ~BloomBuffer();
+
+  bool Init(unsigned int windowWidth, unsigned int windowHeight, unsigned int mipChainLength = 6);
+  void Destroy();
+
+  void Resize(unsigned int newWidth, unsigned int newHeight);
+
+  void Bind() const;
+  void UnBind() const;
+
+  void RenderBloomTexture(float filterRadius);
+  void Render();
+
+  GLuint getBloomTexture() const;
+  GLuint BloomMip_i(int index) const;
+
+private:
+  struct bloomMip
+  {
+      glm::vec2 size;
+      glm::ivec2 intSize;
+      GLuint texture = 0;
+  };
+
+  void renderQuad();
+  void RenderDownsamples(GLuint srcTexture);
+  void RenderUpsamples(float filterRadius);
+
+  // HDR framebuffer
+  GLuint hdrFBO = 0;
+  GLuint colorBuffers[2] = {0, 0};
+  GLuint rboDepth = 0;
+
+  // Ping-pong framebuffer for blur
+  GLuint pingpongFBO[2] = {0, 0};
+  GLuint pingpongColorbuffers[2] = {0, 0};
+
+  // Bloom mip chain framebuffer
+  GLuint bloomFBO = 0;
+  std::vector<bloomMip> mipChain;
+
+  glm::ivec2 srcViewportSize = {0, 0};
+  glm::vec2 srcViewportSizeFloat = {0.f, 0.f};
+
+  // Shaders (assumed external; replace with your shader references)
+  const std::shared_ptr<Shader>& downsampleShader; 
+  const std::shared_ptr<Shader>& upsampleShader;
+  const std::shared_ptr<Shader>& finalShader;
+
+  bool mInit = false;
+  bool mKarisAverageOnDownsample = true;
+
+  // Quad rendering data
+  GLuint quadVAO = 0;
+  GLuint quadVBO = 0;
+};
+
+struct DirectShadowBuffer
+{
+
+};
+
+struct PointShadowBuffer
+{
+
 };

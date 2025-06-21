@@ -42,7 +42,7 @@ void Engine::Run()
     {
         AssetManager::UpdateLoading();
 
-        Renderer::RenderScene(dt, [](){Renderer::Draw2DText("LOADING", glm::vec2(500.0f,300.0f), 1.0f, glm::vec4(1.0f));});
+        /*Renderer::RenderScene(dt, [](){Renderer::Draw2DText("LOADING", glm::vec2(500.0f,300.0f), 1.0f, glm::vec4(1.0f));});*/
 
         if(AssetManager::LoadingComplete())
         {

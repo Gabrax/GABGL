@@ -217,7 +217,7 @@ static Shader& mDownsampleShader = Utilities::g_shaders.bloom_downsample;
 static Shader& mUpsampleShader = Utilities::g_shaders.bloom_upsample;
 static Shader& shaderBloomFinal = Utilities::g_shaders.bloom_final;
 
-bool BloomRenderer::Init()
+bool BloomBuffer::Init()
 {
 	if (mInit) return true;
 
@@ -293,14 +293,14 @@ bool BloomRenderer::Init()
   return true;
 }
 
-void BloomRenderer::Destroy()
+void BloomBuffer::Destroy()
 {
 	mFBO.Destroy();
 	Utilities::g_shaders.bloom_downsample.Delete();
 	Utilities::g_shaders.bloom_upsample.Delete();
 }
 
-void BloomRenderer::RenderDownsamples(unsigned int srcTexture)
+void BloomBuffer::RenderDownsamples(unsigned int srcTexture)
 {
 	const std::vector<bloomMip>& mipChain = mFBO.MipChain();
 
@@ -336,7 +336,7 @@ void BloomRenderer::RenderDownsamples(unsigned int srcTexture)
 	glUseProgram(0);
 }
 
-void BloomRenderer::RenderUpsamples(float filterRadius)
+void BloomBuffer::RenderUpsamples(float filterRadius)
 {
 	const std::vector<bloomMip>& mipChain = mFBO.MipChain();
 
@@ -373,16 +373,15 @@ void BloomRenderer::RenderUpsamples(float filterRadius)
 	glUseProgram(0);
 }
 
-void BloomRenderer::RenderBloomTexture(float filterRadius)
+void BloomBuffer::RenderBloomTexture(float filterRadius)
 {
 	mFBO.BindForWriting();
 
 	this->RenderDownsamples(colorBuffers[1]);
 	this->RenderUpsamples(filterRadius);
-
 }
 
-void BloomRenderer::Resize(int newWidth, int newHeight) {
+void BloomBuffer::Resize(int newWidth, int newHeight) {
     // Update viewport
     glViewport(0, 0, newWidth, newHeight);
     glfwSwapInterval(1);
@@ -404,7 +403,7 @@ void BloomRenderer::Resize(int newWidth, int newHeight) {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void BloomRenderer::Render()
+void BloomBuffer::Render()
 {
   shaderBloomFinal.Use();
   glActiveTexture(GL_TEXTURE0);
@@ -424,12 +423,12 @@ void BloomRenderer::Render()
 
 }
 
-void BloomRenderer::Bind() const 
+void BloomBuffer::Bind() const 
 {
   glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
 }
 
-void BloomRenderer::UnBind() const 
+void BloomBuffer::UnBind() const 
 {
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	// Restore viewport
@@ -437,12 +436,12 @@ void BloomRenderer::UnBind() const
   glfwSwapInterval(1);
 }
 
-GLuint BloomRenderer::getBloomTexture()
+GLuint BloomBuffer::getBloomTexture()
 {
 	return mFBO.MipChain()[0].texture;
 }
 
-GLuint BloomRenderer::BloomMip_i(int index)
+GLuint BloomBuffer::BloomMip_i(int index)
 {
 	const std::vector<bloomMip>& mipChain = mFBO.MipChain();
 	int size = (int)mipChain.size();

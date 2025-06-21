@@ -17,33 +17,29 @@ Application::Application()
 
 void Application::OnUpdate(DeltaTime& dt)
 {
-  Renderer::RenderScene(dt,
-    [&dt]()
+  Renderer::RenderScene(dt, [&dt]()
+  {
+    Renderer::DrawLine(glm::vec3(2.0f), glm::vec3(1.0f,1.0f,0.0f), glm::vec4(1.0f));
+    Renderer::DrawCubeContour(glm::vec3(2.0f), glm::vec3(1.0f), glm::vec4(1.0f));
+    Renderer::DrawCube({glm::vec3(2.0f,0.0f,0.0f)});
+
+    Renderer::DrawModel(dt,ModelManager::GetModel("objHouse"),glm::vec3(0.0f),glm::vec3(1.0f),glm::vec3(0.0f));
+    Renderer::DrawModel(dt,ModelManager::GetModel("MaleSurvivor1"),glm::vec3(0.0f,0.0f,0.0f),glm::vec3(1.0f),glm::vec3(0.0f));
+    Renderer::DrawModel(dt,ModelManager::GetModel("Zombie_Idle"),glm::vec3(10.0f,0.0f,0.0f),glm::vec3(5.0f),glm::vec3(0.0f));
+    Renderer::DrawModel(dt,ModelManager::GetModel("harry"), glm::vec3(5.0f,0.0f,0.0f), glm::vec3(500.03f), glm::vec3(0.0f,0.0f,0.0f));
+
+    Renderer::DrawSkybox("night");
+    Renderer::Draw2DText("FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f,50.0f), 0.5f, glm::vec4(1.0f,1.0f,3.0f,1.0f));
+
+    if (Input::IsKeyPressed(Key::Z))
     {
-      Renderer::DrawLine(glm::vec3(2.0f), glm::vec3(1.0f,1.0f,0.0f), glm::vec4(1.0f));
-      Renderer::DrawCubeContour(glm::vec3(2.0f), glm::vec3(1.0f), glm::vec4(1.0f));
-      Renderer::DrawCube({glm::vec3(2.0f,0.0f,0.0f)});
-
-      Renderer::DrawModel(dt,ModelManager::GetModel("objHouse"),glm::vec3(0.0f),glm::vec3(1.0f),glm::vec3(0.0f));
-      Renderer::DrawModel(dt,ModelManager::GetModel("MaleSurvivor1"),glm::vec3(0.0f,0.0f,0.0f),glm::vec3(1.0f),glm::vec3(0.0f));
-      Renderer::DrawModel(dt,ModelManager::GetModel("Zombie_Idle"),glm::vec3(10.0f,0.0f,0.0f),glm::vec3(5.0f),glm::vec3(0.0f));
-      Renderer::DrawModel(dt,ModelManager::GetModel("harry"), glm::vec3(5.0f,0.0f,0.0f), glm::vec3(500.03f), glm::vec3(0.0f));
-
-      Renderer::DrawSkybox("night");
-      Renderer::Draw2DText("FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f,50.0f), 0.5f, glm::vec4(1.0f,1.0f,3.0f,1.0f));
-      if (Input::IsKeyPressed(Key::Z))
-      {
-        if (!ModelManager::GetModel("harry")->IsInAnimation(1)) 
-            ModelManager::GetModel("harry")->StartBlendToAnimation(1, 0.8f); 
-      }
-      else
-      {
-        if (!ModelManager::GetModel("harry")->IsInAnimation(0)) 
-            ModelManager::GetModel("harry")->StartBlendToAnimation(0, 0.8f); 
-      }
-
+        ModelManager::GetModel("harry")->StartBlendToAnimation(1, 0.8f); 
     }
-  );
+    else
+    {
+        ModelManager::GetModel("harry")->StartBlendToAnimation(0, 0.8f); 
+    }
+  });
 }
 
 void Application::OnEvent(Event& e)

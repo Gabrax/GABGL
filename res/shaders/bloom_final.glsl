@@ -19,14 +19,14 @@ in vec2 TexCoords;
 
 uniform sampler2D scene;
 uniform sampler2D bloomBlur;
-uniform float exposure = 5.0f;
+uniform float exposure = 2.0f;
 uniform float bloomStrength = 0.54f;
 
-uniform float renderWidth;
-uniform float renderHeight;
-
-uniform float pixelWidth = 5.0;
-uniform float pixelHeight = 5.0;
+// uniform float renderWidth;
+// uniform float renderHeight;
+//
+// uniform float pixelWidth = 5.0;
+// uniform float pixelHeight = 5.0;
 
 // ACES Tone Mapping
 vec3 toneMappingACES(vec3 color) {
@@ -36,13 +36,11 @@ vec3 toneMappingACES(vec3 color) {
     const float d = 0.59;
     const float e = 0.14;
 
-// ACES tone mapping curve
     return clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0, 1.0);
 }
 
 const float gamma = 2.2;
 
-// Gamma correction function
 float gammaCorrection(float value)
 {
     return pow(value, 1.0 / gamma);
@@ -55,22 +53,14 @@ vec3 gammaCorrection(vec3 value)
 
 vec3 ApplyBloom()
 {
-    float dx = pixelWidth*(1.0/renderWidth);
-    float dy = pixelHeight*(1.0/renderHeight);
-     
-    vec2 coord = vec2(dx*floor(TexCoords.x/dx), dy*floor(TexCoords.y/dy));
-    vec3 hdrColor = texture(scene, coord).rgb;
-    vec3 bloomColor = texture(bloomBlur, coord).rgb;
+    vec3 hdrColor = texture(scene, TexCoords).rgb;
+    vec3 bloomColor = texture(bloomBlur, TexCoords).rgb;
     return mix(hdrColor, bloomColor, bloomStrength); // linear interpolation
 }
 
 void main()
 {
-
-
-
-    vec3 result = vec3(0.0);
-    result = ApplyBloom();
+    vec3 result = ApplyBloom();
     result = toneMappingACES(result * exposure);
     result = gammaCorrection(result);
     FragColor = vec4(result, 1.0);

@@ -163,21 +163,21 @@ struct RendererData
   uint32_t ModelIndexCount = 0;
   uint32_t ModelVertexCount = 0;
 
-  struct Shaders2D
+  struct Shaders
 	{
 		std::shared_ptr<Shader> _3DQuadShader;
 		std::shared_ptr<Shader> _2DQuadShader;
 		std::shared_ptr<Shader> _CircleShader;
 		std::shared_ptr<Shader> _LineShader;
 		std::shared_ptr<Shader> _FramebufferShader;
-	} _shaders2D;
+    std::shared_ptr<Shader> modelShader;
+    std::shared_ptr<Shader> skyboxShader;
+    std::shared_ptr<Shader> ModelShader;
+    std::shared_ptr<Shader> DownSampleShader;
+    std::shared_ptr<Shader> UpSampleShader;
+    std::shared_ptr<Shader> BloomResultShader;
 
-  struct Shaders3D
-  {
-      std::shared_ptr<Shader> modelShader;
-      std::shared_ptr<Shader> skyboxShader;
-      std::shared_ptr<Shader> ModelShader;
-  } _shaders3D;
+	} _shaders;
 
 	Renderer::Statistics _2DStats;
   Renderer::Statistics _3DStats;
@@ -239,14 +239,17 @@ struct RendererData
 
 void Renderer::LoadShaders()
 {
-	s_RendererData._shaders2D._3DQuadShader = Shader::Create("res/shaders/Renderer2D_Quad.glsl");
-	s_RendererData._shaders2D._2DQuadShader = Shader::Create("res/shaders/Renderer2D_2DQuad.glsl");
-	s_RendererData._shaders2D._CircleShader = Shader::Create("res/shaders/Renderer2D_Circle.glsl");
-	s_RendererData._shaders2D._LineShader = Shader::Create("res/shaders/Renderer2D_Line.glsl");
-	s_RendererData._shaders2D._FramebufferShader = Shader::Create("res/shaders/FB.glsl");
-  s_RendererData._shaders3D.modelShader = Shader::Create("res/shaders/Renderer3D_static.glsl");
-  s_RendererData._shaders3D.skyboxShader = Shader::Create("res/shaders/skybox.glsl");
-  s_RendererData._shaders3D.ModelShader = Shader::Create("res/shaders/Renderer3D_Model.glsl");
+	s_RendererData._shaders._3DQuadShader = Shader::Create("res/shaders/Renderer2D_Quad.glsl");
+	s_RendererData._shaders._2DQuadShader = Shader::Create("res/shaders/Renderer2D_2DQuad.glsl");
+	s_RendererData._shaders._CircleShader = Shader::Create("res/shaders/Renderer2D_Circle.glsl");
+	s_RendererData._shaders._LineShader = Shader::Create("res/shaders/Renderer2D_Line.glsl");
+	s_RendererData._shaders._FramebufferShader = Shader::Create("res/shaders/FB.glsl");
+  s_RendererData._shaders.modelShader = Shader::Create("res/shaders/Renderer3D_static.glsl");
+  s_RendererData._shaders.skyboxShader = Shader::Create("res/shaders/skybox.glsl");
+  s_RendererData._shaders.ModelShader = Shader::Create("res/shaders/Renderer3D_Model.glsl");
+  s_RendererData._shaders.DownSampleShader = Shader::Create("res/shaders/bloom_downsample.glsl");
+  s_RendererData._shaders.UpSampleShader = Shader::Create("res/shaders/bloom_upsample.glsl");
+  s_RendererData._shaders.BloomResultShader = Shader::Create("res/shaders/bloom_final.glsl");
 }
 
 void Renderer::Init()
@@ -488,13 +491,13 @@ void Renderer::RenderScene(DeltaTime& dt, const std::function<void()>& pre)
 
   glDisable(GL_CULL_FACE);
   glDisable(GL_DEPTH_TEST);
-  s_RendererData.m_MSAAFramebuffer->Unbind();
+  s_RendererData.m_MSAAFramebuffer->UnBind();
 
   FrameBuffer::Blit(s_RendererData.m_MSAAFramebuffer, s_RendererData.m_Framebuffer);
 
   s_RendererData.m_Framebuffer->Bind();
   s_RendererData.m_Framebuffer->ClearAttachment(1, -1);
-  s_RendererData.m_Framebuffer->Unbind();
+  s_RendererData.m_Framebuffer->UnBind();
 
   SetClearColor(glm::vec4(0.0f));
   Clear();
@@ -502,6 +505,26 @@ void Renderer::RenderScene(DeltaTime& dt, const std::function<void()>& pre)
   s_RendererData.m_Camera.OnUpdate(dt);
   PhysX::Simulate(dt);
   AudioManager::UpdateAllMusic();
+
+  /*buffer.Bind();*/
+  /* glEnable(GL_DEPTH_TEST);*/
+  /*  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);*/
+  /**/
+  /*  glEnable(GL_CULL_FACE);*/
+  /*  glCullFace(GL_FRONT);*/
+  /*  glFrontFace(GL_CW);*/
+  /**/
+  /*BeginScene(s_RendererData.m_Camera);*/
+  /*pre();*/
+  /*EndScene();*/
+  /*  glDisable(GL_CULL_FACE);*/
+  /**/
+  /*buffer.RenderBloomTexture(0.007f);*/
+  /*buffer.UnBind();*/
+  /**/
+  /**/
+  /*glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);*/
+  /*buffer.Render();*/
 
   if (Input::IsKeyPressed(Key::E)) s_RendererData.m_SceneState = RendererData::SceneState::Edit;
   if (Input::IsKeyPressed(Key::Q)) s_RendererData.m_SceneState = RendererData::SceneState::Play;
@@ -596,7 +619,7 @@ void Renderer::Flush()
 		for (uint32_t i = 0; i < s_RendererData._3DTextureSlotIndex; i++)
 			s_RendererData._3DTextureSlots[i]->Bind(i);
 
-		s_RendererData._shaders2D._3DQuadShader->Use();
+		s_RendererData._shaders._3DQuadShader->Use();
 		Renderer::DrawIndexed(s_RendererData._3DQuadVertexArray, s_RendererData._3DQuadIndexCount);
 		s_RendererData._2DStats.DrawCalls++;
 	}
@@ -608,7 +631,7 @@ void Renderer::Flush()
 		for (uint32_t i = 0; i < s_RendererData._2DTextureSlotIndex; i++)
 			s_RendererData._2DTextureSlots[i]->Bind(i);
 
-		s_RendererData._shaders2D._2DQuadShader->Use();
+		s_RendererData._shaders._2DQuadShader->Use();
 		Renderer::DrawIndexed(s_RendererData._2DQuadVertexArray, s_RendererData._2DQuadIndexCount);
 		s_RendererData._2DStats.DrawCalls++;
 	}
@@ -617,7 +640,7 @@ void Renderer::Flush()
 		uint32_t dataSize = (uint32_t)((uint8_t*)s_RendererData.CircleVertexBufferPtr - (uint8_t*)s_RendererData.CircleVertexBufferBase);
 		s_RendererData.CircleVertexBuffer->SetData(s_RendererData.CircleVertexBufferBase, dataSize);
 
-		s_RendererData._shaders2D._CircleShader->Use();
+		s_RendererData._shaders._CircleShader->Use();
 		Renderer::DrawIndexed(s_RendererData.CircleVertexArray, s_RendererData.CircleIndexCount);
 		s_RendererData._2DStats.DrawCalls++;
 	}
@@ -626,7 +649,7 @@ void Renderer::Flush()
 		uint32_t dataSize = (uint32_t)((uint8_t*)s_RendererData.LineVertexBufferPtr - (uint8_t*)s_RendererData.LineVertexBufferBase);
 		s_RendererData.LineVertexBuffer->SetData(s_RendererData.LineVertexBufferBase, dataSize);
 
-		s_RendererData._shaders2D._LineShader->Use();
+		s_RendererData._shaders._LineShader->Use();
 		Renderer::SetLineWidth(s_RendererData.LineWidth);
 		Renderer::DrawLines(s_RendererData.LineVertexArray, s_RendererData.LineVertexCount);
 		s_RendererData._2DStats.DrawCalls++;
@@ -636,7 +659,7 @@ void Renderer::Flush()
     uint32_t dataSize = (uint32_t)((uint8_t*)s_RendererData.CubeVertexBufferPtr - (uint8_t*)s_RendererData.CubeVertexBufferBase);
     s_RendererData.CubeVertexBuffer->SetData(s_RendererData.CubeVertexBufferBase, dataSize);
 
-    s_RendererData._shaders3D.modelShader->Use();
+    s_RendererData._shaders.modelShader->Use();
     s_RendererData.CubeVertexArray->Bind();
 
     Renderer::DrawIndexed(s_RendererData.CubeVertexArray, s_RendererData.CubeIndexCount);
@@ -995,8 +1018,8 @@ void Renderer::DrawCubeContour(const glm::vec3& position, const glm::vec3& size,
 
 void Renderer::DrawFramebuffer(uint32_t textureID)
 {
-  s_RendererData._shaders2D._FramebufferShader->Use();
-  s_RendererData._shaders2D._FramebufferShader->setInt("u_Texture", 0);
+  s_RendererData._shaders._FramebufferShader->Use();
+  s_RendererData._shaders._FramebufferShader->setInt("u_Texture", 0);
 
   static uint32_t quadVAO = 0, quadVBO = 0;
   if (quadVAO == 0)
@@ -1058,16 +1081,16 @@ void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, con
     return;
   }
 
-  s_RendererData._shaders3D.ModelShader->Use();
-  s_RendererData._shaders3D.ModelShader->setMat4("model", transform);
-  s_RendererData._shaders3D.ModelShader->setBool("isAnimated", model->IsAnimated());
-  s_RendererData._shaders3D.ModelShader->setBool("isInstanced", false);
+  s_RendererData._shaders.ModelShader->Use();
+  s_RendererData._shaders.ModelShader->setMat4("model", transform);
+  s_RendererData._shaders.ModelShader->setBool("isAnimated", model->IsAnimated());
+  s_RendererData._shaders.ModelShader->setBool("isInstanced", false);
 
   if(model->IsAnimated())
   {
     auto& transforms = model->GetFinalBoneMatrices();
     for (size_t i = 0; i < transforms.size(); ++i) {
-        s_RendererData._shaders3D.ModelShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+        s_RendererData._shaders.ModelShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
     }
     model->UpdateAnimation(dt);
   }
@@ -1088,7 +1111,7 @@ void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, con
           glActiveTexture(GL_TEXTURE0 + i);
 
           std::string number = std::to_string(textureCounters[textures[i]->GetType()]++);
-          s_RendererData._shaders3D.ModelShader->setInt(textures[i]->GetType() + number, i);
+          s_RendererData._shaders.ModelShader->setInt(textures[i]->GetType() + number, i);
           glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
       }
       
@@ -1101,16 +1124,16 @@ void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, con
 
 void Renderer::DrawModelInstanced(DeltaTime& dt, const std::shared_ptr<Model>& model, const std::vector<Transform>& instances, int entityID)
 {
-  s_RendererData._shaders3D.ModelShader->Use();
-  s_RendererData._shaders3D.ModelShader->setBool("isAnimated", model->IsAnimated());
-  s_RendererData._shaders3D.ModelShader->setBool("isInstanced", true);
+  s_RendererData._shaders.ModelShader->Use();
+  s_RendererData._shaders.ModelShader->setBool("isAnimated", model->IsAnimated());
+  s_RendererData._shaders.ModelShader->setBool("isInstanced", true);
 
   if (model->IsAnimated())
   {
       auto& transforms = model->GetFinalBoneMatrices();
       for (size_t i = 0; i < transforms.size(); ++i)
       {
-          s_RendererData._shaders3D.ModelShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+          s_RendererData._shaders.ModelShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
       }
       model->UpdateAnimation(dt);
   }
@@ -1131,7 +1154,7 @@ void Renderer::DrawModelInstanced(DeltaTime& dt, const std::shared_ptr<Model>& m
       for (GLuint i = 0; i < textures.size(); i++) {
           glActiveTexture(GL_TEXTURE0 + i);
           std::string number = std::to_string(textureCounters[textures[i]->GetType()]++);
-          s_RendererData._shaders3D.ModelShader->setInt(textures[i]->GetType() + number, i);
+          s_RendererData._shaders.ModelShader->setInt(textures[i]->GetType() + number, i);
           glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
       }
 
@@ -1257,8 +1280,8 @@ void Renderer::DrawSkybox(const std::string& name)
 
   glDepthFunc(GL_LEQUAL); 
 
-  s_RendererData._shaders3D.skyboxShader->Use();
-  s_RendererData._shaders3D.skyboxShader->setMat4("u_ViewProjection", s_RendererData._3DCameraBuffer.NonRotViewProjection);
+  s_RendererData._shaders.skyboxShader->Use();
+  s_RendererData._shaders.skyboxShader->setMat4("u_ViewProjection", s_RendererData._3DCameraBuffer.NonRotViewProjection);
 
   glActiveTexture(GL_TEXTURE0);
   auto it = s_RendererData.skyboxes.find(name);

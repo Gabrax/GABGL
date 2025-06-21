@@ -178,6 +178,7 @@ private:
   float m_Duration;
   int m_TicksPerSecond;
   float m_CurrentTime = 0.0f;
+  float m_NextTime = 0.0f;
   float m_DeltaTime = 0.0f;
 
   bool m_isKinematic;
@@ -197,10 +198,18 @@ private:
   void SetDefaultBoneData(Vertex& vertex);
   void SetBoneData(Vertex& vertex, int boneID, float weight);
   void CalculateBoneTransform(const AssimpNodeData* node, const glm::mat4& parentTransform);
-  void CalculateBoneTransform(const AssimpNodeData* node, const glm::mat4& parentTransform, std::vector<glm::mat4>& outMatrices, std::vector<Bone>& bones);
+  void CalculateBoneTransform(const AssimpNodeData* node, const glm::mat4& parentTransform, std::vector<glm::mat4>& outMatrices, std::vector<Bone>& bones, float time);
+  void CalculateBlendedBoneTransform(
+    const AssimpNodeData* node,
+    const AssimpNodeData* nodeNext,
+    float timeCurrent,
+    float timeNext,
+    const glm::mat4& parentTransform,
+    float blendFactor);
 
   Bone* FindBone(const std::string& name);
   Bone* FindBoneInList(const std::string& name, std::vector<Bone>& bones);
+  bool ValidateBoneConsistency();
   void ResizeFinalBoneMatrices();
   void ReadHierarchyData(AssimpNodeData& dest, const aiNode* src);
   void ReadMissingBones(const aiAnimation* animation);

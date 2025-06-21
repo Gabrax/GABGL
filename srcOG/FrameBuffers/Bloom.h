@@ -2,11 +2,11 @@
 
 #include <cstdint>
 
-struct BloomRenderer
+struct BloomBuffer
 {
 
-	BloomRenderer() : mInit(false) {}
-	~BloomRenderer() = default;
+	BloomBuffer() : mInit(false) {}
+	~BloomBuffer() = default;
 	bool Init();
 	void Destroy();
 	void RenderBloomTexture(float filterRadius);
