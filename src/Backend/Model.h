@@ -123,7 +123,7 @@ struct Mesh
 enum class PhysXMeshType : int32_t
 {
   NONE = 0,
-  BOX = 1,
+  CHARACTER = 1,
   TRIANGLEMESH = 2,
   CONVEXMESH = 3
 };
@@ -138,7 +138,7 @@ struct Model
   void UpdateAnimation(DeltaTime& dt);
   void SetAnimationbyIndex(int animationIndex);
   void SetAnimationByName(const std::string& animationName);
-  void UpdatePhysXActor(const glm::mat4& transform);
+  void SetPhysXActorPosition(const glm::mat4& transform);
   void StartBlendToAnimation(int32_t nextAnimationIndex, float blendDuration);
   bool IsInAnimation(int index) const;
   void CreatePhysXStaticMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m_Indices);
@@ -153,6 +153,8 @@ struct Model
   inline bool IsAnimated() { return m_isAnimated; }
   inline const std::vector<glm::mat4>& GetFinalBoneMatrices() { return m_FinalBoneMatrices; }
   inline const PhysXMeshType& GetPhysXMeshType() { return m_meshType; }
+  inline const PxRigidStatic* GetStaticActor() { return m_StaticMeshActor; }
+  inline const PxRigidDynamic* GetDynamicActor() { return m_DynamicMeshActor; }
 
 private:
 

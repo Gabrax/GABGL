@@ -31,8 +31,11 @@ struct Renderer
   static void DrawCube(const Transform& transform, int entityID = -1);
   static void DrawCubeContour(const glm::vec3& position, const glm::vec3& size, const glm::vec4& color, int entityID = -1);
   static void DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, const glm::vec3& position, const glm::vec3& size, const glm::vec3& rotation);
-  static void DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, const glm::mat4& transform, int entityID = -1);
+  static void DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, const std::shared_ptr<Model>& convex, const glm::vec3& position, const glm::vec3& size, const glm::vec3& rotation);
+  static void DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, const glm::mat4& transform = glm::mat4(0.0f), int entityID = -1);
+  static void DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, const std::shared_ptr<Model>& convex, const glm::mat4& transform = glm::mat4(0.0f), int entityID = -1);
   static void DrawModelInstanced(DeltaTime& dt, const std::shared_ptr<Model>& model, const std::vector<Transform>& instances, int entityID = -1);
+  static void DrawModelInstanced(DeltaTime& dt, const std::shared_ptr<Model>& model, const std::shared_ptr<Model>& convex, const std::vector<Transform>& instances, int entityID = -1);
 
   // 2D space
   static void Draw2DQuad(const glm::vec2& position, const glm::vec2& size, float rotation, const glm::vec4& color);

@@ -10,7 +10,6 @@ using namespace physx;
 struct PhysX
 {
   static void Init();
-  static void RenderActors(unsigned int vao);
   static void Simulate(DeltaTime& dt);
   static void raycastAndApplyForce(PxScene* scene, const glm::vec3& origin, const glm::vec3& direction, float rayLength);
   static void DisableRaycast(PxShape* shape);
@@ -18,6 +17,7 @@ struct PhysX
 
   static PxTriangleMesh* CreateTriangleMesh(PxU32 numVertices, const PxVec3* vertices, PxU32 numTriangles, const PxU32* indices);
   static PxConvexMesh* CreateConvexMesh(PxU32 numVertices, const PxVec3* vertices);
+  static PxController* CreateCharacterController(const PxVec3& position, float radius, float height, bool slopeLimit);
 
   static PxTransform GlmMat4ToPxTransform(const glm::mat4& mat);
   static glm::mat4 PxMat44ToGlmMat4(physx::PxMat44 pxMatrix);

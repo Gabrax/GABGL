@@ -370,13 +370,17 @@ void Model::OptimizeMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m
   m_Vertices = std::move(OptVertices);
 }
 
-void Model::UpdatePhysXActor(const glm::mat4& transform)
+void Model::SetPhysXActorPosition(const glm::mat4& transform)
 {
-  if (m_isKinematic && m_DynamicMeshActor) {
-      m_DynamicMeshActor->setKinematicTarget(PxTransform(PhysX::GlmMat4ToPxTransform(transform)));
-  }
-  else if (m_DynamicMeshActor) {
-      m_DynamicMeshActor->setGlobalPose(PxTransform(PhysX::GlmMat4ToPxTransform(transform)));
+  PxTransform pxTransform = PxTransform(PhysX::GlmMat4ToPxTransform(transform));
+
+  if(m_meshType == PhysXMeshType::TRIANGLEMESH) m_StaticMeshActor->setGlobalPose(pxTransform);
+  else if(m_meshType == PhysXMeshType::CONVEXMESH)
+  {
+    if (m_isKinematic)
+        m_DynamicMeshActor->setKinematicTarget(pxTransform);
+    else
+        m_DynamicMeshActor->setGlobalPose(pxTransform);
   }
 }
 
@@ -391,7 +395,6 @@ void Model::CreatePhysXStaticMesh(std::vector<Vertex>& m_Vertices, std::vector<G
       );
   }
 
-  // Create triangle mesh
   PxTriangleMesh* physxMesh = PhysX::CreateTriangleMesh(
       static_cast<PxU32>(physxVertices.size()), physxVertices.data(),
       static_cast<PxU32>(m_Indices.size() / 3), m_Indices.data()
@@ -409,7 +412,6 @@ void Model::CreatePhysXStaticMesh(std::vector<Vertex>& m_Vertices, std::vector<G
   PxTriangleMeshGeometry triGeom;
   triGeom.triangleMesh = physxMesh;
 
-  // ✅ Create static actor (not affected by gravity or forces)
   PxTransform pose = PxTransform(PxVec3(0));
   m_StaticMeshActor = physics->createRigidStatic(pose);
 
@@ -424,18 +426,12 @@ void Model::CreatePhysXStaticMesh(std::vector<Vertex>& m_Vertices, std::vector<G
 void Model::CreatePhysXDynamicMesh(std::vector<Vertex>& m_Vertices)
 {
   std::vector<PxVec3> physxVertices(m_Vertices.size());
-  for (size_t i = 0; i < m_Vertices.size(); ++i) {
-      physxVertices[i] = PxVec3(
-          m_Vertices[i].Position.x,
-          m_Vertices[i].Position.y,
-          m_Vertices[i].Position.z
-      );
+  for (size_t i = 0; i < m_Vertices.size(); ++i)
+  {
+      physxVertices[i] = PxVec3(m_Vertices[i].Position.x, m_Vertices[i].Position.y,m_Vertices[i].Position.z);
   }
 
-  PxConvexMesh* convexMesh = PhysX::CreateConvexMesh(
-      static_cast<PxU32>(physxVertices.size()),
-      physxVertices.data()
-  );
+  PxConvexMesh* convexMesh = PhysX::CreateConvexMesh(static_cast<PxU32>(physxVertices.size()), physxVertices.data());
 
   if (!convexMesh) {
       GABGL_ERROR("Failed to create PhysX convex mesh");
@@ -453,13 +449,15 @@ void Model::CreatePhysXDynamicMesh(std::vector<Vertex>& m_Vertices)
   PxTransform pose = PxTransform(PxVec3(0));
   m_DynamicMeshActor = physics->createRigidDynamic(pose);
 
-  if (m_DynamicMeshActor) {
-      PxShape* shape = PxRigidActorExt::createExclusiveShape(
-          *m_DynamicMeshActor, convexGeom, *material
-      );
+  if (m_DynamicMeshActor)
+  {
+      PxShape* shape = PxRigidActorExt::createExclusiveShape(*m_DynamicMeshActor, convexGeom, *material);
 
-      // Set mass and inertia (important for dynamics)
-      PxRigidBodyExt::updateMassAndInertia(*m_DynamicMeshActor, 1.0f);
+      material->setRestitution(0.0f);
+
+      if (m_isKinematic) m_DynamicMeshActor->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, true);
+
+      PxRigidBodyExt::setMassAndUpdateInertia(*m_DynamicMeshActor, 1.0f);
 
       scene->addActor(*m_DynamicMeshActor);
   }

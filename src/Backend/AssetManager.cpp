@@ -150,39 +150,47 @@ void UploadContextManager::ProcessMainThreadTasks()
 
 struct AssetsData
 {
-  std::vector<const char*> sounds = {
-      "res/audio/select1.wav",
-      "res/audio/select2.wav",
-      "res/audio/ak.wav",
+  std::vector<const char*> sounds =
+  {
+    "res/audio/select1.wav",
+    "res/audio/select2.wav",
   };
 
-  std::vector<const char*> music = {
-      "res/audio/menu.wav",
-      "res/audio/night.wav",
+  std::vector<const char*> music =
+  {
+    "res/audio/menu.wav",
+    "res/audio/night.wav",
   };
 
-  std::vector<std::string> skybox = {
-      "res/skybox/NightSky_Right.png",
-      "res/skybox/NightSky_Left.png",
-      "res/skybox/NightSky_Top.png",
-      "res/skybox/NightSky_Bottom.png",
-      "res/skybox/NightSky_Front.png",
-      "res/skybox/NightSky_Back.png"
+  std::vector<std::string> skybox =
+  {
+    "res/skybox/NightSky_Right.png",
+    "res/skybox/NightSky_Left.png",
+    "res/skybox/NightSky_Top.png",
+    "res/skybox/NightSky_Bottom.png",
+    "res/skybox/NightSky_Front.png",
+    "res/skybox/NightSky_Back.png"
   };
 
-  std::vector<std::tuple<const char*, float, bool, PhysXMeshType>> static_models = {
-      { "res/map/objHouse.obj", 1.0f, false, PhysXMeshType::TRIANGLEMESH },
-      { "res/models/aidkit.glb", 1.0f, false, PhysXMeshType::NONE },
-      { "res/models/pistolammo.glb", 1.0f, false, PhysXMeshType::NONE },
-      { "res/models/shotgunammo.glb", 1.0f, false, PhysXMeshType::NONE },
-      { "res/models/pistol.glb", 1.0f, false, PhysXMeshType::NONE },
-      { "res/models/shotgun.glb", 1.0f, false, PhysXMeshType::NONE },
+  std::vector<std::tuple<const char*, float, bool, PhysXMeshType>> static_models =
+  {
+    { "res/map/objHouse.obj", 1.0f, false, PhysXMeshType::TRIANGLEMESH },
+    { "res/models/aidkit.glb", 1.0f, false, PhysXMeshType::NONE },
+    { "res/models/aidkit_convex.glb", 1.0f, false, PhysXMeshType::CONVEXMESH },
+    { "res/models/pistolammo.glb", 1.0f, false, PhysXMeshType::NONE },
+    { "res/models/pistolammo_convex.glb", 1.0f, false, PhysXMeshType::CONVEXMESH },
+    { "res/models/shotgunammo.glb", 1.0f, false, PhysXMeshType::NONE },
+    { "res/models/shotgunammo_convex.glb", 1.0f, false, PhysXMeshType::CONVEXMESH },
+    { "res/models/pistol.glb", 1.0f, false, PhysXMeshType::NONE },
+    { "res/models/pistol_convex.glb", 1.0f, false, PhysXMeshType::CONVEXMESH },
+    { "res/models/shotgun.glb", 1.0f, false, PhysXMeshType::NONE },
+    { "res/models/shotgun_convex.glb", 1.0f, false, PhysXMeshType::CONVEXMESH },
   };
 
-  std::vector<std::tuple<const char*, float, bool, PhysXMeshType>> animated_models = {
-      { "res/lowpoly/MaleSurvivor1.glb", 1.0f, false, PhysXMeshType::NONE },
-      { "res/zombie/Zombie_Idle.dae", 1.0f, false, PhysXMeshType::NONE },
-      { "res/harry/harry.glb", 1.0f, false, PhysXMeshType::NONE },
+  std::vector<std::tuple<const char*, float, bool, PhysXMeshType>> animated_models =
+  {
+    { "res/zombie/zombie.glb", 1.0f, false, PhysXMeshType::NONE },
+    { "res/harry/harry.glb", 1.0f, false, PhysXMeshType::NONE },
   };
 
   std::vector<std::future<void>> m_FutureVoid;

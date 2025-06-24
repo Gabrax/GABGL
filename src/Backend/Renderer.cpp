@@ -3,6 +3,7 @@
 #include <array>
 #include "BackendLogger.h"
 #include "Buffer.h"
+#include "Model.h"
 #include "Renderer.h"
 #include "Shader.h"
 #include "Texture.h"
@@ -1080,6 +1081,25 @@ void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, con
   DrawModel(dt, model, transform);
 }
 
+void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, const std::shared_ptr<Model>& convex, const glm::vec3& position, const glm::vec3& size, const glm::vec3& rotation)
+{
+  if(model == nullptr || convex == nullptr)
+  {
+    GABGL_ERROR("Model doesnt exist");
+    return;
+  }
+
+  glm::mat4 transform = glm::translate(glm::mat4(1.0f), position);
+
+  transform = glm::rotate(transform, rotation.z, glm::vec3(0.0f, 0.0f, 1.0f));
+  transform = glm::rotate(transform, rotation.y, glm::vec3(0.0f, 1.0f, 0.0f));
+  transform = glm::rotate(transform, rotation.x, glm::vec3(1.0f, 0.0f, 0.0f));
+
+  transform = glm::scale(transform, size);
+
+  DrawModel(dt, model, convex, transform);
+}
+
 void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, const glm::mat4& transform, int entityID)
 {
   if(model == nullptr)
@@ -1089,7 +1109,8 @@ void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, con
   }
 
   s_RendererData._shaders.ModelShader->Use();
-  s_RendererData._shaders.ModelShader->setMat4("model", transform);
+  if(model->GetPhysXMeshType() == PhysXMeshType::TRIANGLEMESH) s_RendererData._shaders.ModelShader->setMat4("model", PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose()));
+  else if (model->GetPhysXMeshType() == PhysXMeshType::NONE) s_RendererData._shaders.ModelShader->setMat4("model", transform);
   s_RendererData._shaders.ModelShader->setBool("isAnimated", model->IsAnimated());
   s_RendererData._shaders.ModelShader->setBool("isInstanced", false);
 
@@ -1101,8 +1122,6 @@ void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, con
     }
     model->UpdateAnimation(dt);
   }
-
-  model->UpdatePhysXActor(transform);
 
   for (auto& mesh : model->GetMeshes())
   {
@@ -1127,6 +1146,53 @@ void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, con
       glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
       glBindVertexArray(0);
       glActiveTexture(GL_TEXTURE0);
+  }
+}
+
+void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, const std::shared_ptr<Model>& convex, const glm::mat4& transform, int entityID)
+{
+  if(model == nullptr || convex == nullptr)
+  {
+    GABGL_ERROR("Model doesnt exist");
+    return;
+  }
+
+  s_RendererData._shaders.ModelShader->Use();
+  s_RendererData._shaders.ModelShader->setMat4("model", PhysX::PxMat44ToGlmMat4(convex->GetDynamicActor()->getGlobalPose()));
+  s_RendererData._shaders.ModelShader->setBool("isAnimated", model->IsAnimated());
+  s_RendererData._shaders.ModelShader->setBool("isInstanced", false);
+
+  if(model->IsAnimated())
+  {
+    auto& transforms = model->GetFinalBoneMatrices();
+    for (size_t i = 0; i < transforms.size(); ++i) {
+        s_RendererData._shaders.ModelShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+    }
+    model->UpdateAnimation(dt);
+  }
+
+  for (auto& mesh : model->GetMeshes())
+  {
+    std::unordered_map<std::string, GLuint> textureCounters = {
+        {"texture_diffuse", 1},
+        {"texture_specular", 1},
+        {"texture_normal", 1},
+        {"texture_height", 1}
+    };
+
+    auto& textures = mesh.m_Textures;
+    for (GLuint i = 0; i < textures.size(); i++) {
+        glActiveTexture(GL_TEXTURE0 + i);
+
+        std::string number = std::to_string(textureCounters[textures[i]->GetType()]++);
+        s_RendererData._shaders.ModelShader->setInt(textures[i]->GetType() + number, i);
+        glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
+    }
+    
+    glBindVertexArray(mesh.VAO);
+    glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
+    glBindVertexArray(0);
+    glActiveTexture(GL_TEXTURE0);
   }
 }
 

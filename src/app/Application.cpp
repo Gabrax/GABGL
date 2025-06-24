@@ -14,6 +14,25 @@ Application::Application()
   LightManager::AddLight(LightType::POINT, glm::vec4(1.0f,1.0f,0.0,1.0f), glm::vec3(5.0f), glm::vec3(1.0f), glm::vec3(1.0f));
   LightManager::AddLight(LightType::POINT, glm::vec4(1.0f,1.0f,0.0,1.0f), glm::vec3(10.0f), glm::vec3(1.0f), glm::vec3(1.0f));
   /*LightManager::AddLight(LightType::DIRECT, glm::vec4(1.0f), glm::vec3(50.0f), glm::vec3(1.0f), glm::vec3(1.0f));*/
+
+  Transform housetransform;
+  housetransform.SetPosition(glm::vec3(0.0f));
+  ModelManager::GetModel("objHouse")->SetPhysXActorPosition(housetransform.GetTransform());
+  Transform pistoltransform;
+  pistoltransform.SetPosition(glm::vec3(15.0f,4.0f,13.0f));
+  ModelManager::GetModel("pistol_convex")->SetPhysXActorPosition(pistoltransform.GetTransform());
+  Transform pistolammotransform;
+  pistolammotransform.SetPosition(glm::vec3(11.0f,4.0f,5.0f));
+  ModelManager::GetModel("pistolammo_convex")->SetPhysXActorPosition(pistolammotransform.GetTransform());
+  Transform shotguntransform;
+  shotguntransform.SetPosition(glm::vec3(14.0f,4.0f,11.0f));
+  ModelManager::GetModel("shotgun_convex")->SetPhysXActorPosition(shotguntransform.GetTransform());
+  Transform shotgunammotransform;
+  shotgunammotransform.SetPosition(glm::vec3(12.0f,4.0f,7.0f));
+  ModelManager::GetModel("shotgunammo_convex")->SetPhysXActorPosition(shotgunammotransform.GetTransform());
+  Transform aidkittransform;
+  aidkittransform.SetPosition(glm::vec3(13.0f,4.0f,9.0f));
+  ModelManager::GetModel("aidkit_convex")->SetPhysXActorPosition(aidkittransform.GetTransform());
 }
 
 void Application::OnUpdate(DeltaTime& dt)
@@ -21,15 +40,14 @@ void Application::OnUpdate(DeltaTime& dt)
   Renderer::RenderScene(dt, 
     [&dt]()
     {
-      Renderer::DrawModel(dt,ModelManager::GetModel("objHouse"),glm::vec3(0.0f),glm::vec3(1.0f),glm::vec3(0.0f));
-      Renderer::DrawModel(dt,ModelManager::GetModel("MaleSurvivor1"),glm::vec3(0.0f,0.0f,0.0f),glm::vec3(1.0f),glm::vec3(0.0f));
-      Renderer::DrawModel(dt,ModelManager::GetModel("pistolammo"),glm::vec3(11.0f,4.0f,5.0f),glm::vec3(0.2f),glm::vec3(0.0f));
-      Renderer::DrawModel(dt,ModelManager::GetModel("shotgunammo"),glm::vec3(12.0f,4.0f,7.0f),glm::vec3(0.2f),glm::vec3(0.0f));
-      Renderer::DrawModel(dt,ModelManager::GetModel("aidkit"),glm::vec3(13.0f,4.0f,9.0f),glm::vec3(0.1f),glm::vec3(0.0f));
-      Renderer::DrawModel(dt,ModelManager::GetModel("shotgun"),glm::vec3(14.0f,4.0f,11.0f),glm::vec3(0.2f),glm::vec3(0.0f));
-      Renderer::DrawModel(dt,ModelManager::GetModel("pistol"),glm::vec3(15.0f,4.0f,13.0f),glm::vec3(0.1f),glm::vec3(0.0f));
-      Renderer::DrawModel(dt,ModelManager::GetModel("Zombie_Idle"),glm::vec3(10.0f,0.0f,0.0f),glm::vec3(5.0f),glm::vec3(0.0f));
-      Renderer::DrawModel(dt,ModelManager::GetModel("harry"), glm::vec3(5.0f,0.0f,0.0f), glm::vec3(500.03f), glm::vec3(0.0f,0.0f,0.0f));
+      Renderer::DrawModel(dt,ModelManager::GetModel("objHouse"));
+      Renderer::DrawModel(dt,ModelManager::GetModel("zombie"),glm::vec3(10.0f,0.0f,0.0f),glm::vec3(1.0f),glm::vec3(0.0f));
+      Renderer::DrawModel(dt,ModelManager::GetModel("harry"), glm::vec3(5.0f,0.0f,0.0f), glm::vec3(1.0f), glm::vec3(0.0f,0.0f,0.0f));
+      Renderer::DrawModel(dt,ModelManager::GetModel("pistol"),ModelManager::GetModel("pistol_convex"));
+      Renderer::DrawModel(dt,ModelManager::GetModel("pistolammo"),ModelManager::GetModel("pistolammo_convex"));
+      Renderer::DrawModel(dt,ModelManager::GetModel("shotgun"),ModelManager::GetModel("shotgun_convex"));
+      Renderer::DrawModel(dt,ModelManager::GetModel("shotgunammo"),ModelManager::GetModel("shotgunammo_convex"));
+      Renderer::DrawModel(dt,ModelManager::GetModel("aidkit"),ModelManager::GetModel("aidkit_convex"));
 
       Renderer::DrawSkybox("night");
       Renderer::Draw2DText("FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f,50.0f), 0.5f, glm::vec4(1.0f,1.0f,3.0f,1.0f));
