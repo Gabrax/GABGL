@@ -541,409 +541,331 @@ void FrameBuffer::ClearAttachment(uint32_t attachmentIndex, int value)
 	Utils::FBTextureFormatToGL(spec.TextureFormat), GL_INT, &value);
 }
 
+void FrameBuffer::AttachExternalColorTexture(GLuint textureID, uint32_t slot)
+{
+	glBindFramebuffer(GL_FRAMEBUFFER, m_RendererID);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + slot, GL_TEXTURE_2D, textureID, 0);
+	m_ColorAttachments[slot] = textureID;
+}
+
 std::shared_ptr<FrameBuffer> FrameBuffer::Create(const FramebufferSpecification& spec)
 {
 	return std::make_shared<FrameBuffer>(spec);
 }
 
-void FrameBuffer::Blit(const std::shared_ptr<FrameBuffer>& src, const std::shared_ptr<FrameBuffer>& dst)
+void FrameBuffer::BlitColor(const std::shared_ptr<FrameBuffer>& dst)
 {
-  glBindFramebuffer(GL_READ_FRAMEBUFFER, src->GetID());
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, this->GetID());
   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dst->GetID());
 
   glReadBuffer(GL_COLOR_ATTACHMENT0);
   glDrawBuffer(GL_COLOR_ATTACHMENT0);
 
-  const auto& srcSpec = src->GetSpecification();
+  const auto& srcSpec = this->GetSpecification();
   const auto& dstSpec = dst->GetSpecification();
 
   glBlitFramebuffer(
       0, 0, srcSpec.Width, srcSpec.Height,
       0, 0, dstSpec.Width, dstSpec.Height,
-      GL_COLOR_BUFFER_BIT, GL_NEAREST
+      GL_COLOR_BUFFER_BIT,
+      GL_NEAREST
   );
 
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-BloomBuffer::BloomBuffer(const std::shared_ptr<Shader>& downsampleShader, const std::shared_ptr<Shader>& upsampleShader, const std::shared_ptr<Shader>& finalShader) : downsampleShader(downsampleShader), upsampleShader(upsampleShader), finalShader(finalShader) {};
-BloomBuffer::~BloomBuffer() { Destroy(); }
 
-bool BloomBuffer::Init(unsigned int windowWidth, unsigned int windowHeight, unsigned int mipChainLength)
-{
-    if (mInit) return true;
 
-    srcViewportSize = glm::ivec2(windowWidth, windowHeight);
-    srcViewportSizeFloat = glm::vec2((float)windowWidth, (float)windowHeight);
-
-    // HDR framebuffer setup
-    glGenFramebuffers(1, &hdrFBO);
-    glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
-
-    glGenTextures(2, colorBuffers);
-    for (unsigned int i = 0; i < 2; i++)
-    {
-        glBindTexture(GL_TEXTURE_2D, colorBuffers[i]);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, windowWidth, windowHeight, 0, GL_RGBA, GL_FLOAT, nullptr);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, colorBuffers[i], 0);
-    }
-
-    glGenRenderbuffers(1, &rboDepth);
-    glBindRenderbuffer(GL_RENDERBUFFER, rboDepth);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, windowWidth, windowHeight);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rboDepth);
-
-    GLuint attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
-    glDrawBuffers(2, attachments);
-
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-    {
-        std::cerr << "HDR Framebuffer not complete!" << std::endl;
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        return false;
-    }
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-    // Ping-pong framebuffers for blurring
-    glGenFramebuffers(2, pingpongFBO);
-    glGenTextures(2, pingpongColorbuffers);
-    for (int i = 0; i < 2; i++)
-    {
-        glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i]);
-        glBindTexture(GL_TEXTURE_2D, pingpongColorbuffers[i]);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, windowWidth, windowHeight, 0, GL_RGBA, GL_FLOAT, nullptr);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongColorbuffers[i], 0);
-
-        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-        {
-            std::cerr << "Pingpong framebuffer not complete!" << std::endl;
-            glBindFramebuffer(GL_FRAMEBUFFER, 0);
-            return false;
-        }
-    }
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-    // Create bloom mip chain FBO and textures
-    glGenFramebuffers(1, &bloomFBO);
-    glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO);
-
-    glm::vec2 mipSize((float)windowWidth, (float)windowHeight);
-    glm::ivec2 mipIntSize(windowWidth, windowHeight);
-
-    mipChain.clear();
-    for (unsigned int i = 0; i < mipChainLength; i++)
-    {
-        mipSize *= 0.5f;
-        mipIntSize /= 2;
-
-        bloomMip mip;
-        mip.size = mipSize;
-        mip.intSize = mipIntSize;
-
-        glGenTextures(1, &mip.texture);
-        glBindTexture(GL_TEXTURE_2D, mip.texture);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_R11F_G11F_B10F,
-                     (int)mipSize.x, (int)mipSize.y, 0, GL_RGB, GL_FLOAT, nullptr);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-        mipChain.push_back(mip);
-    }
-
-    // Attach first mip texture to bloom framebuffer color attachment 0
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mipChain[0].texture, 0);
-    GLuint bloomAttachments[1] = { GL_COLOR_ATTACHMENT0 };
-    glDrawBuffers(1, bloomAttachments);
-
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-    {
-        std::cerr << "Bloom framebuffer not complete!" << std::endl;
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        return false;
-    }
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-    // Setup shaders' texture unit bindings
-    downsampleShader->Use();
-    downsampleShader->setInt("srcTexture", 0);
-    upsampleShader->Use();
-    upsampleShader->setInt("srcTexture", 0);
-    glUseProgram(0);
-
-    mInit = true;
-    return true;
-}
-
-void BloomBuffer::Destroy()
-{
-    if (!mInit) return;
-
-    // Delete bloom mip textures
-    for (auto& mip : mipChain)
-    {
-        if (mip.texture)
-        {
-            glDeleteTextures(1, &mip.texture);
-            mip.texture = 0;
-        }
-    }
-    mipChain.clear();
-
-    // Delete bloom FBO
-    if (bloomFBO)
-    {
-        glDeleteFramebuffers(1, &bloomFBO);
-        bloomFBO = 0;
-    }
-
-    // Delete HDR color buffers
-    for (int i = 0; i < 2; i++)
-    {
-        if (colorBuffers[i])
-        {
-            glDeleteTextures(1, &colorBuffers[i]);
-            colorBuffers[i] = 0;
-        }
-    }
-
-    // Delete ping-pong buffers and FBOs
-    for (int i = 0; i < 2; i++)
-    {
-        if (pingpongColorbuffers[i])
-        {
-            glDeleteTextures(1, &pingpongColorbuffers[i]);
-            pingpongColorbuffers[i] = 0;
-        }
-        if (pingpongFBO[i])
-        {
-            glDeleteFramebuffers(1, &pingpongFBO[i]);
-            pingpongFBO[i] = 0;
-        }
-    }
-
-    // Delete HDR FBO and renderbuffer
-    if (hdrFBO)
-    {
-        glDeleteFramebuffers(1, &hdrFBO);
-        hdrFBO = 0;
-    }
-    if (rboDepth)
-    {
-        glDeleteRenderbuffers(1, &rboDepth);
-        rboDepth = 0;
-    }
-
-    // Delete quad buffers
-    if (quadVBO)
-    {
-        glDeleteBuffers(1, &quadVBO);
-        quadVBO = 0;
-    }
-    if (quadVAO)
-    {
-        glDeleteVertexArrays(1, &quadVAO);
-        quadVAO = 0;
-    }
-
-    mInit = false;
-}
-
-void BloomBuffer::Resize(unsigned int newWidth, unsigned int newHeight)
-{
-    if (!mInit) return;
-
-    srcViewportSize = glm::ivec2(newWidth, newHeight);
-    srcViewportSizeFloat = glm::vec2((float)newWidth, (float)newHeight);
-
-    // Resize HDR framebuffer textures
-    glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
-    for (unsigned int i = 0; i < 2; i++)
-    {
-        glBindTexture(GL_TEXTURE_2D, colorBuffers[i]);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, newWidth, newHeight, 0, GL_RGBA, GL_FLOAT, nullptr);
-    }
-
-    // Resize depth renderbuffer
-    glBindRenderbuffer(GL_RENDERBUFFER, rboDepth);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, newWidth, newHeight);
-
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-    {
-        std::cerr << "ERROR::FRAMEBUFFER:: Framebuffer is not complete after resizing!" << std::endl;
-    }
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-    // Resize ping-pong textures
-    for (int i = 0; i < 2; i++)
-    {
-        glBindTexture(GL_TEXTURE_2D, pingpongColorbuffers[i]);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, newWidth, newHeight, 0, GL_RGBA, GL_FLOAT, nullptr);
-    }
-
-    // Resize bloom mip chain textures
-    glm::vec2 mipSize((float)newWidth, (float)newHeight);
-    glm::ivec2 mipIntSize(newWidth, newHeight);
-
-    for (auto& mip : mipChain)
-    {
-        mipSize *= 0.5f;
-        mipIntSize /= 2;
-
-        mip.size = mipSize;
-        mip.intSize = mipIntSize;
-
-        glBindTexture(GL_TEXTURE_2D, mip.texture);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_R11F_G11F_B10F,
-                     (int)mipSize.x, (int)mipSize.y, 0, GL_RGB, GL_FLOAT, nullptr);
-    }
-
-    // Reattach first bloom mip to framebuffer
-    glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mipChain[0].texture, 0);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-}
-
-void BloomBuffer::Bind() const
-{
-    glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
-}
-
-void BloomBuffer::UnBind() const
-{
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, srcViewportSize.x, srcViewportSize.y);
-}
-
-GLuint BloomBuffer::getBloomTexture() const
-{
-    return mipChain.empty() ? 0 : mipChain[0].texture;
-}
-
-GLuint BloomBuffer::BloomMip_i(int index) const
-{
-    if (index < 0 || index >= (int)mipChain.size()) return 0;
-    return mipChain[index].texture;
-}
-
-void BloomBuffer::renderQuad()
+static unsigned int quadVAO = 0;
+static unsigned int quadVBO;
+static void renderQuad()
 {
     if (quadVAO == 0)
     {
         float quadVertices[] = {
-            // positions   // texCoords
-            -1.0f,  1.0f,  0.0f, 1.0f,
-            -1.0f, -1.0f,  0.0f, 0.0f,
-             1.0f,  1.0f,  1.0f, 1.0f,
-             1.0f, -1.0f,  1.0f, 0.0f,
+            // positions        // texture Coords
+            -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+             1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+             1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
         };
-
+        // setup plane VAO
         glGenVertexArrays(1, &quadVAO);
         glGenBuffers(1, &quadVBO);
         glBindVertexArray(quadVAO);
         glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
         glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
         glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
     }
     glBindVertexArray(quadVAO);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     glBindVertexArray(0);
 }
 
-void BloomBuffer::RenderDownsamples(GLuint srcTexture)
+
+#include "../engine.h"
+
+BloomBuffer::BloomBuffer(const std::shared_ptr<Shader>& downsampleShader, const std::shared_ptr<Shader>& upsampleShader, const std::shared_ptr<Shader>& finalShader) : downsampleShader(downsampleShader), upsampleShader(upsampleShader), finalShader(finalShader)
 {
-    // Downsample from srcTexture through mipChain
-    downsampleShader->Use();
+  float windowWidth = Engine::GetInstance().GetMainWindow().GetWidth();
+  float windowHeight = Engine::GetInstance().GetMainWindow().GetHeight();
 
-    int mipCount = (int)mipChain.size();
+  FramebufferSpecification hdrSpec;
+	hdrSpec.Attachments = { FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::Depth };
+	hdrSpec.Width = Engine::GetInstance().GetMainWindow().GetWidth();
+	hdrSpec.Height = Engine::GetInstance().GetMainWindow().GetHeight();
+	m_hdrFB = FrameBuffer::Create(hdrSpec); 
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, srcTexture);
+  FramebufferSpecification blurSpec;
+  blurSpec.Width = windowWidth;
+  blurSpec.Height = windowHeight;
+  blurSpec.Attachments = { FramebufferTextureFormat::RGBA16F};
+  m_pingpongFB[0] = FrameBuffer::Create(blurSpec);
+  m_pingpongFB[1] = FrameBuffer::Create(blurSpec);
 
-    for (int i = 0; i < mipCount; i++)
-    {
-        glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mipChain[i].texture, 0);
+  FramebufferSpecification mipFBOspec;
+  mipFBOspec.Width = windowWidth;
+  mipFBOspec.Height = windowHeight;
+  mipFBOspec.Attachments = { FramebufferTextureFormat::R11F_G11F_B10F};
+  m_mipFB = FrameBuffer::Create(mipFBOspec);
 
-        glViewport(0, 0, mipChain[i].intSize.x, mipChain[i].intSize.y);
-        glClear(GL_COLOR_BUFFER_BIT);
+  // Store viewport size
+  mSrcViewportSize = glm::ivec2(windowWidth, windowHeight);
+  mSrcViewportSizeFloat = glm::vec2((float)windowWidth, (float)windowHeight);
 
-        glm::vec2 srcSize = (i == 0) ? srcViewportSizeFloat : mipChain[i - 1].size;
+  // Mip chain creation
+  glm::vec2 mipSize((float)windowWidth, (float)windowHeight);
+  glm::ivec2 mipIntSize((int)windowWidth, (int)windowHeight);
 
-        downsampleShader->setVec2("srcSize", srcSize);
-        downsampleShader->setInt("KarisAverage", mKarisAverageOnDownsample ? 1 : 0);
+  for (GLuint i = 0; i < mipChainLength; i++)
+  {
+      bloomMip mip;
 
-        renderQuad();
+      mip.size = mipSize;
+      mip.intSize = mipIntSize;
 
-        // Bind current mip texture for next iteration
-        glBindTexture(GL_TEXTURE_2D, mipChain[i].texture);
-    }
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-}
+      glGenTextures(1, &mip.texture);
+      glBindTexture(GL_TEXTURE_2D, mip.texture);
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_R11F_G11F_B10F, mip.intSize.x, mip.intSize.y, 0, GL_RGB, GL_FLOAT, nullptr);
 
-void BloomBuffer::RenderUpsamples(float filterRadius)
-{
-    upsampleShader->Use();
-    int mipCount = (int)mipChain.size();
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-    // Upsample starting from smallest mip, blend progressively into higher mips
-    for (int i = mipCount - 2; i >= 0; i--)
-    {
-        glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mipChain[i].texture, 0);
+      GABGL_INFO("Created bloom mip x: {0}, y: {1}", mipIntSize.x, mipIntSize.y);
 
-        glViewport(0, 0, mipChain[i].intSize.x, mipChain[i].intSize.y);
-        glClear(GL_COLOR_BUFFER_BIT);
+      mMipChain.emplace_back(mip);
 
-        // Bind lower mip as source texture to upsample
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, mipChain[i + 1].texture);
+      // Halve for next level, clamped to 1
+      mipSize *= 0.5f;
+      mipIntSize /= 2;
+      mipSize = glm::max(mipSize, glm::vec2(1.0f));
+      mipIntSize = glm::max(mipIntSize, glm::ivec2(1));
+  }
 
-        upsampleShader->setFloat("filterRadius", filterRadius);
-        upsampleShader->setVec2("srcSize", mipChain[i + 1].size);
+  downsampleShader->Use();
+  downsampleShader->setInt("srcTexture", 0);
+  glUseProgram(0);
 
-        renderQuad();
-    }
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, srcViewportSize.x, srcViewportSize.y);
+  upsampleShader->Use();
+  upsampleShader->setInt("srcTexture", 0);
+  glUseProgram(0);
 }
 
 void BloomBuffer::RenderBloomTexture(float filterRadius)
 {
-    // Combine downsampling and upsampling passes to create bloom mip chain
-    RenderDownsamples(colorBuffers[1]); // assuming colorBuffers[1] holds bright parts
-    RenderUpsamples(filterRadius);
+  m_mipFB->Bind();
+
+  auto srcTexture = m_hdrFB->GetColorAttachmentRendererID(1);
+
+  downsampleShader->Use();
+  downsampleShader->setVec2("srcResolution", mSrcViewportSizeFloat);
+  if (mKarisAverageOnDownsample) downsampleShader->setInt("mipLevel", 0);
+
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, srcTexture);
+
+  // ⬇️ Downsample through mip chain
+  for (int i = 0; i < (int)mMipChain.size(); i++)
+  {
+    const bloomMip& mip = mMipChain[i];
+    glViewport(0, 0, mip.size.x, mip.size.y);
+
+    m_mipFB->AttachExternalColorTexture(mip.texture, 0);
+
+    renderQuad();
+
+    downsampleShader->setVec2("srcResolution", mip.size);
+    glBindTexture(GL_TEXTURE_2D, mip.texture);
+
+    if (i == 0) downsampleShader->setInt("mipLevel", 1);
+  }
+
+  glUseProgram(0);
+
+  // ⬆️ Upsample pass
+  upsampleShader->Use();
+  upsampleShader->setFloat("filterRadius", filterRadius);
+
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_ONE, GL_ONE);
+  glBlendEquation(GL_FUNC_ADD);
+
+  for (int i = (int)mMipChain.size() - 1; i > 0; i--)
+  {
+    const bloomMip& mip = mMipChain[i];
+    const bloomMip& nextMip = mMipChain[i - 1];
+
+    glViewport(0, 0, nextMip.size.x, nextMip.size.y);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, mip.texture);
+
+    m_mipFB->AttachExternalColorTexture(nextMip.texture, 0);
+
+    renderQuad();
+  }
+
+  glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+  glDisable(GL_BLEND);
+  glUseProgram(0);
+}
+
+void BloomBuffer::Resize(int newWidth, int newHeight)
+{
+  // Destroy old mip textures
+  for (auto& mip : mMipChain)
+  {
+      glDeleteTextures(1, &mip.texture);
+      mip.texture = 0;
+  }
+  mMipChain.clear();
+
+  glm::vec2 mipSize = glm::vec2((float)newWidth, (float)newHeight);
+  glm::ivec2 mipIntSize = glm::ivec2(newWidth, newHeight);
+
+  // Rebuild mip chain
+  for (GLuint i = 0; i < mipChainLength; i++)
+  {
+    bloomMip mip;
+    mip.size = mipSize;
+    mip.intSize = mipIntSize;
+
+    glGenTextures(1, &mip.texture);
+    glBindTexture(GL_TEXTURE_2D, mip.texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R11F_G11F_B10F, mipIntSize.x, mipIntSize.y, 0, GL_RGB, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    GABGL_INFO("Resized bloom mip x: {0}, y: {1}", mipIntSize.x, mipIntSize.y);
+    mMipChain.emplace_back(mip);
+
+    mipSize *= 0.5f;
+    mipIntSize /= 2;
+    mipSize = glm::max(mipSize, glm::vec2(1.0f));
+    mipIntSize = glm::max(mipIntSize, glm::ivec2(1));
+  }
+
+  // Attach first mip texture to framebuffer using your API
+  m_mipFB->Bind();
+  m_mipFB->AttachExternalColorTexture(mMipChain[0].texture, 0);
+  m_mipFB->UnBind();
+
+  // Resize main HDR framebuffer
+  m_hdrFB->Resize(newWidth, newHeight);
 }
 
 void BloomBuffer::Render()
 {
-    // Bind default framebuffer for final render
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  finalShader->Use();
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, m_hdrFB->GetColorAttachmentRendererID(0));
+  finalShader->setInt("scene", 0);
+  glActiveTexture(GL_TEXTURE1);
+  glBindTexture(GL_TEXTURE_2D, mMipChain[0].texture);
+  finalShader->setInt("bloomBlur", 1);
 
-    finalShader->Use();
+  renderQuad();
+}
 
-    // Bind HDR color buffer 0 (original scene)
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, colorBuffers[0]);
-    finalShader->setInt("sceneTexture", 0);
+void BloomBuffer::Bind() const 
+{
+  m_hdrFB->Bind();
+}
 
-    // Bind bloom texture (first mip in chain)
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, mipChain[0].texture);
-    finalShader->setInt("bloomTexture", 1);
+void BloomBuffer::UnBind() const 
+{
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
 
-    renderQuad();
+void BloomBuffer::CompositeBloomOver(const std::shared_ptr<FrameBuffer>& target)
+{
+  target->Bind();
+
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_ONE, GL_ONE); 
+  glBlendEquation(GL_FUNC_ADD);
+
+  finalShader->Use();
+
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, m_hdrFB->GetColorAttachmentRendererID(0));
+  finalShader->setInt("scene", 0);
+
+  glActiveTexture(GL_TEXTURE1);
+  glBindTexture(GL_TEXTURE_2D, mMipChain[0].texture);
+  finalShader->setInt("bloomBlur", 1);
+
+  renderQuad();
+
+  glDisable(GL_BLEND);
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void BloomBuffer::BlitDepthFrom(const std::shared_ptr<FrameBuffer>& src)
+{
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, src->GetID());      
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_hdrFB->GetID());     
+
+  const auto& srcSpec = src->GetSpecification();
+  const auto& dstSpec = m_hdrFB->GetSpecification();
+
+  glBlitFramebuffer(
+      0, 0, srcSpec.Width, srcSpec.Height,
+      0, 0, dstSpec.Width, dstSpec.Height,
+      GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT, 
+      GL_NEAREST
+  );
+
+  glBindFramebuffer(GL_FRAMEBUFFER, 0); 
+}
+
+void BloomBuffer::BlitDepthTo(const std::shared_ptr<FrameBuffer>& dst)
+{
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, m_hdrFB->GetID());      
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dst->GetID());     
+
+  const auto& srcSpec = m_hdrFB->GetSpecification();
+  const auto& dstSpec = dst->GetSpecification();
+
+  glBlitFramebuffer(
+      0, 0, srcSpec.Width, srcSpec.Height,
+      0, 0, dstSpec.Width, dstSpec.Height,
+      GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT, 
+      GL_NEAREST
+  );
+
+  glBindFramebuffer(GL_FRAMEBUFFER, 0); 
+}
+
+
+std::shared_ptr<BloomBuffer> BloomBuffer::Create(const std::shared_ptr<Shader>& downsampleShader, const std::shared_ptr<Shader>& upsampleShader, const std::shared_ptr<Shader>& finalShader)
+{
+  return std::make_shared<BloomBuffer>(downsampleShader,upsampleShader,finalShader);
 }

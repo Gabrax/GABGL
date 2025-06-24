@@ -224,6 +224,7 @@ struct RendererData
 
   std::shared_ptr<FrameBuffer> m_Framebuffer;
   std::shared_ptr<FrameBuffer> m_MSAAFramebuffer;
+  std::shared_ptr<BloomBuffer> m_BloomFramebuffer;
 
   Window* m_WindowRef = nullptr;
   Camera m_Camera;
@@ -236,6 +237,7 @@ struct RendererData
   FT_Library ft;
 
 } s_RendererData;
+
 
 void Renderer::LoadShaders()
 {
@@ -402,12 +404,6 @@ void Renderer::Init()
   s_RendererData._3DCameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 0);
   s_RendererData._2DCameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 1);
 
-  FramebufferSpecification fbSpec;
-	fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::Depth };
-	fbSpec.Width = Engine::GetInstance().GetMainWindow().GetWidth();
-	fbSpec.Height = Engine::GetInstance().GetMainWindow().GetHeight();
-	s_RendererData.m_Framebuffer = FrameBuffer::Create(fbSpec);
-
   FramebufferSpecification fbSpec2;
 	fbSpec2.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::Depth };
 	fbSpec2.Width = Engine::GetInstance().GetMainWindow().GetWidth();
@@ -415,7 +411,15 @@ void Renderer::Init()
   fbSpec2.Samples = 4;
 	s_RendererData.m_MSAAFramebuffer = FrameBuffer::Create(fbSpec2);
 
+  FramebufferSpecification fbSpec;
+	fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::Depth };
+	fbSpec.Width = Engine::GetInstance().GetMainWindow().GetWidth();
+	fbSpec.Height = Engine::GetInstance().GetMainWindow().GetHeight();
+	s_RendererData.m_Framebuffer = FrameBuffer::Create(fbSpec);
+
   LoadShaders();
+
+  s_RendererData.m_BloomFramebuffer = BloomBuffer::Create(s_RendererData._shaders.DownSampleShader, s_RendererData._shaders.UpSampleShader, s_RendererData._shaders.BloomResultShader);
 
   GABGL_ASSERT(!FT_Init_FreeType(&s_RendererData.ft), "Could not init FreeType");
 
@@ -453,6 +457,7 @@ void Renderer::Init()
 	ImGui_ImplOpenGL3_Init("#version 410");
 	SetLineWidth(4.0f);
   s_RendererData.m_GizmoType = ImGuizmo::OPERATION::TRANSLATE;
+
 }
 
 void Renderer::Shutdown()
@@ -472,59 +477,49 @@ void Renderer::Shutdown()
 	ImGui::DestroyContext();
 }
 
-void Renderer::RenderScene(DeltaTime& dt, const std::function<void()>& pre)
+void Renderer::RenderScene(DeltaTime& dt, const std::function<void()>& geometry, const std::function<void()>& lights)
 {
   ResetStats();
-
-  s_RendererData.m_MSAAFramebuffer->Bind();
-  SetClearColor(glm::vec4(0.0f));
-  Clear();
-
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_CULL_FACE);
   glCullFace(GL_FRONT);
   glFrontFace(GL_CW);
 
+  s_RendererData.m_MSAAFramebuffer->Bind();
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
   BeginScene(s_RendererData.m_Camera);
-  pre();
+  geometry();
   EndScene();
 
-  glDisable(GL_CULL_FACE);
-  glDisable(GL_DEPTH_TEST);
   s_RendererData.m_MSAAFramebuffer->UnBind();
+  s_RendererData.m_MSAAFramebuffer->BlitColor(s_RendererData.m_Framebuffer);
 
-  FrameBuffer::Blit(s_RendererData.m_MSAAFramebuffer, s_RendererData.m_Framebuffer);
+  s_RendererData.m_BloomFramebuffer->BlitDepthFrom(s_RendererData.m_MSAAFramebuffer);
+  s_RendererData.m_BloomFramebuffer->Bind();
+  glClear(GL_COLOR_BUFFER_BIT);
+
+  BeginScene(s_RendererData.m_Camera);
+  lights();
+  EndScene();
+
+  s_RendererData.m_BloomFramebuffer->RenderBloomTexture(0.005f);
+  s_RendererData.m_BloomFramebuffer->UnBind();
+  s_RendererData.m_BloomFramebuffer->CompositeBloomOver(s_RendererData.m_Framebuffer);
+  s_RendererData.m_BloomFramebuffer->BlitDepthTo(s_RendererData.m_Framebuffer);
 
   s_RendererData.m_Framebuffer->Bind();
   s_RendererData.m_Framebuffer->ClearAttachment(1, -1);
   s_RendererData.m_Framebuffer->UnBind();
 
+  glDisable(GL_CULL_FACE);
+  glDisable(GL_DEPTH_TEST);
   SetClearColor(glm::vec4(0.0f));
-  Clear();
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   s_RendererData.m_Camera.OnUpdate(dt);
   PhysX::Simulate(dt);
   AudioManager::UpdateAllMusic();
-
-  /*buffer.Bind();*/
-  /* glEnable(GL_DEPTH_TEST);*/
-  /*  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);*/
-  /**/
-  /*  glEnable(GL_CULL_FACE);*/
-  /*  glCullFace(GL_FRONT);*/
-  /*  glFrontFace(GL_CW);*/
-  /**/
-  /*BeginScene(s_RendererData.m_Camera);*/
-  /*pre();*/
-  /*EndScene();*/
-  /*  glDisable(GL_CULL_FACE);*/
-  /**/
-  /*buffer.RenderBloomTexture(0.007f);*/
-  /*buffer.UnBind();*/
-  /**/
-  /**/
-  /*glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);*/
-  /*buffer.Render();*/
 
   if (Input::IsKeyPressed(Key::E)) s_RendererData.m_SceneState = RendererData::SceneState::Edit;
   if (Input::IsKeyPressed(Key::Q)) s_RendererData.m_SceneState = RendererData::SceneState::Play;
@@ -557,6 +552,7 @@ void Renderer::SetFullscreen(const std::string& sound, bool windowed)
   uint32_t height = (uint32_t)s_RendererData.m_WindowRef->GetHeight(); 
 
   s_RendererData.m_MSAAFramebuffer->Resize(width, height);
+  s_RendererData.m_BloomFramebuffer->Resize(width,height);
   s_RendererData.m_Framebuffer->Resize(width, height);
   s_RendererData.m_Camera.SetViewportSize(width, height);
   AudioManager::PlaySound(sound);
@@ -957,28 +953,39 @@ void Renderer::Draw2DRect(const glm::mat4& transform, const glm::vec4& color, in
 
 void Renderer::DrawCube(const Transform& transform, int entityID)
 {
-  if (s_RendererData.CubeIndexCount >= RendererData::MaxIndices) NextBatch(); // Flush batch if full
+    // Backup the current front face winding
+    GLint prevFrontFace;
+    glGetIntegerv(GL_FRONT_FACE, &prevFrontFace);
 
-  glm::mat4 model = transform.GetTransform();
-  glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_FRONT);
+    glFrontFace(GL_CCW); // Only cubes use counter-clockwise winding
 
-  for (int i = 0; i < 8; i++)
-  {
-      MeshVertex vertex = s_RendererData.cubeVertices[i];
+    if (s_RendererData.CubeIndexCount >= RendererData::MaxIndices)
+        NextBatch(); // Flush batch if full
 
-      // Transform position
-      glm::vec4 transformedPos = model * glm::vec4(vertex.Position, 1.0f);
-      vertex.Position = glm::vec3(transformedPos);
-      vertex.Normal = glm::normalize(normalMatrix * vertex.Normal);
-      vertex.Color = glm::vec4(2.0f);
-      vertex.EntityID = entityID;
+    glm::mat4 model = transform.GetTransform();
+    glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
 
-      *s_RendererData.CubeVertexBufferPtr = vertex;
-      s_RendererData.CubeVertexBufferPtr++;
-  }
+    for (int i = 0; i < 8; i++)
+    {
+        MeshVertex vertex = s_RendererData.cubeVertices[i];
 
-  s_RendererData.CubeVertexCount += 8;
-  s_RendererData.CubeIndexCount += 36; // 6 faces * 2 triangles * 3 indices = 36 indices per cube
+        glm::vec4 transformedPos = model * glm::vec4(vertex.Position, 1.0f);
+        vertex.Position = glm::vec3(transformedPos);
+        vertex.Normal = glm::normalize(normalMatrix * vertex.Normal);
+        vertex.EntityID = entityID;
+
+        *s_RendererData.CubeVertexBufferPtr = vertex;
+        s_RendererData.CubeVertexBufferPtr++;
+    }
+
+    s_RendererData.CubeVertexCount += 8;
+    s_RendererData.CubeIndexCount += 36;
+
+    // Restore the previous front face winding
+    glFrontFace(prevFrontFace);
+    glDisable(GL_CULL_FACE);
 }
 
 void Renderer::DrawCubeContour(const glm::vec3& position, const glm::vec3& size, const glm::vec4& color, int entityID)
@@ -1094,7 +1101,8 @@ void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, con
     }
     model->UpdateAnimation(dt);
   }
-  /*it->second->UpdatePhysXActor(transform);*/
+
+  model->UpdatePhysXActor(transform);
 
   for (auto& mesh : model->GetMeshes())
   {
@@ -1551,9 +1559,19 @@ void Renderer::SetClearColor(const glm::vec4& color)
 	glClearColor(color.r, color.g, color.b, color.a);
 }
 
-void Renderer::Clear()
+void Renderer::ClearBuffers()
 {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+}
+
+void Renderer::ClearColorBuffers()
+{
+	glClear(GL_COLOR_BUFFER_BIT);
+}
+
+void Renderer::ClearDepthBuffers()
+{
+	glClear(GL_DEPTH_BUFFER_BIT);
 }
 
 void Renderer::DrawIndexed(const std::shared_ptr<VertexArray>& vertexArray, uint32_t indexCount)

@@ -263,11 +263,11 @@ glm::mat4 PhysX::PxMat44ToGlmMat4(physx::PxMat44 pxMatrix)
 
 PxMat44 PhysX::GlmMat4ToPxMat44(glm::mat4 glmMatrix)
 {
-    PxMat44 matrix;
-    for (int x = 0; x < 4; x++)
-        for (int y = 0; y < 4; y++)
-            matrix[x][y] = glmMatrix[x][y];
-    return matrix;
+  PxMat44 matrix;
+  for (int x = 0; x < 4; x++)
+      for (int y = 0; y < 4; y++)
+          matrix[x][y] = glmMatrix[x][y];
+  return matrix;
 }
 
 PxScene* PhysX::getScene()

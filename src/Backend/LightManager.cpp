@@ -4,7 +4,6 @@
 #include <vector>
 #include <memory>
 #include "BackendLogger.h"
-#include "Transform.hpp"
 
 struct LightData 
 {

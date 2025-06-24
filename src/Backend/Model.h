@@ -122,14 +122,15 @@ struct Mesh
 
 enum class PhysXMeshType : int32_t
 {
-  BOX = 0,
-  TRIANGLEMESH = 1,
-  CONVEXMESH = 2
+  NONE = 0,
+  BOX = 1,
+  TRIANGLEMESH = 2,
+  CONVEXMESH = 3
 };
 
 struct Model
 {
-  Model(const char* path, float optimizerStrength, bool isAnimated, bool isKinematic, PhysXMeshType type);
+  Model(const char* path, float optimizerStrength, bool isAnimated, bool isKinematic, const PhysXMeshType& type);
 
   static std::shared_ptr<Model> CreateSTATIC(const char* path, float optimizerStrength, bool isKinematic, PhysXMeshType type);
   static std::shared_ptr<Model> CreateANIMATED(const char* path, float optimizerStrength, bool isKinematic, PhysXMeshType type);
@@ -140,6 +141,8 @@ struct Model
   void UpdatePhysXActor(const glm::mat4& transform);
   void StartBlendToAnimation(int32_t nextAnimationIndex, float blendDuration);
   bool IsInAnimation(int index) const;
+  void CreatePhysXStaticMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m_Indices);
+  void CreatePhysXDynamicMesh(std::vector<Vertex>& m_Vertices);
 
   inline std::vector<Mesh>& GetMeshes() { return m_Meshes; }
   inline std::map<std::string,BoneInfo>& GetBoneInfoMap() { return m_BoneInfoMap; }
@@ -149,6 +152,7 @@ struct Model
   inline const AssimpNodeData& GetRootNode() { return m_RootNode; }
   inline bool IsAnimated() { return m_isAnimated; }
   inline const std::vector<glm::mat4>& GetFinalBoneMatrices() { return m_FinalBoneMatrices; }
+  inline const PhysXMeshType& GetPhysXMeshType() { return m_meshType; }
 
 private:
 
@@ -185,7 +189,9 @@ private:
   float m_OptimizerStrength;
   bool m_isAnimated;
   const aiScene* m_Scene;
-  PxRigidDynamic* m_MeshActor;
+  PxRigidStatic* m_StaticMeshActor = nullptr;
+  PxRigidDynamic* m_DynamicMeshActor = nullptr;
+  const PhysXMeshType& m_meshType;
 
 private:
 
@@ -193,7 +199,6 @@ private:
   Mesh processMesh(aiMesh* mesh, const aiScene* scene);
   void loadMaterialTextures(aiMaterial* mat, aiTextureType type, const std::string& typeName, std::vector<std::shared_ptr<Texture>>& textures);
   void OptimizeMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m_Indices);
-  void CreatePhysXStaticMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m_Indices);
   void ExtractBoneWeightForVertices(std::vector<Vertex>& vertices, aiMesh* mesh);
   void SetDefaultBoneData(Vertex& vertex);
   void SetBoneData(Vertex& vertex, int boneID, float weight);

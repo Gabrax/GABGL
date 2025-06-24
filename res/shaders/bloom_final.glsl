@@ -19,8 +19,8 @@ in vec2 TexCoords;
 
 uniform sampler2D scene;
 uniform sampler2D bloomBlur;
-uniform float exposure = 2.0f;
-uniform float bloomStrength = 0.54f;
+uniform float exposure = 1.0f;
+uniform float bloomStrength = 0.5f;
 
 // uniform float renderWidth;
 // uniform float renderHeight;
@@ -51,16 +51,12 @@ vec3 gammaCorrection(vec3 value)
     return pow(value, vec3(1.0 / gamma));
 }
 
-vec3 ApplyBloom()
+void main()
 {
     vec3 hdrColor = texture(scene, TexCoords).rgb;
     vec3 bloomColor = texture(bloomBlur, TexCoords).rgb;
-    return mix(hdrColor, bloomColor, bloomStrength); // linear interpolation
-}
 
-void main()
-{
-    vec3 result = ApplyBloom();
+    vec3 result = mix(hdrColor, bloomColor, bloomStrength); // linear interpolation
     result = toneMappingACES(result * exposure);
     result = gammaCorrection(result);
     FragColor = vec4(result, 1.0);

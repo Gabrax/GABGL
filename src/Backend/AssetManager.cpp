@@ -171,13 +171,18 @@ struct AssetsData
   };
 
   std::vector<std::tuple<const char*, float, bool, PhysXMeshType>> static_models = {
-      { "res/map/objHouse.obj", 1.0f, true, PhysXMeshType::TRIANGLEMESH },
+      { "res/map/objHouse.obj", 1.0f, false, PhysXMeshType::TRIANGLEMESH },
+      { "res/models/aidkit.glb", 1.0f, false, PhysXMeshType::NONE },
+      { "res/models/pistolammo.glb", 1.0f, false, PhysXMeshType::NONE },
+      { "res/models/shotgunammo.glb", 1.0f, false, PhysXMeshType::NONE },
+      { "res/models/pistol.glb", 1.0f, false, PhysXMeshType::NONE },
+      { "res/models/shotgun.glb", 1.0f, false, PhysXMeshType::NONE },
   };
 
   std::vector<std::tuple<const char*, float, bool, PhysXMeshType>> animated_models = {
-      { "res/lowpoly/MaleSurvivor1.glb", 1.0f, true, PhysXMeshType::TRIANGLEMESH },
-      { "res/zombie/Zombie_Idle.dae", 1.0f, true, PhysXMeshType::TRIANGLEMESH },
-      { "res/harry/harry.glb", 1.0f, true, PhysXMeshType::TRIANGLEMESH },
+      { "res/lowpoly/MaleSurvivor1.glb", 1.0f, false, PhysXMeshType::NONE },
+      { "res/zombie/Zombie_Idle.dae", 1.0f, false, PhysXMeshType::NONE },
+      { "res/harry/harry.glb", 1.0f, false, PhysXMeshType::NONE },
   };
 
   std::vector<std::future<void>> m_FutureVoid;

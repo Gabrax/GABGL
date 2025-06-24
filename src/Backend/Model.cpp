@@ -6,7 +6,6 @@
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 #include "Buffer.h"
-#include <iostream>
 
 static glm::mat4 ConvertMatrixToGLMFormat(const aiMatrix4x4& from)
 {
@@ -152,6 +151,9 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
       currentPBO = (currentPBO + 1) % NUM_BUFFERS;
     }
 
+    if(model->GetPhysXMeshType() == PhysXMeshType::TRIANGLEMESH) model->CreatePhysXStaticMesh(mesh.m_Vertices, mesh.m_Indices);
+    else if(model->GetPhysXMeshType() == PhysXMeshType::CONVEXMESH) model->CreatePhysXDynamicMesh(mesh.m_Vertices); 
+
     glGenVertexArrays(1, &mesh.VAO);
     glGenBuffers(1, &mesh.VBO);
     glGenBuffers(1, &mesh.EBO);
@@ -209,7 +211,7 @@ std::shared_ptr<Model> ModelManager::GetModel(const std::string& name)
   return nullptr;
 }
 
-Model::Model(const char* path, float optimizerStrength, bool isAnimated, bool isKinematic, PhysXMeshType type) :  m_isKinematic(isKinematic), m_OptimizerStrength(optimizerStrength), m_isAnimated(isAnimated)
+Model::Model(const char* path, float optimizerStrength, bool isAnimated, bool isKinematic, const PhysXMeshType& type) :  m_isKinematic(isKinematic), m_OptimizerStrength(optimizerStrength), m_isAnimated(isAnimated), m_meshType(type)
 {
   Timer timer;
 
@@ -306,7 +308,6 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
 
   if(m_isAnimated) ExtractBoneWeightForVertices(vertices, mesh);
   OptimizeMesh(vertices, indices);
-  CreatePhysXStaticMesh(vertices, indices);
 
   return Mesh(vertices, indices, textures);
 }
@@ -371,18 +372,11 @@ void Model::OptimizeMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m
 
 void Model::UpdatePhysXActor(const glm::mat4& transform)
 {
-  const PxU32 nbShapes = m_MeshActor->getNbShapes();
-  PxShape* shapes[32];
-  m_MeshActor->getShapes(shapes, nbShapes);
-
-  for (PxU32 j = 0; j < nbShapes; j++) {
-      const PxMat44 shapePose(PxShapeExt::getGlobalPose(*shapes[j], *m_MeshActor));
-      const PxGeometry& geom = shapes[j]->getGeometry();
-
-      if (geom.getType() == PxGeometryType::eTRIANGLEMESH) {
-          if(m_isKinematic) m_MeshActor->setKinematicTarget(PxTransform(PhysX::GlmMat4ToPxTransform(transform)));
-          else m_MeshActor->setGlobalPose(PxTransform(PhysX::GlmMat4ToPxTransform(transform)));
-      }
+  if (m_isKinematic && m_DynamicMeshActor) {
+      m_DynamicMeshActor->setKinematicTarget(PxTransform(PhysX::GlmMat4ToPxTransform(transform)));
+  }
+  else if (m_DynamicMeshActor) {
+      m_DynamicMeshActor->setGlobalPose(PxTransform(PhysX::GlmMat4ToPxTransform(transform)));
   }
 }
 
@@ -390,78 +384,132 @@ void Model::CreatePhysXStaticMesh(std::vector<Vertex>& m_Vertices, std::vector<G
 {
   std::vector<PxVec3> physxVertices(m_Vertices.size());
   for (size_t i = 0; i < m_Vertices.size(); ++i) {
-      physxVertices[i] = PxVec3(m_Vertices[i].Position.x, m_Vertices[i].Position.y, m_Vertices[i].Position.z);
+      physxVertices[i] = PxVec3(
+          m_Vertices[i].Position.x,
+          m_Vertices[i].Position.y,
+          m_Vertices[i].Position.z
+      );
   }
 
-  PxTriangleMesh* physxMesh = PhysX::CreateTriangleMesh(static_cast<PxU32>(physxVertices.size()), physxVertices.data(), static_cast<PxU32>(m_Indices.size() / 3), m_Indices.data());
+  // Create triangle mesh
+  PxTriangleMesh* physxMesh = PhysX::CreateTriangleMesh(
+      static_cast<PxU32>(physxVertices.size()), physxVertices.data(),
+      static_cast<PxU32>(m_Indices.size() / 3), m_Indices.data()
+  );
 
-  if (!physxMesh) GABGL_ERROR("Failed to create PhysX triangle mesh");
+  if (!physxMesh) {
+      GABGL_ERROR("Failed to create PhysX triangle mesh");
+      return;
+  }
 
-  PxScene* scene = PhysX::getScene();
   PxPhysics* physics = PhysX::getPhysics();
+  PxScene* scene = PhysX::getScene();
   PxMaterial* material = PhysX::getMaterial();
 
-  PxTriangleMeshGeometry geom;
+  PxTriangleMeshGeometry triGeom;
+  triGeom.triangleMesh = physxMesh;
+
+  // ✅ Create static actor (not affected by gravity or forces)
   PxTransform pose = PxTransform(PxVec3(0));
-  geom.triangleMesh = physxMesh;
+  m_StaticMeshActor = physics->createRigidStatic(pose);
 
-  m_MeshActor = physics->createRigidDynamic(pose);
-  PxShape* meshShape = nullptr;
-  if(m_MeshActor){
-      m_MeshActor->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, m_isKinematic);
+  if (m_StaticMeshActor) {
+      PxShape* meshShape = PxRigidActorExt::createExclusiveShape(
+          *m_StaticMeshActor, triGeom, *material
+      );
+      scene->addActor(*m_StaticMeshActor);
+  }
+}
 
-      PxTriangleMeshGeometry triGeom;
-      triGeom.triangleMesh = physxMesh;
-      meshShape = PxRigidActorExt::createExclusiveShape(*m_MeshActor, triGeom, *material);
-      scene->addActor(*m_MeshActor);
+void Model::CreatePhysXDynamicMesh(std::vector<Vertex>& m_Vertices)
+{
+  std::vector<PxVec3> physxVertices(m_Vertices.size());
+  for (size_t i = 0; i < m_Vertices.size(); ++i) {
+      physxVertices[i] = PxVec3(
+          m_Vertices[i].Position.x,
+          m_Vertices[i].Position.y,
+          m_Vertices[i].Position.z
+      );
+  }
+
+  PxConvexMesh* convexMesh = PhysX::CreateConvexMesh(
+      static_cast<PxU32>(physxVertices.size()),
+      physxVertices.data()
+  );
+
+  if (!convexMesh) {
+      GABGL_ERROR("Failed to create PhysX convex mesh");
+      return;
+  }
+
+  PxPhysics* physics = PhysX::getPhysics();
+  PxScene* scene = PhysX::getScene();
+  PxMaterial* material = PhysX::getMaterial();
+
+  PxConvexMeshGeometry convexGeom;
+  convexGeom.convexMesh = convexMesh;
+  convexGeom.scale = PxMeshScale(PxVec3(1.0f)); // Optional scaling
+
+  PxTransform pose = PxTransform(PxVec3(0));
+  m_DynamicMeshActor = physics->createRigidDynamic(pose);
+
+  if (m_DynamicMeshActor) {
+      PxShape* shape = PxRigidActorExt::createExclusiveShape(
+          *m_DynamicMeshActor, convexGeom, *material
+      );
+
+      // Set mass and inertia (important for dynamics)
+      PxRigidBodyExt::updateMassAndInertia(*m_DynamicMeshActor, 1.0f);
+
+      scene->addActor(*m_DynamicMeshActor);
   }
 }
 
 void Model::ExtractBoneWeightForVertices(std::vector<Vertex>& vertices, aiMesh* mesh)
 {
-    for (unsigned int i = 0; i < mesh->mNumBones; ++i) {
-        std::string boneName = mesh->mBones[i]->mName.C_Str();
-        int boneID = -1;
+  for (unsigned int i = 0; i < mesh->mNumBones; ++i) {
+      std::string boneName = mesh->mBones[i]->mName.C_Str();
+      int boneID = -1;
 
-        if (m_BoneInfoMap.find(boneName) == m_BoneInfoMap.end()) {
-            boneID = m_BoneCounter++;
-            m_BoneInfoMap[boneName] = { boneID, ConvertMatrixToGLMFormat(mesh->mBones[i]->mOffsetMatrix) };
-        } else {
-            boneID = m_BoneInfoMap[boneName].id;
-        }
+      if (m_BoneInfoMap.find(boneName) == m_BoneInfoMap.end()) {
+          boneID = m_BoneCounter++;
+          m_BoneInfoMap[boneName] = { boneID, ConvertMatrixToGLMFormat(mesh->mBones[i]->mOffsetMatrix) };
+      } else {
+          boneID = m_BoneInfoMap[boneName].id;
+      }
 
-        for (unsigned int j = 0; j < mesh->mBones[i]->mNumWeights; ++j) {
-            int vertexID = mesh->mBones[i]->mWeights[j].mVertexId;
-            float weight = mesh->mBones[i]->mWeights[j].mWeight;
+      for (unsigned int j = 0; j < mesh->mBones[i]->mNumWeights; ++j) {
+          int vertexID = mesh->mBones[i]->mWeights[j].mVertexId;
+          float weight = mesh->mBones[i]->mWeights[j].mWeight;
 
-            if (vertexID < vertices.size()) {
-                SetBoneData(vertices[vertexID], boneID, weight);
-            }
-        }
-    }
+          if (vertexID < vertices.size()) {
+              SetBoneData(vertices[vertexID], boneID, weight);
+          }
+      }
+  }
 }
 
 // Set default bone data for a vertex
 void Model::SetDefaultBoneData(Vertex& vertex)
 {
-    for (int i = 0; i < MAX_BONE_INFLUENCE; ++i) {
-        vertex.m_BoneIDs[i] = -1;
-        vertex.m_Weights[i] = 0.0f;
-    }
+  for (int i = 0; i < MAX_BONE_INFLUENCE; ++i) {
+      vertex.m_BoneIDs[i] = -1;
+      vertex.m_Weights[i] = 0.0f;
+  }
 }
 
 // Set bone data for a vertex
 void Model::SetBoneData(Vertex& vertex, int boneID, float weight)
 {
-    if (weight <= 0.0f) return;
+  if (weight <= 0.0f) return;
 
-    for (int i = 0; i < MAX_BONE_INFLUENCE; ++i) {
-        if (vertex.m_BoneIDs[i] < 0) {
-            vertex.m_BoneIDs[i] = boneID;
-            vertex.m_Weights[i] = weight;
-            return;
-        }
-    }
+  for (int i = 0; i < MAX_BONE_INFLUENCE; ++i) {
+      if (vertex.m_BoneIDs[i] < 0) {
+          vertex.m_BoneIDs[i] = boneID;
+          vertex.m_Weights[i] = weight;
+          return;
+      }
+  }
 }
 
 void Model::UpdateAnimation(DeltaTime& dt)
@@ -504,53 +552,53 @@ bool Model::IsInAnimation(int index) const
 
 void Model::StartBlendToAnimation(int32_t nextAnimationIndex, float blendDuration)
 {
-    assert(nextAnimationIndex >= 0 && nextAnimationIndex < m_ProcessedAnimations.size());
+  assert(nextAnimationIndex >= 0 && nextAnimationIndex < m_ProcessedAnimations.size());
 
-    if (IsInAnimation(nextAnimationIndex)) return; 
+  if (IsInAnimation(nextAnimationIndex)) return; 
 
-    m_BlendTime = 0.0f;
-    m_BlendDuration = blendDuration;
-    m_IsBlending = true;
-    m_NextAnimationIndex = nextAnimationIndex;
+  m_BlendTime = 0.0f;
+  m_BlendDuration = blendDuration;
+  m_IsBlending = true;
+  m_NextAnimationIndex = nextAnimationIndex;
 
-    const AnimationData& animData = m_ProcessedAnimations[nextAnimationIndex];
-    m_RootNodeNext        = animData.hierarchy;
-    m_BonesNext           = animData.bones;
-    m_TicksPerSecondNext  = animData.ticksPerSecond;
-    m_DurationNext        = animData.duration;
+  const AnimationData& animData = m_ProcessedAnimations[nextAnimationIndex];
+  m_RootNodeNext        = animData.hierarchy;
+  m_BonesNext           = animData.bones;
+  m_TicksPerSecondNext  = animData.ticksPerSecond;
+  m_DurationNext        = animData.duration;
 }
 
 void Model::SetAnimationbyIndex(int animationIndex)
 {
-    assert(animationIndex >= 0 && animationIndex < m_ProcessedAnimations.size());
+  assert(animationIndex >= 0 && animationIndex < m_ProcessedAnimations.size());
 
-    m_CurrentAnimationIndex = animationIndex;
-    
-    const AnimationData& animData = m_ProcessedAnimations[animationIndex];
+  m_CurrentAnimationIndex = animationIndex;
+  
+  const AnimationData& animData = m_ProcessedAnimations[animationIndex];
 
-    m_Duration = animData.duration;
-    m_TicksPerSecond = animData.ticksPerSecond;
+  m_Duration = animData.duration;
+  m_TicksPerSecond = animData.ticksPerSecond;
 
-    m_RootNode = animData.hierarchy;
-    m_Bones = animData.bones;
+  m_RootNode = animData.hierarchy;
+  m_Bones = animData.bones;
 
-    ResizeFinalBoneMatrices();
+  ResizeFinalBoneMatrices();
 }
 
 void Model::SetAnimationByName(const std::string& animationName)
 {
-    auto it = std::find_if(m_ProcessedAnimations.begin(), m_ProcessedAnimations.end(),
-        [&animationName](const AnimationData& animData) {
-            return animData.name == animationName;
-        });
+  auto it = std::find_if(m_ProcessedAnimations.begin(), m_ProcessedAnimations.end(),
+      [&animationName](const AnimationData& animData) {
+          return animData.name == animationName;
+      });
 
-    if (it != m_ProcessedAnimations.end()) {
-        // Get the index of the found animation
-        int animationIndex = std::distance(m_ProcessedAnimations.begin(), it);
-        SetAnimationbyIndex(animationIndex); 
-    } else {
-        GABGL_ERROR("Animation not found: " + animationName);
-    }
+  if (it != m_ProcessedAnimations.end()) {
+      // Get the index of the found animation
+      int animationIndex = std::distance(m_ProcessedAnimations.begin(), it);
+      SetAnimationbyIndex(animationIndex); 
+  } else {
+      GABGL_ERROR("Animation not found: " + animationName);
+  }
 }
 
 void Model::CalculateBoneTransform(const AssimpNodeData* node, const glm::mat4& parentTransform)
@@ -615,88 +663,88 @@ void Model::CalculateBoneTransform(const AssimpNodeData* node, const glm::mat4& 
 
 void Model::CalculateBlendedBoneTransform(const AssimpNodeData* node, const AssimpNodeData* nodeNext, float timeCurrent, float timeNext, const glm::mat4& parentTransform, float blendFactor)
 {
-    const std::string& nodeName = node->name;
+  const std::string& nodeName = node->name;
 
-    glm::mat4 transformCurrent = node->transformation;
-    Bone* boneCurrent = FindBoneInList(nodeName, m_Bones);
-    if (boneCurrent) {
-        boneCurrent->Update(timeCurrent);
-        transformCurrent = boneCurrent->GetLocalTransform();
-    }
+  glm::mat4 transformCurrent = node->transformation;
+  Bone* boneCurrent = FindBoneInList(nodeName, m_Bones);
+  if (boneCurrent) {
+      boneCurrent->Update(timeCurrent);
+      transformCurrent = boneCurrent->GetLocalTransform();
+  }
 
-    glm::mat4 transformNext = nodeNext->transformation;
-    Bone* boneNext = FindBoneInList(nodeName, m_BonesNext);
-    if (boneNext) {
-        boneNext->Update(timeNext);
-        transformNext = boneNext->GetLocalTransform();
-    }
+  glm::mat4 transformNext = nodeNext->transformation;
+  Bone* boneNext = FindBoneInList(nodeName, m_BonesNext);
+  if (boneNext) {
+      boneNext->Update(timeNext);
+      transformNext = boneNext->GetLocalTransform();
+  }
 
-    // Decompose matrices
-    glm::vec3 scaleCurrent, translationCurrent, skew1;
-    glm::quat rotationCurrent;
-    glm::vec4 perspective1;
-    glm::decompose(transformCurrent, scaleCurrent, rotationCurrent, translationCurrent, skew1, perspective1);
-    rotationCurrent = glm::normalize(rotationCurrent);
+  // Decompose matrices
+  glm::vec3 scaleCurrent, translationCurrent, skew1;
+  glm::quat rotationCurrent;
+  glm::vec4 perspective1;
+  glm::decompose(transformCurrent, scaleCurrent, rotationCurrent, translationCurrent, skew1, perspective1);
+  rotationCurrent = glm::normalize(rotationCurrent);
 
-    glm::vec3 scaleNext, translationNext, skew2;
-    glm::quat rotationNext;
-    glm::vec4 perspective2;
-    glm::decompose(transformNext, scaleNext, rotationNext, translationNext, skew2, perspective2);
-    rotationNext = glm::normalize(rotationNext);
+  glm::vec3 scaleNext, translationNext, skew2;
+  glm::quat rotationNext;
+  glm::vec4 perspective2;
+  glm::decompose(transformNext, scaleNext, rotationNext, translationNext, skew2, perspective2);
+  rotationNext = glm::normalize(rotationNext);
 
-    // Blend all components
-    glm::vec3 blendedScale       = glm::mix(scaleCurrent, scaleNext, blendFactor);
-    glm::quat blendedRotation    = glm::normalize(glm::slerp(rotationCurrent, rotationNext, blendFactor));
-    glm::vec3 blendedTranslation = glm::mix(translationCurrent, translationNext, blendFactor);
+  // Blend all components
+  glm::vec3 blendedScale       = glm::mix(scaleCurrent, scaleNext, blendFactor);
+  glm::quat blendedRotation    = glm::normalize(glm::slerp(rotationCurrent, rotationNext, blendFactor));
+  glm::vec3 blendedTranslation = glm::mix(translationCurrent, translationNext, blendFactor);
 
-    // Compose blended matrix
-    glm::mat4 translationMat = glm::translate(glm::mat4(1.0f), blendedTranslation);
-    glm::mat4 rotationMat    = glm::toMat4(blendedRotation);
-    glm::mat4 scaleMat       = glm::scale(glm::mat4(1.0f), blendedScale);
+  // Compose blended matrix
+  glm::mat4 translationMat = glm::translate(glm::mat4(1.0f), blendedTranslation);
+  glm::mat4 rotationMat    = glm::toMat4(blendedRotation);
+  glm::mat4 scaleMat       = glm::scale(glm::mat4(1.0f), blendedScale);
 
-    glm::mat4 blendedTransform = translationMat * rotationMat * scaleMat;
-    glm::mat4 globalTransform = parentTransform * blendedTransform;
+  glm::mat4 blendedTransform = translationMat * rotationMat * scaleMat;
+  glm::mat4 globalTransform = parentTransform * blendedTransform;
 
-    if (m_BoneInfoMap.count(nodeName)) {
-        int index = m_BoneInfoMap[nodeName].id;
-        glm::mat4 offset = m_BoneInfoMap[nodeName].offset;
-        m_FinalBoneMatrices[index] = globalTransform * offset;
-    }
+  if (m_BoneInfoMap.count(nodeName)) {
+      int index = m_BoneInfoMap[nodeName].id;
+      glm::mat4 offset = m_BoneInfoMap[nodeName].offset;
+      m_FinalBoneMatrices[index] = globalTransform * offset;
+  }
 
-    for (size_t i = 0; i < node->children.size(); ++i)
-    {
-        CalculateBlendedBoneTransform(&node->children[i], &nodeNext->children[i], timeCurrent, timeNext, globalTransform, blendFactor);
-    }
+  for (size_t i = 0; i < node->children.size(); ++i)
+  {
+      CalculateBlendedBoneTransform(&node->children[i], &nodeNext->children[i], timeCurrent, timeNext, globalTransform, blendFactor);
+  }
 }
 
 bool Model::ValidateBoneConsistency()
 {
-    // Step 1: Validate BoneInfoMap contains same bones
-    for (const auto& [boneName, info] : m_BoneInfoMap)
-    {
-        bool foundInCurrent = FindBoneInList(boneName, m_Bones) != nullptr;
-        bool foundInNext    = FindBoneInList(boneName, m_BonesNext) != nullptr;
+  // Step 1: Validate BoneInfoMap contains same bones
+  for (const auto& [boneName, info] : m_BoneInfoMap)
+  {
+      bool foundInCurrent = FindBoneInList(boneName, m_Bones) != nullptr;
+      bool foundInNext    = FindBoneInList(boneName, m_BonesNext) != nullptr;
 
-        if (!foundInCurrent || !foundInNext)
-        {
-            GABGL_ERROR("Bone '{}' missing in {} animation", 
-                boneName, 
-                !foundInCurrent ? "current" : "next");
-            return false;
-        }
-    }
+      if (!foundInCurrent || !foundInNext)
+      {
+          GABGL_ERROR("Bone '{}' missing in {} animation", 
+              boneName, 
+              !foundInCurrent ? "current" : "next");
+          return false;
+      }
+  }
 
-    // Step 2: Validate output matrix vector sizes
-    if (m_FinalBoneMatricesCurrent.size() != m_FinalBoneMatricesNext.size())
-    {
-        GABGL_ERROR("Final bone matrix size mismatch: {} vs {}", 
-                    m_FinalBoneMatricesCurrent.size(), 
-                    m_FinalBoneMatricesNext.size());
-        return false;
-    }
+  // Step 2: Validate output matrix vector sizes
+  if (m_FinalBoneMatricesCurrent.size() != m_FinalBoneMatricesNext.size())
+  {
+      GABGL_ERROR("Final bone matrix size mismatch: {} vs {}", 
+                  m_FinalBoneMatricesCurrent.size(), 
+                  m_FinalBoneMatricesNext.size());
+      return false;
+  }
 
-    GABGL_INFO("Bone consistency validated between current and next animations.");
-    return true;
+  GABGL_INFO("Bone consistency validated between current and next animations.");
+  return true;
 }
 
 Bone* Model::FindBone(const std::string& name)

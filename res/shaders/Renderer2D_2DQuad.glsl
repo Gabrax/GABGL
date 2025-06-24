@@ -56,7 +56,7 @@ layout (binding = 0) uniform sampler2D u_Textures[32];
 
 void main()
 {
-	vec4 texColor = Input.Color;
+  vec4 texColor = Input.Color;
 
 	switch(int(v_TexIndex))
 	{

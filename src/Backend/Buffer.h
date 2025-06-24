@@ -265,11 +265,12 @@ struct FrameBuffer
 	int ReadPixel(uint32_t attachmentIndex, int x, int y);
 
 	void ClearAttachment(uint32_t attachmentIndex, int value);
+  void AttachExternalColorTexture(GLuint textureID, uint32_t slot = 0);
 
 	inline uint32_t GetColorAttachmentRendererID(uint32_t index = 0) const { GABGL_ASSERT(index < m_ColorAttachments.size(),""); return m_ColorAttachments[index]; }
 	inline const FramebufferSpecification& GetSpecification() const { return m_Specification; };
   inline const uint32_t GetID() { return m_RendererID; }
-  static void Blit(const std::shared_ptr<FrameBuffer>& src, const std::shared_ptr<FrameBuffer>& dst);
+  void BlitColor(const std::shared_ptr<FrameBuffer>& dst);
 
 	static std::shared_ptr<FrameBuffer> Create(const FramebufferSpecification& spec);
 
@@ -286,62 +287,43 @@ private:
 
 struct BloomBuffer
 {
-  BloomBuffer(const std::shared_ptr<Shader>& downsampleShader, const std::shared_ptr<Shader>& upsampleShader, const std::shared_ptr<Shader>& finalShader);
-  ~BloomBuffer();
+	BloomBuffer(const std::shared_ptr<Shader>& downsampleShader, const std::shared_ptr<Shader>& upsampleShader, const std::shared_ptr<Shader>& finalShader); 
+	~BloomBuffer() = default;
 
-  bool Init(unsigned int windowWidth, unsigned int windowHeight, unsigned int mipChainLength = 6);
-  void Destroy();
-
-  void Resize(unsigned int newWidth, unsigned int newHeight);
-
+	void RenderBloomTexture(float filterRadius);
+  void Render();
   void Bind() const;
   void UnBind() const;
+  void Resize(int32_t newWidth, int32_t newHeight);
+  void CompositeBloomOver(const std::shared_ptr<FrameBuffer>& target);
+  void BlitDepthFrom(const std::shared_ptr<FrameBuffer>& src);
+  void BlitDepthTo(const std::shared_ptr<FrameBuffer>& dst);
 
-  void RenderBloomTexture(float filterRadius);
-  void Render();
-
-  GLuint getBloomTexture() const;
-  GLuint BloomMip_i(int index) const;
+	static std::shared_ptr<BloomBuffer> Create(const std::shared_ptr<Shader>& downsampleShader, const std::shared_ptr<Shader>& upsampleShader, const std::shared_ptr<Shader>& finalShader);
 
 private:
-  struct bloomMip
-  {
-      glm::vec2 size;
-      glm::ivec2 intSize;
-      GLuint texture = 0;
-  };
 
-  void renderQuad();
-  void RenderDownsamples(GLuint srcTexture);
-  void RenderUpsamples(float filterRadius);
+  std::shared_ptr<FrameBuffer> m_hdrFB;
+  std::shared_ptr<FrameBuffer> m_pingpongFB[2];
+  std::shared_ptr<FrameBuffer> m_mipFB;
 
-  // HDR framebuffer
-  GLuint hdrFBO = 0;
-  GLuint colorBuffers[2] = {0, 0};
-  GLuint rboDepth = 0;
-
-  // Ping-pong framebuffer for blur
-  GLuint pingpongFBO[2] = {0, 0};
-  GLuint pingpongColorbuffers[2] = {0, 0};
-
-  // Bloom mip chain framebuffer
-  GLuint bloomFBO = 0;
-  std::vector<bloomMip> mipChain;
-
-  glm::ivec2 srcViewportSize = {0, 0};
-  glm::vec2 srcViewportSizeFloat = {0.f, 0.f};
-
-  // Shaders (assumed external; replace with your shader references)
   const std::shared_ptr<Shader>& downsampleShader; 
   const std::shared_ptr<Shader>& upsampleShader;
   const std::shared_ptr<Shader>& finalShader;
+  glm::ivec2 mSrcViewportSize;
+  glm::vec2 mSrcViewportSizeFloat;
 
-  bool mInit = false;
-  bool mKarisAverageOnDownsample = true;
+  struct bloomMip
+  {
+    glm::vec2 size;
+    glm::ivec2 intSize;
+    uint32_t texture;
+  };
 
-  // Quad rendering data
-  GLuint quadVAO = 0;
-  GLuint quadVBO = 0;
+  std::vector<bloomMip> mMipChain;
+	const uint32_t mipChainLength = 6; // TODO: Play around with this value
+  
+	bool mKarisAverageOnDownsample = true;
 };
 
 struct DirectShadowBuffer
