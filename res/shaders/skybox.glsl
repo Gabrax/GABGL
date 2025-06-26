@@ -1,15 +1,21 @@
 #type VERTEX
-#version 330 core
+#version 450 core
 layout (location = 0) in vec3 aPos;
 
 out vec3 TexCoords;
 
-uniform mat4 u_ViewProjection;
+layout(std140, binding = 0) uniform Camera
+{
+  mat4 ViewProjection;
+	mat4 OrtoProjection;
+	mat4 NonRotViewProjection;
+	vec3 CameraPos;
+};
 
 void main()
 {
     TexCoords = aPos;
-    vec4 pos = u_ViewProjection * vec4(aPos, 1.0);
+    vec4 pos = NonRotViewProjection * vec4(aPos, 1.0);
     gl_Position = pos.xyww;
 }  
 
@@ -21,16 +27,15 @@ in vec3 TexCoords;
 
 uniform samplerCube skybox;
 
-// ACES Tone Mapping
-vec3 toneMappingACES(vec3 color) {
-    const float a = 2.51;
-    const float b = 0.03;
-    const float c = 2.43;
-    const float d = 0.59;
-    const float e = 0.14;
+vec3 toneMappingACES(vec3 color)
+{
+  const float a = 2.51;
+  const float b = 0.03;
+  const float c = 2.43;
+  const float d = 0.59;
+  const float e = 0.14;
 
-// ACES tone mapping curve
-    return clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0, 1.0);
+  return clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0, 1.0);
 }
 
 void main()

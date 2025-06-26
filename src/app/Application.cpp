@@ -17,32 +17,38 @@ Application::Application()
 
   Transform housetransform;
   housetransform.SetPosition(glm::vec3(0.0f));
-  ModelManager::GetModel("objHouse")->SetPhysXActorPosition(housetransform.GetTransform());
+  ModelManager::GetModel("objHouse")->SetPosition(housetransform.GetTransform());
   Transform pistoltransform;
   pistoltransform.SetPosition(glm::vec3(15.0f,4.0f,13.0f));
-  ModelManager::GetModel("pistol_convex")->SetPhysXActorPosition(pistoltransform.GetTransform());
+  ModelManager::GetModel("pistol_convex")->SetPosition(pistoltransform.GetTransform());
   Transform pistolammotransform;
   pistolammotransform.SetPosition(glm::vec3(11.0f,4.0f,5.0f));
-  ModelManager::GetModel("pistolammo_convex")->SetPhysXActorPosition(pistolammotransform.GetTransform());
+  ModelManager::GetModel("pistolammo_convex")->SetPosition(pistolammotransform.GetTransform());
   Transform shotguntransform;
   shotguntransform.SetPosition(glm::vec3(14.0f,4.0f,11.0f));
-  ModelManager::GetModel("shotgun_convex")->SetPhysXActorPosition(shotguntransform.GetTransform());
+  ModelManager::GetModel("shotgun_convex")->SetPosition(shotguntransform.GetTransform());
   Transform shotgunammotransform;
   shotgunammotransform.SetPosition(glm::vec3(12.0f,4.0f,7.0f));
-  ModelManager::GetModel("shotgunammo_convex")->SetPhysXActorPosition(shotgunammotransform.GetTransform());
+  ModelManager::GetModel("shotgunammo_convex")->SetPosition(shotgunammotransform.GetTransform());
   Transform aidkittransform;
   aidkittransform.SetPosition(glm::vec3(13.0f,4.0f,9.0f));
-  ModelManager::GetModel("aidkit_convex")->SetPhysXActorPosition(aidkittransform.GetTransform());
+  ModelManager::GetModel("aidkit_convex")->SetPosition(aidkittransform.GetTransform());
+  Transform harrytransform;
+  harrytransform.SetPosition(glm::vec3(5.0f,0.0f,0.0f));
+  ModelManager::GetModel("harry")->SetPosition(harrytransform,1.0f,1.0f,true);
+  Transform zombietransform;
+  zombietransform.SetPosition(glm::vec3(10.0f,0.0f,0.0f));
+  ModelManager::GetModel("zombie")->SetPosition(zombietransform,1.0f,1.0f,true);
 }
 
 void Application::OnUpdate(DeltaTime& dt)
 {
-  Renderer::RenderScene(dt, 
+  Renderer::DrawScene(dt, 
     [&dt]()
     {
       Renderer::DrawModel(dt,ModelManager::GetModel("objHouse"));
-      Renderer::DrawModel(dt,ModelManager::GetModel("zombie"),glm::vec3(10.0f,0.0f,0.0f),glm::vec3(1.0f),glm::vec3(0.0f));
-      Renderer::DrawModel(dt,ModelManager::GetModel("harry"), glm::vec3(5.0f,0.0f,0.0f), glm::vec3(1.0f), glm::vec3(0.0f,0.0f,0.0f));
+      Renderer::DrawModel(dt,ModelManager::GetModel("zombie"));
+      Renderer::DrawModel(dt,ModelManager::GetModel("harry"));
       Renderer::DrawModel(dt,ModelManager::GetModel("pistol"),ModelManager::GetModel("pistol_convex"));
       Renderer::DrawModel(dt,ModelManager::GetModel("pistolammo"),ModelManager::GetModel("pistolammo_convex"));
       Renderer::DrawModel(dt,ModelManager::GetModel("shotgun"),ModelManager::GetModel("shotgun_convex"));
@@ -52,13 +58,26 @@ void Application::OnUpdate(DeltaTime& dt)
       Renderer::DrawSkybox("night");
       Renderer::Draw2DText("FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f,50.0f), 0.5f, glm::vec4(1.0f,1.0f,3.0f,1.0f));
 
-      if (Input::IsKeyPressed(Key::Z))
+      if (Input::IsKeyPressed(Key::X))
       {
-          ModelManager::GetModel("harry")->StartBlendToAnimation(1, 0.8f); 
+          ModelManager::GetModel("harry")->StartBlendToAnimation(1, 0.8f);
+          ModelManager::GetModel("harry")->Move(Movement::FORWARD,5.0f,dt);
       }
       else
       {
           ModelManager::GetModel("harry")->StartBlendToAnimation(0, 0.8f); 
+      }
+      if (Input::IsKeyPressed(Key::C))
+      {
+          ModelManager::GetModel("harry")->Move(Movement::BACKWARD,5.0f,dt);
+      }
+      if (Input::IsKeyPressed(Key::Z))
+      {
+          ModelManager::GetModel("harry")->Move(Movement::LEFT,5.0f,dt);
+      }
+      if (Input::IsKeyPressed(Key::V))
+      {
+          ModelManager::GetModel("harry")->Move(Movement::RIGHT,5.0f,dt);
       }
     },
     []()

@@ -13,8 +13,10 @@ uniform mat4 model;
 
 layout(std140, binding = 0) uniform Camera
 {
-	mat4 u_ViewProjection;
-  vec3 u_CameraPos;
+  mat4 ViewProjection;
+	mat4 OrtoProjection;
+	mat4 NonRotViewProjection;
+  vec3 CameraPos;
 };
 
 out VS_OUT{
@@ -60,7 +62,7 @@ void main()
         vs_out.TBN = mat3(T, B, N);
         vs_out.TBN_FragPos = vs_out.TBN * vs_out.FragPos;
 
-        gl_Position = u_ViewProjection * modelMat * totalPosition;
+        gl_Position = ViewProjection * modelMat * totalPosition;
         vs_out.TexCoords = aTexCoords;
     }
     else
@@ -75,7 +77,7 @@ void main()
         vs_out.TBN = mat3(T, B, N);
         vs_out.TBN_FragPos = vs_out.TBN * vs_out.FragPos;
 
-        gl_Position = u_ViewProjection * worldPos;
+        gl_Position = ViewProjection * worldPos;
         vs_out.TexCoords = aTexCoords;
     }
 }
@@ -88,8 +90,10 @@ layout (location = 1) out vec4 BrightColor;
 
 layout(std140, binding = 0) uniform Camera
 {
-	mat4 u_ViewProjection;
-  vec3 u_CameraPos;
+  mat4 ViewProjection;
+	mat4 OrtoProjection;
+  mat4 NonRotViewProjection;
+  vec3 CameraPos;
 };
 
 struct Material {
@@ -213,17 +217,10 @@ vec3 calculateSpotlight(Light light, vec3 fragPos, vec3 normal, vec3 viewDir, ve
     return ambient + diffuse + specular;
 }
 
-// void main() {
-//     vec3 color = texture(material.diffuse, fs_in.TexCoords).rgb;
-//     vec3 normal = normalize(fs_in.Normal);
-//
-//     FragColor = vec4(color, 1.0);
-// }
-
 void main() {
     vec3 color = texture(material.diffuse, fs_in.TexCoords).rgb;
     vec3 normal = normalize(fs_in.Normal);
-    vec3 viewDir = normalize(u_CameraPos - fs_in.FragPos);
+    vec3 viewDir = normalize(CameraPos - fs_in.FragPos);
 
     vec3 lighting = vec3(0.0);
 

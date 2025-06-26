@@ -3,7 +3,7 @@
 #include <array>
 #include "BackendLogger.h"
 #include "Buffer.h"
-#include "Model.h"
+#include "ModelManager.h"
 #include "Renderer.h"
 #include "Shader.h"
 #include "Texture.h"
@@ -100,6 +100,7 @@ struct Character
 struct CameraData
 {
 	glm::mat4 ViewProjection;
+	glm::mat4 OrtoProjection;
   glm::mat4 NonRotViewProjection;
   glm::vec3 CameraPos;
 };
@@ -183,11 +184,8 @@ struct RendererData
 	Renderer::Statistics _2DStats;
   Renderer::Statistics _3DStats;
 
-  CameraData _3DCameraBuffer;
-  std::shared_ptr<UniformBuffer> _3DCameraUniformBuffer;
-
-  CameraData _2DCameraBuffer;
-  std::shared_ptr<UniformBuffer> _2DCameraUniformBuffer;
+  CameraData m_CameraBuffer;
+  std::shared_ptr<UniformBuffer> m_CameraUniformBuffer;
 
   glm::vec3 quadPositions[4] = {
       { 0.0f, 0.0f, 0.0f },
@@ -402,18 +400,17 @@ void Renderer::Init()
   s_RendererData.CubeVertexArray->SetIndexBuffer(s_RendererData.CubeIndexBuffer);
   s_RendererData.CubeVertexBufferPtr = s_RendererData.CubeVertexBufferBase;
 
-  s_RendererData._3DCameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 0);
-  s_RendererData._2DCameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 1);
+  s_RendererData.m_CameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 0);
 
   FramebufferSpecification fbSpec2;
-	fbSpec2.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::Depth };
+	fbSpec2.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::DEPTH };
 	fbSpec2.Width = Engine::GetInstance().GetMainWindow().GetWidth();
 	fbSpec2.Height = Engine::GetInstance().GetMainWindow().GetHeight();
   fbSpec2.Samples = 4;
 	s_RendererData.m_MSAAFramebuffer = FrameBuffer::Create(fbSpec2);
 
   FramebufferSpecification fbSpec;
-	fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::Depth };
+	fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::DEPTH };
 	fbSpec.Width = Engine::GetInstance().GetMainWindow().GetWidth();
 	fbSpec.Height = Engine::GetInstance().GetMainWindow().GetHeight();
 	s_RendererData.m_Framebuffer = FrameBuffer::Create(fbSpec);
@@ -426,7 +423,7 @@ void Renderer::Init()
 
   LoadFont("res/fonts/dpcomic.ttf");
 
-  s_RendererData.m_SceneState = RendererData::SceneState::Edit;
+  s_RendererData.m_SceneState = RendererData::SceneState::Play;
 
   s_RendererData.m_WindowRef = &Engine::GetInstance().GetMainWindow();
 
@@ -478,7 +475,7 @@ void Renderer::Shutdown()
 	ImGui::DestroyContext();
 }
 
-void Renderer::RenderScene(DeltaTime& dt, const std::function<void()>& geometry, const std::function<void()>& lights)
+void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, const std::function<void()>& lights)
 {
   ResetStats();
   glEnable(GL_DEPTH_TEST);
@@ -582,26 +579,22 @@ void Renderer::StartBatch()
 
 void Renderer::BeginScene(const Camera& camera, const glm::mat4& transform)
 {
-	s_RendererData._3DCameraBuffer.ViewProjection = camera.GetProjection() * glm::inverse(transform);
-  s_RendererData._3DCameraBuffer.NonRotViewProjection = camera.GetNonRotationViewProjection();
-  s_RendererData._3DCameraBuffer.CameraPos = camera.GetPosition();
-	s_RendererData._3DCameraUniformBuffer->SetData(&s_RendererData._3DCameraBuffer, sizeof(CameraData));
-
-	s_RendererData._2DCameraBuffer.ViewProjection = camera.GetOrtoProjection() * glm::inverse(transform);
-  s_RendererData._2DCameraUniformBuffer->SetData(&s_RendererData._2DCameraBuffer, sizeof(CameraData));
+	s_RendererData.m_CameraBuffer.ViewProjection = camera.GetProjection() * glm::inverse(transform);
+	s_RendererData.m_CameraBuffer.OrtoProjection = camera.GetOrtoProjection();
+  s_RendererData.m_CameraBuffer.NonRotViewProjection = camera.GetNonRotationViewProjection();
+  s_RendererData.m_CameraBuffer.CameraPos = camera.GetPosition();
+	s_RendererData.m_CameraUniformBuffer->SetData(&s_RendererData.m_CameraBuffer, sizeof(CameraData));
 
 	StartBatch();
 }
 
 void Renderer::BeginScene(const Camera& camera)
 {
-	s_RendererData._3DCameraBuffer.ViewProjection = camera.GetViewProjection();
-  s_RendererData._3DCameraBuffer.NonRotViewProjection = camera.GetNonRotationViewProjection();
-  s_RendererData._3DCameraBuffer.CameraPos = camera.GetPosition();
-	s_RendererData._3DCameraUniformBuffer->SetData(&s_RendererData._3DCameraBuffer, sizeof(CameraData));
-
-	s_RendererData._2DCameraBuffer.ViewProjection = camera.GetOrtoProjection();
-  s_RendererData._2DCameraUniformBuffer->SetData(&s_RendererData._2DCameraBuffer, sizeof(CameraData));
+	s_RendererData.m_CameraBuffer.ViewProjection = camera.GetViewProjection();
+	s_RendererData.m_CameraBuffer.OrtoProjection = camera.GetOrtoProjection();
+  s_RendererData.m_CameraBuffer.NonRotViewProjection = camera.GetNonRotationViewProjection();
+  s_RendererData.m_CameraBuffer.CameraPos = camera.GetPosition();
+	s_RendererData.m_CameraUniformBuffer->SetData(&s_RendererData.m_CameraBuffer, sizeof(CameraData));
 
 	StartBatch();
 }
@@ -1109,8 +1102,9 @@ void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, con
   }
 
   s_RendererData._shaders.ModelShader->Use();
-  if(model->GetPhysXMeshType() == PhysXMeshType::TRIANGLEMESH) s_RendererData._shaders.ModelShader->setMat4("model", PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose()));
-  else if (model->GetPhysXMeshType() == PhysXMeshType::NONE) s_RendererData._shaders.ModelShader->setMat4("model", transform);
+  if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH) s_RendererData._shaders.ModelShader->setMat4("model", PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose()));
+  else if (model->GetPhysXMeshType() == MeshType::CONTROLLER) s_RendererData._shaders.ModelShader->setMat4("model", model->GetControllerTransform().GetTransform());
+  else if (model->GetPhysXMeshType() == MeshType::NONE) s_RendererData._shaders.ModelShader->setMat4("model", transform);
   s_RendererData._shaders.ModelShader->setBool("isAnimated", model->IsAnimated());
   s_RendererData._shaders.ModelShader->setBool("isInstanced", false);
 
@@ -1125,27 +1119,28 @@ void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, con
 
   for (auto& mesh : model->GetMeshes())
   {
+    std::unordered_map<std::string, GLuint> textureCounters =
+    {
+      {"texture_diffuse", 1},
+      {"texture_specular", 1},
+      {"texture_normal", 1},
+      {"texture_height", 1}
+    };
 
-      std::unordered_map<std::string, GLuint> textureCounters = {
-          {"texture_diffuse", 1},
-          {"texture_specular", 1},
-          {"texture_normal", 1},
-          {"texture_height", 1}
-      };
+    auto& textures = mesh.m_Textures;
+    for (GLuint i = 0; i < textures.size(); i++)
+    {
+      glActiveTexture(GL_TEXTURE0 + i);
 
-      auto& textures = mesh.m_Textures;
-      for (GLuint i = 0; i < textures.size(); i++) {
-          glActiveTexture(GL_TEXTURE0 + i);
-
-          std::string number = std::to_string(textureCounters[textures[i]->GetType()]++);
-          s_RendererData._shaders.ModelShader->setInt(textures[i]->GetType() + number, i);
-          glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
-      }
-      
-      glBindVertexArray(mesh.VAO);
-      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
-      glBindVertexArray(0);
-      glActiveTexture(GL_TEXTURE0);
+      std::string number = std::to_string(textureCounters[textures[i]->GetType()]++);
+      s_RendererData._shaders.ModelShader->setInt(textures[i]->GetType() + number, i);
+      glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
+    }
+    
+    glBindVertexArray(mesh.VAO);
+    glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
+    glBindVertexArray(0);
+    glActiveTexture(GL_TEXTURE0);
   }
 }
 
@@ -1173,20 +1168,22 @@ void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, con
 
   for (auto& mesh : model->GetMeshes())
   {
-    std::unordered_map<std::string, GLuint> textureCounters = {
-        {"texture_diffuse", 1},
-        {"texture_specular", 1},
-        {"texture_normal", 1},
-        {"texture_height", 1}
+    std::unordered_map<std::string, GLuint> textureCounters =
+    {
+      {"texture_diffuse", 1},
+      {"texture_specular", 1},
+      {"texture_normal", 1},
+      {"texture_height", 1}
     };
 
     auto& textures = mesh.m_Textures;
-    for (GLuint i = 0; i < textures.size(); i++) {
-        glActiveTexture(GL_TEXTURE0 + i);
+    for (GLuint i = 0; i < textures.size(); i++)
+    {
+      glActiveTexture(GL_TEXTURE0 + i);
 
-        std::string number = std::to_string(textureCounters[textures[i]->GetType()]++);
-        s_RendererData._shaders.ModelShader->setInt(textures[i]->GetType() + number, i);
-        glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
+      std::string number = std::to_string(textureCounters[textures[i]->GetType()]++);
+      s_RendererData._shaders.ModelShader->setInt(textures[i]->GetType() + number, i);
+      glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
     }
     
     glBindVertexArray(mesh.VAO);
@@ -1355,7 +1352,6 @@ void Renderer::DrawSkybox(const std::string& name)
   glDepthFunc(GL_LEQUAL); 
 
   s_RendererData._shaders.skyboxShader->Use();
-  s_RendererData._shaders.skyboxShader->setMat4("u_ViewProjection", s_RendererData._3DCameraBuffer.NonRotViewProjection);
 
   glActiveTexture(GL_TEXTURE0);
   auto it = s_RendererData.skyboxes.find(name);
@@ -1598,7 +1594,7 @@ void Renderer::OnWindowResize(uint32_t width, uint32_t height)
 void Renderer::Submit3D(const std::shared_ptr<Shader>& shader, const std::shared_ptr<VertexArray>& vertexArray, const glm::mat4& transform)
 {
 	shader->Use();
-	shader->setMat4("u_ViewProjection", s_RendererData._3DCameraBuffer.ViewProjection);
+	shader->setMat4("u_ViewProjection", s_RendererData.m_CameraBuffer.ViewProjection);
 	shader->setMat4("u_Transform", transform);
 
 	vertexArray->Bind();
@@ -1608,7 +1604,7 @@ void Renderer::Submit3D(const std::shared_ptr<Shader>& shader, const std::shared
 void Renderer::Submit2D(const std::shared_ptr<Shader>& shader, const std::shared_ptr<VertexArray>& vertexArray, const glm::mat4& transform)
 {
 	shader->Use();
-	shader->setMat4("u_ViewProjection", s_RendererData._2DCameraBuffer.ViewProjection);
+	shader->setMat4("u_ViewProjection", s_RendererData.m_CameraBuffer.OrtoProjection);
 	shader->setMat4("u_Transform", transform);
 
 	vertexArray->Bind();

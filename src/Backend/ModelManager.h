@@ -120,29 +120,40 @@ struct Mesh
   bool instanceDataDirty = true;
 };
 
-enum class PhysXMeshType : int32_t
+enum class MeshType : int32_t
 {
   NONE = 0,
-  CHARACTER = 1,
+  CONTROLLER = 1,
   TRIANGLEMESH = 2,
   CONVEXMESH = 3
 };
 
+enum class Movement : int32_t
+{
+  FORWARD = 0,
+  BACKWARD = 1,
+  LEFT = 2,
+  RIGHT = 3
+};
+
 struct Model
 {
-  Model(const char* path, float optimizerStrength, bool isAnimated, bool isKinematic, const PhysXMeshType& type);
+  Model(const char* path, float optimizerStrength, bool isAnimated, bool isKinematic, const MeshType& type);
 
-  static std::shared_ptr<Model> CreateSTATIC(const char* path, float optimizerStrength, bool isKinematic, PhysXMeshType type);
-  static std::shared_ptr<Model> CreateANIMATED(const char* path, float optimizerStrength, bool isKinematic, PhysXMeshType type);
+  static std::shared_ptr<Model> CreateSTATIC(const char* path, float optimizerStrength, bool isKinematic, MeshType type);
+  static std::shared_ptr<Model> CreateANIMATED(const char* path, float optimizerStrength, bool isKinematic, MeshType type);
 
   void UpdateAnimation(DeltaTime& dt);
   void SetAnimationbyIndex(int animationIndex);
   void SetAnimationByName(const std::string& animationName);
-  void SetPhysXActorPosition(const glm::mat4& transform);
+  void SetPosition(const glm::mat4& transform);
+  void SetPosition(const Transform& transform, float radius, float height, bool slopeLimit);
+  void Move(const Movement& movement, float speed, const DeltaTime& dt);
   void StartBlendToAnimation(int32_t nextAnimationIndex, float blendDuration);
   bool IsInAnimation(int index) const;
   void CreatePhysXStaticMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m_Indices);
   void CreatePhysXDynamicMesh(std::vector<Vertex>& m_Vertices);
+  void CreateCharacterController(const PxVec3& position, float radius, float height, bool slopeLimit);
 
   inline std::vector<Mesh>& GetMeshes() { return m_Meshes; }
   inline std::map<std::string,BoneInfo>& GetBoneInfoMap() { return m_BoneInfoMap; }
@@ -152,9 +163,10 @@ struct Model
   inline const AssimpNodeData& GetRootNode() { return m_RootNode; }
   inline bool IsAnimated() { return m_isAnimated; }
   inline const std::vector<glm::mat4>& GetFinalBoneMatrices() { return m_FinalBoneMatrices; }
-  inline const PhysXMeshType& GetPhysXMeshType() { return m_meshType; }
+  inline const MeshType& GetPhysXMeshType() { return m_meshType; }
   inline const PxRigidStatic* GetStaticActor() { return m_StaticMeshActor; }
   inline const PxRigidDynamic* GetDynamicActor() { return m_DynamicMeshActor; }
+  inline Transform& GetControllerTransform() { return m_ControllerTransform; }
 
 private:
 
@@ -193,7 +205,16 @@ private:
   const aiScene* m_Scene;
   PxRigidStatic* m_StaticMeshActor = nullptr;
   PxRigidDynamic* m_DynamicMeshActor = nullptr;
-  const PhysXMeshType& m_meshType;
+  PxController* m_ActorController = nullptr;
+  MeshType m_meshType;
+
+  Transform m_ControllerTransform;
+  PxVec3 m_ControllerPosition;
+  PxVec3 m_ControllerVelocity = PxVec3(0.0f);
+  float m_ControllerRadius; 
+  float m_ControllerHeight; 
+  bool m_ControllerSlopeLimit;
+  bool m_ControllerIsGrounded = false;
 
 private:
 

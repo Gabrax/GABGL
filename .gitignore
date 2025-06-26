@@ -5,6 +5,7 @@ Dist/
 /.vs
 .idea/
 Makefile
+CMakeSettings.json
 .vscode/
 *.exe
 *.dll

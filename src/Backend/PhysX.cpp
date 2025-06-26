@@ -266,6 +266,11 @@ PxMat44 PhysX::GlmMat4ToPxMat44(glm::mat4 glmMatrix)
   return matrix;
 }
 
+PxVec3 PhysX::GlmVec3ToPxVec3(const glm::vec3& vec)
+{
+    return PxVec3(vec.x, vec.y, vec.z);
+}
+
 PxScene* PhysX::getScene()
 {
     return s_PhysXData.gScene;

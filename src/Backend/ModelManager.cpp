@@ -1,4 +1,4 @@
-#include "Model.h"
+#include "ModelManager.h"
 #include "BackendLogger.h"
 #include "meshoptimizer.h"
 #include <filesystem>
@@ -151,9 +151,6 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
       currentPBO = (currentPBO + 1) % NUM_BUFFERS;
     }
 
-    if(model->GetPhysXMeshType() == PhysXMeshType::TRIANGLEMESH) model->CreatePhysXStaticMesh(mesh.m_Vertices, mesh.m_Indices);
-    else if(model->GetPhysXMeshType() == PhysXMeshType::CONVEXMESH) model->CreatePhysXDynamicMesh(mesh.m_Vertices); 
-
     glGenVertexArrays(1, &mesh.VAO);
     glGenBuffers(1, &mesh.VBO);
     glGenBuffers(1, &mesh.EBO);
@@ -195,6 +192,9 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
     glBindVertexArray(0);
 
     for(auto& tex : mesh.m_Textures) tex->ClearRawData();
+
+    if(model->GetPhysXMeshType() == MeshType::TRIANGLEMESH) model->CreatePhysXStaticMesh(mesh.m_Vertices, mesh.m_Indices);
+    else if(model->GetPhysXMeshType() == MeshType::CONVEXMESH) model->CreatePhysXDynamicMesh(mesh.m_Vertices);
   }
 
   std::string name = std::filesystem::path(path).stem().string();
@@ -211,7 +211,7 @@ std::shared_ptr<Model> ModelManager::GetModel(const std::string& name)
   return nullptr;
 }
 
-Model::Model(const char* path, float optimizerStrength, bool isAnimated, bool isKinematic, const PhysXMeshType& type) :  m_isKinematic(isKinematic), m_OptimizerStrength(optimizerStrength), m_isAnimated(isAnimated), m_meshType(type)
+Model::Model(const char* path, float optimizerStrength, bool isAnimated, bool isKinematic, const MeshType& type) :  m_isKinematic(isKinematic), m_OptimizerStrength(optimizerStrength), m_isAnimated(isAnimated), m_meshType(type)
 {
   Timer timer;
 
@@ -255,6 +255,8 @@ Model::Model(const char* path, float optimizerStrength, bool isAnimated, bool is
 
     ResizeFinalBoneMatrices();
   }
+
+  m_TexturesLoaded.clear();
 
   GABGL_WARN("Model loading took {0} ms", timer.ElapsedMillis());
 }
@@ -370,18 +372,95 @@ void Model::OptimizeMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m
   m_Vertices = std::move(OptVertices);
 }
 
-void Model::SetPhysXActorPosition(const glm::mat4& transform)
+void Model::SetPosition(const glm::mat4& transform)
 {
+  if(m_meshType == MeshType::CONTROLLER)
+  {
+    GABGL_ERROR("This function is for non Controller model!");
+    return;
+  }
+
   PxTransform pxTransform = PxTransform(PhysX::GlmMat4ToPxTransform(transform));
 
-  if(m_meshType == PhysXMeshType::TRIANGLEMESH) m_StaticMeshActor->setGlobalPose(pxTransform);
-  else if(m_meshType == PhysXMeshType::CONVEXMESH)
+  if(m_meshType == MeshType::TRIANGLEMESH) m_StaticMeshActor->setGlobalPose(pxTransform);
+  else if(m_meshType == MeshType::CONVEXMESH)
   {
-    if (m_isKinematic)
-        m_DynamicMeshActor->setKinematicTarget(pxTransform);
-    else
-        m_DynamicMeshActor->setGlobalPose(pxTransform);
+    if (m_isKinematic) m_DynamicMeshActor->setKinematicTarget(pxTransform);
+    else m_DynamicMeshActor->setGlobalPose(pxTransform);
   }
+}
+
+void Model::SetPosition(const Transform& transform, float radius, float height, bool slopeLimit)
+{
+  if(m_meshType != MeshType::CONTROLLER)
+  {
+    GABGL_ERROR("This function is for Controller model!");
+    return;
+  }
+
+  m_ControllerTransform = transform;
+
+  CreateCharacterController(PhysX::GlmVec3ToPxVec3(m_ControllerTransform.GetPosition()), radius, height, slopeLimit);
+}
+
+void Model::Move(const Movement& movement, float speed, const DeltaTime& dt)
+{
+    if (m_meshType != MeshType::CONTROLLER)
+    {
+        GABGL_ERROR("This function is for Controller model!");
+        return;
+    }
+
+    // Constants
+    const float gravity = -9.81f;
+    const float damping = 0.9f;
+    const float jumpSpeed = 5.5f;
+
+    // Apply gravity
+    m_ControllerVelocity.y += gravity * dt;
+
+    // Horizontal movement
+    PxVec3 direction(0.0f);
+    switch (movement)
+    {
+        case Movement::FORWARD:  direction.z += 1.0f; break;
+        case Movement::BACKWARD: direction.z -= 1.0f; break;
+        case Movement::LEFT:     direction.x -= 1.0f; break;
+        case Movement::RIGHT:    direction.x += 1.0f; break;
+        default: break;
+    }
+
+    if (direction.magnitudeSquared() > 0.0f)
+    {
+        direction = direction.getNormalized();
+        m_ControllerVelocity.x = direction.x * speed;
+        m_ControllerVelocity.z = direction.z * speed;
+    }
+    else
+    {
+        // Apply damping when no input
+        m_ControllerVelocity.x *= damping;
+        m_ControllerVelocity.z *= damping;
+    }
+
+    // Move controller
+    PxVec3 displacement = m_ControllerVelocity * dt;
+    PxControllerCollisionFlags flags = m_ActorController->move(displacement, 0.001f, dt, PxControllerFilters());
+
+    // Ground check and vertical reset
+    if (flags.isSet(PxControllerCollisionFlag::eCOLLISION_DOWN))
+    {
+        m_ControllerVelocity.y = 0.0f;
+        m_ControllerIsGrounded = true;
+    }
+    else
+    {
+        m_ControllerIsGrounded = false;
+    }
+
+    // Update internal transform
+    PxExtendedVec3 footPos = m_ActorController->getFootPosition();
+    m_ControllerTransform.SetPosition(glm::vec3(footPos.x, footPos.y, footPos.z));
 }
 
 void Model::CreatePhysXStaticMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m_Indices)
@@ -461,6 +540,11 @@ void Model::CreatePhysXDynamicMesh(std::vector<Vertex>& m_Vertices)
 
       scene->addActor(*m_DynamicMeshActor);
   }
+}
+
+void Model::CreateCharacterController(const PxVec3& position, float radius, float height, bool slopeLimit)
+{
+  m_ActorController = PhysX::CreateCharacterController(position, radius, height, slopeLimit);
 }
 
 void Model::ExtractBoneWeightForVertices(std::vector<Vertex>& vertices, aiMesh* mesh)
@@ -819,12 +903,12 @@ void Model::ReadMissingBones(const aiAnimation* animation)
 }
 
 
-std::shared_ptr<Model> Model::CreateSTATIC(const char* path, float optimizerStrength, bool isKinematic, PhysXMeshType type)
+std::shared_ptr<Model> Model::CreateSTATIC(const char* path, float optimizerStrength, bool isKinematic, MeshType type)
 {
 	return std::make_shared<Model>(path,optimizerStrength,false,isKinematic,type);
 }
 
-std::shared_ptr<Model> Model::CreateANIMATED(const char* path, float optimizerStrength, bool isKinematic, PhysXMeshType type)
+std::shared_ptr<Model> Model::CreateANIMATED(const char* path, float optimizerStrength, bool isKinematic, MeshType type)
 {
 	return std::make_shared<Model>(path,optimizerStrength,true,isKinematic,type);
 }

@@ -5,7 +5,7 @@
 #include "Transform.hpp"
 #include "Buffer.h"
 #include "Shader.h"
-#include "Model.h"
+#include "ModelManager.h"
 #include "DeltaTime.h"
 
 struct Renderer
@@ -13,7 +13,7 @@ struct Renderer
 	static void Init();
 	static void Shutdown();
 
-  static void RenderScene(DeltaTime& dt, const std::function<void()>& geometry, const std::function<void()>& lights);
+  static void DrawScene(DeltaTime& dt, const std::function<void()>& geometry, const std::function<void()>& lights);
 	static void BeginScene(const Camera& camera, const glm::mat4& transform);
 	static void BeginScene(const Camera& camera);
 	static void EndScene();
@@ -50,7 +50,6 @@ struct Renderer
   static void BakeSkyboxTextures(const std::string& name,const std::shared_ptr<Texture>& texture);
   static void DrawSkybox(const std::string& name);
 	static void LoadFont(const std::string& path);
-  static void DrawFramebuffer(uint32_t textureID);
 
 	static float GetLineWidth();
 	static void SetLineWidth(float width);
@@ -58,9 +57,9 @@ struct Renderer
 
 	static void LoadShaders();
 
-  static void OnWindowResize(uint32_t width, uint32_t height);
   static void Submit3D(const std::shared_ptr<Shader>& shader, const std::shared_ptr<VertexArray>& vertexArray, const glm::mat4& transform = glm::mat4(1.0f));
   static void Submit2D(const std::shared_ptr<Shader>& shader, const std::shared_ptr<VertexArray>& vertexArray, const glm::mat4& transform = glm::mat4(1.0f));
+  static void OnWindowResize(uint32_t width, uint32_t height);
 	static void SetViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height);
 	static void SetClearColor(const glm::vec4& color);
 	static void ClearBuffers();
@@ -87,6 +86,7 @@ private:
 	static void StartBatch();
 	static void NextBatch();
 
+  static void DrawFramebuffer(uint32_t textureID);
 	static void DrawEditorFrameBuffer(uint32_t framebufferTexture);
   static uint32_t GetActiveWidgetID();
 	static void BlockEvents(bool block);

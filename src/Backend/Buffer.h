@@ -214,13 +214,13 @@ enum class FramebufferTextureFormat
 
   // Color
   RGBA8,
-  RGBA16F,          // <- Add this
-  R11F_G11F_B10F,   // <- Add this for mip chain
+  RGBA16F,          
+  R11F_G11F_B10F,   
   RED_INTEGER,
 
   // Depth/stencil
   DEPTH24STENCIL8,
-  Depth = DEPTH24STENCIL8
+  DEPTH = DEPTH24STENCIL8
 };
 
 struct FramebufferTextureSpecification

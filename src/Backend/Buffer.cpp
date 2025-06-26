@@ -614,7 +614,7 @@ BloomBuffer::BloomBuffer(const std::shared_ptr<Shader>& downsampleShader, const 
   float windowHeight = Engine::GetInstance().GetMainWindow().GetHeight();
 
   FramebufferSpecification hdrSpec;
-	hdrSpec.Attachments = { FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::Depth };
+	hdrSpec.Attachments = { FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::DEPTH };
 	hdrSpec.Width = Engine::GetInstance().GetMainWindow().GetWidth();
 	hdrSpec.Height = Engine::GetInstance().GetMainWindow().GetHeight();
 	m_hdrFB = FrameBuffer::Create(hdrSpec); 

@@ -4,8 +4,7 @@
 #include "../backend/AudioManager.h"
 #include "../backend/Texture.h"
 #include "../backend/Renderer.h"
-#include "../backend/Model.h"
-#include "../engine.h"
+#include "../backend/ModelManager.h"
 #include <GLFW/glfw3.h>
 #include <thread>
 #include <mutex>
@@ -13,8 +12,6 @@
 #include <queue>
 #include <functional>
 #include <atomic>
-#include <filesystem>
-#include "BackendLogger.h"
 
 struct UploadContextManager
 {
@@ -172,25 +169,25 @@ struct AssetsData
     "res/skybox/NightSky_Back.png"
   };
 
-  std::vector<std::tuple<const char*, float, bool, PhysXMeshType>> static_models =
+  std::vector<std::tuple<const char*, float, bool, MeshType>> static_models =
   {
-    { "res/map/objHouse.obj", 1.0f, false, PhysXMeshType::TRIANGLEMESH },
-    { "res/models/aidkit.glb", 1.0f, false, PhysXMeshType::NONE },
-    { "res/models/aidkit_convex.glb", 1.0f, false, PhysXMeshType::CONVEXMESH },
-    { "res/models/pistolammo.glb", 1.0f, false, PhysXMeshType::NONE },
-    { "res/models/pistolammo_convex.glb", 1.0f, false, PhysXMeshType::CONVEXMESH },
-    { "res/models/shotgunammo.glb", 1.0f, false, PhysXMeshType::NONE },
-    { "res/models/shotgunammo_convex.glb", 1.0f, false, PhysXMeshType::CONVEXMESH },
-    { "res/models/pistol.glb", 1.0f, false, PhysXMeshType::NONE },
-    { "res/models/pistol_convex.glb", 1.0f, false, PhysXMeshType::CONVEXMESH },
-    { "res/models/shotgun.glb", 1.0f, false, PhysXMeshType::NONE },
-    { "res/models/shotgun_convex.glb", 1.0f, false, PhysXMeshType::CONVEXMESH },
+    { "res/map/objHouse.obj", 1.0f, false, MeshType::TRIANGLEMESH },
+    { "res/models/aidkit.glb", 1.0f, false, MeshType::NONE },
+    { "res/models/aidkit_convex.glb", 1.0f, false, MeshType::CONVEXMESH },
+    { "res/models/pistolammo.glb", 1.0f, false, MeshType::NONE },
+    { "res/models/pistolammo_convex.glb", 1.0f, false, MeshType::CONVEXMESH },
+    { "res/models/shotgunammo.glb", 1.0f, false, MeshType::NONE },
+    { "res/models/shotgunammo_convex.glb", 1.0f, false, MeshType::CONVEXMESH },
+    { "res/models/pistol.glb", 1.0f, false, MeshType::NONE },
+    { "res/models/pistol_convex.glb", 1.0f, false, MeshType::CONVEXMESH },
+    { "res/models/shotgun.glb", 1.0f, false, MeshType::NONE },
+    { "res/models/shotgun_convex.glb", 1.0f, false, MeshType::CONVEXMESH },
   };
 
-  std::vector<std::tuple<const char*, float, bool, PhysXMeshType>> animated_models =
+  std::vector<std::tuple<const char*, float, bool, MeshType>> animated_models =
   {
-    { "res/zombie/zombie.glb", 1.0f, false, PhysXMeshType::NONE },
-    { "res/harry/harry.glb", 1.0f, false, PhysXMeshType::NONE },
+    { "res/zombie/zombie.glb", 1.0f, false, MeshType::CONTROLLER },
+    { "res/harry/harry.glb", 1.0f, false, MeshType::CONTROLLER },
   };
 
   std::vector<std::future<void>> m_FutureVoid;
@@ -198,25 +195,26 @@ struct AssetsData
   std::vector<std::future<std::shared_ptr<Model>>> m_FutureStaticModels;
   std::vector<std::future<std::shared_ptr<Model>>> m_FutureAnimModels;
 
+  bool m_UploadStarted = false;
+  bool m_LoadingStarted = false;
+  bool m_LoadingDone = false;
+
 } s_Data;
 
-static inline bool s_UploadStarted = false;
-static inline bool s_LoadingStarted = false;
-static inline bool s_LoadingDone = false;
 
 void AssetManager::StartLoadingAssets()
 {
-  if (s_LoadingStarted)
+  if (s_Data.m_LoadingStarted)
       return; // Already started
 
-  s_LoadingStarted = true;
-  s_LoadingDone = false;
-  s_UploadStarted = false;
+  s_Data.m_LoadingStarted = true;
+  s_Data.m_LoadingDone = false;
+  s_Data.m_UploadStarted = false;
 
-  for (auto& sound : s_Data.sounds)
-      s_Data.m_FutureVoid.push_back(std::async(std::launch::async, AudioManager::LoadSound, sound));
-  for (auto& track : s_Data.music)
-      s_Data.m_FutureVoid.push_back(std::async(std::launch::async, AudioManager::LoadMusic, track));
+  for (auto& sound : s_Data.sounds) AudioManager::LoadSound(sound);
+      /*s_Data.m_FutureVoid.push_back(std::async(std::launch::async, AudioManager::LoadSound, sound));*/
+  for (auto& track : s_Data.music) AudioManager::LoadMusic(track);
+      /*s_Data.m_FutureVoid.push_back(std::async(std::launch::async, AudioManager::LoadMusic, track));*/
 
   for (auto& [path, scale, flag, meshType] : s_Data.static_models)
       s_Data.m_FutureStaticModels.push_back(std::async(std::launch::async, Model::CreateSTATIC, path, scale, flag, meshType));
@@ -233,7 +231,7 @@ void AssetManager::StartLoadingAssets()
 
 void AssetManager::UpdateLoading()
 {
-  if (!s_LoadingStarted || s_LoadingDone)
+  if (!s_Data.m_LoadingStarted || s_Data.m_LoadingDone)
       return;
 
   bool allReady = std::all_of(s_Data.m_FutureVoid.begin(), s_Data.m_FutureVoid.end(),
@@ -248,15 +246,17 @@ void AssetManager::UpdateLoading()
   if (!allReady)
       return;
 
-  if (!s_UploadStarted)
+  if (!s_Data.m_UploadStarted)
   {
-    s_UploadStarted = true;
+    s_Data.m_UploadStarted = true;
 
+    s_LoadState = LoadState::UploadingAssets;
     for (size_t i = 0; i < s_Data.static_models.size(); ++i)
     {
       ModelManager::BakeModel(std::get<0>(s_Data.static_models[i]), s_Data.m_FutureStaticModels[i].get());
     }
 
+    s_LoadState = LoadState::Finalizing;
     for (size_t i = 0; i < s_Data.animated_models.size(); ++i)
     {
       ModelManager::BakeModel(std::get<0>(s_Data.animated_models[i]), s_Data.m_FutureAnimModels[i].get());
@@ -270,15 +270,16 @@ void AssetManager::UpdateLoading()
     s_Data.m_FutureStaticModels.clear();
     s_Data.m_FutureAnimModels.clear();
 
-    s_LoadingDone = true;
-    s_LoadingStarted = false;
-    s_UploadStarted = false;
+    s_LoadState = LoadState::Done;
+    s_Data.m_LoadingDone = true;
+    s_Data.m_LoadingStarted = false;
+    s_Data.m_UploadStarted = false;
   }
 }
 
 bool AssetManager::LoadingComplete()
 {
-    return s_LoadingDone;
+    return s_Data.m_LoadingDone;
 }
 
 
