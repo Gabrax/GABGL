@@ -2,13 +2,15 @@
 #include "BackendLogger.h"
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
+#include <algorithm>
 
 struct UserErrorCallback : public PxErrorCallback
 {
-    virtual void reportError(PxErrorCode::Enum /*code*/, const char* message, const char* file, int line) {
-        /*std::cout << file << " line " << line << ": " << message << "\n";*/
-        /*std::cout << "\n";*/
-    }
+  virtual void reportError(PxErrorCode::Enum /*code*/, const char* message, const char* file, int line)
+  {
+    GABGL_ERROR("file: {0}, line: {1}, message: {2}",file,line,message);
+  }
+
 }gErrorCallback;
 
 #define PVD_HOST "127.0.0.1"
@@ -66,8 +68,9 @@ void PhysX::Init()
 
 void PhysX::Simulate(DeltaTime& dt)
 {
-   float delta = 1.0f/60.0f;
-  s_PhysXData.gScene->simulate(delta);
+  /*float delta = std::clamp(dt.GetSeconds(), 0.0f, 60.0f);*/
+
+  s_PhysXData.gScene->simulate(1.0f/60.0f);
   s_PhysXData.gScene->fetchResults(true);
 }
 

@@ -20,6 +20,8 @@ struct LightManager
              const std::optional<glm::vec3>& newRotation = std::nullopt,    
              const std::optional<glm::vec3>& newScale = std::nullopt);
   static void RemoveLight(int32_t index);
+  static int32_t GetLightsSize();
+  static glm::vec3 GetLightPosition(size_t index);
 
 private:
   static void UpdateSSBOLightData();

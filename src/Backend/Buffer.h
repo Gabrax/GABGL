@@ -220,7 +220,7 @@ enum class FramebufferTextureFormat
 
   // Depth/stencil
   DEPTH24STENCIL8,
-  DEPTH = DEPTH24STENCIL8
+  DEPTH,
 };
 
 struct FramebufferTextureSpecification
@@ -266,6 +266,7 @@ struct FrameBuffer
 
 	void ClearAttachment(uint32_t attachmentIndex, int value);
   void AttachExternalColorTexture(GLuint textureID, uint32_t slot = 0);
+  void AttachExternalDepthTexture(GLuint textureID);
 
 	inline uint32_t GetColorAttachmentRendererID(uint32_t index = 0) const { GABGL_ASSERT(index < m_ColorAttachments.size(),""); return m_ColorAttachments[index]; }
 	inline const FramebufferSpecification& GetSpecification() const { return m_Specification; };
@@ -291,7 +292,6 @@ struct BloomBuffer
 	~BloomBuffer() = default;
 
 	void RenderBloomTexture(float filterRadius);
-  void Render();
   void Bind() const;
   void UnBind() const;
   void Resize(int32_t newWidth, int32_t newHeight);
@@ -333,5 +333,29 @@ struct DirectShadowBuffer
 
 struct PointShadowBuffer
 {
+  PointShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeight);
+  ~PointShadowBuffer() = default;
 
+  void Bind() const;
+  void UnBind() const;
+  void Resize(int32_t newWidth, int32_t newHeight);
+  void AttachDepthCubemapFace(GLenum face);
+  inline uint32_t GetShadowMap() { return m_depthCubemap; }
+
+  void BindForWriting(GLenum CubeFace);
+  void BindforReading(GLenum Texture);
+  inline glm::mat4 GetLightProj() { return m_lightproj; }
+
+	static std::shared_ptr<PointShadowBuffer> Create(uint32_t shadowWidth, uint32_t shadowHeight);
+
+private:
+
+  glm::mat4 m_lightproj;
+
+  uint32_t m_shadowWidth; 
+  uint32_t m_shadowHeight;
+  std::shared_ptr<FrameBuffer> m_shadowFB;
+  uint32_t m_fbo;
+  uint32_t m_depth;
+  uint32_t m_depthCubemap;
 };

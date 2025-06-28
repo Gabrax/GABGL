@@ -143,7 +143,7 @@ struct Model
   static std::shared_ptr<Model> CreateSTATIC(const char* path, float optimizerStrength, bool isKinematic, MeshType type);
   static std::shared_ptr<Model> CreateANIMATED(const char* path, float optimizerStrength, bool isKinematic, MeshType type);
 
-  void UpdateAnimation(DeltaTime& dt);
+  void UpdateAnimation(const DeltaTime& dt);
   void SetAnimationbyIndex(int animationIndex);
   void SetAnimationByName(const std::string& animationName);
   void SetPosition(const glm::mat4& transform);
@@ -248,5 +248,7 @@ struct ModelManager
   static void BakeModel(const std::string& path, const std::shared_ptr<Model>& model);
   static void BakeModelInstancedBuffers(Mesh& mesh, const std::vector<Transform>& instances);
   static std::shared_ptr<Model> GetModel(const std::string& name);
+  static void UpdateAnimations(const DeltaTime& dt);
+  static std::vector<glm::mat4> GetTransforms();
 };
 

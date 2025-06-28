@@ -8,6 +8,7 @@
 #include "app/Application.h"
 #include "backend/AssetManager.h"
 #include "backend/PhysX.h"
+#include "backend/FontManager.h"
 
 Engine* Engine::s_Instance = nullptr;
 
@@ -27,6 +28,7 @@ void Engine::Run()
 
   AudioManager::Init();
   LightManager::Init();
+  FontManager::Init();
   PhysX::Init();
 	Renderer::Init();
 
@@ -42,7 +44,7 @@ void Engine::Run()
     {
         AssetManager::UpdateLoading();
 
-        Renderer::DrawScene(dt, [](){Renderer::Draw2DText("LOADING", glm::vec2(500.0f,300.0f), 1.0f, glm::vec4(1.0f));},[](){});
+        Renderer::DrawLoadingScreen();
 
         if(AssetManager::LoadingComplete())
         {

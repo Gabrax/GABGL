@@ -144,6 +144,8 @@ layout(std430, binding = 3) buffer LightTypes {
 uniform Material material;
 uniform Light light;
 
+uniform samplerCube u_ShadowMap;
+
 const float gamma = 2.2;
 
 float gammaCorrection(float value) {

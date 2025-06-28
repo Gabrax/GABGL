@@ -1,5 +1,8 @@
 #include "Buffer.h"
 #include "BackendLogger.h"
+#include "glm/trigonometric.hpp"
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp> 
 
 #include <glad/glad.h>
 
@@ -381,6 +384,7 @@ namespace Utils {
 		switch (format)
 		{
 			case FramebufferTextureFormat::DEPTH24STENCIL8:  return true;
+			case FramebufferTextureFormat::DEPTH:  return true;
 		}
 
 		return false;
@@ -477,6 +481,9 @@ void FrameBuffer::Invalidate()
 		case FramebufferTextureFormat::DEPTH24STENCIL8:
 			Utils::AttachDepthTexture(m_DepthAttachment, m_Specification.Samples, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL_ATTACHMENT, m_Specification.Width, m_Specification.Height);
 			break;
+		case FramebufferTextureFormat::DEPTH:
+			Utils::AttachDepthTexture(m_DepthAttachment, m_Specification.Samples, GL_DEPTH_COMPONENT32, GL_DEPTH_ATTACHMENT, m_Specification.Width, m_Specification.Height);
+			break;
 		}
 	}
 
@@ -490,6 +497,7 @@ void FrameBuffer::Invalidate()
 	{
 		// Only depth-pass
 		glDrawBuffer(GL_NONE);
+    glReadBuffer(GL_NONE);
 	}
 
 	GABGL_ASSERT(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE, "Framebuffer is incomplete!");
@@ -546,6 +554,13 @@ void FrameBuffer::AttachExternalColorTexture(GLuint textureID, uint32_t slot)
 	glBindFramebuffer(GL_FRAMEBUFFER, m_RendererID);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + slot, GL_TEXTURE_2D, textureID, 0);
 	m_ColorAttachments[slot] = textureID;
+}
+
+void FrameBuffer::AttachExternalDepthTexture(GLuint textureID)
+{
+  glBindFramebuffer(GL_FRAMEBUFFER, m_RendererID);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, textureID, 0);
+  m_DepthAttachment = textureID;
 }
 
 std::shared_ptr<FrameBuffer> FrameBuffer::Create(const FramebufferSpecification& spec)
@@ -614,7 +629,7 @@ BloomBuffer::BloomBuffer(const std::shared_ptr<Shader>& downsampleShader, const 
   float windowHeight = Engine::GetInstance().GetMainWindow().GetHeight();
 
   FramebufferSpecification hdrSpec;
-	hdrSpec.Attachments = { FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::DEPTH };
+	hdrSpec.Attachments = { FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::DEPTH24STENCIL8 };
 	hdrSpec.Width = Engine::GetInstance().GetMainWindow().GetWidth();
 	hdrSpec.Height = Engine::GetInstance().GetMainWindow().GetHeight();
 	m_hdrFB = FrameBuffer::Create(hdrSpec); 
@@ -781,19 +796,6 @@ void BloomBuffer::Resize(int newWidth, int newHeight)
   m_hdrFB->Resize(newWidth, newHeight);
 }
 
-void BloomBuffer::Render()
-{
-  finalShader->Use();
-  glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_2D, m_hdrFB->GetColorAttachmentRendererID(0));
-  finalShader->setInt("scene", 0);
-  glActiveTexture(GL_TEXTURE1);
-  glBindTexture(GL_TEXTURE_2D, mMipChain[0].texture);
-  finalShader->setInt("bloomBlur", 1);
-
-  renderQuad();
-}
-
 void BloomBuffer::Bind() const 
 {
   m_hdrFB->Bind();
@@ -864,8 +866,84 @@ void BloomBuffer::BlitDepthTo(const std::shared_ptr<FrameBuffer>& dst)
   glBindFramebuffer(GL_FRAMEBUFFER, 0); 
 }
 
-
 std::shared_ptr<BloomBuffer> BloomBuffer::Create(const std::shared_ptr<Shader>& downsampleShader, const std::shared_ptr<Shader>& upsampleShader, const std::shared_ptr<Shader>& finalShader)
 {
   return std::make_shared<BloomBuffer>(downsampleShader,upsampleShader,finalShader);
 }
+
+PointShadowBuffer::PointShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeight) : m_shadowWidth(shadowWidth), m_shadowHeight(shadowHeight)
+{
+  m_lightproj = glm::perspective(glm::radians(90.0f), float(m_shadowWidth) / float(m_shadowHeight), 0.1f, 20.0f);
+
+  glGenTextures(1,&m_depth);
+  glBindTexture(GL_TEXTURE_2D, m_depth);
+  glTexImage2D(GL_TEXTURE_2D,0,GL_DEPTH_COMPONENT, m_shadowWidth, m_shadowHeight,0,GL_DEPTH_COMPONENT,GL_FLOAT,NULL);
+  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glBindTexture(GL_TEXTURE_2D,0);
+
+  glGenTextures(1, &m_depthCubemap);
+  glBindTexture(GL_TEXTURE_CUBE_MAP, m_depthCubemap);
+  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+  for (uint32_t i = 0; i < 6; ++i)
+  {
+    glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_R32F, m_shadowWidth, m_shadowHeight, 0, GL_RED, GL_FLOAT, nullptr);
+  }
+
+  glGenFramebuffers(1,&m_fbo);
+  glBindFramebuffer(GL_FRAMEBUFFER,m_fbo);
+  glFramebufferTexture2D(GL_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,GL_TEXTURE_2D,m_depth,0);
+  glDrawBuffer(GL_NONE);
+  glReadBuffer(GL_NONE);
+  glBindFramebuffer(GL_FRAMEBUFFER,0);
+}
+
+void PointShadowBuffer::AttachDepthCubemapFace(GLenum face)
+{
+  m_shadowFB->Bind();
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, face, m_depthCubemap, 0);
+  glDrawBuffer(GL_NONE);
+  glReadBuffer(GL_NONE);
+}
+
+void PointShadowBuffer::Bind() const 
+{
+  m_shadowFB->Bind();
+  glViewport(0, 0, m_shadowWidth, m_shadowHeight);
+}
+
+void PointShadowBuffer::BindForWriting(GLenum CubeFace)
+{
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_fbo);
+  glViewport(0,0,m_shadowWidth,m_shadowHeight);
+  glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,CubeFace,m_depthCubemap,0);
+  glDrawBuffer(GL_COLOR_ATTACHMENT0);
+}
+
+void PointShadowBuffer::BindforReading(GLenum Texture)
+{
+  glActiveTexture(Texture);
+  glBindTexture(GL_TEXTURE_CUBE_MAP,m_depthCubemap);
+}
+
+void PointShadowBuffer::UnBind() const 
+{
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void PointShadowBuffer::Resize(int32_t newWidth, int32_t newHeight)
+{
+  m_shadowFB->Resize(newWidth, newHeight);
+}
+
+std::shared_ptr<PointShadowBuffer> PointShadowBuffer::Create(uint32_t shadowWidth, uint32_t shadowHeight)
+{
+  return std::make_shared<PointShadowBuffer>(shadowWidth, shadowHeight);
+}
+

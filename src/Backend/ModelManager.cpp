@@ -211,6 +211,41 @@ std::shared_ptr<Model> ModelManager::GetModel(const std::string& name)
   return nullptr;
 }
 
+void ModelManager::UpdateAnimations(const DeltaTime& dt)
+{
+  for(auto i : s_Data.models)
+  {
+    if(i.second->IsAnimated()) i.second->UpdateAnimation(dt);
+  }
+}
+
+std::vector<glm::mat4> ModelManager::GetTransforms()
+{
+  std::vector<glm::mat4> transforms;
+  transforms.reserve(s_Data.models.size());
+
+  for (const auto& [key, model] : s_Data.models)
+  {
+      if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH)
+      {
+          glm::mat4 mat = PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose());
+          transforms.push_back(mat);
+      }
+      else if (model->GetPhysXMeshType() == MeshType::CONVEXMESH)
+      {
+          glm::mat4 mat = PhysX::PxMat44ToGlmMat4(model->GetDynamicActor()->getGlobalPose());
+          transforms.push_back(mat);
+      }
+      else if (model->GetPhysXMeshType() == MeshType::CONTROLLER)
+      {
+          glm::mat4 mat = model->GetControllerTransform().GetTransform();
+          transforms.push_back(mat);
+      }
+  }
+
+  return transforms;
+}
+
 Model::Model(const char* path, float optimizerStrength, bool isAnimated, bool isKinematic, const MeshType& type) :  m_isKinematic(isKinematic), m_OptimizerStrength(optimizerStrength), m_isAnimated(isAnimated), m_meshType(type)
 {
   Timer timer;
@@ -594,7 +629,7 @@ void Model::SetBoneData(Vertex& vertex, int boneID, float weight)
   }
 }
 
-void Model::UpdateAnimation(DeltaTime& dt)
+void Model::UpdateAnimation(const DeltaTime& dt)
 {
   float delta = dt;
 

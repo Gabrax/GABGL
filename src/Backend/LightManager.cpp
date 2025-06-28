@@ -123,3 +123,12 @@ void LightManager::UpdateSSBOLightData()
   glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
+glm::vec3 LightManager::GetLightPosition(size_t index)
+{
+  return s_Data.lights[index]->position;
+}
+
+int32_t LightManager::GetLightsSize()
+{
+  return s_Data.numLights;
+}

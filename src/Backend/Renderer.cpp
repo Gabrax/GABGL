@@ -3,6 +3,7 @@
 #include <array>
 #include "BackendLogger.h"
 #include "Buffer.h"
+#include "LightManager.h"
 #include "ModelManager.h"
 #include "Renderer.h"
 #include "Shader.h"
@@ -10,10 +11,10 @@
 #include "glad/glad.h"
 #include "glm/fwd.hpp"
 #include <cstdint>
+#include <limits>
+#include <random>
 #include <stb_image.h>
 #include <filesystem>
-#include <ft2build.h>
-#include FT_FREETYPE_H
 #include "../engine.h"
 #include "AudioManager.h"
 #include "../input/UserInput.h"
@@ -85,16 +86,6 @@ struct MeshVertex
   glm::vec3 Position;   
   glm::vec3 Normal;     
   glm::vec4 Color;
-
-  int EntityID;        
-};
-
-struct Character
-{
-  uint32_t TextureID;
-  glm::ivec2 Size;
-  glm::ivec2 Bearing;
-  uint32_t Advance;
 };
 
 struct CameraData
@@ -178,11 +169,9 @@ struct RendererData
     std::shared_ptr<Shader> DownSampleShader;
     std::shared_ptr<Shader> UpSampleShader;
     std::shared_ptr<Shader> BloomResultShader;
+    std::shared_ptr<Shader> PointShadowBufferShader;
 
 	} _shaders;
-
-	Renderer::Statistics _2DStats;
-  Renderer::Statistics _3DStats;
 
   CameraData m_CameraBuffer;
   std::shared_ptr<UniformBuffer> m_CameraUniformBuffer;
@@ -202,15 +191,15 @@ struct RendererData
   };
 
   MeshVertex cubeVertices[8] = {
-      {{-0.5f, -0.5f,  0.5f}, {0, 0, 1}, {1.0f, 1.0f, 1.0f, 1.0f}, 0},
-      {{ 0.5f, -0.5f,  0.5f}, {0, 0, 1}, {1.0f, 1.0f, 1.0f, 1.0f}, 0},
-      {{ 0.5f,  0.5f,  0.5f}, {0, 0, 1}, {1.0f, 1.0f, 1.0f, 1.0f}, 0},
-      {{-0.5f,  0.5f,  0.5f}, {0, 0, 1}, {1.0f, 1.0f, 1.0f, 1.0f}, 0},
+      {{-0.5f, -0.5f,  0.5f}, {0, 0, 1}, {1.0f, 1.0f, 1.0f, 1.0f}},
+      {{ 0.5f, -0.5f,  0.5f}, {0, 0, 1}, {1.0f, 1.0f, 1.0f, 1.0f}},
+      {{ 0.5f,  0.5f,  0.5f}, {0, 0, 1}, {1.0f, 1.0f, 1.0f, 1.0f}},
+      {{-0.5f,  0.5f,  0.5f}, {0, 0, 1}, {1.0f, 1.0f, 1.0f, 1.0f}},
 
-      {{-0.5f, -0.5f, -0.5f}, {0, 0, -1}, {1.0f, 1.0f, 1.0f, 1.0f}, 0},
-      {{ 0.5f, -0.5f, -0.5f}, {0, 0, -1}, {1.0f, 1.0f, 1.0f, 1.0f}, 0},
-      {{ 0.5f,  0.5f, -0.5f}, {0, 0, -1}, {1.0f, 1.0f, 1.0f, 1.0f}, 0},
-      {{-0.5f,  0.5f, -0.5f}, {0, 0, -1}, {1.0f, 1.0f, 1.0f, 1.0f}, 0},
+      {{-0.5f, -0.5f, -0.5f}, {0, 0, -1}, {1.0f, 1.0f, 1.0f, 1.0f}},
+      {{ 0.5f, -0.5f, -0.5f}, {0, 0, -1}, {1.0f, 1.0f, 1.0f, 1.0f}},
+      {{ 0.5f,  0.5f, -0.5f}, {0, 0, -1}, {1.0f, 1.0f, 1.0f, 1.0f}},
+      {{-0.5f,  0.5f, -0.5f}, {0, 0, -1}, {1.0f, 1.0f, 1.0f, 1.0f}},
   };
   
 	std::array<std::shared_ptr<Texture>, MaxTextureSlots> _3DTextureSlots;
@@ -219,11 +208,11 @@ struct RendererData
 	uint32_t _2DTextureSlotIndex = 1; // 0 = white texture
 
   std::unordered_map<std::string, std::shared_ptr<Texture>> skyboxes;
-  std::unordered_map<char, Character> Characters;
 
   std::shared_ptr<FrameBuffer> m_Framebuffer;
   std::shared_ptr<FrameBuffer> m_MSAAFramebuffer;
   std::shared_ptr<BloomBuffer> m_BloomFramebuffer;
+  std::shared_ptr<PointShadowBuffer> m_PointShadowFramebuffer;
 
   Window* m_WindowRef = nullptr;
   Camera m_Camera;
@@ -231,26 +220,28 @@ struct RendererData
   enum class SceneState
 	{
 		Edit = 0, Play = 1
+
 	} m_SceneState;
 
-  FT_Library ft;
+  bool m_ShadowPass;
 
-} s_RendererData;
+} s_Data;
 
 
 void Renderer::LoadShaders()
 {
-	s_RendererData._shaders._3DQuadShader = Shader::Create("res/shaders/Renderer2D_Quad.glsl");
-	s_RendererData._shaders._2DQuadShader = Shader::Create("res/shaders/Renderer2D_2DQuad.glsl");
-	s_RendererData._shaders._CircleShader = Shader::Create("res/shaders/Renderer2D_Circle.glsl");
-	s_RendererData._shaders._LineShader = Shader::Create("res/shaders/Renderer2D_Line.glsl");
-	s_RendererData._shaders._FramebufferShader = Shader::Create("res/shaders/FB.glsl");
-  s_RendererData._shaders.modelShader = Shader::Create("res/shaders/Renderer3D_static.glsl");
-  s_RendererData._shaders.skyboxShader = Shader::Create("res/shaders/skybox.glsl");
-  s_RendererData._shaders.ModelShader = Shader::Create("res/shaders/Renderer3D_Model.glsl");
-  s_RendererData._shaders.DownSampleShader = Shader::Create("res/shaders/bloom_downsample.glsl");
-  s_RendererData._shaders.UpSampleShader = Shader::Create("res/shaders/bloom_upsample.glsl");
-  s_RendererData._shaders.BloomResultShader = Shader::Create("res/shaders/bloom_final.glsl");
+	s_Data._shaders._3DQuadShader = Shader::Create("res/shaders/Renderer2D_Quad.glsl");
+	s_Data._shaders._2DQuadShader = Shader::Create("res/shaders/Renderer2D_2DQuad.glsl");
+	s_Data._shaders._CircleShader = Shader::Create("res/shaders/Renderer2D_Circle.glsl");
+	s_Data._shaders._LineShader = Shader::Create("res/shaders/Renderer2D_Line.glsl");
+	s_Data._shaders._FramebufferShader = Shader::Create("res/shaders/FB.glsl");
+  s_Data._shaders.modelShader = Shader::Create("res/shaders/Renderer3D_static.glsl");
+  s_Data._shaders.skyboxShader = Shader::Create("res/shaders/skybox.glsl");
+  s_Data._shaders.ModelShader = Shader::Create("res/shaders/Renderer3D_Model.glsl");
+  s_Data._shaders.DownSampleShader = Shader::Create("res/shaders/bloom_downsample.glsl");
+  s_Data._shaders.UpSampleShader = Shader::Create("res/shaders/bloom_upsample.glsl");
+  s_Data._shaders.BloomResultShader = Shader::Create("res/shaders/bloom_final.glsl");
+  s_Data._shaders.PointShadowBufferShader = Shader::Create("res/shaders/point_shadow.glsl");
 }
 
 void Renderer::Init()
@@ -269,9 +260,9 @@ void Renderer::Init()
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_LINE_SMOOTH);
 
-	s_RendererData._3DQuadVertexArray = VertexArray::Create();
-	s_RendererData._3DQuadVertexBuffer = VertexBuffer::Create(s_RendererData.MaxVertices * sizeof(QuadVertex));
-	s_RendererData._3DQuadVertexBuffer->SetLayout({
+	s_Data._3DQuadVertexArray = VertexArray::Create();
+	s_Data._3DQuadVertexBuffer = VertexBuffer::Create(s_Data.MaxVertices * sizeof(QuadVertex));
+	s_Data._3DQuadVertexBuffer->SetLayout({
 		{ ShaderDataType::Float3, "a_Position"     },
 		{ ShaderDataType::Float4, "a_Color"        },
 		{ ShaderDataType::Float2, "a_TexCoord"     },
@@ -279,12 +270,12 @@ void Renderer::Init()
 		{ ShaderDataType::Float,  "a_TilingFactor" },
 		{ ShaderDataType::Int,    "a_EntityID"     }
 		});
-	s_RendererData._3DQuadVertexArray->AddVertexBuffer(s_RendererData._3DQuadVertexBuffer);
-	s_RendererData._3DQuadVertexBufferBase = new QuadVertex[s_RendererData.MaxVertices];
+	s_Data._3DQuadVertexArray->AddVertexBuffer(s_Data._3DQuadVertexBuffer);
+	s_Data._3DQuadVertexBufferBase = new QuadVertex[s_Data.MaxVertices];
 
-  s_RendererData._2DQuadVertexArray = VertexArray::Create();
-	s_RendererData._2DQuadVertexBuffer = VertexBuffer::Create(s_RendererData.MaxVertices * sizeof(QuadVertex));
-	s_RendererData._2DQuadVertexBuffer->SetLayout({
+  s_Data._2DQuadVertexArray = VertexArray::Create();
+	s_Data._2DQuadVertexBuffer = VertexBuffer::Create(s_Data.MaxVertices * sizeof(QuadVertex));
+	s_Data._2DQuadVertexBuffer->SetLayout({
 		{ ShaderDataType::Float3, "a_Position"     },
 		{ ShaderDataType::Float4, "a_Color"        },
 		{ ShaderDataType::Float2, "a_TexCoord"     },
@@ -292,13 +283,13 @@ void Renderer::Init()
 		{ ShaderDataType::Float,  "a_TilingFactor" },
 		{ ShaderDataType::Int,    "a_EntityID"     }
 		});
-	s_RendererData._2DQuadVertexArray->AddVertexBuffer(s_RendererData._2DQuadVertexBuffer);
-	s_RendererData._2DQuadVertexBufferBase = new QuadVertex[s_RendererData.MaxVertices];
+	s_Data._2DQuadVertexArray->AddVertexBuffer(s_Data._2DQuadVertexBuffer);
+	s_Data._2DQuadVertexBufferBase = new QuadVertex[s_Data.MaxVertices];
 
-	uint32_t* quadIndices = new uint32_t[s_RendererData.MaxIndices];
+	uint32_t* quadIndices = new uint32_t[s_Data.MaxIndices];
 
 	uint32_t offset = 0;
-	for (uint32_t i = 0; i < s_RendererData.MaxIndices; i += 6)
+	for (uint32_t i = 0; i < s_Data.MaxIndices; i += 6)
 	{
 		quadIndices[i + 0] = offset + 0;
 		quadIndices[i + 1] = offset + 1;
@@ -311,16 +302,16 @@ void Renderer::Init()
 		offset += 4;
 	}
 
-	std::shared_ptr<IndexBuffer> _3DquadIB = IndexBuffer::Create(quadIndices, s_RendererData.MaxIndices);
-	s_RendererData._3DQuadVertexArray->SetIndexBuffer(_3DquadIB);
-	std::shared_ptr<IndexBuffer> _2DquadIB = IndexBuffer::Create(quadIndices, s_RendererData.MaxIndices);
-	s_RendererData._2DQuadVertexArray->SetIndexBuffer(_2DquadIB);
+	std::shared_ptr<IndexBuffer> _3DquadIB = IndexBuffer::Create(quadIndices, s_Data.MaxIndices);
+	s_Data._3DQuadVertexArray->SetIndexBuffer(_3DquadIB);
+	std::shared_ptr<IndexBuffer> _2DquadIB = IndexBuffer::Create(quadIndices, s_Data.MaxIndices);
+	s_Data._2DQuadVertexArray->SetIndexBuffer(_2DquadIB);
 	delete[] quadIndices;
 
 	// Circles
-	s_RendererData.CircleVertexArray = VertexArray::Create();
-	s_RendererData.CircleVertexBuffer = VertexBuffer::Create(s_RendererData.MaxVertices * sizeof(CircleVertex));
-	s_RendererData.CircleVertexBuffer->SetLayout({
+	s_Data.CircleVertexArray = VertexArray::Create();
+	s_Data.CircleVertexBuffer = VertexBuffer::Create(s_Data.MaxVertices * sizeof(CircleVertex));
+	s_Data.CircleVertexBuffer->SetLayout({
 		{ ShaderDataType::Float3, "a_WorldPosition" },
 		{ ShaderDataType::Float3, "a_LocalPosition" },
 		{ ShaderDataType::Float4, "a_Color"         },
@@ -331,48 +322,47 @@ void Renderer::Init()
 		{ ShaderDataType::Float2, "a_TexCoord"		},
 		{ ShaderDataType::Float,  "a_TexIndex"		}*/
 		});
-	s_RendererData.CircleVertexArray->AddVertexBuffer(s_RendererData.CircleVertexBuffer);
-	s_RendererData.CircleVertexArray->SetIndexBuffer(_3DquadIB); // Use quad IB
-	s_RendererData.CircleVertexBufferBase = new CircleVertex[s_RendererData.MaxVertices];
+	s_Data.CircleVertexArray->AddVertexBuffer(s_Data.CircleVertexBuffer);
+	s_Data.CircleVertexArray->SetIndexBuffer(_3DquadIB); // Use quad IB
+	s_Data.CircleVertexBufferBase = new CircleVertex[s_Data.MaxVertices];
 
 	// Lines
-	s_RendererData.LineVertexArray = VertexArray::Create();
-	s_RendererData.LineVertexBuffer = VertexBuffer::Create(s_RendererData.MaxVertices * sizeof(LineVertex));
-	s_RendererData.LineVertexBuffer->SetLayout({
+	s_Data.LineVertexArray = VertexArray::Create();
+	s_Data.LineVertexBuffer = VertexBuffer::Create(s_Data.MaxVertices * sizeof(LineVertex));
+	s_Data.LineVertexBuffer->SetLayout({
 		{ ShaderDataType::Float3, "a_Position" },
 		{ ShaderDataType::Float4, "a_Color"    },
 		{ ShaderDataType::Int,    "a_EntityID" }
 		});
-	s_RendererData.LineVertexArray->AddVertexBuffer(s_RendererData.LineVertexBuffer);
-	s_RendererData.LineVertexBufferBase = new LineVertex[s_RendererData.MaxVertices];
+	s_Data.LineVertexArray->AddVertexBuffer(s_Data.LineVertexBuffer);
+	s_Data.LineVertexBufferBase = new LineVertex[s_Data.MaxVertices];
 
-	s_RendererData.WhiteTexture = Texture::Create(TextureSpecification());
+	s_Data.WhiteTexture = Texture::Create(TextureSpecification());
 	uint32_t whiteTextureData = 0xffffffff;
-	s_RendererData.WhiteTexture->SetData(&whiteTextureData, sizeof(uint32_t));
+	s_Data.WhiteTexture->SetData(&whiteTextureData, sizeof(uint32_t));
 
-	int32_t samplers[s_RendererData.MaxTextureSlots];
-	for (uint32_t i = 0; i < s_RendererData.MaxTextureSlots; i++)
+	int32_t samplers[s_Data.MaxTextureSlots];
+	for (uint32_t i = 0; i < s_Data.MaxTextureSlots; i++)
 		samplers[i] = i;
 
-	s_RendererData._3DTextureSlots[0] = s_RendererData.WhiteTexture;
-	s_RendererData._2DTextureSlots[0] = s_RendererData.WhiteTexture;
+	s_Data._3DTextureSlots[0] = s_Data.WhiteTexture;
+	s_Data._2DTextureSlots[0] = s_Data.WhiteTexture;
 
-	s_RendererData._3DQuadVertexPositions[0] = { -0.5f, -0.5f, 0.0f, 1.0f };
-	s_RendererData._3DQuadVertexPositions[1] = { 0.5f, -0.5f, 0.0f, 1.0f };
-	s_RendererData._3DQuadVertexPositions[2] = { 0.5f,  0.5f, 0.0f, 1.0f };
-	s_RendererData._3DQuadVertexPositions[3] = { -0.5f,  0.5f, 0.0f, 1.0f };
+	s_Data._3DQuadVertexPositions[0] = { -0.5f, -0.5f, 0.0f, 1.0f };
+	s_Data._3DQuadVertexPositions[1] = { 0.5f, -0.5f, 0.0f, 1.0f };
+	s_Data._3DQuadVertexPositions[2] = { 0.5f,  0.5f, 0.0f, 1.0f };
+	s_Data._3DQuadVertexPositions[3] = { -0.5f,  0.5f, 0.0f, 1.0f };
 
-  s_RendererData.CubeVertexBufferBase = new MeshVertex[s_RendererData.MaxVertices];
-  s_RendererData.CubeVertexBuffer = VertexBuffer::Create(nullptr, s_RendererData.MaxVertices * sizeof(MeshVertex));
-  s_RendererData.CubeVertexBuffer->SetLayout({
+  s_Data.CubeVertexBufferBase = new MeshVertex[s_Data.MaxVertices];
+  s_Data.CubeVertexBuffer = VertexBuffer::Create(nullptr, s_Data.MaxVertices * sizeof(MeshVertex));
+  s_Data.CubeVertexBuffer->SetLayout({
       { ShaderDataType::Float3, "a_Position" },   // 0
       { ShaderDataType::Float3, "a_Normal" },     // 1
       { ShaderDataType::Float4, "a_Color" },      // 3
-      { ShaderDataType::Int,    "a_EntityID" }    // 5
   });
 
   std::vector<uint32_t> indices;
-  indices.reserve(s_RendererData.MaxIndices);
+  indices.reserve(s_Data.MaxIndices);
 
   const uint32_t cubeIndicesCount = 36;
 
@@ -385,7 +375,7 @@ void Renderer::Init()
       4, 5, 1, 1, 0, 4        // Bottom
   };
 
-  uint32_t maxCubes = s_RendererData.MaxVertices / 8; // 8 vertices per cube
+  uint32_t maxCubes = s_Data.MaxVertices / 8; // 8 vertices per cube
   for (uint32_t i = 0; i < maxCubes; i++)
   {
       for (uint32_t j = 0; j < cubeIndicesCount; j++)
@@ -394,41 +384,39 @@ void Renderer::Init()
       }
   }
 
-  s_RendererData.CubeIndexBuffer = IndexBuffer::Create(indices.data(), (uint32_t)indices.size());
-  s_RendererData.CubeVertexArray = VertexArray::Create();
-  s_RendererData.CubeVertexArray->AddVertexBuffer(s_RendererData.CubeVertexBuffer);
-  s_RendererData.CubeVertexArray->SetIndexBuffer(s_RendererData.CubeIndexBuffer);
-  s_RendererData.CubeVertexBufferPtr = s_RendererData.CubeVertexBufferBase;
+  s_Data.CubeIndexBuffer = IndexBuffer::Create(indices.data(), (uint32_t)indices.size());
+  s_Data.CubeVertexArray = VertexArray::Create();
+  s_Data.CubeVertexArray->AddVertexBuffer(s_Data.CubeVertexBuffer);
+  s_Data.CubeVertexArray->SetIndexBuffer(s_Data.CubeIndexBuffer);
+  s_Data.CubeVertexBufferPtr = s_Data.CubeVertexBufferBase;
 
-  s_RendererData.m_CameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 0);
-
-  FramebufferSpecification fbSpec2;
-	fbSpec2.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::DEPTH };
-	fbSpec2.Width = Engine::GetInstance().GetMainWindow().GetWidth();
-	fbSpec2.Height = Engine::GetInstance().GetMainWindow().GetHeight();
-  fbSpec2.Samples = 4;
-	s_RendererData.m_MSAAFramebuffer = FrameBuffer::Create(fbSpec2);
-
-  FramebufferSpecification fbSpec;
-	fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::DEPTH };
-	fbSpec.Width = Engine::GetInstance().GetMainWindow().GetWidth();
-	fbSpec.Height = Engine::GetInstance().GetMainWindow().GetHeight();
-	s_RendererData.m_Framebuffer = FrameBuffer::Create(fbSpec);
+  s_Data.m_CameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 0);
 
   LoadShaders();
 
-  s_RendererData.m_BloomFramebuffer = BloomBuffer::Create(s_RendererData._shaders.DownSampleShader, s_RendererData._shaders.UpSampleShader, s_RendererData._shaders.BloomResultShader);
+  FramebufferSpecification fbSpec2;
+	fbSpec2.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::DEPTH24STENCIL8 };
+	fbSpec2.Width = Engine::GetInstance().GetMainWindow().GetWidth();
+	fbSpec2.Height = Engine::GetInstance().GetMainWindow().GetHeight();
+  fbSpec2.Samples = 4;
+	s_Data.m_MSAAFramebuffer = FrameBuffer::Create(fbSpec2);
 
-  GABGL_ASSERT(!FT_Init_FreeType(&s_RendererData.ft), "Could not init FreeType");
+  FramebufferSpecification fbSpec;
+	fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::DEPTH24STENCIL8 };
+	fbSpec.Width = Engine::GetInstance().GetMainWindow().GetWidth();
+	fbSpec.Height = Engine::GetInstance().GetMainWindow().GetHeight();
+	s_Data.m_Framebuffer = FrameBuffer::Create(fbSpec);
 
-  LoadFont("res/fonts/dpcomic.ttf");
+  s_Data.m_BloomFramebuffer = BloomBuffer::Create(s_Data._shaders.DownSampleShader, s_Data._shaders.UpSampleShader, s_Data._shaders.BloomResultShader);
 
-  s_RendererData.m_SceneState = RendererData::SceneState::Play;
+  s_Data.m_PointShadowFramebuffer = PointShadowBuffer::Create(1024, 1024);
 
-  s_RendererData.m_WindowRef = &Engine::GetInstance().GetMainWindow();
+  s_Data.m_SceneState = RendererData::SceneState::Play;
 
-  s_RendererData.m_Camera = Camera(45.0f, (float)s_RendererData.m_WindowRef->GetWidth() / (float)s_RendererData.m_WindowRef->GetHeight(), 0.01f, 1000.0f);
-  s_RendererData.m_Camera.SetViewportSize((float)s_RendererData.m_WindowRef->GetWidth(), (float)s_RendererData.m_WindowRef->GetHeight());
+  s_Data.m_WindowRef = &Engine::GetInstance().GetMainWindow();
+
+  s_Data.m_Camera = Camera(45.0f, (float)s_Data.m_WindowRef->GetWidth() / (float)s_Data.m_WindowRef->GetHeight(), 0.01f, 1000.0f);
+  s_Data.m_Camera.SetViewportSize((float)s_Data.m_WindowRef->GetWidth(), (float)s_Data.m_WindowRef->GetHeight());
 
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -449,212 +437,264 @@ void Renderer::Init()
 		style.Colors[ImGuiCol_WindowBg].w = 1.0f;
 	}
 
-	GLFWwindow* window = reinterpret_cast<GLFWwindow*>(s_RendererData.m_WindowRef->GetWindowPtr());
+	GLFWwindow* window = reinterpret_cast<GLFWwindow*>(s_Data.m_WindowRef->GetWindowPtr());
 
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 410");
 	SetLineWidth(4.0f);
-  s_RendererData.m_GizmoType = ImGuizmo::OPERATION::TRANSLATE;
+  s_Data.m_GizmoType = ImGuizmo::OPERATION::TRANSLATE;
 
 }
 
 void Renderer::Shutdown()
 {
-	delete[] s_RendererData._3DQuadVertexBufferBase;
-	delete[] s_RendererData._2DQuadVertexBufferBase;
+	delete[] s_Data._3DQuadVertexBufferBase;
+	delete[] s_Data._2DQuadVertexBufferBase;
 
-  delete[] s_RendererData.CubeVertexBufferBase;
-  s_RendererData.CubeVertexBufferBase = nullptr;
+  delete[] s_Data.CubeVertexBufferBase;
+  s_Data.CubeVertexBufferBase = nullptr;
 
-  s_RendererData.CubeVertexArray.reset();
-  s_RendererData.CubeVertexBuffer.reset();
-  s_RendererData.CubeIndexBuffer.reset();
+  s_Data.CubeVertexArray.reset();
+  s_Data.CubeVertexBuffer.reset();
+  s_Data.CubeIndexBuffer.reset();
 
   ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
 }
 
+struct CameraDirection
+{
+    GLenum CubemapFace;
+    glm::vec3 Target;
+    glm::vec3 Up;
+};
+
+CameraDirection gCameraDirections[6] =
+{
+    { GL_TEXTURE_CUBE_MAP_POSITIVE_X, glm::vec3(1.0f, 0.0f, 0.0f),  glm::vec3(0.0f, 1.0f, 0.0f) },
+    { GL_TEXTURE_CUBE_MAP_NEGATIVE_X, glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) },
+    { GL_TEXTURE_CUBE_MAP_POSITIVE_Y, glm::vec3(0.0f, 1.0f, 0.0f),  glm::vec3(0.0f, 0.0f, -1.0f) },
+    { GL_TEXTURE_CUBE_MAP_NEGATIVE_Y, glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f) },
+    { GL_TEXTURE_CUBE_MAP_POSITIVE_Z, glm::vec3(0.0f, 0.0f, 1.0f),  glm::vec3(0.0f, 1.0f, 0.0f) },
+    { GL_TEXTURE_CUBE_MAP_NEGATIVE_Z, glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f) }
+};
+
 void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, const std::function<void()>& lights)
 {
-  ResetStats();
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_CULL_FACE);
   glCullFace(GL_FRONT);
   glFrontFace(GL_CW);
 
-  s_RendererData.m_MSAAFramebuffer->Bind();
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  s_Data._shaders.PointShadowBufferShader->Use();
+  float max = std::numeric_limits<float>::max();
+  SetClearColor({max,max,max,max});
 
-  BeginScene(s_RendererData.m_Camera);
+  for (auto lightIndex : std::views::iota(0, LightManager::GetLightsSize()))
+  {
+    glm::vec3 lightPosition = LightManager::GetLightPosition(lightIndex);
+
+    for (uint32_t face = 0; face < 6; ++face)
+    {
+      s_Data.m_PointShadowFramebuffer->BindForWriting(gCameraDirections[face].CubemapFace);
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+      glm::mat4 view = glm::lookAt(lightPosition,lightPosition + gCameraDirections[face].Target,gCameraDirections[face].Up);
+      glm::mat4 proj = s_Data.m_PointShadowFramebuffer->GetLightProj() * view;
+
+      const auto& modelTransforms = ModelManager::GetTransforms();
+      for (const auto& transform : modelTransforms)
+      {
+          glm::mat4 lightViewProjModel = proj * transform;
+
+          s_Data._shaders.PointShadowBufferShader->setMat4("gWVP", lightViewProjModel);
+          s_Data._shaders.PointShadowBufferShader->setMat4("gWorld", transform);
+      }
+      /*geometry();*/
+    }
+  }
+
+  s_Data.m_MSAAFramebuffer->Bind();
+  SetClearColor(glm::vec4(0.0f));
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  s_Data._shaders.ModelShader->Use();
+  glActiveTexture(GL_TEXTURE1);
+  glBindTexture(GL_TEXTURE_CUBE_MAP, s_Data.m_PointShadowFramebuffer->GetShadowMap());
+  s_Data._shaders.ModelShader->setInt("u_ShadowMap",1);
+  s_Data._shaders.ModelShader->setFloat("u_FarPLane",20.0f);
+  BeginScene(s_Data.m_Camera);
   geometry();
   EndScene();
 
-  s_RendererData.m_MSAAFramebuffer->UnBind();
-  s_RendererData.m_MSAAFramebuffer->BlitColor(s_RendererData.m_Framebuffer);
+  s_Data.m_MSAAFramebuffer->UnBind();
+  s_Data.m_MSAAFramebuffer->BlitColor(s_Data.m_Framebuffer);
 
-  s_RendererData.m_BloomFramebuffer->BlitDepthFrom(s_RendererData.m_MSAAFramebuffer);
-  s_RendererData.m_BloomFramebuffer->Bind();
+  s_Data.m_BloomFramebuffer->BlitDepthFrom(s_Data.m_MSAAFramebuffer);
+  s_Data.m_BloomFramebuffer->Bind();
   glClear(GL_COLOR_BUFFER_BIT);
 
-  BeginScene(s_RendererData.m_Camera);
+  BeginScene(s_Data.m_Camera);
   lights();
   EndScene();
 
-  s_RendererData.m_BloomFramebuffer->RenderBloomTexture(0.005f);
-  s_RendererData.m_BloomFramebuffer->UnBind();
-  s_RendererData.m_BloomFramebuffer->CompositeBloomOver(s_RendererData.m_Framebuffer);
-  s_RendererData.m_BloomFramebuffer->BlitDepthTo(s_RendererData.m_Framebuffer);
+  s_Data.m_BloomFramebuffer->RenderBloomTexture(0.005f);
+  s_Data.m_BloomFramebuffer->UnBind();
+  s_Data.m_BloomFramebuffer->CompositeBloomOver(s_Data.m_Framebuffer);
+  s_Data.m_BloomFramebuffer->BlitDepthTo(s_Data.m_Framebuffer);
 
-  s_RendererData.m_Framebuffer->Bind();
-  s_RendererData.m_Framebuffer->ClearAttachment(1, -1);
-  s_RendererData.m_Framebuffer->UnBind();
+  s_Data.m_Framebuffer->Bind();
+  s_Data.m_Framebuffer->ClearAttachment(1, -1);
+  s_Data.m_Framebuffer->UnBind();
 
   glDisable(GL_CULL_FACE);
   glDisable(GL_DEPTH_TEST);
   SetClearColor(glm::vec4(0.0f));
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  s_RendererData.m_Camera.OnUpdate(dt);
+  s_Data.m_Camera.OnUpdate(dt);
+  ModelManager::UpdateAnimations(dt);
   PhysX::Simulate(dt);
   AudioManager::UpdateAllMusic();
 
-  if (Input::IsKeyPressed(Key::E)) s_RendererData.m_SceneState = RendererData::SceneState::Edit;
-  if (Input::IsKeyPressed(Key::Q)) s_RendererData.m_SceneState = RendererData::SceneState::Play;
+  if (Input::IsKeyPressed(Key::E)) s_Data.m_SceneState = RendererData::SceneState::Edit;
+  if (Input::IsKeyPressed(Key::Q)) s_Data.m_SceneState = RendererData::SceneState::Play;
 
-  uint32_t finalTexture = s_RendererData.m_Framebuffer->GetColorAttachmentRendererID();
+  uint32_t finalTexture = s_Data.m_Framebuffer->GetColorAttachmentRendererID();
 
-  switch (s_RendererData.m_SceneState)
+  switch (s_Data.m_SceneState)
   {
-    case RendererData::SceneState::Edit:
-    {
-      s_RendererData.m_WindowRef->SetCursorVisible(true);
-      Renderer::DrawEditorFrameBuffer(finalTexture);
-      break;
-    }
+   case RendererData::SceneState::Edit:
+   {
+     s_Data.m_WindowRef->SetCursorVisible(true);
+     Renderer::DrawEditorFrameBuffer(finalTexture);
+     break;
+   }
 
-    case RendererData::SceneState::Play:
-    {
-      s_RendererData.m_WindowRef->SetCursorVisible(false);
-      Renderer::DrawFramebuffer(finalTexture);
-      break;
-    }
+   case RendererData::SceneState::Play:
+   {
+     s_Data.m_WindowRef->SetCursorVisible(false);
+     Renderer::DrawFramebuffer(finalTexture);
+     break;
+   }
   }
+}
+
+void Renderer::DrawLoadingScreen()
+{
+  BeginScene(s_Data.m_Camera);
+  Renderer::Draw2DText(FontManager::GetFont("dpcomic"),"LOADING", glm::vec2(s_Data.m_WindowRef->GetWidth() / 2,s_Data.m_WindowRef->GetHeight() / 2), 1.0f, glm::vec4(1.0f));
+  EndScene();
 }
 
 void Renderer::SetFullscreen(const std::string& sound, bool windowed)
 {
-  s_RendererData.m_WindowRef->SetFullscreen(windowed);
+  s_Data.m_WindowRef->SetFullscreen(windowed);
 
-  uint32_t width = (uint32_t)s_RendererData.m_WindowRef->GetWidth(); 
-  uint32_t height = (uint32_t)s_RendererData.m_WindowRef->GetHeight(); 
+  uint32_t width = (uint32_t)s_Data.m_WindowRef->GetWidth(); 
+  uint32_t height = (uint32_t)s_Data.m_WindowRef->GetHeight(); 
 
-  s_RendererData.m_MSAAFramebuffer->Resize(width, height);
-  s_RendererData.m_BloomFramebuffer->Resize(width,height);
-  s_RendererData.m_Framebuffer->Resize(width, height);
-  s_RendererData.m_Camera.SetViewportSize(width, height);
+  s_Data.m_MSAAFramebuffer->Resize(width, height);
+  s_Data.m_BloomFramebuffer->Resize(width,height);
+  s_Data.m_Framebuffer->Resize(width, height);
+  s_Data.m_Camera.SetViewportSize(width, height);
   AudioManager::PlaySound(sound);
 }
 
 void Renderer::StartBatch()
 {
-	s_RendererData._3DQuadIndexCount = 0;
-	s_RendererData._3DQuadVertexBufferPtr = s_RendererData._3DQuadVertexBufferBase;
-	s_RendererData._3DTextureSlotIndex = 1;
+	s_Data._3DQuadIndexCount = 0;
+	s_Data._3DQuadVertexBufferPtr = s_Data._3DQuadVertexBufferBase;
+	s_Data._3DTextureSlotIndex = 1;
 
-	s_RendererData._2DQuadIndexCount = 0;
-	s_RendererData._2DQuadVertexBufferPtr = s_RendererData._2DQuadVertexBufferBase;
-	s_RendererData._2DTextureSlotIndex = 1;
+	s_Data._2DQuadIndexCount = 0;
+	s_Data._2DQuadVertexBufferPtr = s_Data._2DQuadVertexBufferBase;
+	s_Data._2DTextureSlotIndex = 1;
 
-	s_RendererData.CircleIndexCount = 0;
-	s_RendererData.CircleVertexBufferPtr = s_RendererData.CircleVertexBufferBase;
+	s_Data.CircleIndexCount = 0;
+	s_Data.CircleVertexBufferPtr = s_Data.CircleVertexBufferBase;
 
-	s_RendererData.LineVertexCount = 0;
-	s_RendererData.LineVertexBufferPtr = s_RendererData.LineVertexBufferBase;
+	s_Data.LineVertexCount = 0;
+	s_Data.LineVertexBufferPtr = s_Data.LineVertexBufferBase;
 
-  s_RendererData.CubeVertexCount = 0;
-  s_RendererData.CubeIndexCount = 0;
-  s_RendererData.CubeVertexBufferPtr = s_RendererData.CubeVertexBufferBase;
+  s_Data.CubeVertexCount = 0;
+  s_Data.CubeIndexCount = 0;
+  s_Data.CubeVertexBufferPtr = s_Data.CubeVertexBufferBase;
 }
 
 void Renderer::BeginScene(const Camera& camera, const glm::mat4& transform)
 {
-	s_RendererData.m_CameraBuffer.ViewProjection = camera.GetProjection() * glm::inverse(transform);
-	s_RendererData.m_CameraBuffer.OrtoProjection = camera.GetOrtoProjection();
-  s_RendererData.m_CameraBuffer.NonRotViewProjection = camera.GetNonRotationViewProjection();
-  s_RendererData.m_CameraBuffer.CameraPos = camera.GetPosition();
-	s_RendererData.m_CameraUniformBuffer->SetData(&s_RendererData.m_CameraBuffer, sizeof(CameraData));
+	s_Data.m_CameraBuffer.ViewProjection = camera.GetProjection() * glm::inverse(transform);
+	s_Data.m_CameraBuffer.OrtoProjection = camera.GetOrtoProjection();
+  s_Data.m_CameraBuffer.NonRotViewProjection = camera.GetNonRotationViewProjection();
+  s_Data.m_CameraBuffer.CameraPos = camera.GetPosition();
+	s_Data.m_CameraUniformBuffer->SetData(&s_Data.m_CameraBuffer, sizeof(CameraData));
 
 	StartBatch();
 }
 
 void Renderer::BeginScene(const Camera& camera)
 {
-	s_RendererData.m_CameraBuffer.ViewProjection = camera.GetViewProjection();
-	s_RendererData.m_CameraBuffer.OrtoProjection = camera.GetOrtoProjection();
-  s_RendererData.m_CameraBuffer.NonRotViewProjection = camera.GetNonRotationViewProjection();
-  s_RendererData.m_CameraBuffer.CameraPos = camera.GetPosition();
-	s_RendererData.m_CameraUniformBuffer->SetData(&s_RendererData.m_CameraBuffer, sizeof(CameraData));
+	s_Data.m_CameraBuffer.ViewProjection = camera.GetViewProjection();
+	s_Data.m_CameraBuffer.OrtoProjection = camera.GetOrtoProjection();
+  s_Data.m_CameraBuffer.NonRotViewProjection = camera.GetNonRotationViewProjection();
+  s_Data.m_CameraBuffer.CameraPos = camera.GetPosition();
+	s_Data.m_CameraUniformBuffer->SetData(&s_Data.m_CameraBuffer, sizeof(CameraData));
 
 	StartBatch();
 }
 
 void Renderer::Flush()
 {
-	if (s_RendererData._3DQuadIndexCount)
+	if (s_Data._3DQuadIndexCount)
 	{
-		uint32_t dataSize = (uint32_t)((uint8_t*)s_RendererData._3DQuadVertexBufferPtr - (uint8_t*)s_RendererData._3DQuadVertexBufferBase);
-		s_RendererData._3DQuadVertexBuffer->SetData(s_RendererData._3DQuadVertexBufferBase, dataSize);
+		uint32_t dataSize = (uint32_t)((uint8_t*)s_Data._3DQuadVertexBufferPtr - (uint8_t*)s_Data._3DQuadVertexBufferBase);
+		s_Data._3DQuadVertexBuffer->SetData(s_Data._3DQuadVertexBufferBase, dataSize);
 
-		for (uint32_t i = 0; i < s_RendererData._3DTextureSlotIndex; i++)
-			s_RendererData._3DTextureSlots[i]->Bind(i);
+		for (uint32_t i = 0; i < s_Data._3DTextureSlotIndex; i++)
+			s_Data._3DTextureSlots[i]->Bind(i);
 
-		s_RendererData._shaders._3DQuadShader->Use();
-		Renderer::DrawIndexed(s_RendererData._3DQuadVertexArray, s_RendererData._3DQuadIndexCount);
-		s_RendererData._2DStats.DrawCalls++;
+		s_Data._shaders._3DQuadShader->Use();
+		Renderer::DrawIndexed(s_Data._3DQuadVertexArray, s_Data._3DQuadIndexCount);
 	}
-	if (s_RendererData._2DQuadIndexCount)
+	if (s_Data._2DQuadIndexCount)
 	{
-		uint32_t dataSize = (uint32_t)((uint8_t*)s_RendererData._2DQuadVertexBufferPtr - (uint8_t*)s_RendererData._2DQuadVertexBufferBase);
-		s_RendererData._2DQuadVertexBuffer->SetData(s_RendererData._2DQuadVertexBufferBase, dataSize);
+		uint32_t dataSize = (uint32_t)((uint8_t*)s_Data._2DQuadVertexBufferPtr - (uint8_t*)s_Data._2DQuadVertexBufferBase);
+		s_Data._2DQuadVertexBuffer->SetData(s_Data._2DQuadVertexBufferBase, dataSize);
 
-		for (uint32_t i = 0; i < s_RendererData._2DTextureSlotIndex; i++)
-			s_RendererData._2DTextureSlots[i]->Bind(i);
+		for (uint32_t i = 0; i < s_Data._2DTextureSlotIndex; i++)
+			s_Data._2DTextureSlots[i]->Bind(i);
 
-		s_RendererData._shaders._2DQuadShader->Use();
-		Renderer::DrawIndexed(s_RendererData._2DQuadVertexArray, s_RendererData._2DQuadIndexCount);
-		s_RendererData._2DStats.DrawCalls++;
+		s_Data._shaders._2DQuadShader->Use();
+		Renderer::DrawIndexed(s_Data._2DQuadVertexArray, s_Data._2DQuadIndexCount);
 	}
-	if (s_RendererData.CircleIndexCount)
+	if (s_Data.CircleIndexCount)
 	{
-		uint32_t dataSize = (uint32_t)((uint8_t*)s_RendererData.CircleVertexBufferPtr - (uint8_t*)s_RendererData.CircleVertexBufferBase);
-		s_RendererData.CircleVertexBuffer->SetData(s_RendererData.CircleVertexBufferBase, dataSize);
+		uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.CircleVertexBufferPtr - (uint8_t*)s_Data.CircleVertexBufferBase);
+		s_Data.CircleVertexBuffer->SetData(s_Data.CircleVertexBufferBase, dataSize);
 
-		s_RendererData._shaders._CircleShader->Use();
-		Renderer::DrawIndexed(s_RendererData.CircleVertexArray, s_RendererData.CircleIndexCount);
-		s_RendererData._2DStats.DrawCalls++;
+		s_Data._shaders._CircleShader->Use();
+		Renderer::DrawIndexed(s_Data.CircleVertexArray, s_Data.CircleIndexCount);
 	}
-	if (s_RendererData.LineVertexCount)
+	if (s_Data.LineVertexCount)
 	{
-		uint32_t dataSize = (uint32_t)((uint8_t*)s_RendererData.LineVertexBufferPtr - (uint8_t*)s_RendererData.LineVertexBufferBase);
-		s_RendererData.LineVertexBuffer->SetData(s_RendererData.LineVertexBufferBase, dataSize);
+		uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.LineVertexBufferPtr - (uint8_t*)s_Data.LineVertexBufferBase);
+		s_Data.LineVertexBuffer->SetData(s_Data.LineVertexBufferBase, dataSize);
 
-		s_RendererData._shaders._LineShader->Use();
-		Renderer::SetLineWidth(s_RendererData.LineWidth);
-		Renderer::DrawLines(s_RendererData.LineVertexArray, s_RendererData.LineVertexCount);
-		s_RendererData._2DStats.DrawCalls++;
+		s_Data._shaders._LineShader->Use();
+		Renderer::SetLineWidth(s_Data.LineWidth);
+		Renderer::DrawLines(s_Data.LineVertexArray, s_Data.LineVertexCount);
 	}
-  if (s_RendererData.CubeIndexCount) 
+  if (s_Data.CubeIndexCount) 
   {
-    uint32_t dataSize = (uint32_t)((uint8_t*)s_RendererData.CubeVertexBufferPtr - (uint8_t*)s_RendererData.CubeVertexBufferBase);
-    s_RendererData.CubeVertexBuffer->SetData(s_RendererData.CubeVertexBufferBase, dataSize);
+    uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.CubeVertexBufferPtr - (uint8_t*)s_Data.CubeVertexBufferBase);
+    s_Data.CubeVertexBuffer->SetData(s_Data.CubeVertexBufferBase, dataSize);
 
-    s_RendererData._shaders.modelShader->Use();
-    s_RendererData.CubeVertexArray->Bind();
+    s_Data._shaders.modelShader->Use();
+    s_Data.CubeVertexArray->Bind();
 
-    Renderer::DrawIndexed(s_RendererData.CubeVertexArray, s_RendererData.CubeIndexCount);
-
-    s_RendererData._3DStats.DrawCalls++;
+    Renderer::DrawIndexed(s_Data.CubeVertexArray, s_Data.CubeIndexCount);
   }
 }
 
@@ -684,23 +724,21 @@ void Renderer::Draw3DQuad(const glm::mat4& transform, const glm::vec4& color, in
 	constexpr glm::vec2 textureCoords[] = { { 0.0f, 0.0f }, { 1.0f, 0.0f }, { 1.0f, 1.0f }, { 0.0f, 1.0f } };
 	const float tilingFactor = 1.0f;
 
-	if (s_RendererData._3DQuadIndexCount >= RendererData::MaxIndices)
+	if (s_Data._3DQuadIndexCount >= RendererData::MaxIndices)
 		NextBatch();
 
 	for (size_t i = 0; i < quadVertexCount; i++)
 	{
-		s_RendererData._3DQuadVertexBufferPtr->Position = transform * s_RendererData._3DQuadVertexPositions[i];
-		s_RendererData._3DQuadVertexBufferPtr->Color = color;
-		s_RendererData._3DQuadVertexBufferPtr->TexCoord = textureCoords[i];
-		s_RendererData._3DQuadVertexBufferPtr->TexIndex = textureIndex;
-		s_RendererData._3DQuadVertexBufferPtr->TilingFactor = tilingFactor;
-		s_RendererData._3DQuadVertexBufferPtr->EntityID = entityID;
-		s_RendererData._3DQuadVertexBufferPtr++;
+		s_Data._3DQuadVertexBufferPtr->Position = transform * s_Data._3DQuadVertexPositions[i];
+		s_Data._3DQuadVertexBufferPtr->Color = color;
+		s_Data._3DQuadVertexBufferPtr->TexCoord = textureCoords[i];
+		s_Data._3DQuadVertexBufferPtr->TexIndex = textureIndex;
+		s_Data._3DQuadVertexBufferPtr->TilingFactor = tilingFactor;
+		s_Data._3DQuadVertexBufferPtr->EntityID = entityID;
+		s_Data._3DQuadVertexBufferPtr++;
 	}
 
-	s_RendererData._3DQuadIndexCount += 6;
-
-	s_RendererData._2DStats.QuadCount++;
+	s_Data._3DQuadIndexCount += 6;
 }
 
 void Renderer::Draw3DQuad(const glm::vec3& position, const glm::vec2& size, float rotation, const std::shared_ptr<Texture>& texture, float tilingFactor, const glm::vec4& tintColor)
@@ -717,13 +755,13 @@ void Renderer::Draw3DQuad(const glm::mat4& transform, const std::shared_ptr<Text
 	constexpr size_t quadVertexCount = 4;
 	constexpr glm::vec2 textureCoords[] = { { 0.0f, 0.0f }, { 1.0f, 0.0f }, { 1.0f, 1.0f }, { 0.0f, 1.0f } };
 
-	if (s_RendererData._3DQuadIndexCount >= RendererData::MaxIndices)
+	if (s_Data._3DQuadIndexCount >= RendererData::MaxIndices)
 		NextBatch();
 
 	float textureIndex = 0.0f;
-	for (uint32_t i = 1; i < s_RendererData._3DTextureSlotIndex; i++)
+	for (uint32_t i = 1; i < s_Data._3DTextureSlotIndex; i++)
 	{
-		if (*s_RendererData._3DTextureSlots[i] == *texture)
+		if (*s_Data._3DTextureSlots[i] == *texture)
 		{
 			textureIndex = (float)i;
 			break;
@@ -732,28 +770,26 @@ void Renderer::Draw3DQuad(const glm::mat4& transform, const std::shared_ptr<Text
 
 	if (textureIndex == 0.0f)
 	{
-		if (s_RendererData._3DTextureSlotIndex >= RendererData::MaxTextureSlots)
+		if (s_Data._3DTextureSlotIndex >= RendererData::MaxTextureSlots)
 			NextBatch();
 
-		textureIndex = (float)s_RendererData._3DTextureSlotIndex;
-		s_RendererData._3DTextureSlots[s_RendererData._3DTextureSlotIndex] = texture;
-		s_RendererData._3DTextureSlotIndex++;
+		textureIndex = (float)s_Data._3DTextureSlotIndex;
+		s_Data._3DTextureSlots[s_Data._3DTextureSlotIndex] = texture;
+		s_Data._3DTextureSlotIndex++;
 	}
 
 	for (size_t i = 0; i < quadVertexCount; i++)
 	{
-		s_RendererData._3DQuadVertexBufferPtr->Position = transform * s_RendererData._3DQuadVertexPositions[i];
-		s_RendererData._3DQuadVertexBufferPtr->Color = tintColor;
-		s_RendererData._3DQuadVertexBufferPtr->TexCoord = textureCoords[i];
-		s_RendererData._3DQuadVertexBufferPtr->TexIndex = textureIndex;
-		s_RendererData._3DQuadVertexBufferPtr->TilingFactor = tilingFactor;
-		s_RendererData._3DQuadVertexBufferPtr->EntityID = entityID;
-		s_RendererData._3DQuadVertexBufferPtr++;
+		s_Data._3DQuadVertexBufferPtr->Position = transform * s_Data._3DQuadVertexPositions[i];
+		s_Data._3DQuadVertexBufferPtr->Color = tintColor;
+		s_Data._3DQuadVertexBufferPtr->TexCoord = textureCoords[i];
+		s_Data._3DQuadVertexBufferPtr->TexIndex = textureIndex;
+		s_Data._3DQuadVertexBufferPtr->TilingFactor = tilingFactor;
+		s_Data._3DQuadVertexBufferPtr->EntityID = entityID;
+		s_Data._3DQuadVertexBufferPtr++;
 	}
 
-	s_RendererData._3DQuadIndexCount += 6;
-
-	s_RendererData._2DStats.QuadCount++;
+	s_Data._3DQuadIndexCount += 6;
 }
 
 void Renderer::Draw3DCircle(const glm::mat4& transform, const glm::vec4& color, float thickness /*= 1.0f*/, float fade /*= 0.005f*/, int entityID /*= -1*/)
@@ -764,33 +800,31 @@ void Renderer::Draw3DCircle(const glm::mat4& transform, const glm::vec4& color, 
 
 	for (size_t i = 0; i < 4; i++)
 	{
-		s_RendererData.CircleVertexBufferPtr->WorldPosition = transform * s_RendererData._3DQuadVertexPositions[i];
-		s_RendererData.CircleVertexBufferPtr->LocalPosition = s_RendererData._3DQuadVertexPositions[i] * 2.0f;
-		s_RendererData.CircleVertexBufferPtr->Color = color;
-		s_RendererData.CircleVertexBufferPtr->Thickness = thickness;
-		s_RendererData.CircleVertexBufferPtr->Fade = fade;
-		s_RendererData.CircleVertexBufferPtr->EntityID = entityID;
-		s_RendererData.CircleVertexBufferPtr++;
+		s_Data.CircleVertexBufferPtr->WorldPosition = transform * s_Data._3DQuadVertexPositions[i];
+		s_Data.CircleVertexBufferPtr->LocalPosition = s_Data._3DQuadVertexPositions[i] * 2.0f;
+		s_Data.CircleVertexBufferPtr->Color = color;
+		s_Data.CircleVertexBufferPtr->Thickness = thickness;
+		s_Data.CircleVertexBufferPtr->Fade = fade;
+		s_Data.CircleVertexBufferPtr->EntityID = entityID;
+		s_Data.CircleVertexBufferPtr++;
 	}
 
-	s_RendererData.CircleIndexCount += 6;
-
-	s_RendererData._2DStats.QuadCount++;
+	s_Data.CircleIndexCount += 6;
 }
 
 void Renderer::DrawLine(const glm::vec3& p0, const glm::vec3& p1, const glm::vec4& color, int entityID)
 {
-	s_RendererData.LineVertexBufferPtr->Position = p0;
-	s_RendererData.LineVertexBufferPtr->Color = color;
-	s_RendererData.LineVertexBufferPtr->EntityID = entityID;
-	s_RendererData.LineVertexBufferPtr++;
+	s_Data.LineVertexBufferPtr->Position = p0;
+	s_Data.LineVertexBufferPtr->Color = color;
+	s_Data.LineVertexBufferPtr->EntityID = entityID;
+	s_Data.LineVertexBufferPtr++;
 
-	s_RendererData.LineVertexBufferPtr->Position = p1;
-	s_RendererData.LineVertexBufferPtr->Color = color;
-	s_RendererData.LineVertexBufferPtr->EntityID = entityID;
-	s_RendererData.LineVertexBufferPtr++;
+	s_Data.LineVertexBufferPtr->Position = p1;
+	s_Data.LineVertexBufferPtr->Color = color;
+	s_Data.LineVertexBufferPtr->EntityID = entityID;
+	s_Data.LineVertexBufferPtr++;
 
-	s_RendererData.LineVertexCount += 2;
+	s_Data.LineVertexCount += 2;
 }
 
 void Renderer::Draw3DRect(const glm::vec3& position, const glm::vec2& size, const glm::vec4& color, int entityID)
@@ -809,7 +843,7 @@ void Renderer::Draw3DRect(const glm::vec3& position, const glm::vec2& size, cons
 void Renderer::Draw3DRect(const glm::mat4& transform, const glm::vec4& color, int entityID)
 {
 	glm::vec3 lineVertices[4];
-	for (size_t i = 0; i < 4; i++) lineVertices[i] = transform * s_RendererData._3DQuadVertexPositions[i];
+	for (size_t i = 0; i < 4; i++) lineVertices[i] = transform * s_Data._3DQuadVertexPositions[i];
 
 	DrawLine(lineVertices[0], lineVertices[1], color, entityID);
 	DrawLine(lineVertices[1], lineVertices[2], color, entityID);
@@ -833,22 +867,20 @@ void Renderer::Draw2DQuad(const glm::mat4& transform, const glm::vec4& color, in
 	constexpr glm::vec2 textureCoords[] = { { 0.0f, 0.0f }, { 1.0f, 0.0f }, { 1.0f, 1.0f }, { 0.0f, 1.0f } };
 	const float tilingFactor = 1.0f;
 
-	if (s_RendererData._2DQuadIndexCount >= RendererData::MaxIndices) NextBatch();
+	if (s_Data._2DQuadIndexCount >= RendererData::MaxIndices) NextBatch();
 
 	for (size_t i = 0; i < quadVertexCount; i++)
 	{
-		s_RendererData._2DQuadVertexBufferPtr->Position = transform * s_RendererData._3DQuadVertexPositions[i];
-		s_RendererData._2DQuadVertexBufferPtr->Color = color;
-		s_RendererData._2DQuadVertexBufferPtr->TexCoord = textureCoords[i];
-		s_RendererData._2DQuadVertexBufferPtr->TexIndex = textureIndex;
-		s_RendererData._2DQuadVertexBufferPtr->TilingFactor = tilingFactor;
-		s_RendererData._2DQuadVertexBufferPtr->EntityID = entityID;
-		s_RendererData._2DQuadVertexBufferPtr++;
+		s_Data._2DQuadVertexBufferPtr->Position = transform * s_Data._3DQuadVertexPositions[i];
+		s_Data._2DQuadVertexBufferPtr->Color = color;
+		s_Data._2DQuadVertexBufferPtr->TexCoord = textureCoords[i];
+		s_Data._2DQuadVertexBufferPtr->TexIndex = textureIndex;
+		s_Data._2DQuadVertexBufferPtr->TilingFactor = tilingFactor;
+		s_Data._2DQuadVertexBufferPtr->EntityID = entityID;
+		s_Data._2DQuadVertexBufferPtr++;
 	}
 
-	s_RendererData._2DQuadIndexCount += 6;
-
-	s_RendererData._2DStats.QuadCount++;
+	s_Data._2DQuadIndexCount += 6;
 }
 
 void Renderer::Draw2DQuad(const glm::vec2& position, const glm::vec2& size, float rotation, const std::shared_ptr<Texture>& texture, float tilingFactor, const glm::vec4& tintColor)
@@ -865,12 +897,12 @@ void Renderer::Draw2DQuad(const glm::mat4& transform, const std::shared_ptr<Text
 	constexpr size_t quadVertexCount = 4;
 	constexpr glm::vec2 textureCoords[] = { { 0.0f, 0.0f }, { 1.0f, 0.0f }, { 1.0f, 1.0f }, { 0.0f, 1.0f } };
 
-	if (s_RendererData._2DQuadIndexCount >= RendererData::MaxIndices) NextBatch();
+	if (s_Data._2DQuadIndexCount >= RendererData::MaxIndices) NextBatch();
 
 	float textureIndex = 0.0f;
-	for (uint32_t i = 1; i < s_RendererData._2DTextureSlotIndex; i++)
+	for (uint32_t i = 1; i < s_Data._2DTextureSlotIndex; i++)
 	{
-		if (*s_RendererData._2DTextureSlots[i] == *texture)
+		if (*s_Data._2DTextureSlots[i] == *texture)
 		{
 			textureIndex = (float)i;
 			break;
@@ -879,27 +911,25 @@ void Renderer::Draw2DQuad(const glm::mat4& transform, const std::shared_ptr<Text
 
 	if (textureIndex == 0.0f)
 	{
-		if (s_RendererData._2DTextureSlotIndex >= RendererData::MaxTextureSlots) NextBatch();
+		if (s_Data._2DTextureSlotIndex >= RendererData::MaxTextureSlots) NextBatch();
 
-		textureIndex = (float)s_RendererData._2DTextureSlotIndex;
-		s_RendererData._2DTextureSlots[s_RendererData._2DTextureSlotIndex] = texture;
-		s_RendererData._2DTextureSlotIndex++;
+		textureIndex = (float)s_Data._2DTextureSlotIndex;
+		s_Data._2DTextureSlots[s_Data._2DTextureSlotIndex] = texture;
+		s_Data._2DTextureSlotIndex++;
 	}
 
 	for (size_t i = 0; i < quadVertexCount; i++)
 	{
-		s_RendererData._2DQuadVertexBufferPtr->Position = transform * s_RendererData._3DQuadVertexPositions[i];
-		s_RendererData._2DQuadVertexBufferPtr->Color = tintColor;
-		s_RendererData._2DQuadVertexBufferPtr->TexCoord = textureCoords[i];
-		s_RendererData._2DQuadVertexBufferPtr->TexIndex = textureIndex;
-		s_RendererData._2DQuadVertexBufferPtr->TilingFactor = tilingFactor;
-		s_RendererData._2DQuadVertexBufferPtr->EntityID = entityID;
-		s_RendererData._2DQuadVertexBufferPtr++;
+		s_Data._2DQuadVertexBufferPtr->Position = transform * s_Data._3DQuadVertexPositions[i];
+		s_Data._2DQuadVertexBufferPtr->Color = tintColor;
+		s_Data._2DQuadVertexBufferPtr->TexCoord = textureCoords[i];
+		s_Data._2DQuadVertexBufferPtr->TexIndex = textureIndex;
+		s_Data._2DQuadVertexBufferPtr->TilingFactor = tilingFactor;
+		s_Data._2DQuadVertexBufferPtr->EntityID = entityID;
+		s_Data._2DQuadVertexBufferPtr++;
 	}
 
-	s_RendererData._2DQuadIndexCount += 6;
-
-	s_RendererData._2DStats.QuadCount++;
+	s_Data._2DQuadIndexCount += 6;
 }
 
 void Renderer::Draw2DCircle(const glm::mat4& transform, const glm::vec4& color, float thickness /*= 1.0f*/, float fade /*= 0.005f*/, int entityID /*= -1*/)
@@ -910,18 +940,16 @@ void Renderer::Draw2DCircle(const glm::mat4& transform, const glm::vec4& color, 
 
 	for (size_t i = 0; i < 4; i++)
 	{
-		s_RendererData.CircleVertexBufferPtr->WorldPosition = transform * s_RendererData._3DQuadVertexPositions[i];
-		s_RendererData.CircleVertexBufferPtr->LocalPosition = s_RendererData._3DQuadVertexPositions[i] * 2.0f;
-		s_RendererData.CircleVertexBufferPtr->Color = color;
-		s_RendererData.CircleVertexBufferPtr->Thickness = thickness;
-		s_RendererData.CircleVertexBufferPtr->Fade = fade;
-		s_RendererData.CircleVertexBufferPtr->EntityID = entityID;
-		s_RendererData.CircleVertexBufferPtr++;
+		s_Data.CircleVertexBufferPtr->WorldPosition = transform * s_Data._3DQuadVertexPositions[i];
+		s_Data.CircleVertexBufferPtr->LocalPosition = s_Data._3DQuadVertexPositions[i] * 2.0f;
+		s_Data.CircleVertexBufferPtr->Color = color;
+		s_Data.CircleVertexBufferPtr->Thickness = thickness;
+		s_Data.CircleVertexBufferPtr->Fade = fade;
+		s_Data.CircleVertexBufferPtr->EntityID = entityID;
+		s_Data.CircleVertexBufferPtr++;
 	}
 
-	s_RendererData.CircleIndexCount += 6;
-
-	s_RendererData._2DStats.QuadCount++;
+	s_Data.CircleIndexCount += 6;
 }
 
 void Renderer::Draw2DRect(const glm::vec2& position, const glm::vec2& size, float rotation, const glm::vec4& color, int entityID)
@@ -937,7 +965,7 @@ void Renderer::Draw2DRect(const glm::mat4& transform, const glm::vec4& color, in
 {
 	glm::vec3 lineVertices[4];
 	for (size_t i = 0; i < 4; i++)
-		lineVertices[i] = transform * s_RendererData._3DQuadVertexPositions[i];
+		lineVertices[i] = transform * s_Data._3DQuadVertexPositions[i];
 
 	DrawLine(lineVertices[0], lineVertices[1], color, entityID);
 	DrawLine(lineVertices[1], lineVertices[2], color, entityID);
@@ -955,7 +983,7 @@ void Renderer::DrawCube(const Transform& transform, int entityID)
     glCullFace(GL_FRONT);
     glFrontFace(GL_CCW); // Only cubes use counter-clockwise winding
 
-    if (s_RendererData.CubeIndexCount >= RendererData::MaxIndices)
+    if (s_Data.CubeIndexCount >= RendererData::MaxIndices)
         NextBatch(); // Flush batch if full
 
     glm::mat4 model = transform.GetTransform();
@@ -963,19 +991,18 @@ void Renderer::DrawCube(const Transform& transform, int entityID)
 
     for (int i = 0; i < 8; i++)
     {
-        MeshVertex vertex = s_RendererData.cubeVertices[i];
+        MeshVertex vertex = s_Data.cubeVertices[i];
 
         glm::vec4 transformedPos = model * glm::vec4(vertex.Position, 1.0f);
         vertex.Position = glm::vec3(transformedPos);
         vertex.Normal = glm::normalize(normalMatrix * vertex.Normal);
-        vertex.EntityID = entityID;
 
-        *s_RendererData.CubeVertexBufferPtr = vertex;
-        s_RendererData.CubeVertexBufferPtr++;
+        *s_Data.CubeVertexBufferPtr = vertex;
+        s_Data.CubeVertexBufferPtr++;
     }
 
-    s_RendererData.CubeVertexCount += 8;
-    s_RendererData.CubeIndexCount += 36;
+    s_Data.CubeVertexCount += 8;
+    s_Data.CubeIndexCount += 36;
 
     // Restore the previous front face winding
     glFrontFace(prevFrontFace);
@@ -1019,8 +1046,8 @@ void Renderer::DrawCubeContour(const glm::vec3& position, const glm::vec3& size,
 
 void Renderer::DrawFramebuffer(uint32_t textureID)
 {
-  s_RendererData._shaders._FramebufferShader->Use();
-  s_RendererData._shaders._FramebufferShader->setInt("u_Texture", 0);
+  s_Data._shaders._FramebufferShader->Use();
+  s_Data._shaders._FramebufferShader->setInt("u_Texture", 0);
 
   static uint32_t quadVAO = 0, quadVBO = 0;
   if (quadVAO == 0)
@@ -1055,7 +1082,7 @@ void Renderer::DrawFramebuffer(uint32_t textureID)
 }
 
 
-void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, const glm::vec3& position, const glm::vec3& size, const glm::vec3& rotation)
+void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::vec3& position, const glm::vec3& size, const glm::vec3& rotation)
 {
   if(model == nullptr)
   {
@@ -1071,10 +1098,10 @@ void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, con
 
   transform = glm::scale(transform, size);
 
-  DrawModel(dt, model, transform);
+  DrawModel(model, transform);
 }
 
-void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, const std::shared_ptr<Model>& convex, const glm::vec3& position, const glm::vec3& size, const glm::vec3& rotation)
+void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_ptr<Model>& convex, const glm::vec3& position, const glm::vec3& size, const glm::vec3& rotation)
 {
   if(model == nullptr || convex == nullptr)
   {
@@ -1090,10 +1117,10 @@ void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, con
 
   transform = glm::scale(transform, size);
 
-  DrawModel(dt, model, convex, transform);
+  DrawModel(model, convex, transform);
 }
 
-void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, const glm::mat4& transform, int entityID)
+void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& transform, int entityID)
 {
   if(model == nullptr)
   {
@@ -1101,20 +1128,30 @@ void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, con
     return;
   }
 
-  s_RendererData._shaders.ModelShader->Use();
-  if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH) s_RendererData._shaders.ModelShader->setMat4("model", PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose()));
-  else if (model->GetPhysXMeshType() == MeshType::CONTROLLER) s_RendererData._shaders.ModelShader->setMat4("model", model->GetControllerTransform().GetTransform());
-  else if (model->GetPhysXMeshType() == MeshType::NONE) s_RendererData._shaders.ModelShader->setMat4("model", transform);
-  s_RendererData._shaders.ModelShader->setBool("isAnimated", model->IsAnimated());
-  s_RendererData._shaders.ModelShader->setBool("isInstanced", false);
+  if(s_Data.m_ShadowPass)
+  {
+    s_Data._shaders.PointShadowBufferShader->Use();
+    /*s_Data._shaders.PointShadowBufferShader->setMat4("gWVP", lightViewProjModel);*/
+    if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH) s_Data._shaders.PointShadowBufferShader->setMat4("model", PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose()));
+    else if (model->GetPhysXMeshType() == MeshType::CONTROLLER) s_Data._shaders.PointShadowBufferShader->setMat4("model", model->GetControllerTransform().GetTransform());
+    else if (model->GetPhysXMeshType() == MeshType::NONE) s_Data._shaders.PointShadowBufferShader->setMat4("model", transform);
+  }
+  else
+  {
+    s_Data._shaders.ModelShader->Use();
+    if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH) s_Data._shaders.ModelShader->setMat4("model", PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose()));
+    else if (model->GetPhysXMeshType() == MeshType::CONTROLLER) s_Data._shaders.ModelShader->setMat4("model", model->GetControllerTransform().GetTransform());
+    else if (model->GetPhysXMeshType() == MeshType::NONE) s_Data._shaders.ModelShader->setMat4("model", transform);
+    s_Data._shaders.ModelShader->setBool("isAnimated", model->IsAnimated());
+    s_Data._shaders.ModelShader->setBool("isInstanced", false);
+  }
 
   if(model->IsAnimated())
   {
     auto& transforms = model->GetFinalBoneMatrices();
     for (size_t i = 0; i < transforms.size(); ++i) {
-        s_RendererData._shaders.ModelShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+        s_Data._shaders.ModelShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
     }
-    model->UpdateAnimation(dt);
   }
 
   for (auto& mesh : model->GetMeshes())
@@ -1133,7 +1170,7 @@ void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, con
       glActiveTexture(GL_TEXTURE0 + i);
 
       std::string number = std::to_string(textureCounters[textures[i]->GetType()]++);
-      s_RendererData._shaders.ModelShader->setInt(textures[i]->GetType() + number, i);
+      s_Data._shaders.ModelShader->setInt(textures[i]->GetType() + number, i);
       glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
     }
     
@@ -1144,7 +1181,7 @@ void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, con
   }
 }
 
-void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, const std::shared_ptr<Model>& convex, const glm::mat4& transform, int entityID)
+void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_ptr<Model>& convex, const glm::mat4& transform, int entityID)
 {
   if(model == nullptr || convex == nullptr)
   {
@@ -1152,18 +1189,17 @@ void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, con
     return;
   }
 
-  s_RendererData._shaders.ModelShader->Use();
-  s_RendererData._shaders.ModelShader->setMat4("model", PhysX::PxMat44ToGlmMat4(convex->GetDynamicActor()->getGlobalPose()));
-  s_RendererData._shaders.ModelShader->setBool("isAnimated", model->IsAnimated());
-  s_RendererData._shaders.ModelShader->setBool("isInstanced", false);
+  s_Data._shaders.ModelShader->Use();
+  s_Data._shaders.ModelShader->setMat4("model", PhysX::PxMat44ToGlmMat4(convex->GetDynamicActor()->getGlobalPose()));
+  s_Data._shaders.ModelShader->setBool("isAnimated", model->IsAnimated());
+  s_Data._shaders.ModelShader->setBool("isInstanced", false);
 
   if(model->IsAnimated())
   {
     auto& transforms = model->GetFinalBoneMatrices();
     for (size_t i = 0; i < transforms.size(); ++i) {
-        s_RendererData._shaders.ModelShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+        s_Data._shaders.ModelShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
     }
-    model->UpdateAnimation(dt);
   }
 
   for (auto& mesh : model->GetMeshes())
@@ -1182,7 +1218,7 @@ void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, con
       glActiveTexture(GL_TEXTURE0 + i);
 
       std::string number = std::to_string(textureCounters[textures[i]->GetType()]++);
-      s_RendererData._shaders.ModelShader->setInt(textures[i]->GetType() + number, i);
+      s_Data._shaders.ModelShader->setInt(textures[i]->GetType() + number, i);
       glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
     }
     
@@ -1191,22 +1227,28 @@ void Renderer::DrawModel(DeltaTime& dt, const std::shared_ptr<Model>& model, con
     glBindVertexArray(0);
     glActiveTexture(GL_TEXTURE0);
   }
+
+  /*for (auto& mesh : convex->GetMeshes())*/
+  /*{*/
+  /*  glBindVertexArray(mesh.VAO);*/
+  /*  glDrawElements(GL_LINES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);*/
+  /*  glBindVertexArray(0);*/
+  /*}*/
 }
 
-void Renderer::DrawModelInstanced(DeltaTime& dt, const std::shared_ptr<Model>& model, const std::vector<Transform>& instances, int entityID)
+void Renderer::DrawModelInstanced(const std::shared_ptr<Model>& model, const std::vector<Transform>& instances, int entityID)
 {
-  s_RendererData._shaders.ModelShader->Use();
-  s_RendererData._shaders.ModelShader->setBool("isAnimated", model->IsAnimated());
-  s_RendererData._shaders.ModelShader->setBool("isInstanced", true);
+  s_Data._shaders.ModelShader->Use();
+  s_Data._shaders.ModelShader->setBool("isAnimated", model->IsAnimated());
+  s_Data._shaders.ModelShader->setBool("isInstanced", true);
 
   if (model->IsAnimated())
   {
       auto& transforms = model->GetFinalBoneMatrices();
       for (size_t i = 0; i < transforms.size(); ++i)
       {
-          s_RendererData._shaders.ModelShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+          s_Data._shaders.ModelShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
       }
-      model->UpdateAnimation(dt);
   }
 
   for (auto& mesh : model->GetMeshes())
@@ -1225,7 +1267,7 @@ void Renderer::DrawModelInstanced(DeltaTime& dt, const std::shared_ptr<Model>& m
       for (GLuint i = 0; i < textures.size(); i++) {
           glActiveTexture(GL_TEXTURE0 + i);
           std::string number = std::to_string(textureCounters[textures[i]->GetType()]++);
-          s_RendererData._shaders.ModelShader->setInt(textures[i]->GetType() + number, i);
+          s_Data._shaders.ModelShader->setInt(textures[i]->GetType() + number, i);
           glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
       }
 
@@ -1282,7 +1324,7 @@ void Renderer::BakeSkyboxTextures(const std::string& name, const std::shared_ptr
 
   glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 
-  s_RendererData.skyboxes[name] = std::move(cubemap);
+  s_Data.skyboxes[name] = std::move(cubemap);
   GABGL_WARN("Skybox uploading took {0} ms", timer.ElapsedMillis());
 }
 
@@ -1351,11 +1393,11 @@ void Renderer::DrawSkybox(const std::string& name)
 
   glDepthFunc(GL_LEQUAL); 
 
-  s_RendererData._shaders.skyboxShader->Use();
+  s_Data._shaders.skyboxShader->Use();
 
   glActiveTexture(GL_TEXTURE0);
-  auto it = s_RendererData.skyboxes.find(name);
-  if (it != s_RendererData.skyboxes.end())
+  auto it = s_Data.skyboxes.find(name);
+  if (it != s_Data.skyboxes.end())
   {
       glBindTexture(GL_TEXTURE_CUBE_MAP, it->second->GetRendererID());
   }
@@ -1371,244 +1413,183 @@ void Renderer::DrawSkybox(const std::string& name)
   glDepthFunc(GL_LESS); 
 }
 
-void Renderer::Draw3DText(const std::string& text, const glm::vec2& position, float size, const glm::vec4& color, int entityID)
+void Renderer::Draw3DText(const Font* font, const std::string& text, const glm::vec2& position, float size, const glm::vec4& color, int entityID)
 {
-    if (s_RendererData.Characters.empty()) return;
-
-    // --- Precompute total width and height for centering ---
-    float textWidth = 0.0f;
-    float maxBearingY = 0.0f;
-    float maxBelowBaseline = 0.0f;
-
-    for (char c : text)
-    {
-        auto it = s_RendererData.Characters.find(c);
-        if (it == s_RendererData.Characters.end())
-            continue;
-
-        const auto& ch = it->second;
-        textWidth += (ch.Advance >> 6) * size;
-
-        float bearingY = ch.Bearing.y * size;
-        float belowBaseline = (ch.Size.y - ch.Bearing.y) * size;
-
-        if (bearingY > maxBearingY) maxBearingY = bearingY;
-        if (belowBaseline > maxBelowBaseline) maxBelowBaseline = belowBaseline;
-    }
-
-    float totalHeight = maxBearingY + maxBelowBaseline;
-
-    // Center the starting position
-    float x = position.x - textWidth * 0.5f;
-    float y = position.y - totalHeight * 0.5f;
-
-    // --- Render characters ---
-    for (char c : text)
-    {
-        auto it = s_RendererData.Characters.find(c);
-        if (it == s_RendererData.Characters.end())
-            continue;
-
-        Character& ch = it->second;
-
-        if (s_RendererData._3DQuadIndexCount >= RendererData::MaxIndices)
-            NextBatch();
-
-        float xpos = x + ch.Bearing.x * size;
-        float ypos = y + (maxBearingY - ch.Bearing.y * size);  // Adjust Y using max bearing
-
-        float w = ch.Size.x * size;
-        float h = ch.Size.y * size;
-
-        glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(xpos, ypos, 0.0f)) *
-                              glm::scale(glm::mat4(1.0f), glm::vec3(w, h, 1.0f));
-
-        float textureIndex = 0.0f;
-        for (uint32_t i = 1; i < s_RendererData._3DTextureSlotIndex; i++) {
-            if (s_RendererData._3DTextureSlots[i]->GetRendererID() == ch.TextureID) {
-                textureIndex = (float)i;
-                break;
-            }
-        }
-
-        if (textureIndex == 0.0f) {
-            if (s_RendererData._3DTextureSlotIndex >= RendererData::MaxTextureSlots) NextBatch();
-
-            textureIndex = (float)s_RendererData._3DTextureSlotIndex;
-            s_RendererData._3DTextureSlots[s_RendererData._3DTextureSlotIndex++] = Texture::WrapExisting(ch.TextureID);
-        }
-
-        for (int i = 0; i < 4; i++) {
-            s_RendererData._3DQuadVertexBufferPtr->Position = transform * glm::vec4(s_RendererData.quadPositions[i], 1.0f);
-            s_RendererData._3DQuadVertexBufferPtr->Color = color;
-            s_RendererData._3DQuadVertexBufferPtr->TexCoord = s_RendererData.texCoords[i];
-            s_RendererData._3DQuadVertexBufferPtr->TexIndex = textureIndex;
-            s_RendererData._3DQuadVertexBufferPtr->TilingFactor = 1.0f;
-            s_RendererData._3DQuadVertexBufferPtr->EntityID = entityID;
-            s_RendererData._3DQuadVertexBufferPtr++;
-        }
-
-        s_RendererData._3DQuadIndexCount += 6;
-
-        x += (ch.Advance >> 6) * size;
-    }
-
-    s_RendererData._2DStats.QuadCount += (int)text.length();
-}
-
-void Renderer::Draw2DText(const std::string& text, const glm::vec2& position, float size, const glm::vec4& color, int entityID)
-{
-    if (s_RendererData.Characters.empty()) return;
-
-    // --- Precompute total width and height for centering ---
-    float textWidth = 0.0f;
-    float maxBearingY = 0.0f;
-    float maxBelowBaseline = 0.0f;
-
-    for (char c : text)
-    {
-        auto it = s_RendererData.Characters.find(c);
-        if (it == s_RendererData.Characters.end())
-            continue;
-
-        const auto& ch = it->second;
-        textWidth += (ch.Advance >> 6) * size;
-
-        float bearingY = ch.Bearing.y * size;
-        float belowBaseline = (ch.Size.y - ch.Bearing.y) * size;
-
-        if (bearingY > maxBearingY) maxBearingY = bearingY;
-        if (belowBaseline > maxBelowBaseline) maxBelowBaseline = belowBaseline;
-    }
-
-    float totalHeight = maxBearingY + maxBelowBaseline;
-
-    // Center the starting position
-    float x = position.x - textWidth * 0.5f;
-    float y = position.y - totalHeight * 0.5f;
-
-    // --- Render characters ---
-    for (char c : text)
-    {
-        auto it = s_RendererData.Characters.find(c);
-        if (it == s_RendererData.Characters.end())
-            continue;
-
-        Character& ch = it->second;
-
-        if (s_RendererData._2DQuadIndexCount >= RendererData::MaxIndices)
-            NextBatch();
-
-        float xpos = x + ch.Bearing.x * size;
-        float ypos = y + (maxBearingY - ch.Bearing.y * size);  // Adjust Y using max bearing
-
-        float w = ch.Size.x * size;
-        float h = ch.Size.y * size;
-
-        glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(xpos, ypos, 0.0f)) *
-                              glm::scale(glm::mat4(1.0f), glm::vec3(w, h, 1.0f));
-
-        float textureIndex = 0.0f;
-        for (uint32_t i = 1; i < s_RendererData._2DTextureSlotIndex; i++) {
-            if (s_RendererData._2DTextureSlots[i]->GetRendererID() == ch.TextureID) {
-                textureIndex = (float)i;
-                break;
-            }
-        }
-
-        if (textureIndex == 0.0f) {
-            if (s_RendererData._2DTextureSlotIndex >= RendererData::MaxTextureSlots) NextBatch();
-
-            textureIndex = (float)s_RendererData._2DTextureSlotIndex;
-            s_RendererData._2DTextureSlots[s_RendererData._2DTextureSlotIndex++] = Texture::WrapExisting(ch.TextureID);
-        }
-
-        for (int i = 0; i < 4; i++) {
-            s_RendererData._2DQuadVertexBufferPtr->Position = transform * glm::vec4(s_RendererData.quadPositions[i], 1.0f);
-            s_RendererData._2DQuadVertexBufferPtr->Color = color;
-            s_RendererData._2DQuadVertexBufferPtr->TexCoord = s_RendererData.texCoords[i];
-            s_RendererData._2DQuadVertexBufferPtr->TexIndex = textureIndex;
-            s_RendererData._2DQuadVertexBufferPtr->TilingFactor = 1.0f;
-            s_RendererData._2DQuadVertexBufferPtr->EntityID = entityID;
-            s_RendererData._2DQuadVertexBufferPtr++;
-        }
-
-        s_RendererData._2DQuadIndexCount += 6;
-
-        x += (ch.Advance >> 6) * size;
-    }
-
-    s_RendererData._2DStats.QuadCount += (int)text.length();
-}
-
-void Renderer::LoadFont(const std::string& path)
-{
-  Timer timer;
-
-  FT_Face face;
-  if (FT_New_Face(s_RendererData.ft, path.c_str(), 0, &face)) GABGL_ERROR("Failed to load font");
-  else
+  if (font->m_Characters.empty() || font == nullptr)
   {
-    FT_Set_Pixel_Sizes(face, 0, 48);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    GABGL_ERROR("Font is nullptr");
+    return;
+  }
 
-    for (unsigned char c = 0; c < 128; c++)
-    {
-      if (FT_Load_Char(face, c, FT_LOAD_RENDER)) { GABGL_ERROR("ERROR::FREETYPE: Failed to load Glyph"); continue; }
+  // --- Precompute total width and height for centering ---
+  float textWidth = 0.0f;
+  float maxBearingY = 0.0f;
+  float maxBelowBaseline = 0.0f;
 
-      GLuint texture;
-      glGenTextures(1, &texture);
-      glBindTexture(GL_TEXTURE_2D, texture);
-      glTexImage2D(GL_TEXTURE_2D,0,GL_RED,face->glyph->bitmap.width,face->glyph->bitmap.rows,0,GL_RED,GL_UNSIGNED_BYTE,face->glyph->bitmap.buffer);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  for (char c : text)
+  {
+      auto it = font->m_Characters.find(c);
+      if (it == font->m_Characters.end())
+          continue;
 
-      GLint swizzleMask[] = {GL_ONE, GL_ONE, GL_ONE, GL_RED};
-      glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
+      const auto& ch = it->second;
+      textWidth += (ch.Advance >> 6) * size;
 
-      Character character = {
-          texture,
-          { face->glyph->bitmap.width, face->glyph->bitmap.rows },
-          { face->glyph->bitmap_left, face->glyph->bitmap_top },
-          static_cast<uint32_t>(face->glyph->advance.x)
-      };
+      float bearingY = ch.Bearing.y * size;
+      float belowBaseline = (ch.Size.y - ch.Bearing.y) * size;
 
-      s_RendererData.Characters.insert({ c, character });
+      if (bearingY > maxBearingY) maxBearingY = bearingY;
+      if (belowBaseline > maxBelowBaseline) maxBelowBaseline = belowBaseline;
+  }
+
+  float totalHeight = maxBearingY + maxBelowBaseline;
+
+  // Center the starting position
+  float x = position.x - textWidth * 0.5f;
+  float y = position.y - totalHeight * 0.5f;
+
+  // --- Render characters ---
+  for (char c : text)
+  {
+      auto it = font->m_Characters.find(c);
+      if (it == font->m_Characters.end())
+          continue;
+
+      const Character& ch = it->second;
+
+      if (s_Data._3DQuadIndexCount >= RendererData::MaxIndices)
+          NextBatch();
+
+      float xpos = x + ch.Bearing.x * size;
+      float ypos = y + (maxBearingY - ch.Bearing.y * size);  // Adjust Y using max bearing
+
+      float w = ch.Size.x * size;
+      float h = ch.Size.y * size;
+
+      glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(xpos, ypos, 0.0f)) *
+                            glm::scale(glm::mat4(1.0f), glm::vec3(w, h, 1.0f));
+
+      float textureIndex = 0.0f;
+      for (uint32_t i = 1; i < s_Data._3DTextureSlotIndex; i++) {
+          if (s_Data._3DTextureSlots[i]->GetRendererID() == ch.TextureID) {
+              textureIndex = (float)i;
+              break;
+          }
+      }
+
+      if (textureIndex == 0.0f) {
+          if (s_Data._3DTextureSlotIndex >= RendererData::MaxTextureSlots) NextBatch();
+
+          textureIndex = (float)s_Data._3DTextureSlotIndex;
+          s_Data._3DTextureSlots[s_Data._3DTextureSlotIndex++] = Texture::WrapExisting(ch.TextureID);
+      }
+
+      for (int i = 0; i < 4; i++) {
+          s_Data._3DQuadVertexBufferPtr->Position = transform * glm::vec4(s_Data.quadPositions[i], 1.0f);
+          s_Data._3DQuadVertexBufferPtr->Color = color;
+          s_Data._3DQuadVertexBufferPtr->TexCoord = s_Data.texCoords[i];
+          s_Data._3DQuadVertexBufferPtr->TexIndex = textureIndex;
+          s_Data._3DQuadVertexBufferPtr->TilingFactor = 1.0f;
+          s_Data._3DQuadVertexBufferPtr->EntityID = entityID;
+          s_Data._3DQuadVertexBufferPtr++;
+      }
+
+      s_Data._3DQuadIndexCount += 6;
+
+      x += (ch.Advance >> 6) * size;
+  }
+}
+
+void Renderer::Draw2DText(const Font* font, const std::string& text, const glm::vec2& position, float size, const glm::vec4& color, int entityID)
+{
+	if (font->m_Characters.empty() || font == nullptr)
+	{
+		GABGL_ERROR("Font is nullptr");
+		return;
+	}
+
+  // --- Precompute total width and height for centering ---
+  float textWidth = 0.0f;
+  float maxBearingY = 0.0f;
+  float maxBelowBaseline = 0.0f;
+
+  for (char c : text)
+  {
+    auto it = font->m_Characters.find(c);
+    if (it == font->m_Characters.end())
+        continue;
+
+    const auto& ch = it->second;
+    textWidth += (ch.Advance >> 6) * size;
+
+    float bearingY = ch.Bearing.y * size;
+    float belowBaseline = (ch.Size.y - ch.Bearing.y) * size;
+
+    if (bearingY > maxBearingY) maxBearingY = bearingY;
+    if (belowBaseline > maxBelowBaseline) maxBelowBaseline = belowBaseline;
+  }
+
+  float totalHeight = maxBearingY + maxBelowBaseline;
+
+  // Center the starting position
+  float x = position.x - textWidth * 0.5f;
+  float y = position.y - totalHeight * 0.5f;
+
+  // --- Render characters ---
+  for (char c : text)
+  {
+    auto it = font->m_Characters.find(c);
+    if (it == font->m_Characters.end())
+        continue;
+
+    const Character& ch = it->second;
+
+    if (s_Data._2DQuadIndexCount >= RendererData::MaxIndices)
+        NextBatch();
+
+    float xpos = x + ch.Bearing.x * size;
+    float ypos = y + (maxBearingY - ch.Bearing.y * size);  // Adjust Y using max bearing
+
+    float w = ch.Size.x * size;
+    float h = ch.Size.y * size;
+
+    glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(xpos, ypos, 0.0f)) *
+                          glm::scale(glm::mat4(1.0f), glm::vec3(w, h, 1.0f));
+
+    float textureIndex = 0.0f;
+    for (uint32_t i = 1; i < s_Data._2DTextureSlotIndex; i++) {
+        if (s_Data._2DTextureSlots[i]->GetRendererID() == ch.TextureID) {
+            textureIndex = (float)i;
+            break;
+        }
     }
 
-    glBindTexture(GL_TEXTURE_2D, 0);
-    FT_Done_Face(face);
-    FT_Done_FreeType(s_RendererData.ft);
+    if (textureIndex == 0.0f) {
+        if (s_Data._2DTextureSlotIndex >= RendererData::MaxTextureSlots) NextBatch();
 
-    GABGL_WARN("Font uploading took {0} ms", timer.ElapsedMillis());
+        textureIndex = (float)s_Data._2DTextureSlotIndex;
+        s_Data._2DTextureSlots[s_Data._2DTextureSlotIndex++] = Texture::WrapExisting(ch.TextureID);
+    }
+
+    for (int i = 0; i < 4; i++) {
+        s_Data._2DQuadVertexBufferPtr->Position = transform * glm::vec4(s_Data.quadPositions[i], 1.0f);
+        s_Data._2DQuadVertexBufferPtr->Color = color;
+        s_Data._2DQuadVertexBufferPtr->TexCoord = s_Data.texCoords[i];
+        s_Data._2DQuadVertexBufferPtr->TexIndex = textureIndex;
+        s_Data._2DQuadVertexBufferPtr->TilingFactor = 1.0f;
+        s_Data._2DQuadVertexBufferPtr->EntityID = entityID;
+        s_Data._2DQuadVertexBufferPtr++;
+    }
+
+    s_Data._2DQuadIndexCount += 6;
+
+    x += (ch.Advance >> 6) * size;
   }
 }
 
 void Renderer::OnWindowResize(uint32_t width, uint32_t height)
 {
 	SetViewport(0, 0, width, height);
-}
-
-void Renderer::Submit3D(const std::shared_ptr<Shader>& shader, const std::shared_ptr<VertexArray>& vertexArray, const glm::mat4& transform)
-{
-	shader->Use();
-	shader->setMat4("u_ViewProjection", s_RendererData.m_CameraBuffer.ViewProjection);
-	shader->setMat4("u_Transform", transform);
-
-	vertexArray->Bind();
-	DrawIndexed(vertexArray);
-}
-
-void Renderer::Submit2D(const std::shared_ptr<Shader>& shader, const std::shared_ptr<VertexArray>& vertexArray, const glm::mat4& transform)
-{
-	shader->Use();
-	shader->setMat4("u_ViewProjection", s_RendererData.m_CameraBuffer.OrtoProjection);
-	shader->setMat4("u_Transform", transform);
-
-	vertexArray->Bind();
-	DrawIndexed(vertexArray);
 }
 
 void Renderer::SetViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height)
@@ -1656,23 +1637,7 @@ void Renderer::SetLineWidth(float width)
 
 float Renderer::GetLineWidth()
 {
-	return s_RendererData.LineWidth;
-}
-
-void Renderer::ResetStats()
-{
-	memset(&s_RendererData._2DStats, 0, sizeof(Statistics));
-	memset(&s_RendererData._3DStats, 0, sizeof(Statistics));
-}
-
-Renderer::Statistics Renderer::Get2DStats()
-{
-	return s_RendererData._2DStats;
-}
-
-Renderer::Statistics Renderer::Get3DStats()
-{
-	return s_RendererData._3DStats;
+	return s_Data.LineWidth;
 }
 
 uint32_t Renderer::GetActiveWidgetID()
@@ -1682,7 +1647,7 @@ uint32_t Renderer::GetActiveWidgetID()
 
 void Renderer::BlockEvents(bool block)
 { 
-  s_RendererData.m_BlockEvents = block;
+  s_Data.m_BlockEvents = block;
 }
 
 void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
@@ -1756,24 +1721,24 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 	auto viewportMinRegion = ImGui::GetWindowContentRegionMin();
 	auto viewportMaxRegion = ImGui::GetWindowContentRegionMax();
 	auto viewportOffset = ImGui::GetWindowPos();
-	s_RendererData.m_ViewportBounds[0] = { viewportMinRegion.x + viewportOffset.x, viewportMinRegion.y + viewportOffset.y };
-	s_RendererData.m_ViewportBounds[1] = { viewportMaxRegion.x + viewportOffset.x, viewportMaxRegion.y + viewportOffset.y };
+	s_Data.m_ViewportBounds[0] = { viewportMinRegion.x + viewportOffset.x, viewportMinRegion.y + viewportOffset.y };
+	s_Data.m_ViewportBounds[1] = { viewportMaxRegion.x + viewportOffset.x, viewportMaxRegion.y + viewportOffset.y };
 
-	s_RendererData.m_ViewportFocused = ImGui::IsWindowFocused();
-	s_RendererData.m_ViewportHovered = ImGui::IsWindowHovered();
+	s_Data.m_ViewportFocused = ImGui::IsWindowFocused();
+	s_Data.m_ViewportHovered = ImGui::IsWindowHovered();
 
-	BlockEvents(!s_RendererData.m_ViewportHovered);
+	BlockEvents(!s_Data.m_ViewportHovered);
 	ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
-	s_RendererData.m_ViewportSize = { viewportPanelSize.x, viewportPanelSize.y };
+	s_Data.m_ViewportSize = { viewportPanelSize.x, viewportPanelSize.y };
 
 	uint64_t textureID = static_cast<uint64_t>(framebufferTexture);
-	ImGui::Image(reinterpret_cast<void*>(textureID), ImVec2{ s_RendererData.m_ViewportSize.x, s_RendererData.m_ViewportSize.y }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
+	ImGui::Image(reinterpret_cast<void*>(textureID), ImVec2{ s_Data.m_ViewportSize.x, s_Data.m_ViewportSize.y }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
 
 	ImGui::End();
 	ImGui::PopStyleVar();
 
 	ImGui::End();
-	io.DisplaySize = ImVec2((float)s_RendererData.m_WindowRef->GetWidth(), (float)s_RendererData.m_WindowRef->GetHeight());
+	io.DisplaySize = ImVec2((float)s_Data.m_WindowRef->GetWidth(), (float)s_Data.m_WindowRef->GetHeight());
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
