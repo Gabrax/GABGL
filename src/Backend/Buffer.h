@@ -338,11 +338,9 @@ struct PointShadowBuffer
 
   void Bind() const;
   void UnBind() const;
-  void BindForWriting(GLenum CubeFace);
-  void BindForReading(GLenum Texture);
-  void Resize(int32_t newWidth, int32_t newHeight);
+  void BindForWriting(uint32_t cubemapIndex, uint32_t faceIndex);
+  void BindForReadingArray(GLenum TextureUnit);
 
-  inline uint32_t GetShadowMap() { return m_depthCubemap; }
   inline glm::mat4 GetLightProj() { return m_lightproj; }
 
 	static std::shared_ptr<PointShadowBuffer> Create(uint32_t shadowWidth, uint32_t shadowHeight);
@@ -353,9 +351,8 @@ private:
 
   uint32_t m_shadowWidth; 
   uint32_t m_shadowHeight;
-  /*std::shared_ptr<FrameBuffer> m_shadowFB;*/
+
   uint32_t m_fbo;
   uint32_t m_depth;
-  uint32_t m_depthCubemap;
   uint32_t m_depthCubemapArray;
 };

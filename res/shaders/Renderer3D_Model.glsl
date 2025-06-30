@@ -144,7 +144,7 @@ layout(std430, binding = 3) buffer LightTypes {
 uniform Material material;
 uniform Light light;
 
-uniform samplerCube u_ShadowMap;
+uniform samplerCubeArray u_ShadowMap;
 
 const float gamma = 2.2;
 
@@ -167,18 +167,20 @@ vec3 toneMappingACES(vec3 color) {
     return clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0, 1.0);
 }
 
-float calculatePointShadow(vec3 fragPos, vec3 lightPos)
+float calculatePointShadow(vec3 fragPos, vec3 lightPos, int lightIndex)
 {
     vec3 fragToLight = fragPos - lightPos;
     float currentDepth = length(fragToLight);
 
-    // fragToLight.y = -fragToLight.y;
+    // Normalize direction for sampling cubemap array
+    vec3 direction = normalize(fragToLight);
 
-    float closestDepth = texture(u_ShadowMap, fragToLight).r;
+    // Sample closest depth from cubemap array layer corresponding to this light
+    float closestDepth = texture(u_ShadowMap, vec4(direction, float(lightIndex))).r;
 
-    float bias = max(0.05 * (1.0 - dot(normalize(fs_in.Normal), normalize(fragToLight))), 0.005);
+    float bias = max(0.05 * (1.0 - dot(normalize(fs_in.Normal), direction)), 0.005);
 
-    float shadow = closestDepth + bias < currentDepth ? 0.0 : 1.0;
+    float shadow = currentDepth - bias > closestDepth ? 0.0 : 1.0;
 
     return shadow;
 }
@@ -198,7 +200,7 @@ vec3 calculateDirectionalLight(Light light, vec3 normal, vec3 viewDir, vec3 colo
     return ambient + diffuse + specular;
 }
 
-vec3 calculatePointLight(Light light, vec3 fragPos, vec3 normal, vec3 viewDir, vec3 color)
+vec3 calculatePointLight(Light light, vec3 fragPos, vec3 normal, vec3 viewDir, vec3 color, int lightIndex)
 {
     vec3 lightDir = normalize(light.position - fragPos);
     float diff = max(dot(normal, lightDir), 0.0);
@@ -209,8 +211,8 @@ vec3 calculatePointLight(Light light, vec3 fragPos, vec3 normal, vec3 viewDir, v
     float distance = length(light.position - fragPos);
     float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * (distance * distance));
 
-    // Shadow calculation — uses world-space positions
-    float shadow = calculatePointShadow(fragPos, light.position);
+    // Shadow calculation with cubemap array
+    float shadow = calculatePointShadow(fragPos, light.position, lightIndex);
 
     vec3 ambient = light.ambient * color * attenuation;
     vec3 diffuse = light.diffuse * diff * color * attenuation * shadow;
@@ -261,7 +263,7 @@ void main()
         currentLight.outerCutOff = cos(radians(17.5));
         
         if (lightTypes[i] == 0) { 
-            lighting += calculatePointLight(currentLight, fs_in.FragPos, normal, viewDir, color);
+            lighting += calculatePointLight(currentLight, fs_in.FragPos, normal, viewDir, color,i);
         } else if (lightTypes[i] == 1) { 
             lighting += calculateDirectionalLight(currentLight, normal, viewDir, color);
         } else if (lightTypes[i] == 2) { 

@@ -21,7 +21,7 @@ Camera::Camera(float fov, float aspectRatio, float nearClip, float farClip)
       m_AspectRatio(aspectRatio),
       m_PerspectiveNear(nearClip),
       m_PerspectiveFar(farClip),
-      m_Distance(10.0f),
+      m_Distance(100.0f),
       m_Pitch(0.0f),
       m_Yaw(0.0f)
 {
@@ -35,6 +35,36 @@ Camera::Camera(const glm::mat4& projection) : m_Projection(projection)
     UpdateView();
 };
 
+void Camera::SetMode(CameraMode mode)
+{
+  if (mode == m_Mode)
+      return;
+
+  if (mode == CameraMode::FPS && m_Mode == CameraMode::ORBITAL)
+  {
+      m_Position = CalculatePosition();  
+      UpdateCameraVectors();
+  }
+  else if (mode == CameraMode::ORBITAL && m_Mode == CameraMode::FPS)
+  {
+      glm::vec3 offset = m_Position;  
+
+      if (m_Distance > 0.001f)
+      {
+          m_Pitch = glm::degrees(asin(offset.y / m_Distance));
+          m_Yaw = glm::degrees(atan2(offset.z, offset.x));
+      }
+      else
+      {
+          m_Pitch = 0.0f;
+          m_Yaw = 0.0f;
+          m_Distance = 100.0f; // default
+      }
+      UpdateCameraVectors();
+  }
+
+  m_Mode = mode;
+}
 
 void Camera::UpdateProjection()
 {
@@ -46,7 +76,14 @@ void Camera::UpdateProjection()
 
 void Camera::UpdateView()
 {
-  m_ViewMatrix = glm::lookAt(m_Position, m_Position + m_Front, m_Up);
+  if (m_Mode == CameraMode::ORBITAL)
+  {
+      m_ViewMatrix = glm::lookAt(m_Position, m_FocalPoint, m_Up);
+  }
+  else
+  {
+      m_ViewMatrix = glm::lookAt(m_Position, m_Position + m_Front, m_Up);
+  }
 }
 
 std::pair<float, float> Camera::PanSpeed() const
@@ -76,28 +113,41 @@ float Camera::ZoomSpeed() const
 
 void Camera::OnUpdate(DeltaTime dt)
 {
-  glm::vec2 mouse{ Input::GetMouseX(), Input::GetMouseY() };
-  glm::vec2 delta = (mouse - m_InitialMousePosition) * 0.1f;
-  m_InitialMousePosition = mouse;
+    glm::vec2 mouse{ Input::GetMouseX(), Input::GetMouseY() };
+    glm::vec2 delta = (mouse - m_InitialMousePosition) * 0.1f;
+    m_InitialMousePosition = mouse;
 
-  MouseRotate(delta.x, -delta.y);
+    if (m_Mode == CameraMode::ORBITAL)
+    {
+        if (Input::IsMouseButtonPressed(Mouse::ButtonRight))
+        {
+            MouseRotate(delta.x, delta.y);
+        }
 
-  float velocity = m_MovementSpeed * dt;
+        m_Position = CalculatePosition();  // Update position around origin
+        UpdateView();
+    }
+    else // FPS mode
+    {
+        MouseRotate(delta.x, -delta.y);
 
-  if (Input::IsKeyPressed(Key::W))
-      m_Position += m_Front * velocity;
-  if (Input::IsKeyPressed(Key::S))
-      m_Position -= m_Front * velocity;
-  if (Input::IsKeyPressed(Key::A))
-      m_Position -= m_Right * velocity;
-  if (Input::IsKeyPressed(Key::D))
-      m_Position += m_Right * velocity;
-  if (Input::IsKeyPressed(Key::Space)) // Move up
-      m_Position += m_Up * velocity;
-  if (Input::IsKeyPressed(Key::LeftControl) || Input::IsKeyPressed(Key::RightControl)) // Move down
-      m_Position -= m_Up * velocity;
+        float velocity = m_MovementSpeed * dt;
 
-  UpdateView();
+        if (Input::IsKeyPressed(Key::W))
+            m_Position += m_Front * velocity;
+        if (Input::IsKeyPressed(Key::S))
+            m_Position -= m_Front * velocity;
+        if (Input::IsKeyPressed(Key::A))
+            m_Position -= m_Right * velocity;
+        if (Input::IsKeyPressed(Key::D))
+            m_Position += m_Right * velocity;
+        if (Input::IsKeyPressed(Key::Space))
+            m_Position += m_Up * velocity;
+        if (Input::IsKeyPressed(Key::LeftControl))
+            m_Position -= m_Up * velocity;
+
+        UpdateView();
+    }
 }
 
 void Camera::OnEvent(Event& e)
@@ -178,7 +228,12 @@ glm::vec3 Camera::GetForwardDirection() const
 
 glm::vec3 Camera::CalculatePosition() const
 {
-	return m_FocalPoint - GetForwardDirection() * m_Distance;
+  glm::vec3 direction;
+  direction.x = cos(glm::radians(m_Pitch)) * cos(glm::radians(m_Yaw));
+  direction.y = sin(glm::radians(m_Pitch));
+  direction.z = cos(glm::radians(m_Pitch)) * sin(glm::radians(m_Yaw));
+
+  return m_FocalPoint + direction * m_Distance;
 }
 
 glm::quat Camera::GetOrientation() const

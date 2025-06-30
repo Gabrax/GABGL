@@ -3,6 +3,7 @@
 #include <array>
 #include "BackendLogger.h"
 #include "Buffer.h"
+#include "Camera.h"
 #include "LightManager.h"
 #include "ModelManager.h"
 #include "Renderer.h"
@@ -212,9 +213,6 @@ struct RendererData
   std::shared_ptr<FrameBuffer> m_Framebuffer;
   std::shared_ptr<FrameBuffer> m_MSAAFramebuffer;
   std::shared_ptr<BloomBuffer> m_BloomFramebuffer;
-
-  std::vector<std::shared_ptr<PointShadowBuffer>> m_PointShadowFramebuffers;
-
   std::shared_ptr<PointShadowBuffer> m_PointShadowFramebuffer;
 
   Window* m_WindowRef = nullptr;
@@ -413,12 +411,7 @@ void Renderer::Init()
 
   s_Data.m_BloomFramebuffer = BloomBuffer::Create(s_Data._shaders.DownSampleShader, s_Data._shaders.UpSampleShader, s_Data._shaders.BloomResultShader);
 
-  s_Data.m_PointShadowFramebuffer = PointShadowBuffer::Create(4096, 4096);
-
-  for (int32_t i = 0; i < 1; ++i)
-  {
-    s_Data.m_PointShadowFramebuffers.emplace_back(PointShadowBuffer::Create(4096, 4096));
-  }
+  s_Data.m_PointShadowFramebuffer = PointShadowBuffer::Create(1024, 1024);
 
   s_Data.m_SceneState = RendererData::SceneState::Play;
 
@@ -496,20 +489,21 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
   glCullFace(GL_FRONT);
   glFrontFace(GL_CW);
 
+  s_Data.m_PointShadowFramebuffer->Bind();
   s_Data.m_ShadowPass = true;
   float max = std::numeric_limits<float>::max();
   SetClearColor({max,max,max,max});
 
   for (auto lightIndex : std::views::iota(0, LightManager::GetLightsSize()))
   {
-  s_Data.m_PointShadowFramebuffer->Bind();
     s_Data._shaders.PointShadowBufferShader->Use();
     glm::vec3 lightPosition = LightManager::GetLightPosition(lightIndex);
     s_Data._shaders.PointShadowBufferShader->setVec3("gLightWorldPos",lightPosition);
 
     for (uint32_t face = 0; face < 6; ++face)
     {
-      s_Data.m_PointShadowFramebuffer->BindForWriting(gCameraDirections[face].CubemapFace);
+      /*s_Data.m_PointShadowFramebuffer->BindForWriting(gCameraDirections[face].CubemapFace);*/
+      s_Data.m_PointShadowFramebuffer->BindForWriting(lightIndex, face);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
       glm::mat4 view = glm::lookAt(lightPosition,lightPosition + gCameraDirections[face].Target,gCameraDirections[face].Up);
@@ -517,16 +511,16 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
 
       geometry();
     }
-  s_Data.m_PointShadowFramebuffer->UnBind();
   }
   s_Data.m_ShadowPass = false;
+  s_Data.m_PointShadowFramebuffer->UnBind();
 
   s_Data.m_MSAAFramebuffer->Bind();
   SetClearColor(glm::vec4(0.0f));
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   s_Data._shaders.ModelShader->Use();
-  s_Data.m_PointShadowFramebuffer->BindForReading(GL_TEXTURE1);
+  s_Data.m_PointShadowFramebuffer->BindForReadingArray(GL_TEXTURE1);
   s_Data._shaders.ModelShader->setInt("u_ShadowMap",1);
   BeginScene(s_Data.m_Camera);
   geometry();
@@ -562,8 +556,16 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
   PhysX::Simulate(dt);
   AudioManager::UpdateAllMusic();
 
-  if (Input::IsKeyPressed(Key::E)) s_Data.m_SceneState = RendererData::SceneState::Edit;
-  if (Input::IsKeyPressed(Key::Q)) s_Data.m_SceneState = RendererData::SceneState::Play;
+  if (Input::IsKeyPressed(Key::E))
+  {
+    s_Data.m_Camera.SetMode(CameraMode::ORBITAL);
+    s_Data.m_SceneState = RendererData::SceneState::Edit;
+  }
+  if (Input::IsKeyPressed(Key::Q))
+  {
+    s_Data.m_Camera.SetMode(CameraMode::FPS);
+    s_Data.m_SceneState = RendererData::SceneState::Play;
+  }
 
   uint32_t finalTexture = s_Data.m_Framebuffer->GetColorAttachmentRendererID();
 
