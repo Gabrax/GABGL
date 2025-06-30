@@ -878,16 +878,16 @@ PointShadowBuffer::PointShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeight
   glGenTextures(1,&m_depth);
   glBindTexture(GL_TEXTURE_2D, m_depth);
   glTexImage2D(GL_TEXTURE_2D,0,GL_DEPTH_COMPONENT, m_shadowWidth, m_shadowHeight,0,GL_DEPTH_COMPONENT,GL_FLOAT,NULL);
-  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
   glBindTexture(GL_TEXTURE_2D,0);
 
   glGenTextures(1, &m_depthCubemap);
   glBindTexture(GL_TEXTURE_CUBE_MAP, m_depthCubemap);
-  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
@@ -904,29 +904,19 @@ PointShadowBuffer::PointShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeight
   glBindFramebuffer(GL_FRAMEBUFFER,0);
 }
 
-void PointShadowBuffer::AttachDepthCubemapFace(GLenum face)
-{
-  m_shadowFB->Bind();
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, face, m_depthCubemap, 0);
-  glDrawBuffer(GL_NONE);
-  glReadBuffer(GL_NONE);
-}
-
 void PointShadowBuffer::Bind() const 
 {
-  m_shadowFB->Bind();
-  glViewport(0, 0, m_shadowWidth, m_shadowHeight);
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_fbo);
 }
 
 void PointShadowBuffer::BindForWriting(GLenum CubeFace)
 {
-  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_fbo);
   glViewport(0,0,m_shadowWidth,m_shadowHeight);
   glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,CubeFace,m_depthCubemap,0);
   glDrawBuffer(GL_COLOR_ATTACHMENT0);
 }
 
-void PointShadowBuffer::BindforReading(GLenum Texture)
+void PointShadowBuffer::BindForReading(GLenum Texture)
 {
   glActiveTexture(Texture);
   glBindTexture(GL_TEXTURE_CUBE_MAP,m_depthCubemap);
@@ -939,7 +929,7 @@ void PointShadowBuffer::UnBind() const
 
 void PointShadowBuffer::Resize(int32_t newWidth, int32_t newHeight)
 {
-  m_shadowFB->Resize(newWidth, newHeight);
+  /*m_shadowFB->Resize(newWidth, newHeight);*/
 }
 
 std::shared_ptr<PointShadowBuffer> PointShadowBuffer::Create(uint32_t shadowWidth, uint32_t shadowHeight)

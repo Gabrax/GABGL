@@ -212,9 +212,8 @@ void AssetManager::StartLoadingAssets()
   s_Data.m_UploadStarted = false;
 
   for (auto& sound : s_Data.sounds) AudioManager::LoadSound(sound);
-      /*s_Data.m_FutureVoid.push_back(std::async(std::launch::async, AudioManager::LoadSound, sound));*/
+
   for (auto& track : s_Data.music) AudioManager::LoadMusic(track);
-      /*s_Data.m_FutureVoid.push_back(std::async(std::launch::async, AudioManager::LoadMusic, track));*/
 
   for (auto& [path, scale, flag, meshType] : s_Data.static_models)
       s_Data.m_FutureStaticModels.push_back(std::async(std::launch::async, Model::CreateSTATIC, path, scale, flag, meshType));
