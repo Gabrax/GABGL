@@ -39,11 +39,10 @@ void ModelManager::BakeModelInstancedBuffers(Mesh& mesh, const std::vector<Trans
 
   std::vector<glm::mat4> instanceMatrices;
   instanceMatrices.reserve(transforms.size());
-  for (const auto& t : transforms)
-      instanceMatrices.push_back(t.GetTransform());
 
-  if (mesh.instanceVBO == 0)
-      glGenBuffers(1, &mesh.instanceVBO);
+  for (const auto& t : transforms) instanceMatrices.push_back(t.GetTransform());
+
+  if (mesh.instanceVBO == 0) glGenBuffers(1, &mesh.instanceVBO);
 
   glBindVertexArray(mesh.VAO);
   glBindBuffer(GL_ARRAY_BUFFER, mesh.instanceVBO);
@@ -51,16 +50,16 @@ void ModelManager::BakeModelInstancedBuffers(Mesh& mesh, const std::vector<Trans
 
   if (!mesh.instanceAttribsConfigured)
   {
-      std::size_t vec4Size = sizeof(glm::vec4);
-      for (int i = 0; i < 4; ++i)
-      {
-          GLuint loc = 7 + i;
-          glEnableVertexAttribArray(loc);
-          glVertexAttribPointer(loc, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(i * vec4Size));
-          glVertexAttribDivisor(loc, 1);
-      }
+    std::size_t vec4Size = sizeof(glm::vec4);
+    for (int i = 0; i < 4; ++i)
+    {
+        GLuint loc = 7 + i;
+        glEnableVertexAttribArray(loc);
+        glVertexAttribPointer(loc, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(i * vec4Size));
+        glVertexAttribDivisor(loc, 1);
+    }
 
-      mesh.instanceAttribsConfigured = true;
+    mesh.instanceAttribsConfigured = true;
   }
 
   glBindVertexArray(0);

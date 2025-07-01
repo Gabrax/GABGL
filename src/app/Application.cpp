@@ -113,6 +113,11 @@ bool Application::OnKeyPressed(KeyPressedEvent& e)
       Renderer::SetFullscreen("select2", false);
 			break;
 		}
+    case Key::Tab:
+    {
+      Renderer::SwitchRenderState();
+      break;
+    }
 	}
 
 	return false;

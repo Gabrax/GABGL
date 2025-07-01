@@ -873,7 +873,7 @@ std::shared_ptr<BloomBuffer> BloomBuffer::Create(const std::shared_ptr<Shader>& 
 
 PointShadowBuffer::PointShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeight) : m_shadowWidth(shadowWidth), m_shadowHeight(shadowHeight)
 {
-  m_lightproj = glm::perspective(glm::radians(90.0f), float(m_shadowWidth) / float(m_shadowHeight), 0.1f, 20.0f);
+  m_shadowProj = glm::perspective(glm::radians(90.0f), float(m_shadowWidth) / float(m_shadowHeight), 0.1f, 20.0f);
 
   glGenTextures(1,&m_depth);
   glBindTexture(GL_TEXTURE_2D, m_depth);
@@ -899,6 +899,16 @@ PointShadowBuffer::PointShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeight
   glDrawBuffer(GL_NONE);
   glReadBuffer(GL_NONE);
   glBindFramebuffer(GL_FRAMEBUFFER,0);
+
+  m_Directions =
+  {
+    CubemapDirection{ GL_TEXTURE_CUBE_MAP_POSITIVE_X, glm::vec3(1, 0, 0), glm::vec3(0, -1, 0) },
+    CubemapDirection{ GL_TEXTURE_CUBE_MAP_NEGATIVE_X, glm::vec3(-1, 0, 0), glm::vec3(0, -1, 0) },
+    CubemapDirection{ GL_TEXTURE_CUBE_MAP_POSITIVE_Y, glm::vec3(0, 1, 0), glm::vec3(0, 0, 1) },
+    CubemapDirection{ GL_TEXTURE_CUBE_MAP_NEGATIVE_Y, glm::vec3(0, -1, 0), glm::vec3(0, 0, -1) },
+    CubemapDirection{ GL_TEXTURE_CUBE_MAP_POSITIVE_Z, glm::vec3(0, 0, 1), glm::vec3(0, -1, 0) },
+    CubemapDirection{ GL_TEXTURE_CUBE_MAP_NEGATIVE_Z, glm::vec3(0, 0, -1), glm::vec3(0, -1, 0) }
+  };
 }
 
 void PointShadowBuffer::Bind() const 
@@ -913,7 +923,7 @@ void PointShadowBuffer::BindForWriting(uint32_t cubemapIndex, uint32_t faceIndex
   glDrawBuffer(GL_COLOR_ATTACHMENT0);
 }
 
-void PointShadowBuffer::BindForReadingArray(GLenum TextureUnit)
+void PointShadowBuffer::BindForReading(GLenum TextureUnit)
 {
     glActiveTexture(TextureUnit);
     glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, m_depthCubemapArray);

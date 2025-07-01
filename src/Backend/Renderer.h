@@ -65,6 +65,7 @@ struct Renderer
 	static void ClearColorBuffers();
 	static void ClearDepthBuffers();
   static void SetFullscreen(const std::string& sound, bool windowed);
+  static void SwitchRenderState();
 
 private:
 

@@ -1,6 +1,5 @@
 #include "Renderer.h"
 
-#include <array>
 #include "BackendLogger.h"
 #include "Buffer.h"
 #include "Camera.h"
@@ -9,13 +8,9 @@
 #include "Renderer.h"
 #include "Shader.h"
 #include "Texture.h"
-#include "glad/glad.h"
-#include "glm/fwd.hpp"
 #include <cstdint>
 #include <limits>
-#include <random>
 #include <stb_image.h>
-#include <filesystem>
 #include "../engine.h"
 #include "AudioManager.h"
 #include "../input/UserInput.h"
@@ -27,9 +22,10 @@
 #include <glad/glad.h>
 #include "ImGuizmo.h"
 #include <glm/gtc/type_ptr.hpp>
-#include "json.hpp"
+#include <glm/fwd.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
+#include "json.hpp"
 
 
 void MessageCallback(
@@ -207,6 +203,13 @@ struct RendererData
 	uint32_t _3DTextureSlotIndex = 1; // 0 = white texture
 	std::array<std::shared_ptr<Texture>, MaxTextureSlots> _2DTextureSlots;
 	uint32_t _2DTextureSlotIndex = 1; // 0 = white texture
+
+  std::unordered_map<std::string, GLuint> textureCounters = {
+      {"texture_diffuse", 1},
+      {"texture_specular", 1},
+      {"texture_normal", 1},
+      {"texture_height", 1}
+  };
 
   std::unordered_map<std::string, std::shared_ptr<Texture>> skyboxes;
 
@@ -413,12 +416,14 @@ void Renderer::Init()
 
   s_Data.m_PointShadowFramebuffer = PointShadowBuffer::Create(1024, 1024);
 
-  s_Data.m_SceneState = RendererData::SceneState::Play;
-
   s_Data.m_WindowRef = &Engine::GetInstance().GetMainWindow();
 
   s_Data.m_Camera = Camera(45.0f, (float)s_Data.m_WindowRef->GetWidth() / (float)s_Data.m_WindowRef->GetHeight(), 0.01f, 1000.0f);
   s_Data.m_Camera.SetViewportSize((float)s_Data.m_WindowRef->GetWidth(), (float)s_Data.m_WindowRef->GetHeight());
+
+  s_Data.m_SceneState = RendererData::SceneState::Play;
+  s_Data.m_Camera.SetMode(CameraMode::FPS);
+  s_Data.m_WindowRef->SetCursorVisible(false);
 
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -426,9 +431,6 @@ void Renderer::Init()
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;       // Enable Keyboard Controls
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;           // Enable Docking
 	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;         // Enable Multi-Viewport / Platform Windows
-	//float fontSize = 18.0f;// *2.0f;
-	//io.Fonts->AddFontFromFileTTF("assets/fonts/opensans/OpenSans-Bold.ttf", fontSize);
-	//io.FontDefault = io.Fonts->AddFontFromFileTTF("assets/fonts/opensans/OpenSans-Regular.ttf", fontSize);
 
 	ImGui::StyleColorsDark();
 
@@ -445,7 +447,6 @@ void Renderer::Init()
 	ImGui_ImplOpenGL3_Init("#version 410");
 	SetLineWidth(4.0f);
   s_Data.m_GizmoType = ImGuizmo::OPERATION::TRANSLATE;
-
 }
 
 void Renderer::Shutdown()
@@ -465,23 +466,6 @@ void Renderer::Shutdown()
 	ImGui::DestroyContext();
 }
 
-struct CameraDirection
-{
-    GLenum CubemapFace;
-    glm::vec3 Target;
-    glm::vec3 Up;
-};
-
-CameraDirection gCameraDirections[6] =
-{
-    { GL_TEXTURE_CUBE_MAP_POSITIVE_X, glm::vec3( 1.0f,  0.0f,  0.0f), glm::vec3( 0.0f, -1.0f,  0.0f) },
-    { GL_TEXTURE_CUBE_MAP_NEGATIVE_X, glm::vec3(-1.0f,  0.0f,  0.0f), glm::vec3( 0.0f, -1.0f,  0.0f) },
-    { GL_TEXTURE_CUBE_MAP_POSITIVE_Y, glm::vec3( 0.0f,  1.0f,  0.0f), glm::vec3( 0.0f,  0.0f, -1.0f) },
-    { GL_TEXTURE_CUBE_MAP_NEGATIVE_Y, glm::vec3( 0.0f, -1.0f,  0.0f), glm::vec3( 0.0f,  0.0f, -1.0f) },
-    { GL_TEXTURE_CUBE_MAP_POSITIVE_Z, glm::vec3( 0.0f,  0.0f,  1.0f), glm::vec3( 0.0f, -1.0f,  0.0f) },
-    { GL_TEXTURE_CUBE_MAP_NEGATIVE_Z, glm::vec3( 0.0f,  0.0f, -1.0f), glm::vec3( 0.0f, -1.0f,  0.0f) }
-};
-
 void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, const std::function<void()>& lights)
 {
   glEnable(GL_DEPTH_TEST);
@@ -494,20 +478,20 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
   float max = std::numeric_limits<float>::max();
   SetClearColor({max,max,max,max});
 
-  for (auto lightIndex : std::views::iota(0, LightManager::GetLightsSize()))
+  for (auto lightIndex : std::views::iota(0, LightManager::GetPointLightsQuantity()))
   {
     s_Data._shaders.PointShadowBufferShader->Use();
     glm::vec3 lightPosition = LightManager::GetLightPosition(lightIndex);
     s_Data._shaders.PointShadowBufferShader->setVec3("gLightWorldPos",lightPosition);
 
-    for (uint32_t face = 0; face < 6; ++face)
+    const auto& directions = s_Data.m_PointShadowFramebuffer->GetFaceDirections();
+    for (auto face = 0; face < directions.size(); ++face)
     {
-      /*s_Data.m_PointShadowFramebuffer->BindForWriting(gCameraDirections[face].CubemapFace);*/
       s_Data.m_PointShadowFramebuffer->BindForWriting(lightIndex, face);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-      glm::mat4 view = glm::lookAt(lightPosition,lightPosition + gCameraDirections[face].Target,gCameraDirections[face].Up);
-      s_Data.m_LightProj = s_Data.m_PointShadowFramebuffer->GetLightProj() * view;
+      glm::mat4 view = glm::lookAt(lightPosition,lightPosition + directions[face].Target,directions[face].Up);
+      s_Data.m_LightProj = s_Data.m_PointShadowFramebuffer->GetShadowProj() * view;
 
       geometry();
     }
@@ -520,7 +504,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   s_Data._shaders.ModelShader->Use();
-  s_Data.m_PointShadowFramebuffer->BindForReadingArray(GL_TEXTURE1);
+  s_Data.m_PointShadowFramebuffer->BindForReading(GL_TEXTURE1);
   s_Data._shaders.ModelShader->setInt("u_ShadowMap",1);
   BeginScene(s_Data.m_Camera);
   geometry();
@@ -556,31 +540,18 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
   PhysX::Simulate(dt);
   AudioManager::UpdateAllMusic();
 
-  if (Input::IsKeyPressed(Key::E))
-  {
-    s_Data.m_Camera.SetMode(CameraMode::ORBITAL);
-    s_Data.m_SceneState = RendererData::SceneState::Edit;
-  }
-  if (Input::IsKeyPressed(Key::Q))
-  {
-    s_Data.m_Camera.SetMode(CameraMode::FPS);
-    s_Data.m_SceneState = RendererData::SceneState::Play;
-  }
-
   uint32_t finalTexture = s_Data.m_Framebuffer->GetColorAttachmentRendererID();
 
   switch (s_Data.m_SceneState)
   {
    case RendererData::SceneState::Edit:
    {
-     s_Data.m_WindowRef->SetCursorVisible(true);
      Renderer::DrawEditorFrameBuffer(finalTexture);
      break;
    }
 
    case RendererData::SceneState::Play:
    {
-     s_Data.m_WindowRef->SetCursorVisible(false);
      Renderer::DrawFramebuffer(finalTexture);
      break;
    }
@@ -592,6 +563,37 @@ void Renderer::DrawLoadingScreen()
   BeginScene(s_Data.m_Camera);
   Renderer::Draw2DText(FontManager::GetFont("dpcomic"),"LOADING", glm::vec2(s_Data.m_WindowRef->GetWidth() / 2,s_Data.m_WindowRef->GetHeight() / 2), 1.0f, glm::vec4(1.0f));
   EndScene();
+}
+
+void Renderer::SwitchRenderState()
+{
+  static bool tabWasPressedLastFrame = false;
+
+  if (Input::IsKeyPressed(Key::Tab))
+  {
+    if (!tabWasPressedLastFrame)
+    {
+      if (s_Data.m_SceneState == RendererData::SceneState::Edit)
+      {
+        s_Data.m_Camera.SetMode(CameraMode::FPS);
+        s_Data.m_WindowRef->SetCursorVisible(false);
+        s_Data.m_SceneState = RendererData::SceneState::Play;
+      }
+      else if (s_Data.m_SceneState == RendererData::SceneState::Play)
+      {
+        s_Data.m_Camera.SetMode(CameraMode::ORBITAL);
+        s_Data.m_WindowRef->SetCursorVisible(true);
+        s_Data.m_SceneState = RendererData::SceneState::Edit;
+      }
+
+      tabWasPressedLastFrame = true;
+    }
+  }
+  else
+  {
+    // Reset the flag when TAB is released
+    tabWasPressedLastFrame = false;
+  }
 }
 
 void Renderer::SetFullscreen(const std::string& sound, bool windowed)
@@ -981,73 +983,73 @@ void Renderer::Draw2DRect(const glm::mat4& transform, const glm::vec4& color, in
 
 void Renderer::DrawCube(const Transform& transform, int entityID)
 {
-    // Backup the current front face winding
-    GLint prevFrontFace;
-    glGetIntegerv(GL_FRONT_FACE, &prevFrontFace);
+  // Backup the current front face winding
+  GLint prevFrontFace;
+  glGetIntegerv(GL_FRONT_FACE, &prevFrontFace);
 
-    glEnable(GL_CULL_FACE);
-    glCullFace(GL_FRONT);
-    glFrontFace(GL_CCW); // Only cubes use counter-clockwise winding
+  glEnable(GL_CULL_FACE);
+  glCullFace(GL_FRONT);
+  glFrontFace(GL_CCW); // Only cubes use counter-clockwise winding
 
-    if (s_Data.CubeIndexCount >= RendererData::MaxIndices)
-        NextBatch(); // Flush batch if full
+  if (s_Data.CubeIndexCount >= RendererData::MaxIndices)
+      NextBatch(); // Flush batch if full
 
-    glm::mat4 model = transform.GetTransform();
-    glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
+  glm::mat4 model = transform.GetTransform();
+  glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
 
-    for (int i = 0; i < 8; i++)
-    {
-        MeshVertex vertex = s_Data.cubeVertices[i];
+  for (int i = 0; i < 8; i++)
+  {
+      MeshVertex vertex = s_Data.cubeVertices[i];
 
-        glm::vec4 transformedPos = model * glm::vec4(vertex.Position, 1.0f);
-        vertex.Position = glm::vec3(transformedPos);
-        vertex.Normal = glm::normalize(normalMatrix * vertex.Normal);
+      glm::vec4 transformedPos = model * glm::vec4(vertex.Position, 1.0f);
+      vertex.Position = glm::vec3(transformedPos);
+      vertex.Normal = glm::normalize(normalMatrix * vertex.Normal);
 
-        *s_Data.CubeVertexBufferPtr = vertex;
-        s_Data.CubeVertexBufferPtr++;
-    }
+      *s_Data.CubeVertexBufferPtr = vertex;
+      s_Data.CubeVertexBufferPtr++;
+  }
 
-    s_Data.CubeVertexCount += 8;
-    s_Data.CubeIndexCount += 36;
+  s_Data.CubeVertexCount += 8;
+  s_Data.CubeIndexCount += 36;
 
-    // Restore the previous front face winding
-    glFrontFace(prevFrontFace);
-    glDisable(GL_CULL_FACE);
+  // Restore the previous front face winding
+  glFrontFace(prevFrontFace);
+  glDisable(GL_CULL_FACE);
 }
 
 void Renderer::DrawCubeContour(const glm::vec3& position, const glm::vec3& size, const glm::vec4& color, int entityID)
 {
-    // Half size for easier calculations
-    glm::vec3 half = size * 0.5f;
+  // Half size for easier calculations
+  glm::vec3 half = size * 0.5f;
 
-    // Define 8 cube vertices relative to center position
-    glm::vec3 v0 = position + glm::vec3(-half.x, -half.y, -half.z); // left bottom back
-    glm::vec3 v1 = position + glm::vec3( half.x, -half.y, -half.z); // right bottom back
-    glm::vec3 v2 = position + glm::vec3( half.x,  half.y, -half.z); // right top back
-    glm::vec3 v3 = position + glm::vec3(-half.x,  half.y, -half.z); // left top back
+  // Define 8 cube vertices relative to center position
+  glm::vec3 v0 = position + glm::vec3(-half.x, -half.y, -half.z); // left bottom back
+  glm::vec3 v1 = position + glm::vec3( half.x, -half.y, -half.z); // right bottom back
+  glm::vec3 v2 = position + glm::vec3( half.x,  half.y, -half.z); // right top back
+  glm::vec3 v3 = position + glm::vec3(-half.x,  half.y, -half.z); // left top back
 
-    glm::vec3 v4 = position + glm::vec3(-half.x, -half.y,  half.z); // left bottom front
-    glm::vec3 v5 = position + glm::vec3( half.x, -half.y,  half.z); // right bottom front
-    glm::vec3 v6 = position + glm::vec3( half.x,  half.y,  half.z); // right top front
-    glm::vec3 v7 = position + glm::vec3(-half.x,  half.y,  half.z); // left top front
+  glm::vec3 v4 = position + glm::vec3(-half.x, -half.y,  half.z); // left bottom front
+  glm::vec3 v5 = position + glm::vec3( half.x, -half.y,  half.z); // right bottom front
+  glm::vec3 v6 = position + glm::vec3( half.x,  half.y,  half.z); // right top front
+  glm::vec3 v7 = position + glm::vec3(-half.x,  half.y,  half.z); // left top front
 
-    // Bottom square
-    DrawLine(v0, v1, color, entityID);
-    DrawLine(v1, v2, color, entityID);
-    DrawLine(v2, v3, color, entityID);
-    DrawLine(v3, v0, color, entityID);
+  // Bottom square
+  DrawLine(v0, v1, color, entityID);
+  DrawLine(v1, v2, color, entityID);
+  DrawLine(v2, v3, color, entityID);
+  DrawLine(v3, v0, color, entityID);
 
-    // Top square
-    DrawLine(v4, v5, color, entityID);
-    DrawLine(v5, v6, color, entityID);
-    DrawLine(v6, v7, color, entityID);
-    DrawLine(v7, v4, color, entityID);
+  // Top square
+  DrawLine(v4, v5, color, entityID);
+  DrawLine(v5, v6, color, entityID);
+  DrawLine(v6, v7, color, entityID);
+  DrawLine(v7, v4, color, entityID);
 
-    // Vertical edges
-    DrawLine(v0, v4, color, entityID);
-    DrawLine(v1, v5, color, entityID);
-    DrawLine(v2, v6, color, entityID);
-    DrawLine(v3, v7, color, entityID);
+  // Vertical edges
+  DrawLine(v0, v4, color, entityID);
+  DrawLine(v1, v5, color, entityID);
+  DrawLine(v2, v6, color, entityID);
+  DrawLine(v3, v7, color, entityID);
 }
 
 void Renderer::DrawFramebuffer(uint32_t textureID)
@@ -1086,7 +1088,6 @@ void Renderer::DrawFramebuffer(uint32_t textureID)
   glBindVertexArray(quadVAO);
   glDrawArrays(GL_TRIANGLES, 0, 6);
 }
-
 
 void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::vec3& position, const glm::vec3& size, const glm::vec3& rotation)
 {
@@ -1143,8 +1144,18 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
     else if (model->GetPhysXMeshType() == MeshType::CONTROLLER) modelMat = model->GetControllerTransform().GetTransform();
     else if (model->GetPhysXMeshType() == MeshType::NONE) modelMat = transform;
 
-    s_Data._shaders.PointShadowBufferShader->setMat4("gWVP", s_Data.m_LightProj * modelMat);
-    s_Data._shaders.PointShadowBufferShader->setMat4("gWorld", modelMat);
+    s_Data._shaders.PointShadowBufferShader->setMat4("u_LightViewProjection", s_Data.m_LightProj);
+    s_Data._shaders.PointShadowBufferShader->setMat4("u_ModelTransform", modelMat);
+    s_Data._shaders.PointShadowBufferShader->setBool("isAnimated", model->IsAnimated());
+    s_Data._shaders.PointShadowBufferShader->setBool("isInstanced", false);
+
+    if(model->IsAnimated())
+    {
+      auto& transforms = model->GetFinalBoneMatrices();
+      for (size_t i = 0; i < transforms.size(); ++i) {
+          s_Data._shaders.PointShadowBufferShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+      }
+    }
 
     for (auto& mesh : model->GetMeshes())
     {
@@ -1171,20 +1182,12 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
 
     for (auto& mesh : model->GetMeshes())
     {
-      std::unordered_map<std::string, GLuint> textureCounters =
-      {
-        {"texture_diffuse", 1},
-        {"texture_specular", 1},
-        {"texture_normal", 1},
-        {"texture_height", 1}
-      };
-
       auto& textures = mesh.m_Textures;
       for (GLuint i = 0; i < textures.size(); i++)
       {
         glActiveTexture(GL_TEXTURE0 + i);
 
-        std::string number = std::to_string(textureCounters[textures[i]->GetType()]++);
+        std::string number = std::to_string(s_Data.textureCounters[textures[i]->GetType()]++);
         s_Data._shaders.ModelShader->setInt(textures[i]->GetType() + number, i);
         glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
       }
@@ -1210,8 +1213,18 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_
     s_Data._shaders.PointShadowBufferShader->Use();
     glm::mat4 modelMat = PhysX::PxMat44ToGlmMat4(convex->GetDynamicActor()->getGlobalPose()); 
 
-    s_Data._shaders.PointShadowBufferShader->setMat4("gWVP", s_Data.m_LightProj * modelMat);
-    s_Data._shaders.PointShadowBufferShader->setMat4("gWorld", modelMat);
+    s_Data._shaders.PointShadowBufferShader->setMat4("u_LightViewProjection", s_Data.m_LightProj);
+    s_Data._shaders.PointShadowBufferShader->setMat4("u_ModelTransform", modelMat);
+    s_Data._shaders.PointShadowBufferShader->setBool("isAnimated", model->IsAnimated());
+    s_Data._shaders.PointShadowBufferShader->setBool("isInstanced", false);
+
+    if(model->IsAnimated())
+    {
+      auto& transforms = model->GetFinalBoneMatrices();
+      for (size_t i = 0; i < transforms.size(); ++i) {
+          s_Data._shaders.PointShadowBufferShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+      }
+    }
 
     for (auto& mesh : model->GetMeshes())
     {
@@ -1226,6 +1239,7 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_
     s_Data._shaders.ModelShader->setMat4("model", PhysX::PxMat44ToGlmMat4(convex->GetDynamicActor()->getGlobalPose()));
     s_Data._shaders.ModelShader->setBool("isAnimated", model->IsAnimated());
     s_Data._shaders.ModelShader->setBool("isInstanced", false);
+
     if(model->IsAnimated())
     {
       auto& transforms = model->GetFinalBoneMatrices();
@@ -1236,20 +1250,12 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_
 
     for (auto& mesh : model->GetMeshes())
     {
-      std::unordered_map<std::string, GLuint> textureCounters =
-      {
-        {"texture_diffuse", 1},
-        {"texture_specular", 1},
-        {"texture_normal", 1},
-        {"texture_height", 1}
-      };
-
       auto& textures = mesh.m_Textures;
       for (GLuint i = 0; i < textures.size(); i++)
       {
         glActiveTexture(GL_TEXTURE0 + i);
 
-        std::string number = std::to_string(textureCounters[textures[i]->GetType()]++);
+        std::string number = std::to_string(s_Data.textureCounters[textures[i]->GetType()]++);
         s_Data._shaders.ModelShader->setInt(textures[i]->GetType() + number, i);
         glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
       }
@@ -1271,35 +1277,56 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_
 
 void Renderer::DrawModelInstanced(const std::shared_ptr<Model>& model, const std::vector<Transform>& instances, int entityID)
 {
-  s_Data._shaders.ModelShader->Use();
-  s_Data._shaders.ModelShader->setBool("isAnimated", model->IsAnimated());
-  s_Data._shaders.ModelShader->setBool("isInstanced", true);
-
-  if (model->IsAnimated())
+  if(model == nullptr)
   {
+    GABGL_ERROR("Model doesnt exist");
+    return;
+  }
+
+  if(s_Data.m_ShadowPass)
+  {
+    s_Data._shaders.PointShadowBufferShader->Use();
+    s_Data._shaders.PointShadowBufferShader->setBool("isAnimated", model->IsAnimated());
+    s_Data._shaders.PointShadowBufferShader->setBool("isInstanced", false);
+
+    if(model->IsAnimated())
+    {
+      auto& transforms = model->GetFinalBoneMatrices();
+      for (size_t i = 0; i < transforms.size(); ++i) {
+          s_Data._shaders.PointShadowBufferShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+      }
+    }
+
+    for (auto& mesh : model->GetMeshes())
+    {
+      glBindVertexArray(mesh.VAO);
+      glDrawElementsInstanced(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0, static_cast<GLsizei>(instances.size()));
+      glBindVertexArray(0);
+    }
+  }
+  else
+  {
+    s_Data._shaders.ModelShader->Use();
+    s_Data._shaders.ModelShader->setBool("isAnimated", model->IsAnimated());
+    s_Data._shaders.ModelShader->setBool("isInstanced", true);
+
+    if (model->IsAnimated())
+    {
       auto& transforms = model->GetFinalBoneMatrices();
       for (size_t i = 0; i < transforms.size(); ++i)
       {
           s_Data._shaders.ModelShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
       }
-  }
+    }
 
-  for (auto& mesh : model->GetMeshes())
-  {
+    for (auto& mesh : model->GetMeshes())
+    {
       ModelManager::BakeModelInstancedBuffers(mesh, instances); // Upload instance data
-
-      // Bind all textures
-      std::unordered_map<std::string, GLuint> textureCounters = {
-          {"texture_diffuse", 1},
-          {"texture_specular", 1},
-          {"texture_normal", 1},
-          {"texture_height", 1}
-      };
 
       auto& textures = mesh.m_Textures;
       for (GLuint i = 0; i < textures.size(); i++) {
           glActiveTexture(GL_TEXTURE0 + i);
-          std::string number = std::to_string(textureCounters[textures[i]->GetType()]++);
+          std::string number = std::to_string(s_Data.textureCounters[textures[i]->GetType()]++);
           s_Data._shaders.ModelShader->setInt(textures[i]->GetType() + number, i);
           glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
       }
@@ -1308,6 +1335,7 @@ void Renderer::DrawModelInstanced(const std::shared_ptr<Model>& model, const std
       glDrawElementsInstanced(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0, static_cast<GLsizei>(instances.size()));
       glBindVertexArray(0);
       glActiveTexture(GL_TEXTURE0);
+    }
   }
 }
 

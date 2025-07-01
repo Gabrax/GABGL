@@ -36,50 +36,50 @@ uniform bool isInstanced;
 
 void main()
 {
-    mat4 modelMat = isInstanced ? instanceMatrix : model;
+  mat4 modelMat = isInstanced ? instanceMatrix : model;
 
-    if (isAnimated)
+  if (isAnimated)
+  {
+    vec4 totalPosition = vec4(0.0f);
+    for (int i = 0; i < MAX_BONE_INFLUENCE; i++)
     {
-        vec4 totalPosition = vec4(0.0f);
-        for (int i = 0; i < MAX_BONE_INFLUENCE; i++)
+        if (boneIds[i] == -1) continue;
+        if (boneIds[i] >= MAX_BONES)
         {
-            if (boneIds[i] == -1) continue;
-            if (boneIds[i] >= MAX_BONES)
-            {
-                totalPosition = vec4(aPos, 1.0f);
-                break;
-            }
-            vec4 localPosition = finalBonesMatrices[boneIds[i]] * vec4(aPos, 1.0f);
-            totalPosition += localPosition * weights[i];
+            totalPosition = vec4(aPos, 1.0f);
+            break;
         }
-
-        vs_out.FragPos = vec3(modelMat * totalPosition);
-        vs_out.Normal = mat3(transpose(inverse(modelMat))) * aNormal;
-
-        vec3 T = normalize(mat3(modelMat) * tangent);
-        vec3 B = normalize(mat3(modelMat) * bitangent);
-        vec3 N = normalize(mat3(modelMat) * aNormal);
-        vs_out.TBN = mat3(T, B, N);
-        vs_out.TBN_FragPos = vs_out.TBN * vs_out.FragPos;
-
-        gl_Position = ViewProjection * modelMat * totalPosition;
-        vs_out.TexCoords = aTexCoords;
+        vec4 localPosition = finalBonesMatrices[boneIds[i]] * vec4(aPos, 1.0f);
+        totalPosition += localPosition * weights[i];
     }
-    else
-    {
-        vec4 worldPos = modelMat * vec4(aPos, 1.0);
-        vs_out.FragPos = vec3(worldPos);
-        vs_out.Normal = mat3(transpose(inverse(modelMat))) * aNormal;
 
-        vec3 T = normalize(mat3(modelMat) * tangent);
-        vec3 B = normalize(mat3(modelMat) * bitangent);
-        vec3 N = normalize(mat3(modelMat) * aNormal);
-        vs_out.TBN = mat3(T, B, N);
-        vs_out.TBN_FragPos = vs_out.TBN * vs_out.FragPos;
+    vs_out.FragPos = vec3(modelMat * totalPosition);
+    vs_out.Normal = mat3(transpose(inverse(modelMat))) * aNormal;
 
-        gl_Position = ViewProjection * worldPos;
-        vs_out.TexCoords = aTexCoords;
-    }
+    vec3 T = normalize(mat3(modelMat) * tangent);
+    vec3 B = normalize(mat3(modelMat) * bitangent);
+    vec3 N = normalize(mat3(modelMat) * aNormal);
+    vs_out.TBN = mat3(T, B, N);
+    vs_out.TBN_FragPos = vs_out.TBN * vs_out.FragPos;
+
+    gl_Position = ViewProjection * modelMat * totalPosition;
+    vs_out.TexCoords = aTexCoords;
+  }
+  else
+  {
+    vec4 worldPos = modelMat * vec4(aPos, 1.0);
+    vs_out.FragPos = vec3(worldPos);
+    vs_out.Normal = mat3(transpose(inverse(modelMat))) * aNormal;
+
+    vec3 T = normalize(mat3(modelMat) * tangent);
+    vec3 B = normalize(mat3(modelMat) * bitangent);
+    vec3 N = normalize(mat3(modelMat) * aNormal);
+    vs_out.TBN = mat3(T, B, N);
+    vs_out.TBN_FragPos = vs_out.TBN * vs_out.FragPos;
+
+    gl_Position = ViewProjection * worldPos;
+    vs_out.TexCoords = aTexCoords;
+  }
 }
 
 #type FRAGMENT
@@ -180,7 +180,7 @@ float calculatePointShadow(vec3 fragPos, vec3 lightPos, int lightIndex)
 
     float bias = max(0.05 * (1.0 - dot(normalize(fs_in.Normal), direction)), 0.005);
 
-    float shadow = currentDepth - bias > closestDepth ? 0.0 : 1.0;
+    float shadow = currentDepth - bias > closestDepth ? 0.15 : 1.0;
 
     return shadow;
 }

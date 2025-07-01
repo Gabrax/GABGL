@@ -21,7 +21,7 @@ Camera::Camera(float fov, float aspectRatio, float nearClip, float farClip)
       m_AspectRatio(aspectRatio),
       m_PerspectiveNear(nearClip),
       m_PerspectiveFar(farClip),
-      m_Distance(100.0f),
+      m_Distance(1000.0f),
       m_Pitch(0.0f),
       m_Yaw(0.0f)
 {
@@ -37,33 +37,43 @@ Camera::Camera(const glm::mat4& projection) : m_Projection(projection)
 
 void Camera::SetMode(CameraMode mode)
 {
-  if (mode == m_Mode)
-      return;
+  if (mode == m_Mode) return;
 
-  if (mode == CameraMode::FPS && m_Mode == CameraMode::ORBITAL)
+  // Save current mode's state before switching
+  if (m_Mode == CameraMode::FPS)
   {
-      m_Position = CalculatePosition();  
-      UpdateCameraVectors();
+    m_FPS_Position = m_Position;
+    m_FPS_Yaw = m_Yaw;
+    m_FPS_Pitch = m_Pitch;
   }
-  else if (mode == CameraMode::ORBITAL && m_Mode == CameraMode::FPS)
+  else if (m_Mode == CameraMode::ORBITAL)
   {
-      glm::vec3 offset = m_Position;  
+    m_Orbital_FocalPoint = m_FocalPoint;
+    m_Orbital_Distance = m_Distance;
+    m_Orbital_Yaw = m_Yaw;
+    m_Orbital_Pitch = m_Pitch;
+  }
 
-      if (m_Distance > 0.001f)
-      {
-          m_Pitch = glm::degrees(asin(offset.y / m_Distance));
-          m_Yaw = glm::degrees(atan2(offset.z, offset.x));
-      }
-      else
-      {
-          m_Pitch = 0.0f;
-          m_Yaw = 0.0f;
-          m_Distance = 100.0f; // default
-      }
-      UpdateCameraVectors();
+  // Load new mode's state
+  if (mode == CameraMode::FPS)
+  {
+    m_Position = m_FPS_Position;
+    m_Yaw = m_FPS_Yaw;
+    m_Pitch = m_FPS_Pitch;
+    UpdateCameraVectors();
+  }
+  else if (mode == CameraMode::ORBITAL)
+  {
+    m_FocalPoint = m_Orbital_FocalPoint;
+    m_Distance = m_Orbital_Distance;
+    m_Yaw = m_Orbital_Yaw;
+    m_Pitch = m_Orbital_Pitch;
+    m_Position = CalculatePosition();
+    UpdateCameraVectors();
   }
 
   m_Mode = mode;
+  UpdateView();
 }
 
 void Camera::UpdateProjection()
@@ -113,47 +123,50 @@ float Camera::ZoomSpeed() const
 
 void Camera::OnUpdate(DeltaTime dt)
 {
-    glm::vec2 mouse{ Input::GetMouseX(), Input::GetMouseY() };
-    glm::vec2 delta = (mouse - m_InitialMousePosition) * 0.1f;
-    m_InitialMousePosition = mouse;
+  glm::vec2 mouse{ Input::GetMouseX(), Input::GetMouseY() };
+  glm::vec2 delta = (mouse - m_InitialMousePosition) * 0.1f;
+  m_InitialMousePosition = mouse;
 
-    if (m_Mode == CameraMode::ORBITAL)
-    {
-        if (Input::IsMouseButtonPressed(Mouse::ButtonRight))
-        {
-            MouseRotate(delta.x, delta.y);
-        }
+  if (m_Mode == CameraMode::ORBITAL)
+  {
+      if (Input::IsMouseButtonPressed(Mouse::ButtonRight))
+      {
+          MouseRotate(delta.x, delta.y);
+      }
 
-        m_Position = CalculatePosition();  // Update position around origin
-        UpdateView();
-    }
-    else // FPS mode
-    {
-        MouseRotate(delta.x, -delta.y);
+      float zoomDelta = 0.0f;
+      if (Input::IsKeyPressed(Key::F)) // Zoom in
+          zoomDelta = 0.5f;
+      if (Input::IsKeyPressed(Key::G)) // Zoom out
+          zoomDelta = -0.5f;
 
-        float velocity = m_MovementSpeed * dt;
+      if (zoomDelta != 0.0f)
+          MouseZoom(zoomDelta * dt * 10.0f); // scale zoom speed by dt
 
-        if (Input::IsKeyPressed(Key::W))
-            m_Position += m_Front * velocity;
-        if (Input::IsKeyPressed(Key::S))
-            m_Position -= m_Front * velocity;
-        if (Input::IsKeyPressed(Key::A))
-            m_Position -= m_Right * velocity;
-        if (Input::IsKeyPressed(Key::D))
-            m_Position += m_Right * velocity;
-        if (Input::IsKeyPressed(Key::Space))
-            m_Position += m_Up * velocity;
-        if (Input::IsKeyPressed(Key::LeftControl))
-            m_Position -= m_Up * velocity;
+      m_Position = CalculatePosition();
+      UpdateView();
+  }
+  else 
+  {
+      MouseRotate(delta.x, -delta.y);
 
-        UpdateView();
-    }
-}
+      float velocity = m_MovementSpeed * dt;
 
-void Camera::OnEvent(Event& e)
-{
-	EventDispatcher dispatcher(e);
-	dispatcher.Dispatch<MouseScrolledEvent>(BIND_EVENT(Camera::OnMouseScroll));
+      if (Input::IsKeyPressed(Key::W))
+          m_Position += m_Front * velocity;
+      if (Input::IsKeyPressed(Key::S))
+          m_Position -= m_Front * velocity;
+      if (Input::IsKeyPressed(Key::A))
+          m_Position -= m_Right * velocity;
+      if (Input::IsKeyPressed(Key::D))
+          m_Position += m_Right * velocity;
+      if (Input::IsKeyPressed(Key::Space))
+          m_Position += m_Up * velocity;
+      if (Input::IsKeyPressed(Key::LeftControl))
+          m_Position -= m_Up * velocity;
+
+      UpdateView();
+  }
 }
 
 bool Camera::OnMouseScroll(MouseScrolledEvent& e)
@@ -190,12 +203,25 @@ void Camera::MouseRotate(float xoffset, float yoffset, bool constrainPitch)
 
 void Camera::MouseZoom(float delta)
 {
-	m_Distance -= delta * ZoomSpeed();
-	if (m_Distance < 1.0f)
-	{
-		m_FocalPoint += GetForwardDirection();
-		m_Distance = 1.0f;
-	}
+  // Apply zoom only if orbital mode active
+  if (m_Mode == CameraMode::ORBITAL)
+  {
+    // Adjust distance by delta scaled by zoom speed
+    m_Distance -= delta * ZoomSpeed();
+
+    // Clamp distance
+    if (m_Distance < 1.0f)
+        m_Distance = 1.0f;
+    if (m_Distance > 1000.0f) // optional max zoom out limit
+        m_Distance = 1000.0f;
+
+    // Keep saved orbital distance in sync
+    m_Orbital_Distance = m_Distance;
+
+    // Update position based on new distance
+    m_Position = CalculatePosition();
+    UpdateView();
+  }
 }
 
 void Camera::UpdateCameraVectors()

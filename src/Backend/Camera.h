@@ -24,7 +24,6 @@ struct Camera
   ~Camera() = default;
 
   void OnUpdate(DeltaTime dt);
-  void OnEvent(Event& e);
 
   inline float GetDistance() const { return m_Distance; }
   inline void SetDistance(float distance) { m_Distance = distance; }
@@ -34,18 +33,18 @@ struct Camera
 
   void SetMode(CameraMode mode);
 
-  const glm::mat4& GetViewMatrix() const { return m_ViewMatrix; }
-  const glm::mat4& GetProjection() const { return m_Projection; }
-  glm::mat4 GetViewProjection() const { return m_Projection * m_ViewMatrix; }
-  glm::mat4 GetNonRotationViewProjection() const { return m_Projection * glm::mat4(glm::mat3(m_ViewMatrix)); }
-  glm::mat4 GetOrtoProjection() const { return glm::ortho(0.0f, static_cast<float>(m_ViewportWidth), 0.0f, static_cast<float>(m_ViewportHeight)); }
+  inline const glm::mat4& GetViewMatrix() const { return m_ViewMatrix; }
+  inline const glm::mat4& GetProjection() const { return m_Projection; }
+  inline glm::mat4 GetViewProjection() const { return m_Projection * m_ViewMatrix; }
+  inline glm::mat4 GetNonRotationViewProjection() const { return m_Projection * glm::mat4(glm::mat3(m_ViewMatrix)); }
+  inline glm::mat4 GetOrtoProjection() const { return glm::ortho(0.0f, static_cast<float>(m_ViewportWidth), 0.0f, static_cast<float>(m_ViewportHeight)); }
 
   void UpdateProjection();
 
   glm::vec3 GetUpDirection() const;
   glm::vec3 GetRightDirection() const;
   glm::vec3 GetForwardDirection() const;
-  const glm::vec3& GetPosition() const { return m_Position; }
+  inline const glm::vec3& GetPosition() const { return m_Position; }
   glm::quat GetOrientation() const;
 
   float GetPitch() const { return m_Pitch; }
@@ -54,22 +53,22 @@ struct Camera
   void SetPerspective(float verticalFOV, float nearClip, float farClip);
   void SetOrthographic(float size, float nearClip, float farClip);
 
-  float GetPerspectiveVerticalFOV() const { return m_PerspectiveFOV; }
-  void SetPerspectiveVerticalFOV(float verticalFov) { m_PerspectiveFOV = verticalFov; RecalculateProjection(); }
-  float GetPerspectiveNearClip() const { return m_PerspectiveNear; }
-  void SetPerspectiveNearClip(float nearClip) { m_PerspectiveNear = nearClip; RecalculateProjection(); }
-  float GetPerspectiveFarClip() const { return m_PerspectiveFar; }
-  void SetPerspectiveFarClip(float farClip) { m_PerspectiveFar = farClip; RecalculateProjection(); }
+  inline float GetPerspectiveVerticalFOV() const { return m_PerspectiveFOV; }
+  inline void SetPerspectiveVerticalFOV(float verticalFov) { m_PerspectiveFOV = verticalFov; RecalculateProjection(); }
+  inline float GetPerspectiveNearClip() const { return m_PerspectiveNear; }
+  inline void SetPerspectiveNearClip(float nearClip) { m_PerspectiveNear = nearClip; RecalculateProjection(); }
+  inline float GetPerspectiveFarClip() const { return m_PerspectiveFar; }
+  inline void SetPerspectiveFarClip(float farClip) { m_PerspectiveFar = farClip; RecalculateProjection(); }
 
-  float GetOrthographicSize() const { return m_OrthographicSize; }
-  void SetOrthographicSize(float size) { m_OrthographicSize = size; RecalculateProjection(); }
-  float GetOrthographicNearClip() const { return m_OrthographicNear; }
-  void SetOrthographicNearClip(float nearClip) { m_OrthographicNear = nearClip; RecalculateProjection(); }
-  float GetOrthographicFarClip() const { return m_OrthographicFar; }
-  void SetOrthographicFarClip(float farClip) { m_OrthographicFar = farClip; RecalculateProjection(); }
+  inline float GetOrthographicSize() const { return m_OrthographicSize; }
+  inline void SetOrthographicSize(float size) { m_OrthographicSize = size; RecalculateProjection(); }
+  inline float GetOrthographicNearClip() const { return m_OrthographicNear; }
+  inline void SetOrthographicNearClip(float nearClip) { m_OrthographicNear = nearClip; RecalculateProjection(); }
+  inline float GetOrthographicFarClip() const { return m_OrthographicFar; }
+  inline void SetOrthographicFarClip(float farClip) { m_OrthographicFar = farClip; RecalculateProjection(); }
 
-  ProjectionType GetProjectionType() const { return m_ProjectionType; }
-  void SetProjectionType(ProjectionType type) { m_ProjectionType = type; RecalculateProjection(); }
+  inline ProjectionType GetProjectionType() const { return m_ProjectionType; }
+  inline void SetProjectionType(ProjectionType type) { m_ProjectionType = type; RecalculateProjection(); }
 
 private:
   void RecalculateProjection();
@@ -112,6 +111,15 @@ private:
   glm::vec3 m_FocalPoint = { 0.0f, 0.0f, 0.0f };
 
   glm::vec2 m_InitialMousePosition = { 0.0f, 0.0f };
+
+  glm::vec3 m_FPS_Position = { 0.0f, 5.0f, 5.0f };
+  float m_FPS_Yaw = 0.0f;
+  float m_FPS_Pitch = 0.0f;
+
+  glm::vec3 m_Orbital_FocalPoint = { 0.0f, 0.0f, 0.0f };
+  float m_Orbital_Distance = 100.0f;
+  float m_Orbital_Yaw = 0.0f;
+  float m_Orbital_Pitch = 0.0f;
 
   float m_MovementSpeed = 5.0f;
   float m_MouseSensitivity = 1.0f;

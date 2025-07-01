@@ -239,7 +239,19 @@ void Window::SetResizable(bool enable)
 
 void Window::SetCursorVisible(bool enable)
 {
-  glfwSetInputMode(m_Window, GLFW_CURSOR, enable ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
+  if (enable)
+  {
+    glfwSetInputMode(m_Window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+
+    int32_t width, height;
+    glfwGetWindowSize(m_Window, &width, &height);
+    glfwSetCursorPos(m_Window, width / 2.0, height / 2.0);
+
+  }
+  else
+  {
+    glfwSetInputMode(m_Window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+  }
 }
 
 void Window::OnEvent(Event& e)
@@ -247,7 +259,7 @@ void Window::OnEvent(Event& e)
 	EventDispatcher dispatcher(e);
 	dispatcher.Dispatch<WindowCloseEvent>(BIND_EVENT(OnWindowClose));
 	dispatcher.Dispatch<WindowResizeEvent>(BIND_EVENT(OnWindowResize));
-  
+
   auto& m_LayerStack = LayerStack::GetLayers();
 	for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
 	{

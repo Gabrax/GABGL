@@ -5,6 +5,8 @@
 #include <vector>
 #include <glad/glad.h>
 #include "Shader.h"
+#include <span>
+#include <array>
 
 enum class ShaderDataType
 {
@@ -331,6 +333,13 @@ struct DirectShadowBuffer
 
 };
 
+struct CubemapDirection
+{
+  GLenum CubemapFace;
+  glm::vec3 Target;
+  glm::vec3 Up;
+};
+
 struct PointShadowBuffer
 {
   PointShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeight);
@@ -339,15 +348,19 @@ struct PointShadowBuffer
   void Bind() const;
   void UnBind() const;
   void BindForWriting(uint32_t cubemapIndex, uint32_t faceIndex);
-  void BindForReadingArray(GLenum TextureUnit);
+  void BindForReading(GLenum TextureUnit);
 
-  inline glm::mat4 GetLightProj() { return m_lightproj; }
+  inline glm::mat4 GetShadowProj() { return m_shadowProj; }
+
+  inline std::span<const CubemapDirection, 6> GetFaceDirections() const { return m_Directions; }
 
 	static std::shared_ptr<PointShadowBuffer> Create(uint32_t shadowWidth, uint32_t shadowHeight);
 
 private:
 
-  glm::mat4 m_lightproj;
+  std::array<CubemapDirection, 6> m_Directions;
+
+  glm::mat4 m_shadowProj;
 
   uint32_t m_shadowWidth; 
   uint32_t m_shadowHeight;

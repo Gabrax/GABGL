@@ -24,7 +24,9 @@ struct LightManagerData
   std::vector<std::shared_ptr<LightData>> lights;
 
   int32_t numLights = 0;
+  int32_t numPointLights = 0;
   const uint32_t maxLights = 30;
+  const uint32_t maxPointLights = maxLights - 10;
 
 } s_Data;
 
@@ -38,14 +40,19 @@ void LightManager::Init()
 
 void LightManager::AddLight(const LightType& type, const glm::vec4& color, const glm::vec3& position, const glm::vec3& rotation, const glm::vec3& scale)
 {
+  if (s_Data.numPointLights== s_Data.maxPointLights - 1) {
+      GABGL_ERROR("Max number of Point lights reached!");
+      return;
+  }
   if (s_Data.numLights == s_Data.maxLights - 1) {
-      GABGL_ERROR("Max number of lights reached!");
+      GABGL_ERROR("Max number of All lights reached!");
       return;
   }
 
   std::shared_ptr<LightData> lightData = std::make_shared<LightData>( position, rotation, scale, color, type );
 
   s_Data.lights.push_back(lightData);
+  if(type == LightType::POINT) s_Data.numPointLights++;
   s_Data.numLights++;
   UpdateSSBOLightData();
 }
@@ -128,7 +135,13 @@ glm::vec3 LightManager::GetLightPosition(size_t index)
   return s_Data.lights[index]->position;
 }
 
-int32_t LightManager::GetLightsSize()
+int32_t LightManager::GetLightsQuantity()
 {
   return s_Data.numLights;
 }
+
+int32_t LightManager::GetPointLightsQuantity()
+{
+  return s_Data.numPointLights;
+}
+
