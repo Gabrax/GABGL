@@ -42,15 +42,15 @@ void Engine::Run()
 
     if (!AssetManager::LoadingComplete())
     {
-        AssetManager::UpdateLoading();
+      AssetManager::UpdateLoading();
 
-        Renderer::DrawLoadingScreen();
+      Renderer::DrawLoadingScreen();
 
-        if(AssetManager::LoadingComplete())
-        {
-          Application* m_App = new Application;
-          LayerStack::PushLayer(m_App);
-        }
+      if(AssetManager::LoadingComplete())
+      {
+        Application* m_App = new Application;
+        LayerStack::PushLayer(m_App);
+      }
     }
     else
     {

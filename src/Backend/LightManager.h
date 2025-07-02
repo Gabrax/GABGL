@@ -26,4 +26,5 @@ struct LightManager
 
 private:
   static void UpdateSSBOLightData();
+  static void ResizeLightBuffers(uint32_t newMax);
 };

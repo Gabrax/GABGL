@@ -25,35 +25,26 @@ struct LightManagerData
 
   int32_t numLights = 0;
   int32_t numPointLights = 0;
-  const uint32_t maxLights = 30;
-  const uint32_t maxPointLights = maxLights - 10;
+  uint32_t maxLights = 30;
+  uint32_t maxPointLights = maxLights - 10;
 
 } s_Data;
 
 void LightManager::Init()
 {
-  s_Data.LightPosStorageBuffer = StorageBuffer::Create(sizeof(glm::vec3) * 10, 0);
-  s_Data.LightQuantityStorageBuffer= StorageBuffer::Create(sizeof(uint32_t) * 10, 1);
-  s_Data.LightColorStorageBuffer= StorageBuffer::Create(sizeof(glm::vec4) * 10, 2);
-  s_Data.LightTypeStorageBuffer= StorageBuffer::Create(sizeof(uint32_t) * 10, 3);
+  ResizeLightBuffers(s_Data.maxLights);
 }
 
 void LightManager::AddLight(const LightType& type, const glm::vec4& color, const glm::vec3& position, const glm::vec3& rotation, const glm::vec3& scale)
 {
-  if (s_Data.numPointLights== s_Data.maxPointLights - 1) {
-      GABGL_ERROR("Max number of Point lights reached!");
-      return;
-  }
-  if (s_Data.numLights == s_Data.maxLights - 1) {
-      GABGL_ERROR("Max number of All lights reached!");
-      return;
-  }
+  if (s_Data.numLights >= s_Data.maxLights) ResizeLightBuffers(s_Data.maxLights * 2);
 
-  std::shared_ptr<LightData> lightData = std::make_shared<LightData>( position, rotation, scale, color, type );
-
+  std::shared_ptr<LightData> lightData = std::make_shared<LightData>(position, rotation, scale, color, type);
   s_Data.lights.push_back(lightData);
-  if(type == LightType::POINT) s_Data.numPointLights++;
+
+  if (type == LightType::POINT) s_Data.numPointLights++;
   s_Data.numLights++;
+
   UpdateSSBOLightData();
 }
 
@@ -70,21 +61,10 @@ void LightManager::EditLight(int32_t index, const std::optional<glm::vec4>& newC
 
   std::shared_ptr<LightData>& lightData = s_Data.lights[index];
 
-  if (newColor.has_value()) {
-      lightData->color = newColor.value();
-  }
-
-  if (newPosition.has_value()) {
-      lightData->position = newPosition.value();
-  }
-
-  if (newRotation.has_value()) {
-      lightData->rotation = newRotation.value();
-  }
-
-  if (newScale.has_value()) {
-      lightData->scale = newScale.value();
-  }
+  if (newColor) lightData->color = *newColor;
+  if (newPosition) lightData->position = *newPosition;
+  if (newRotation) lightData->rotation = *newRotation;
+  if (newScale) lightData->scale = *newScale;
 
   UpdateSSBOLightData();
 }
@@ -97,6 +77,17 @@ void LightManager::RemoveLight(int32_t index)
       s_Data.numLights--;
       UpdateSSBOLightData();
   }
+}
+
+void LightManager::ResizeLightBuffers(uint32_t newMax)
+{
+  s_Data.maxLights = newMax;
+  s_Data.maxPointLights = newMax - 10;
+
+  s_Data.LightPosStorageBuffer = StorageBuffer::Create(sizeof(glm::vec4) * newMax, 0);
+  s_Data.LightQuantityStorageBuffer = StorageBuffer::Create(sizeof(uint32_t), 1);
+  s_Data.LightColorStorageBuffer = StorageBuffer::Create(sizeof(glm::vec4) * newMax, 2);
+  s_Data.LightTypeStorageBuffer = StorageBuffer::Create(sizeof(uint32_t) * newMax, 3);
 }
 
 void LightManager::UpdateSSBOLightData()

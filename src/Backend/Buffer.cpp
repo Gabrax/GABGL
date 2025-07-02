@@ -1,5 +1,6 @@
 #include "Buffer.h"
 #include "BackendLogger.h"
+#include "LightManager.h"
 #include "glm/trigonometric.hpp"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp> 
@@ -635,16 +636,16 @@ BloomBuffer::BloomBuffer(const std::shared_ptr<Shader>& downsampleShader, const 
 	m_hdrFB = FrameBuffer::Create(hdrSpec); 
 
   FramebufferSpecification blurSpec;
+  blurSpec.Attachments = { FramebufferTextureFormat::RGBA16F};
   blurSpec.Width = windowWidth;
   blurSpec.Height = windowHeight;
-  blurSpec.Attachments = { FramebufferTextureFormat::RGBA16F};
   m_pingpongFB[0] = FrameBuffer::Create(blurSpec);
   m_pingpongFB[1] = FrameBuffer::Create(blurSpec);
 
   FramebufferSpecification mipFBOspec;
+  mipFBOspec.Attachments = { FramebufferTextureFormat::R11F_G11F_B10F};
   mipFBOspec.Width = windowWidth;
   mipFBOspec.Height = windowHeight;
-  mipFBOspec.Attachments = { FramebufferTextureFormat::R11F_G11F_B10F};
   m_mipFB = FrameBuffer::Create(mipFBOspec);
 
   // Store viewport size
@@ -871,34 +872,77 @@ std::shared_ptr<BloomBuffer> BloomBuffer::Create(const std::shared_ptr<Shader>& 
   return std::make_shared<BloomBuffer>(downsampleShader,upsampleShader,finalShader);
 }
 
-PointShadowBuffer::PointShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeight) : m_shadowWidth(shadowWidth), m_shadowHeight(shadowHeight)
+DirectShadowBuffer::DirectShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeight) : m_shadowWidth(shadowWidth), m_shadowHeight(shadowHeight)
 {
-  m_shadowProj = glm::perspective(glm::radians(90.0f), float(m_shadowWidth) / float(m_shadowHeight), 0.1f, 20.0f);
+  glGenTextures(1, &m_depthMap);
+  glBindTexture(GL_TEXTURE_2D, m_depthMap);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, shadowWidth, shadowHeight, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
 
-  glGenTextures(1,&m_depth);
-  glBindTexture(GL_TEXTURE_2D, m_depth);
-  glTexImage2D(GL_TEXTURE_2D,0,GL_DEPTH_COMPONENT, m_shadowWidth, m_shadowHeight,0,GL_DEPTH_COMPONENT,GL_FLOAT,NULL);
-  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-  glBindTexture(GL_TEXTURE_2D,0);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+  float borderColor[] = {1.0, 1.0, 1.0, 1.0};
+  glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+
+  glGenFramebuffers(1, &m_FBO);
+  glBindFramebuffer(GL_FRAMEBUFFER, m_FBO);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, m_depthMap, 0);
+  glDrawBuffer(GL_NONE);
+  glReadBuffer(GL_NONE);
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+  float near_plane = 1.0f, far_plane = 100.0f;
+  float orthoSize = 10.0f; // You can customize this
+  m_shadowProj = glm::ortho(-orthoSize, orthoSize, -orthoSize, orthoSize, near_plane, far_plane);
+}
+
+DirectShadowBuffer::~DirectShadowBuffer()
+{
+  glDeleteFramebuffers(1, &m_FBO);
+  glDeleteTextures(1, &m_depthMap);
+}
+
+void DirectShadowBuffer::Bind() const
+{
+  glBindFramebuffer(GL_FRAMEBUFFER, m_FBO);
+  glViewport(0, 0, m_shadowWidth, m_shadowHeight);
+}
+
+void DirectShadowBuffer::UnBind() const
+{
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void DirectShadowBuffer::BindForReading(GLenum textureUnit) const
+{
+  glActiveTexture(textureUnit);
+  glBindTexture(GL_TEXTURE_2D, m_depthMap);
+}
+
+std::shared_ptr<DirectShadowBuffer> DirectShadowBuffer::Create(uint32_t shadowWidth, uint32_t shadowHeight)
+{
+    return std::make_shared<DirectShadowBuffer>(shadowWidth, shadowHeight);
+}
+
+OmniDirectShadowBuffer::OmniDirectShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeight) 
+{
+  m_shadowProj = glm::perspective(glm::radians(90.0f), float(shadowWidth) / float(shadowHeight), 0.1f, 20.0f);
+
+  FramebufferSpecification mipFBOspec;
+  mipFBOspec.Attachments = { FramebufferTextureFormat::DEPTH};
+  mipFBOspec.Width = shadowWidth;
+  mipFBOspec.Height = shadowHeight;
+  m_testFB = FrameBuffer::Create(mipFBOspec);
 
   glGenTextures(1, &m_depthCubemapArray);
   glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, m_depthCubemapArray);
-  glTexImage3D(GL_TEXTURE_CUBE_MAP_ARRAY,0,GL_R32F,m_shadowWidth,m_shadowHeight,6 * 30,0,GL_RED,GL_FLOAT,nullptr);
+  glTexImage3D(GL_TEXTURE_CUBE_MAP_ARRAY,0,GL_R16F,shadowWidth,shadowHeight,6 * 20,0,GL_RED,GL_FLOAT,nullptr);
   glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-
-  glGenFramebuffers(1,&m_fbo);
-  glBindFramebuffer(GL_FRAMEBUFFER,m_fbo);
-  glFramebufferTexture2D(GL_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,GL_TEXTURE_2D,m_depth,0);
-  glDrawBuffer(GL_NONE);
-  glReadBuffer(GL_NONE);
-  glBindFramebuffer(GL_FRAMEBUFFER,0);
 
   m_Directions =
   {
@@ -911,31 +955,30 @@ PointShadowBuffer::PointShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeight
   };
 }
 
-void PointShadowBuffer::Bind() const 
+void OmniDirectShadowBuffer::Bind() const 
 {
-  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_fbo);
-  glViewport(0,0,m_shadowWidth,m_shadowHeight);
+  m_testFB->Bind();
 }
 
-void PointShadowBuffer::BindForWriting(uint32_t cubemapIndex, uint32_t faceIndex)
+void OmniDirectShadowBuffer::BindForWriting(uint32_t cubemapIndex, uint32_t faceIndex)
 {
   glFramebufferTextureLayer(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,m_depthCubemapArray,0,cubemapIndex * 6 + faceIndex);
   glDrawBuffer(GL_COLOR_ATTACHMENT0);
 }
 
-void PointShadowBuffer::BindForReading(GLenum TextureUnit)
+void OmniDirectShadowBuffer::BindForReading(GLenum TextureUnit)
 {
-    glActiveTexture(TextureUnit);
-    glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, m_depthCubemapArray);
+  glActiveTexture(TextureUnit);
+  glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, m_depthCubemapArray);
 }
 
-void PointShadowBuffer::UnBind() const 
+void OmniDirectShadowBuffer::UnBind() const 
 {
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  m_testFB->UnBind();
 }
 
-std::shared_ptr<PointShadowBuffer> PointShadowBuffer::Create(uint32_t shadowWidth, uint32_t shadowHeight)
+std::shared_ptr<OmniDirectShadowBuffer> OmniDirectShadowBuffer::Create(uint32_t shadowWidth, uint32_t shadowHeight)
 {
-  return std::make_shared<PointShadowBuffer>(shadowWidth, shadowHeight);
+  return std::make_shared<OmniDirectShadowBuffer>(shadowWidth, shadowHeight);
 }
 

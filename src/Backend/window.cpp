@@ -57,7 +57,7 @@ void Window::Init(const WindowDefaultData& props)
 
   glfwSetWindowUserPointer(m_Window, &m_Data);
 
-  SetWindowIcon("res/engineTextures/gabglicon.png", m_Window);
+  SetWindowIcon("res/textures/gabglicon.png", m_Window);
   SetResizable(false);
   CenterWindowPos();
   SetVSync(true);

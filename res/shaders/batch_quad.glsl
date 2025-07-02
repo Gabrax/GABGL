@@ -27,6 +27,8 @@ layout (location = 0) out VertexOutput Output;
 layout (location = 3) out flat float v_TexIndex;
 layout (location = 4) out flat int v_EntityID;
 
+uniform bool u_Is3D;
+
 void main()
 {
 	Output.Color = a_Color;
@@ -35,14 +37,17 @@ void main()
 	v_TexIndex = a_TexIndex;
 	v_EntityID = a_EntityID;
 
-	gl_Position = OrtoProjection * vec4(a_Position, 1.0);
+  mat4 projection = u_Is3D ? ViewProjection : OrtoProjection;
+
+	gl_Position = projection * vec4(a_Position, 1.0);
 }
 
 #type FRAGMENT
 #version 450 core
 
 layout(location = 0) out vec4 o_Color;
-layout(location = 1) out int o_EntityID;
+layout(location = 1) out vec4 BrightColor;
+layout(location = 2) out int o_EntityID;
 
 struct VertexOutput
 {
@@ -97,8 +102,10 @@ void main()
 		case 31: texColor *= texture(u_Textures[31], Input.TexCoord * Input.TilingFactor); break;
 	}
 
-	if (texColor.a == 0.0)
-		discard;
+	if (texColor.a == 0.0) discard;
+
+  float brightness = dot(texColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+  BrightColor = brightness < 1.0 ? texColor : vec4(0.0);
 
 	o_Color = texColor;
 	o_EntityID = v_EntityID;

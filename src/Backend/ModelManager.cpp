@@ -30,7 +30,15 @@ static glm::quat GetGLMQuat(const aiQuaternion& pOrientation)
 
 struct ModelsData
 {
-  std::unordered_map<std::string, std::shared_ptr<Model>> models;
+  std::shared_ptr<StorageBuffer> InPositionsBuffer;
+  std::shared_ptr<StorageBuffer> InNormalsBuffer;
+  std::shared_ptr<StorageBuffer> BoneIDBuffer;
+  std::shared_ptr<StorageBuffer> BoneWeightBuffer;
+  std::shared_ptr<StorageBuffer> OutPositionsBuffer;
+  std::shared_ptr<StorageBuffer> OutNormalsBuffer;
+
+  std::unordered_map<std::string, std::shared_ptr<Model>> m_Models;
+
 } s_Data; 
 
 void ModelManager::BakeModelInstancedBuffers(Mesh& mesh, const std::vector<Transform>& transforms)
@@ -197,22 +205,22 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
   }
 
   std::string name = std::filesystem::path(path).stem().string();
-  s_Data.models[name] = std::move(model);
+  s_Data.m_Models[name] = std::move(model);
 
   GABGL_WARN("Model: {0} baking took {1} ms", name, timer.ElapsedMillis());
 }
 
 std::shared_ptr<Model> ModelManager::GetModel(const std::string& name)
 {
-  auto it = s_Data.models.find(name);
-  if (it != s_Data.models.end())
+  auto it = s_Data.m_Models.find(name);
+  if (it != s_Data.m_Models.end())
       return it->second;
   return nullptr;
 }
 
 void ModelManager::UpdateAnimations(const DeltaTime& dt)
 {
-  for(auto i : s_Data.models)
+  for(auto i : s_Data.m_Models)
   {
     if(i.second->IsAnimated()) i.second->UpdateAnimation(dt);
   }
@@ -221,9 +229,9 @@ void ModelManager::UpdateAnimations(const DeltaTime& dt)
 std::vector<glm::mat4> ModelManager::GetTransforms()
 {
   std::vector<glm::mat4> transforms;
-  transforms.reserve(s_Data.models.size());
+  transforms.reserve(s_Data.m_Models.size());
 
-  for (const auto& [key, model] : s_Data.models)
+  for (const auto& [key, model] : s_Data.m_Models)
   {
       if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH)
       {

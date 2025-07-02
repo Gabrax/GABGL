@@ -161,12 +161,12 @@ struct AssetsData
 
   std::vector<std::string> skybox =
   {
-    "res/skybox/NightSky_Right.png",
-    "res/skybox/NightSky_Left.png",
-    "res/skybox/NightSky_Top.png",
-    "res/skybox/NightSky_Bottom.png",
-    "res/skybox/NightSky_Front.png",
-    "res/skybox/NightSky_Back.png"
+    "res/textures/NightSky_Right.png",
+    "res/textures/NightSky_Left.png",
+    "res/textures/NightSky_Top.png",
+    "res/textures/NightSky_Bottom.png",
+    "res/textures/NightSky_Front.png",
+    "res/textures/NightSky_Back.png"
   };
 
   std::vector<std::tuple<const char*, float, bool, MeshType>> static_models =
@@ -187,7 +187,7 @@ struct AssetsData
   std::vector<std::tuple<const char*, float, bool, MeshType>> animated_models =
   {
     { "res/zombie/zombie.glb", 1.0f, false, MeshType::CONTROLLER },
-    { "res/harry/harry.glb", 1.0f, false, MeshType::CONTROLLER },
+    { "res/models/harry.glb", 1.0f, false, MeshType::CONTROLLER },
   };
 
   std::vector<std::future<void>> m_FutureVoid;
@@ -201,11 +201,9 @@ struct AssetsData
 
 } s_Data;
 
-
 void AssetManager::StartLoadingAssets()
 {
-  if (s_Data.m_LoadingStarted)
-      return; // Already started
+  if (s_Data.m_LoadingStarted) return; // Already started
 
   s_Data.m_LoadingStarted = true;
   s_Data.m_LoadingDone = false;

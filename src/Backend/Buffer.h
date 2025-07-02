@@ -288,6 +288,11 @@ private:
 	uint32_t m_DepthAttachment = 0;
 };
 
+struct GeometryBuffer
+{
+
+};
+
 struct BloomBuffer
 {
 	BloomBuffer(const std::shared_ptr<Shader>& downsampleShader, const std::shared_ptr<Shader>& upsampleShader, const std::shared_ptr<Shader>& finalShader); 
@@ -330,7 +335,27 @@ private:
 
 struct DirectShadowBuffer
 {
+  DirectShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeight);
+  ~DirectShadowBuffer();
 
+  void Bind() const;
+  void UnBind() const;
+
+  void BindForReading(GLenum textureUnit) const;
+
+  const glm::mat4& GetLightSpaceMatrix() const { return m_shadowProj; }
+  GLuint GetDepthMap() const { return m_depthMap; }
+
+  static std::shared_ptr<DirectShadowBuffer> Create(uint32_t shadowWidth, uint32_t shadowHeight);
+
+private:
+
+  uint32_t m_shadowWidth = 0, m_shadowHeight = 0;
+
+  GLuint m_FBO = 0;
+  GLuint m_depthMap = 0;
+
+  glm::mat4 m_shadowProj;
 };
 
 struct CubemapDirection
@@ -340,10 +365,10 @@ struct CubemapDirection
   glm::vec3 Up;
 };
 
-struct PointShadowBuffer
+struct OmniDirectShadowBuffer
 {
-  PointShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeight);
-  ~PointShadowBuffer() = default;
+  OmniDirectShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeight);
+  ~OmniDirectShadowBuffer() = default;
 
   void Bind() const;
   void UnBind() const;
@@ -354,18 +379,13 @@ struct PointShadowBuffer
 
   inline std::span<const CubemapDirection, 6> GetFaceDirections() const { return m_Directions; }
 
-	static std::shared_ptr<PointShadowBuffer> Create(uint32_t shadowWidth, uint32_t shadowHeight);
+	static std::shared_ptr<OmniDirectShadowBuffer> Create(uint32_t shadowWidth, uint32_t shadowHeight);
 
 private:
 
   std::array<CubemapDirection, 6> m_Directions;
+  std::shared_ptr<FrameBuffer> m_testFB;
 
   glm::mat4 m_shadowProj;
-
-  uint32_t m_shadowWidth; 
-  uint32_t m_shadowHeight;
-
-  uint32_t m_fbo;
-  uint32_t m_depth;
   uint32_t m_depthCubemapArray;
 };

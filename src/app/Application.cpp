@@ -13,7 +13,7 @@ Application::Application()
   AudioManager::PlayMusic("night",true);
   LightManager::AddLight(LightType::POINT, glm::vec4(1.0f,1.0f,0.0,1.0f), glm::vec3(5.0f), glm::vec3(1.0f), glm::vec3(1.0f));
   LightManager::AddLight(LightType::POINT, glm::vec4(1.0f,1.0f,0.0,1.0f), glm::vec3(15.0f,5.0f,15.0f), glm::vec3(1.0f), glm::vec3(1.0f)); 
-  /*LightManager::AddLight(LightType::DIRECT, glm::vec4(1.0f), glm::vec3(50.0f), glm::vec3(1.0f), glm::vec3(1.0f));*/
+  /*LightManager::AddLight(LightType::DIRECT, glm::vec4(1.0f), glm::vec3(50000.0f), glm::vec3(1.0f), glm::vec3(1.0f));*/
 
   Transform housetransform;
   housetransform.SetPosition(glm::vec3(0.0f));
@@ -56,12 +56,12 @@ void Application::OnUpdate(DeltaTime& dt)
       Renderer::DrawModel(ModelManager::GetModel("aidkit"),ModelManager::GetModel("aidkit_convex"));
 
       Renderer::DrawSkybox("night");
-      Renderer::Draw2DText(FontManager::GetFont("dpcomic"),"FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f,50.0f), 0.5f, glm::vec4(1.0f,1.0f,3.0f,1.0f));
+      Renderer::DrawText(FontManager::GetFont("dpcomic"),"FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f,50.0f), 0.5f, glm::vec4(1.0f));
     },
     [&dt]()
     {
-      Renderer::DrawCube({glm::vec3(5.0f)});
-      Renderer::DrawCube({glm::vec3(15.0f,5.0f,15.0f)});
+      Renderer::DrawCube(glm::vec3(5.0f),glm::vec3(1.0f),glm::vec4(1.0,1.0,0.0,1.0));
+      Renderer::DrawCube(glm::vec3(15.0f,5.0f,15.0f),glm::vec3(1.0f),glm::vec4(1.0f));
 
       if (Input::IsKeyPressed(Key::X))
       {

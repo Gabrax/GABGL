@@ -8,12 +8,11 @@
 #include "Renderer.h"
 #include "Shader.h"
 #include "Texture.h"
+#include "../engine.h"
+#include "AudioManager.h"
 #include <cstdint>
 #include <limits>
 #include <stb_image.h>
-#include "../engine.h"
-#include "AudioManager.h"
-#include "../input/UserInput.h"
 #include <imgui.h>
 #include <imgui_internal.h>
 #include "backends/imgui_impl_glfw.h"
@@ -26,7 +25,6 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
 #include "json.hpp"
-
 
 void MessageCallback(
 	unsigned source,
@@ -78,13 +76,6 @@ struct LineVertex
 	int EntityID;
 };
 
-struct MeshVertex
-{
-  glm::vec3 Position;   
-  glm::vec3 Normal;     
-  glm::vec4 Color;
-};
-
 struct CameraData
 {
 	glm::mat4 ViewProjection;
@@ -111,18 +102,12 @@ struct RendererData
 
 	std::shared_ptr<Texture> WhiteTexture;
 
-	std::shared_ptr<VertexArray> _3DQuadVertexArray;
-	std::shared_ptr<VertexBuffer> _3DQuadVertexBuffer;
-	uint32_t _3DQuadIndexCount = 0;
-	QuadVertex* _3DQuadVertexBufferBase = nullptr;
-	QuadVertex* _3DQuadVertexBufferPtr = nullptr;
-	glm::vec4 _3DQuadVertexPositions[4];
-
-	std::shared_ptr<VertexArray> _2DQuadVertexArray;
-	std::shared_ptr<VertexBuffer> _2DQuadVertexBuffer;
-	uint32_t _2DQuadIndexCount = 0;
-	QuadVertex* _2DQuadVertexBufferBase = nullptr;
-	QuadVertex* _2DQuadVertexBufferPtr = nullptr;
+	std::shared_ptr<VertexArray> QuadVertexArray;
+	std::shared_ptr<VertexBuffer> QuadVertexBuffer;
+	uint32_t QuadIndexCount = 0;
+	QuadVertex* QuadVertexBufferBase = nullptr;
+	QuadVertex* QuadVertexBufferPtr = nullptr;
+	glm::vec4 QuadVertexPositions[4];
 
 	std::shared_ptr<VertexArray> CircleVertexArray;
 	std::shared_ptr<VertexBuffer> CircleVertexBuffer;
@@ -137,72 +122,42 @@ struct RendererData
 	LineVertex* LineVertexBufferPtr = nullptr;
 	float LineWidth = 2.0f;
 
-  std::shared_ptr<VertexArray> CubeVertexArray;
-  std::shared_ptr<VertexBuffer> CubeVertexBuffer;
-  std::shared_ptr<IndexBuffer> CubeIndexBuffer;
-  MeshVertex* CubeVertexBufferBase = nullptr;
-  MeshVertex* CubeVertexBufferPtr = nullptr;
-  uint32_t CubeIndexCount = 0;
-  uint32_t CubeVertexCount = 0;
-
-  std::shared_ptr<VertexArray> ModelVertexArray;
-  std::shared_ptr<VertexBuffer> ModelVertexBuffer;
-  std::shared_ptr<IndexBuffer> ModelIndexBuffer;
-  Vertex* ModelVertexBufferBase = nullptr;
-  Vertex* ModelVertexBufferPtr = nullptr;
-  uint32_t ModelIndexCount = 0;
-  uint32_t ModelVertexCount = 0;
+  bool Is3D = false;
 
   struct Shaders
 	{
-		std::shared_ptr<Shader> _3DQuadShader;
-		std::shared_ptr<Shader> _2DQuadShader;
-		std::shared_ptr<Shader> _CircleShader;
-		std::shared_ptr<Shader> _LineShader;
-		std::shared_ptr<Shader> _FramebufferShader;
-    std::shared_ptr<Shader> modelShader;
+		std::shared_ptr<Shader> QuadShader;
+		std::shared_ptr<Shader> CircleShader;
+		std::shared_ptr<Shader> LineShader;
+		std::shared_ptr<Shader> FramebufferShader;
     std::shared_ptr<Shader> skyboxShader;
     std::shared_ptr<Shader> ModelShader;
     std::shared_ptr<Shader> DownSampleShader;
     std::shared_ptr<Shader> UpSampleShader;
     std::shared_ptr<Shader> BloomResultShader;
-    std::shared_ptr<Shader> PointShadowBufferShader;
+    std::shared_ptr<Shader> OmniDirectShadowShader;
 
 	} _shaders;
 
   CameraData m_CameraBuffer;
   std::shared_ptr<UniformBuffer> m_CameraUniformBuffer;
 
-  glm::vec3 quadPositions[4] = {
+  static constexpr glm::vec3 quadPositions[4] = {
       { 0.0f, 0.0f, 0.0f },
       { 1.0f, 0.0f, 0.0f },
       { 1.0f, 1.0f, 0.0f },
       { 0.0f, 1.0f, 0.0f }
   };
 
-  glm::vec2 texCoords[4] = {
+  static constexpr glm::vec2 texCoords[4] = {
       { 0.0f, 1.0f },
       { 1.0f, 1.0f },
       { 1.0f, 0.0f },
       { 0.0f, 0.0f }
   };
 
-  MeshVertex cubeVertices[8] = {
-      {{-0.5f, -0.5f,  0.5f}, {0, 0, 1}, {1.0f, 1.0f, 1.0f, 1.0f}},
-      {{ 0.5f, -0.5f,  0.5f}, {0, 0, 1}, {1.0f, 1.0f, 1.0f, 1.0f}},
-      {{ 0.5f,  0.5f,  0.5f}, {0, 0, 1}, {1.0f, 1.0f, 1.0f, 1.0f}},
-      {{-0.5f,  0.5f,  0.5f}, {0, 0, 1}, {1.0f, 1.0f, 1.0f, 1.0f}},
-
-      {{-0.5f, -0.5f, -0.5f}, {0, 0, -1}, {1.0f, 1.0f, 1.0f, 1.0f}},
-      {{ 0.5f, -0.5f, -0.5f}, {0, 0, -1}, {1.0f, 1.0f, 1.0f, 1.0f}},
-      {{ 0.5f,  0.5f, -0.5f}, {0, 0, -1}, {1.0f, 1.0f, 1.0f, 1.0f}},
-      {{-0.5f,  0.5f, -0.5f}, {0, 0, -1}, {1.0f, 1.0f, 1.0f, 1.0f}},
-  };
-  
-	std::array<std::shared_ptr<Texture>, MaxTextureSlots> _3DTextureSlots;
-	uint32_t _3DTextureSlotIndex = 1; // 0 = white texture
-	std::array<std::shared_ptr<Texture>, MaxTextureSlots> _2DTextureSlots;
-	uint32_t _2DTextureSlotIndex = 1; // 0 = white texture
+	std::array<std::shared_ptr<Texture>, MaxTextureSlots> TextureSlots;
+	uint32_t TextureSlotIndex = 1; // 0 = white texture
 
   std::unordered_map<std::string, GLuint> textureCounters = {
       {"texture_diffuse", 1},
@@ -216,7 +171,7 @@ struct RendererData
   std::shared_ptr<FrameBuffer> m_Framebuffer;
   std::shared_ptr<FrameBuffer> m_MSAAFramebuffer;
   std::shared_ptr<BloomBuffer> m_BloomFramebuffer;
-  std::shared_ptr<PointShadowBuffer> m_PointShadowFramebuffer;
+  std::shared_ptr<OmniDirectShadowBuffer> m_PointShadowFramebuffer;
 
   Window* m_WindowRef = nullptr;
   Camera m_Camera;
@@ -235,18 +190,16 @@ struct RendererData
 
 void Renderer::LoadShaders()
 {
-	s_Data._shaders._3DQuadShader = Shader::Create("res/shaders/Renderer2D_Quad.glsl");
-	s_Data._shaders._2DQuadShader = Shader::Create("res/shaders/Renderer2D_2DQuad.glsl");
-	s_Data._shaders._CircleShader = Shader::Create("res/shaders/Renderer2D_Circle.glsl");
-	s_Data._shaders._LineShader = Shader::Create("res/shaders/Renderer2D_Line.glsl");
-	s_Data._shaders._FramebufferShader = Shader::Create("res/shaders/FB.glsl");
-  s_Data._shaders.modelShader = Shader::Create("res/shaders/Renderer3D_static.glsl");
+	s_Data._shaders.QuadShader = Shader::Create("res/shaders/batch_quad.glsl");
+	s_Data._shaders.CircleShader = Shader::Create("res/shaders/batch_circle.glsl");
+	s_Data._shaders.LineShader = Shader::Create("res/shaders/batch_line.glsl");
+	s_Data._shaders.FramebufferShader = Shader::Create("res/shaders/finalFB.glsl");
   s_Data._shaders.skyboxShader = Shader::Create("res/shaders/skybox.glsl");
-  s_Data._shaders.ModelShader = Shader::Create("res/shaders/Renderer3D_Model.glsl");
+  s_Data._shaders.ModelShader = Shader::Create("res/shaders/static_anim_model.glsl");
   s_Data._shaders.DownSampleShader = Shader::Create("res/shaders/bloom_downsample.glsl");
   s_Data._shaders.UpSampleShader = Shader::Create("res/shaders/bloom_upsample.glsl");
   s_Data._shaders.BloomResultShader = Shader::Create("res/shaders/bloom_final.glsl");
-  s_Data._shaders.PointShadowBufferShader = Shader::Create("res/shaders/point_shadow.glsl");
+  s_Data._shaders.OmniDirectShadowShader = Shader::Create("res/shaders/point_shadowFB.glsl");
 }
 
 void Renderer::Init()
@@ -265,9 +218,9 @@ void Renderer::Init()
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_LINE_SMOOTH);
 
-	s_Data._3DQuadVertexArray = VertexArray::Create();
-	s_Data._3DQuadVertexBuffer = VertexBuffer::Create(s_Data.MaxVertices * sizeof(QuadVertex));
-	s_Data._3DQuadVertexBuffer->SetLayout({
+  s_Data.QuadVertexArray = VertexArray::Create();
+	s_Data.QuadVertexBuffer = VertexBuffer::Create(s_Data.MaxVertices * sizeof(QuadVertex));
+	s_Data.QuadVertexBuffer->SetLayout({
 		{ ShaderDataType::Float3, "a_Position"     },
 		{ ShaderDataType::Float4, "a_Color"        },
 		{ ShaderDataType::Float2, "a_TexCoord"     },
@@ -275,21 +228,8 @@ void Renderer::Init()
 		{ ShaderDataType::Float,  "a_TilingFactor" },
 		{ ShaderDataType::Int,    "a_EntityID"     }
 		});
-	s_Data._3DQuadVertexArray->AddVertexBuffer(s_Data._3DQuadVertexBuffer);
-	s_Data._3DQuadVertexBufferBase = new QuadVertex[s_Data.MaxVertices];
-
-  s_Data._2DQuadVertexArray = VertexArray::Create();
-	s_Data._2DQuadVertexBuffer = VertexBuffer::Create(s_Data.MaxVertices * sizeof(QuadVertex));
-	s_Data._2DQuadVertexBuffer->SetLayout({
-		{ ShaderDataType::Float3, "a_Position"     },
-		{ ShaderDataType::Float4, "a_Color"        },
-		{ ShaderDataType::Float2, "a_TexCoord"     },
-		{ ShaderDataType::Float,  "a_TexIndex"     },
-		{ ShaderDataType::Float,  "a_TilingFactor" },
-		{ ShaderDataType::Int,    "a_EntityID"     }
-		});
-	s_Data._2DQuadVertexArray->AddVertexBuffer(s_Data._2DQuadVertexBuffer);
-	s_Data._2DQuadVertexBufferBase = new QuadVertex[s_Data.MaxVertices];
+	s_Data.QuadVertexArray->AddVertexBuffer(s_Data.QuadVertexBuffer);
+	s_Data.QuadVertexBufferBase = new QuadVertex[s_Data.MaxVertices];
 
 	uint32_t* quadIndices = new uint32_t[s_Data.MaxIndices];
 
@@ -307,10 +247,8 @@ void Renderer::Init()
 		offset += 4;
 	}
 
-	std::shared_ptr<IndexBuffer> _3DquadIB = IndexBuffer::Create(quadIndices, s_Data.MaxIndices);
-	s_Data._3DQuadVertexArray->SetIndexBuffer(_3DquadIB);
 	std::shared_ptr<IndexBuffer> _2DquadIB = IndexBuffer::Create(quadIndices, s_Data.MaxIndices);
-	s_Data._2DQuadVertexArray->SetIndexBuffer(_2DquadIB);
+	s_Data.QuadVertexArray->SetIndexBuffer(_2DquadIB);
 	delete[] quadIndices;
 
 	// Circles
@@ -328,7 +266,7 @@ void Renderer::Init()
 		{ ShaderDataType::Float,  "a_TexIndex"		}*/
 		});
 	s_Data.CircleVertexArray->AddVertexBuffer(s_Data.CircleVertexBuffer);
-	s_Data.CircleVertexArray->SetIndexBuffer(_3DquadIB); // Use quad IB
+	s_Data.CircleVertexArray->SetIndexBuffer(_2DquadIB); // Use quad IB
 	s_Data.CircleVertexBufferBase = new CircleVertex[s_Data.MaxVertices];
 
 	// Lines
@@ -347,53 +285,17 @@ void Renderer::Init()
 	s_Data.WhiteTexture->SetData(&whiteTextureData, sizeof(uint32_t));
 
 	int32_t samplers[s_Data.MaxTextureSlots];
-	for (uint32_t i = 0; i < s_Data.MaxTextureSlots; i++)
-		samplers[i] = i;
+	for (uint32_t i = 0; i < s_Data.MaxTextureSlots; i++) samplers[i] = i;
 
-	s_Data._3DTextureSlots[0] = s_Data.WhiteTexture;
-	s_Data._2DTextureSlots[0] = s_Data.WhiteTexture;
+	s_Data.TextureSlots[0] = s_Data.WhiteTexture;
 
-	s_Data._3DQuadVertexPositions[0] = { -0.5f, -0.5f, 0.0f, 1.0f };
-	s_Data._3DQuadVertexPositions[1] = { 0.5f, -0.5f, 0.0f, 1.0f };
-	s_Data._3DQuadVertexPositions[2] = { 0.5f,  0.5f, 0.0f, 1.0f };
-	s_Data._3DQuadVertexPositions[3] = { -0.5f,  0.5f, 0.0f, 1.0f };
-
-  s_Data.CubeVertexBufferBase = new MeshVertex[s_Data.MaxVertices];
-  s_Data.CubeVertexBuffer = VertexBuffer::Create(nullptr, s_Data.MaxVertices * sizeof(MeshVertex));
-  s_Data.CubeVertexBuffer->SetLayout({
-      { ShaderDataType::Float3, "a_Position" },   // 0
-      { ShaderDataType::Float3, "a_Normal" },     // 1
-      { ShaderDataType::Float4, "a_Color" },      // 3
-  });
+	s_Data.QuadVertexPositions[0] = { -0.5f, -0.5f, 0.0f, 1.0f };
+	s_Data.QuadVertexPositions[1] = { 0.5f, -0.5f, 0.0f, 1.0f };
+	s_Data.QuadVertexPositions[2] = { 0.5f,  0.5f, 0.0f, 1.0f };
+	s_Data.QuadVertexPositions[3] = { -0.5f,  0.5f, 0.0f, 1.0f };
 
   std::vector<uint32_t> indices;
   indices.reserve(s_Data.MaxIndices);
-
-  const uint32_t cubeIndicesCount = 36;
-
-  uint32_t cubeIndices[36] = {
-      0, 1, 2, 2, 3, 0,       // Front
-      4, 5, 6, 6, 7, 4,       // Back
-      4, 0, 3, 3, 7, 4,       // Left
-      1, 5, 6, 6, 2, 1,       // Right
-      3, 2, 6, 6, 7, 3,       // Top
-      4, 5, 1, 1, 0, 4        // Bottom
-  };
-
-  uint32_t maxCubes = s_Data.MaxVertices / 8; // 8 vertices per cube
-  for (uint32_t i = 0; i < maxCubes; i++)
-  {
-      for (uint32_t j = 0; j < cubeIndicesCount; j++)
-      {
-          indices.push_back(cubeIndices[j] + i * 8);
-      }
-  }
-
-  s_Data.CubeIndexBuffer = IndexBuffer::Create(indices.data(), (uint32_t)indices.size());
-  s_Data.CubeVertexArray = VertexArray::Create();
-  s_Data.CubeVertexArray->AddVertexBuffer(s_Data.CubeVertexBuffer);
-  s_Data.CubeVertexArray->SetIndexBuffer(s_Data.CubeIndexBuffer);
-  s_Data.CubeVertexBufferPtr = s_Data.CubeVertexBufferBase;
 
   s_Data.m_CameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 0);
 
@@ -414,7 +316,7 @@ void Renderer::Init()
 
   s_Data.m_BloomFramebuffer = BloomBuffer::Create(s_Data._shaders.DownSampleShader, s_Data._shaders.UpSampleShader, s_Data._shaders.BloomResultShader);
 
-  s_Data.m_PointShadowFramebuffer = PointShadowBuffer::Create(1024, 1024);
+  s_Data.m_PointShadowFramebuffer = OmniDirectShadowBuffer::Create(512, 512);
 
   s_Data.m_WindowRef = &Engine::GetInstance().GetMainWindow();
 
@@ -451,15 +353,7 @@ void Renderer::Init()
 
 void Renderer::Shutdown()
 {
-	delete[] s_Data._3DQuadVertexBufferBase;
-	delete[] s_Data._2DQuadVertexBufferBase;
-
-  delete[] s_Data.CubeVertexBufferBase;
-  s_Data.CubeVertexBufferBase = nullptr;
-
-  s_Data.CubeVertexArray.reset();
-  s_Data.CubeVertexBuffer.reset();
-  s_Data.CubeIndexBuffer.reset();
+	delete[] s_Data.QuadVertexBufferBase;
 
   ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
@@ -473,58 +367,70 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
   glCullFace(GL_FRONT);
   glFrontFace(GL_CW);
 
-  s_Data.m_PointShadowFramebuffer->Bind();
-  s_Data.m_ShadowPass = true;
-  float max = std::numeric_limits<float>::max();
-  SetClearColor({max,max,max,max});
-
-  for (auto lightIndex : std::views::iota(0, LightManager::GetPointLightsQuantity()))
   {
-    s_Data._shaders.PointShadowBufferShader->Use();
-    glm::vec3 lightPosition = LightManager::GetLightPosition(lightIndex);
-    s_Data._shaders.PointShadowBufferShader->setVec3("gLightWorldPos",lightPosition);
+    GABGL_PROFILE_SCOPE("OMNI SHADOW PASS");
 
-    const auto& directions = s_Data.m_PointShadowFramebuffer->GetFaceDirections();
-    for (auto face = 0; face < directions.size(); ++face)
+    s_Data.m_PointShadowFramebuffer->Bind();
+    s_Data.m_ShadowPass = true;
+    float max = std::numeric_limits<float>::max();
+    SetClearColor({max,max,max,max});
+
+    for (auto lightIndex : std::views::iota(0, LightManager::GetPointLightsQuantity()))
     {
-      s_Data.m_PointShadowFramebuffer->BindForWriting(lightIndex, face);
-      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      s_Data._shaders.OmniDirectShadowShader->Use();
+      glm::vec3 lightPosition = LightManager::GetLightPosition(lightIndex);
+      s_Data._shaders.OmniDirectShadowShader->setVec3("gLightWorldPos",lightPosition);
 
-      glm::mat4 view = glm::lookAt(lightPosition,lightPosition + directions[face].Target,directions[face].Up);
-      s_Data.m_LightProj = s_Data.m_PointShadowFramebuffer->GetShadowProj() * view;
+      const auto& directions = s_Data.m_PointShadowFramebuffer->GetFaceDirections();
+      for (auto face = 0; face < directions.size(); ++face)
+      {
+        s_Data.m_PointShadowFramebuffer->BindForWriting(lightIndex, face);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-      geometry();
+        glm::mat4 view = glm::lookAt(lightPosition,lightPosition + directions[face].Target,directions[face].Up);
+        s_Data.m_LightProj = s_Data.m_PointShadowFramebuffer->GetShadowProj() * view;
+
+        geometry();
+      }
     }
+    s_Data.m_ShadowPass = false;
+    s_Data.m_PointShadowFramebuffer->UnBind();
   }
-  s_Data.m_ShadowPass = false;
-  s_Data.m_PointShadowFramebuffer->UnBind();
+  
+  {
+    GABGL_PROFILE_SCOPE("GEOMETRY PASS");
 
-  s_Data.m_MSAAFramebuffer->Bind();
-  SetClearColor(glm::vec4(0.0f));
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    s_Data.m_MSAAFramebuffer->Bind();
+    SetClearColor(glm::vec4(0.0f));
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  s_Data._shaders.ModelShader->Use();
-  s_Data.m_PointShadowFramebuffer->BindForReading(GL_TEXTURE1);
-  s_Data._shaders.ModelShader->setInt("u_ShadowMap",1);
-  BeginScene(s_Data.m_Camera);
-  geometry();
-  EndScene();
+    s_Data._shaders.ModelShader->Use();
+    s_Data.m_PointShadowFramebuffer->BindForReading(GL_TEXTURE1);
+    s_Data._shaders.ModelShader->setInt("u_ShadowMap",1);
+    BeginScene(s_Data.m_Camera);
+    geometry();
+    EndScene();
 
-  s_Data.m_MSAAFramebuffer->UnBind();
-  s_Data.m_MSAAFramebuffer->BlitColor(s_Data.m_Framebuffer);
+    s_Data.m_MSAAFramebuffer->UnBind();
+    s_Data.m_MSAAFramebuffer->BlitColor(s_Data.m_Framebuffer);
+  }
 
-  s_Data.m_BloomFramebuffer->BlitDepthFrom(s_Data.m_MSAAFramebuffer);
-  s_Data.m_BloomFramebuffer->Bind();
-  glClear(GL_COLOR_BUFFER_BIT);
+  {
+    GABGL_PROFILE_SCOPE("BLOOM PASS");
 
-  BeginScene(s_Data.m_Camera);
-  lights();
-  EndScene();
+    s_Data.m_BloomFramebuffer->BlitDepthFrom(s_Data.m_MSAAFramebuffer);
+    s_Data.m_BloomFramebuffer->Bind();
+    glClear(GL_COLOR_BUFFER_BIT);
 
-  s_Data.m_BloomFramebuffer->RenderBloomTexture(0.005f);
-  s_Data.m_BloomFramebuffer->UnBind();
-  s_Data.m_BloomFramebuffer->CompositeBloomOver(s_Data.m_Framebuffer);
-  s_Data.m_BloomFramebuffer->BlitDepthTo(s_Data.m_Framebuffer);
+    BeginScene(s_Data.m_Camera);
+    lights();
+    EndScene();
+
+    s_Data.m_BloomFramebuffer->RenderBloomTexture(0.005f);
+    s_Data.m_BloomFramebuffer->UnBind();
+    s_Data.m_BloomFramebuffer->CompositeBloomOver(s_Data.m_Framebuffer);
+    s_Data.m_BloomFramebuffer->BlitDepthTo(s_Data.m_Framebuffer);
+  }
 
   s_Data.m_Framebuffer->Bind();
   s_Data.m_Framebuffer->ClearAttachment(1, -1);
@@ -561,38 +467,23 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
 void Renderer::DrawLoadingScreen()
 {
   BeginScene(s_Data.m_Camera);
-  Renderer::Draw2DText(FontManager::GetFont("dpcomic"),"LOADING", glm::vec2(s_Data.m_WindowRef->GetWidth() / 2,s_Data.m_WindowRef->GetHeight() / 2), 1.0f, glm::vec4(1.0f));
+  Renderer::DrawText(FontManager::GetFont("dpcomic"),"LOADING", glm::vec2(s_Data.m_WindowRef->GetWidth() / 2,s_Data.m_WindowRef->GetHeight() / 2), 1.0f, glm::vec4(1.0f));
   EndScene();
 }
 
 void Renderer::SwitchRenderState()
 {
-  static bool tabWasPressedLastFrame = false;
-
-  if (Input::IsKeyPressed(Key::Tab))
+  if (s_Data.m_SceneState == RendererData::SceneState::Edit)
   {
-    if (!tabWasPressedLastFrame)
-    {
-      if (s_Data.m_SceneState == RendererData::SceneState::Edit)
-      {
-        s_Data.m_Camera.SetMode(CameraMode::FPS);
-        s_Data.m_WindowRef->SetCursorVisible(false);
-        s_Data.m_SceneState = RendererData::SceneState::Play;
-      }
-      else if (s_Data.m_SceneState == RendererData::SceneState::Play)
-      {
-        s_Data.m_Camera.SetMode(CameraMode::ORBITAL);
-        s_Data.m_WindowRef->SetCursorVisible(true);
-        s_Data.m_SceneState = RendererData::SceneState::Edit;
-      }
-
-      tabWasPressedLastFrame = true;
-    }
+    s_Data.m_Camera.SetMode(CameraMode::FPS);
+    s_Data.m_WindowRef->SetCursorVisible(false);
+    s_Data.m_SceneState = RendererData::SceneState::Play;
   }
-  else
+  else if (s_Data.m_SceneState == RendererData::SceneState::Play)
   {
-    // Reset the flag when TAB is released
-    tabWasPressedLastFrame = false;
+    s_Data.m_Camera.SetMode(CameraMode::ORBITAL);
+    s_Data.m_WindowRef->SetCursorVisible(true);
+    s_Data.m_SceneState = RendererData::SceneState::Edit;
   }
 }
 
@@ -610,38 +501,6 @@ void Renderer::SetFullscreen(const std::string& sound, bool windowed)
   AudioManager::PlaySound(sound);
 }
 
-void Renderer::StartBatch()
-{
-	s_Data._3DQuadIndexCount = 0;
-	s_Data._3DQuadVertexBufferPtr = s_Data._3DQuadVertexBufferBase;
-	s_Data._3DTextureSlotIndex = 1;
-
-	s_Data._2DQuadIndexCount = 0;
-	s_Data._2DQuadVertexBufferPtr = s_Data._2DQuadVertexBufferBase;
-	s_Data._2DTextureSlotIndex = 1;
-
-	s_Data.CircleIndexCount = 0;
-	s_Data.CircleVertexBufferPtr = s_Data.CircleVertexBufferBase;
-
-	s_Data.LineVertexCount = 0;
-	s_Data.LineVertexBufferPtr = s_Data.LineVertexBufferBase;
-
-  s_Data.CubeVertexCount = 0;
-  s_Data.CubeIndexCount = 0;
-  s_Data.CubeVertexBufferPtr = s_Data.CubeVertexBufferBase;
-}
-
-void Renderer::BeginScene(const Camera& camera, const glm::mat4& transform)
-{
-	s_Data.m_CameraBuffer.ViewProjection = camera.GetProjection() * glm::inverse(transform);
-	s_Data.m_CameraBuffer.OrtoProjection = camera.GetOrtoProjection();
-  s_Data.m_CameraBuffer.NonRotViewProjection = camera.GetNonRotationViewProjection();
-  s_Data.m_CameraBuffer.CameraPos = camera.GetPosition();
-	s_Data.m_CameraUniformBuffer->SetData(&s_Data.m_CameraBuffer, sizeof(CameraData));
-
-	StartBatch();
-}
-
 void Renderer::BeginScene(const Camera& camera)
 {
 	s_Data.m_CameraBuffer.ViewProjection = camera.GetViewProjection();
@@ -653,36 +512,31 @@ void Renderer::BeginScene(const Camera& camera)
 	StartBatch();
 }
 
+void Renderer::EndScene()
+{
+	Flush();
+}
+
 void Renderer::Flush()
 {
-	if (s_Data._3DQuadIndexCount)
+	if (s_Data.QuadIndexCount)
 	{
-		uint32_t dataSize = (uint32_t)((uint8_t*)s_Data._3DQuadVertexBufferPtr - (uint8_t*)s_Data._3DQuadVertexBufferBase);
-		s_Data._3DQuadVertexBuffer->SetData(s_Data._3DQuadVertexBufferBase, dataSize);
+		uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.QuadVertexBufferPtr - (uint8_t*)s_Data.QuadVertexBufferBase);
+		s_Data.QuadVertexBuffer->SetData(s_Data.QuadVertexBufferBase, dataSize);
 
-		for (uint32_t i = 0; i < s_Data._3DTextureSlotIndex; i++)
-			s_Data._3DTextureSlots[i]->Bind(i);
+		for (uint32_t i = 0; i < s_Data.TextureSlotIndex; i++)
+			s_Data.TextureSlots[i]->Bind(i);
 
-		s_Data._shaders._3DQuadShader->Use();
-		Renderer::DrawIndexed(s_Data._3DQuadVertexArray, s_Data._3DQuadIndexCount);
-	}
-	if (s_Data._2DQuadIndexCount)
-	{
-		uint32_t dataSize = (uint32_t)((uint8_t*)s_Data._2DQuadVertexBufferPtr - (uint8_t*)s_Data._2DQuadVertexBufferBase);
-		s_Data._2DQuadVertexBuffer->SetData(s_Data._2DQuadVertexBufferBase, dataSize);
-
-		for (uint32_t i = 0; i < s_Data._2DTextureSlotIndex; i++)
-			s_Data._2DTextureSlots[i]->Bind(i);
-
-		s_Data._shaders._2DQuadShader->Use();
-		Renderer::DrawIndexed(s_Data._2DQuadVertexArray, s_Data._2DQuadIndexCount);
+		s_Data._shaders.QuadShader->Use();
+    s_Data._shaders.QuadShader->setBool("u_Is3D", s_Data.Is3D);
+		Renderer::DrawIndexed(s_Data.QuadVertexArray, s_Data.QuadIndexCount);
 	}
 	if (s_Data.CircleIndexCount)
 	{
 		uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.CircleVertexBufferPtr - (uint8_t*)s_Data.CircleVertexBufferBase);
 		s_Data.CircleVertexBuffer->SetData(s_Data.CircleVertexBufferBase, dataSize);
 
-		s_Data._shaders._CircleShader->Use();
+		s_Data._shaders.CircleShader->Use();
 		Renderer::DrawIndexed(s_Data.CircleVertexArray, s_Data.CircleIndexCount);
 	}
 	if (s_Data.LineVertexCount)
@@ -690,134 +544,29 @@ void Renderer::Flush()
 		uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.LineVertexBufferPtr - (uint8_t*)s_Data.LineVertexBufferBase);
 		s_Data.LineVertexBuffer->SetData(s_Data.LineVertexBufferBase, dataSize);
 
-		s_Data._shaders._LineShader->Use();
+		s_Data._shaders.LineShader->Use();
 		Renderer::SetLineWidth(s_Data.LineWidth);
 		Renderer::DrawLines(s_Data.LineVertexArray, s_Data.LineVertexCount);
 	}
-  if (s_Data.CubeIndexCount) 
-  {
-    uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.CubeVertexBufferPtr - (uint8_t*)s_Data.CubeVertexBufferBase);
-    s_Data.CubeVertexBuffer->SetData(s_Data.CubeVertexBufferBase, dataSize);
-
-    s_Data._shaders.modelShader->Use();
-    s_Data.CubeVertexArray->Bind();
-
-    Renderer::DrawIndexed(s_Data.CubeVertexArray, s_Data.CubeIndexCount);
-  }
 }
 
-void Renderer::EndScene()
+void Renderer::StartBatch()
 {
-	Flush();
+	s_Data.QuadIndexCount = 0;
+	s_Data.QuadVertexBufferPtr = s_Data.QuadVertexBufferBase;
+	s_Data.TextureSlotIndex = 1;
+
+	s_Data.CircleIndexCount = 0;
+	s_Data.CircleVertexBufferPtr = s_Data.CircleVertexBufferBase;
+
+	s_Data.LineVertexCount = 0;
+	s_Data.LineVertexBufferPtr = s_Data.LineVertexBufferBase;
 }
 
 void Renderer::NextBatch()
 {
 	Flush();
 	StartBatch();
-}
-
-void Renderer::Draw3DQuad(const glm::vec3& position, const glm::vec2& size, float rotation, const glm::vec4& color)
-{
-	glm::mat4 transform = glm::translate(glm::mat4(1.0f), position)
-		* glm::scale(glm::mat4(1.0f), { size.x, size.y, 1.0f });
-
-	Draw3DQuad(transform, color);
-}
-
-void Renderer::Draw3DQuad(const glm::mat4& transform, const glm::vec4& color, int entityID)
-{
-	constexpr size_t quadVertexCount = 4;
-	const float textureIndex = 0.0f; // White Texture
-	constexpr glm::vec2 textureCoords[] = { { 0.0f, 0.0f }, { 1.0f, 0.0f }, { 1.0f, 1.0f }, { 0.0f, 1.0f } };
-	const float tilingFactor = 1.0f;
-
-	if (s_Data._3DQuadIndexCount >= RendererData::MaxIndices)
-		NextBatch();
-
-	for (size_t i = 0; i < quadVertexCount; i++)
-	{
-		s_Data._3DQuadVertexBufferPtr->Position = transform * s_Data._3DQuadVertexPositions[i];
-		s_Data._3DQuadVertexBufferPtr->Color = color;
-		s_Data._3DQuadVertexBufferPtr->TexCoord = textureCoords[i];
-		s_Data._3DQuadVertexBufferPtr->TexIndex = textureIndex;
-		s_Data._3DQuadVertexBufferPtr->TilingFactor = tilingFactor;
-		s_Data._3DQuadVertexBufferPtr->EntityID = entityID;
-		s_Data._3DQuadVertexBufferPtr++;
-	}
-
-	s_Data._3DQuadIndexCount += 6;
-}
-
-void Renderer::Draw3DQuad(const glm::vec3& position, const glm::vec2& size, float rotation, const std::shared_ptr<Texture>& texture, float tilingFactor, const glm::vec4& tintColor)
-{
-	glm::mat4 transform = glm::translate(glm::mat4(1.0f), position)
-		* glm::rotate(glm::mat4(1.0f), glm::radians(rotation), { 0.0f, 0.0f, 1.0f })
-		* glm::scale(glm::mat4(1.0f), { size.x, size.y, 1.0f });
-
-	Draw3DQuad(transform, texture, tilingFactor, tintColor);
-}
-
-void Renderer::Draw3DQuad(const glm::mat4& transform, const std::shared_ptr<Texture>& texture, float tilingFactor, const glm::vec4& tintColor, int entityID)
-{
-	constexpr size_t quadVertexCount = 4;
-	constexpr glm::vec2 textureCoords[] = { { 0.0f, 0.0f }, { 1.0f, 0.0f }, { 1.0f, 1.0f }, { 0.0f, 1.0f } };
-
-	if (s_Data._3DQuadIndexCount >= RendererData::MaxIndices)
-		NextBatch();
-
-	float textureIndex = 0.0f;
-	for (uint32_t i = 1; i < s_Data._3DTextureSlotIndex; i++)
-	{
-		if (*s_Data._3DTextureSlots[i] == *texture)
-		{
-			textureIndex = (float)i;
-			break;
-		}
-	}
-
-	if (textureIndex == 0.0f)
-	{
-		if (s_Data._3DTextureSlotIndex >= RendererData::MaxTextureSlots)
-			NextBatch();
-
-		textureIndex = (float)s_Data._3DTextureSlotIndex;
-		s_Data._3DTextureSlots[s_Data._3DTextureSlotIndex] = texture;
-		s_Data._3DTextureSlotIndex++;
-	}
-
-	for (size_t i = 0; i < quadVertexCount; i++)
-	{
-		s_Data._3DQuadVertexBufferPtr->Position = transform * s_Data._3DQuadVertexPositions[i];
-		s_Data._3DQuadVertexBufferPtr->Color = tintColor;
-		s_Data._3DQuadVertexBufferPtr->TexCoord = textureCoords[i];
-		s_Data._3DQuadVertexBufferPtr->TexIndex = textureIndex;
-		s_Data._3DQuadVertexBufferPtr->TilingFactor = tilingFactor;
-		s_Data._3DQuadVertexBufferPtr->EntityID = entityID;
-		s_Data._3DQuadVertexBufferPtr++;
-	}
-
-	s_Data._3DQuadIndexCount += 6;
-}
-
-void Renderer::Draw3DCircle(const glm::mat4& transform, const glm::vec4& color, float thickness /*= 1.0f*/, float fade /*= 0.005f*/, int entityID /*= -1*/)
-{
-	// TODO: implement for circles
-	// if (s_Data.QuadIndexCount >= Renderer2DData::MaxIndices)
-	// 	NextBatch();
-
-	for (size_t i = 0; i < 4; i++)
-	{
-		s_Data.CircleVertexBufferPtr->WorldPosition = transform * s_Data._3DQuadVertexPositions[i];
-		s_Data.CircleVertexBufferPtr->LocalPosition = s_Data._3DQuadVertexPositions[i] * 2.0f;
-		s_Data.CircleVertexBufferPtr->Color = color;
-		s_Data.CircleVertexBufferPtr->Thickness = thickness;
-		s_Data.CircleVertexBufferPtr->Fade = fade;
-		s_Data.CircleVertexBufferPtr->EntityID = entityID;
-		s_Data.CircleVertexBufferPtr++;
-	}
-
-	s_Data.CircleIndexCount += 6;
 }
 
 void Renderer::DrawLine(const glm::vec3& p0, const glm::vec3& p1, const glm::vec4& color, int entityID)
@@ -835,7 +584,110 @@ void Renderer::DrawLine(const glm::vec3& p0, const glm::vec3& p1, const glm::vec
 	s_Data.LineVertexCount += 2;
 }
 
-void Renderer::Draw3DRect(const glm::vec3& position, const glm::vec2& size, const glm::vec4& color, int entityID)
+void Renderer::DrawQuad(glm::vec3& position, const glm::vec3& size, const glm::vec3& rotation, const glm::vec4& color)
+{
+  glm::mat4 transform = glm::translate(glm::mat4(1.0f), position)
+    * glm::rotate(glm::mat4(1.0f), glm::radians(rotation.x), glm::vec3(1, 0, 0))
+    * glm::rotate(glm::mat4(1.0f), glm::radians(rotation.y), glm::vec3(0, 1, 0))
+    * glm::rotate(glm::mat4(1.0f), glm::radians(rotation.z), glm::vec3(0, 0, 1))
+    * glm::scale(glm::mat4(1.0f), size);
+
+	DrawQuad(transform, color);
+}
+
+void Renderer::DrawQuad(const glm::vec2& position, const glm::vec2& size, float rotation, const glm::vec4& color)
+{
+	glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(position, 0.0f))
+		* glm::rotate(glm::mat4(1.0f), glm::radians(rotation), { 0.0f, 0.0f, 1.0f })
+		* glm::scale(glm::mat4(1.0f), { size.x, size.y, 1.0f });
+
+	DrawQuad(transform, color);
+}
+
+void Renderer::DrawQuad(const glm::mat4& transform, const glm::vec4& color, int entityID)
+{
+	constexpr size_t quadVertexCount = 4;
+	const float textureIndex = 0.0f; // White Texture
+	constexpr glm::vec2 textureCoords[] = { { 0.0f, 0.0f }, { 1.0f, 0.0f }, { 1.0f, 1.0f }, { 0.0f, 1.0f } };
+	const float tilingFactor = 1.0f;
+
+	if (s_Data.QuadIndexCount >= RendererData::MaxIndices) NextBatch();
+
+	for (size_t i = 0; i < quadVertexCount; i++)
+	{
+		s_Data.QuadVertexBufferPtr->Position = transform * s_Data.QuadVertexPositions[i];
+		s_Data.QuadVertexBufferPtr->Color = color;
+		s_Data.QuadVertexBufferPtr->TexCoord = textureCoords[i];
+		s_Data.QuadVertexBufferPtr->TexIndex = textureIndex;
+		s_Data.QuadVertexBufferPtr->TilingFactor = tilingFactor;
+		s_Data.QuadVertexBufferPtr->EntityID = entityID;
+		s_Data.QuadVertexBufferPtr++;
+	}
+
+	s_Data.QuadIndexCount += 6;
+}
+
+void Renderer::DrawQuad(const glm::vec3& position, const glm::vec3& size, const glm::vec3& rotation, const std::shared_ptr<Texture>& texture, const glm::vec4& tintColor)
+{
+  glm::mat4 transform = glm::translate(glm::mat4(1.0f), position)
+    * glm::rotate(glm::mat4(1.0f), glm::radians(rotation.x), glm::vec3(1, 0, 0))
+    * glm::rotate(glm::mat4(1.0f), glm::radians(rotation.y), glm::vec3(0, 1, 0))
+    * glm::rotate(glm::mat4(1.0f), glm::radians(rotation.z), glm::vec3(0, 0, 1))
+    * glm::scale(glm::mat4(1.0f), size);
+
+	DrawQuad(transform, texture, tintColor, 1.0f);
+}
+
+void Renderer::DrawQuad(const glm::vec2& position, const glm::vec2& size, float rotation, const std::shared_ptr<Texture>& texture, const glm::vec4& tintColor)
+{
+	glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(position, 0.0f))
+		* glm::rotate(glm::mat4(1.0f), glm::radians(rotation), { 0.0f, 0.0f, 1.0f })
+		* glm::scale(glm::mat4(1.0f), { size.x, size.y, 1.0f });
+
+	DrawQuad(transform, texture, tintColor, 1.0f);
+}
+
+void Renderer::DrawQuad(const glm::mat4& transform, const std::shared_ptr<Texture>& texture, const glm::vec4& tintColor, float tilingFactor, int entityID)
+{
+	constexpr size_t quadVertexCount = 4;
+	constexpr glm::vec2 textureCoords[] = { { 0.0f, 0.0f }, { 1.0f, 0.0f }, { 1.0f, 1.0f }, { 0.0f, 1.0f } };
+
+	if (s_Data.QuadIndexCount >= RendererData::MaxIndices) NextBatch();
+
+	float textureIndex = 0.0f;
+	for (uint32_t i = 1; i < s_Data.TextureSlotIndex; i++)
+	{
+		if (*s_Data.TextureSlots[i] == *texture)
+		{
+			textureIndex = (float)i;
+			break;
+		}
+	}
+
+	if (textureIndex == 0.0f)
+	{
+		if (s_Data.TextureSlotIndex >= RendererData::MaxTextureSlots) NextBatch();
+
+		textureIndex = (float)s_Data.TextureSlotIndex;
+		s_Data.TextureSlots[s_Data.TextureSlotIndex] = texture;
+		s_Data.TextureSlotIndex++;
+	}
+
+	for (size_t i = 0; i < quadVertexCount; i++)
+	{
+		s_Data.QuadVertexBufferPtr->Position = transform * s_Data.QuadVertexPositions[i];
+		s_Data.QuadVertexBufferPtr->Color = tintColor;
+		s_Data.QuadVertexBufferPtr->TexCoord = textureCoords[i];
+		s_Data.QuadVertexBufferPtr->TexIndex = textureIndex;
+		s_Data.QuadVertexBufferPtr->TilingFactor = tilingFactor;
+		s_Data.QuadVertexBufferPtr->EntityID = entityID;
+		s_Data.QuadVertexBufferPtr++;
+	}
+
+	s_Data.QuadIndexCount += 6;
+}
+
+void Renderer::DrawQuadContour(const glm::vec3& position, const glm::vec2& size, const glm::vec4& color, int entityID)
 {
 	glm::vec3 p0 = glm::vec3(position.x - size.x * 0.5f, position.y - size.y * 0.5f, position.z);
 	glm::vec3 p1 = glm::vec3(position.x + size.x * 0.5f, position.y - size.y * 0.5f, position.z);
@@ -848,132 +700,19 @@ void Renderer::Draw3DRect(const glm::vec3& position, const glm::vec2& size, cons
 	DrawLine(p3, p0, color, entityID);
 }
 
-void Renderer::Draw3DRect(const glm::mat4& transform, const glm::vec4& color, int entityID)
-{
-	glm::vec3 lineVertices[4];
-	for (size_t i = 0; i < 4; i++) lineVertices[i] = transform * s_Data._3DQuadVertexPositions[i];
-
-	DrawLine(lineVertices[0], lineVertices[1], color, entityID);
-	DrawLine(lineVertices[1], lineVertices[2], color, entityID);
-	DrawLine(lineVertices[2], lineVertices[3], color, entityID);
-	DrawLine(lineVertices[3], lineVertices[0], color, entityID);
-}
-
-void Renderer::Draw2DQuad(const glm::vec2& position, const glm::vec2& size, float rotation, const glm::vec4& color)
-{
-	glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(position, 0.0f))
-		* glm::rotate(glm::mat4(1.0f), glm::radians(rotation), { 0.0f, 0.0f, 1.0f })
-		* glm::scale(glm::mat4(1.0f), { size.x, size.y, 1.0f });
-
-	Draw2DQuad(transform, color);
-}
-
-void Renderer::Draw2DQuad(const glm::mat4& transform, const glm::vec4& color, int entityID)
-{
-	constexpr size_t quadVertexCount = 4;
-	const float textureIndex = 0.0f; // White Texture
-	constexpr glm::vec2 textureCoords[] = { { 0.0f, 0.0f }, { 1.0f, 0.0f }, { 1.0f, 1.0f }, { 0.0f, 1.0f } };
-	const float tilingFactor = 1.0f;
-
-	if (s_Data._2DQuadIndexCount >= RendererData::MaxIndices) NextBatch();
-
-	for (size_t i = 0; i < quadVertexCount; i++)
-	{
-		s_Data._2DQuadVertexBufferPtr->Position = transform * s_Data._3DQuadVertexPositions[i];
-		s_Data._2DQuadVertexBufferPtr->Color = color;
-		s_Data._2DQuadVertexBufferPtr->TexCoord = textureCoords[i];
-		s_Data._2DQuadVertexBufferPtr->TexIndex = textureIndex;
-		s_Data._2DQuadVertexBufferPtr->TilingFactor = tilingFactor;
-		s_Data._2DQuadVertexBufferPtr->EntityID = entityID;
-		s_Data._2DQuadVertexBufferPtr++;
-	}
-
-	s_Data._2DQuadIndexCount += 6;
-}
-
-void Renderer::Draw2DQuad(const glm::vec2& position, const glm::vec2& size, float rotation, const std::shared_ptr<Texture>& texture, float tilingFactor, const glm::vec4& tintColor)
-{
-	glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(position, 0.0f))
-		* glm::rotate(glm::mat4(1.0f), glm::radians(rotation), { 0.0f, 0.0f, 1.0f })
-		* glm::scale(glm::mat4(1.0f), { size.x, size.y, 1.0f });
-
-	Draw2DQuad(transform, texture, tilingFactor, tintColor);
-}
-
-void Renderer::Draw2DQuad(const glm::mat4& transform, const std::shared_ptr<Texture>& texture, float tilingFactor, const glm::vec4& tintColor, int entityID)
-{
-	constexpr size_t quadVertexCount = 4;
-	constexpr glm::vec2 textureCoords[] = { { 0.0f, 0.0f }, { 1.0f, 0.0f }, { 1.0f, 1.0f }, { 0.0f, 1.0f } };
-
-	if (s_Data._2DQuadIndexCount >= RendererData::MaxIndices) NextBatch();
-
-	float textureIndex = 0.0f;
-	for (uint32_t i = 1; i < s_Data._2DTextureSlotIndex; i++)
-	{
-		if (*s_Data._2DTextureSlots[i] == *texture)
-		{
-			textureIndex = (float)i;
-			break;
-		}
-	}
-
-	if (textureIndex == 0.0f)
-	{
-		if (s_Data._2DTextureSlotIndex >= RendererData::MaxTextureSlots) NextBatch();
-
-		textureIndex = (float)s_Data._2DTextureSlotIndex;
-		s_Data._2DTextureSlots[s_Data._2DTextureSlotIndex] = texture;
-		s_Data._2DTextureSlotIndex++;
-	}
-
-	for (size_t i = 0; i < quadVertexCount; i++)
-	{
-		s_Data._2DQuadVertexBufferPtr->Position = transform * s_Data._3DQuadVertexPositions[i];
-		s_Data._2DQuadVertexBufferPtr->Color = tintColor;
-		s_Data._2DQuadVertexBufferPtr->TexCoord = textureCoords[i];
-		s_Data._2DQuadVertexBufferPtr->TexIndex = textureIndex;
-		s_Data._2DQuadVertexBufferPtr->TilingFactor = tilingFactor;
-		s_Data._2DQuadVertexBufferPtr->EntityID = entityID;
-		s_Data._2DQuadVertexBufferPtr++;
-	}
-
-	s_Data._2DQuadIndexCount += 6;
-}
-
-void Renderer::Draw2DCircle(const glm::mat4& transform, const glm::vec4& color, float thickness /*= 1.0f*/, float fade /*= 0.005f*/, int entityID /*= -1*/)
-{
-	// TODO: implement for circles
-	// if (s_Data.QuadIndexCount >= Renderer2DData::MaxIndices)
-	// 	NextBatch();
-
-	for (size_t i = 0; i < 4; i++)
-	{
-		s_Data.CircleVertexBufferPtr->WorldPosition = transform * s_Data._3DQuadVertexPositions[i];
-		s_Data.CircleVertexBufferPtr->LocalPosition = s_Data._3DQuadVertexPositions[i] * 2.0f;
-		s_Data.CircleVertexBufferPtr->Color = color;
-		s_Data.CircleVertexBufferPtr->Thickness = thickness;
-		s_Data.CircleVertexBufferPtr->Fade = fade;
-		s_Data.CircleVertexBufferPtr->EntityID = entityID;
-		s_Data.CircleVertexBufferPtr++;
-	}
-
-	s_Data.CircleIndexCount += 6;
-}
-
-void Renderer::Draw2DRect(const glm::vec2& position, const glm::vec2& size, float rotation, const glm::vec4& color, int entityID)
+void Renderer::DrawQuadContour(const glm::vec2& position, const glm::vec2& size, float rotation, const glm::vec4& color, int entityID)
 {
 	glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(position,0.0f))
 		* glm::rotate(glm::mat4(1.0f), glm::radians(rotation), { 0.0f, 0.0f, 1.0f })
 		* glm::scale(glm::mat4(1.0f), { size.x, size.y, 1.0f });
 
-	Draw2DRect(transform, color);
+	DrawQuadContour(transform, color);
 }
 
-void Renderer::Draw2DRect(const glm::mat4& transform, const glm::vec4& color, int entityID)
+void Renderer::DrawQuadContour(const glm::mat4& transform, const glm::vec4& color, int entityID)
 {
 	glm::vec3 lineVertices[4];
-	for (size_t i = 0; i < 4; i++)
-		lineVertices[i] = transform * s_Data._3DQuadVertexPositions[i];
+	for (size_t i = 0; i < 4; i++) lineVertices[i] = transform * s_Data.QuadVertexPositions[i];
 
 	DrawLine(lineVertices[0], lineVertices[1], color, entityID);
 	DrawLine(lineVertices[1], lineVertices[2], color, entityID);
@@ -981,9 +720,10 @@ void Renderer::Draw2DRect(const glm::mat4& transform, const glm::vec4& color, in
 	DrawLine(lineVertices[3], lineVertices[0], color, entityID);
 }
 
-void Renderer::DrawCube(const Transform& transform, int entityID)
+void Renderer::DrawCube(const glm::vec3& position, const glm::vec3& size, const std::shared_ptr<Texture>& texture, const glm::vec4& tintColor, int entityID)
 {
-  // Backup the current front face winding
+  Renderer::Set3D(true);
+
   GLint prevFrontFace;
   glGetIntegerv(GL_FRONT_FACE, &prevFrontFace);
 
@@ -991,30 +731,125 @@ void Renderer::DrawCube(const Transform& transform, int entityID)
   glCullFace(GL_FRONT);
   glFrontFace(GL_CCW); // Only cubes use counter-clockwise winding
 
-  if (s_Data.CubeIndexCount >= RendererData::MaxIndices)
-      NextBatch(); // Flush batch if full
+  glm::vec2 xy = { size.x, size.y };
+	glm::vec2 yz = { size.z, size.y };
+	glm::vec2 xz = { size.x, size.z };
 
-  glm::mat4 model = transform.GetTransform();
-  glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
+	float halfX = size.x / 2.0f;
+	float halfY = size.y / 2.0f;
+	float halfZ = size.z / 2.0f;
 
-  for (int i = 0; i < 8; i++)
-  {
-      MeshVertex vertex = s_Data.cubeVertices[i];
+	// FRONT (+Z)
+	DrawQuad(
+		glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, 0.0f, +halfZ)) *
+		glm::scale(glm::mat4(1.0f), glm::vec3(xy, 1.0f)),
+		texture,tintColor);
 
-      glm::vec4 transformedPos = model * glm::vec4(vertex.Position, 1.0f);
-      vertex.Position = glm::vec3(transformedPos);
-      vertex.Normal = glm::normalize(normalMatrix * vertex.Normal);
+	// BACK (-Z)
+	DrawQuad(
+		glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, 0.0f, -halfZ)) *
+		glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), { 0, 1, 0 }) *
+		glm::scale(glm::mat4(1.0f), glm::vec3(xy, 1.0f)),
+		texture,tintColor);
 
-      *s_Data.CubeVertexBufferPtr = vertex;
-      s_Data.CubeVertexBufferPtr++;
-  }
+	// LEFT (-X)
+	DrawQuad(
+		glm::translate(glm::mat4(1.0f), position + glm::vec3(-halfX, 0.0f, 0.0f)) *
+		glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), { 0, 1, 0 }) *
+		glm::scale(glm::mat4(1.0f), glm::vec3(yz, 1.0f)),
+		texture,tintColor);
 
-  s_Data.CubeVertexCount += 8;
-  s_Data.CubeIndexCount += 36;
+	// RIGHT (+X)
+	DrawQuad(
+		glm::translate(glm::mat4(1.0f), position + glm::vec3(+halfX, 0.0f, 0.0f)) *
+		glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), { 0, 1, 0 }) *
+		glm::scale(glm::mat4(1.0f), glm::vec3(yz, 1.0f)),
+		texture,tintColor);
 
+	// TOP (+Y)
+	DrawQuad(
+		glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, +halfY, 0.0f)) *
+		glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), { 1, 0, 0 }) *
+		glm::scale(glm::mat4(1.0f), glm::vec3(xz, 1.0f)),
+		texture,tintColor);
+
+	// BOTTOM (-Y)
+	DrawQuad(
+		glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, -halfY, 0.0f)) *
+		glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), { 1, 0, 0 }) *
+		glm::scale(glm::mat4(1.0f), glm::vec3(xz, 1.0f)),
+		texture,tintColor);
+
+  glFrontFace(prevFrontFace);
+  glDisable(GL_CULL_FACE);
+
+  Renderer::Set3D(false);
+}
+
+void Renderer::DrawCube(const glm::vec3& position, const glm::vec3& size, const glm::vec4& color, int entityID)
+{
+  Renderer::Set3D(true);
+
+  GLint prevFrontFace;
+  glGetIntegerv(GL_FRONT_FACE, &prevFrontFace);
+
+  glEnable(GL_CULL_FACE);
+  glCullFace(GL_FRONT);
+  glFrontFace(GL_CCW); // Only cubes use counter-clockwise winding
+
+  glm::vec2 xy = { size.x, size.y };
+	glm::vec2 yz = { size.z, size.y };
+	glm::vec2 xz = { size.x, size.z };
+
+	float halfX = size.x / 2.0f;
+	float halfY = size.y / 2.0f;
+	float halfZ = size.z / 2.0f;
+
+	// FRONT (+Z)
+	DrawQuad(
+		glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, 0.0f, +halfZ)) *
+		glm::scale(glm::mat4(1.0f), glm::vec3(xy, 1.0f)),
+		color);
+
+	// BACK (-Z)
+	DrawQuad(
+		glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, 0.0f, -halfZ)) *
+		glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), { 0, 1, 0 }) *
+		glm::scale(glm::mat4(1.0f), glm::vec3(xy, 1.0f)),
+		color);
+
+	// LEFT (-X)
+	DrawQuad(
+		glm::translate(glm::mat4(1.0f), position + glm::vec3(-halfX, 0.0f, 0.0f)) *
+		glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), { 0, 1, 0 }) *
+		glm::scale(glm::mat4(1.0f), glm::vec3(yz, 1.0f)),
+		color);
+
+	// RIGHT (+X)
+	DrawQuad(
+		glm::translate(glm::mat4(1.0f), position + glm::vec3(+halfX, 0.0f, 0.0f)) *
+		glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), { 0, 1, 0 }) *
+		glm::scale(glm::mat4(1.0f), glm::vec3(yz, 1.0f)),
+		color);
+
+	// TOP (+Y)
+	DrawQuad(
+		glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, +halfY, 0.0f)) *
+		glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), { 1, 0, 0 }) *
+		glm::scale(glm::mat4(1.0f), glm::vec3(xz, 1.0f)),
+		color);
+
+	// BOTTOM (-Y)
+	DrawQuad(
+		glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, -halfY, 0.0f)) *
+		glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), { 1, 0, 0 }) *
+		glm::scale(glm::mat4(1.0f), glm::vec3(xz, 1.0f)),
+		color);
   // Restore the previous front face winding
   glFrontFace(prevFrontFace);
   glDisable(GL_CULL_FACE);
+
+  Renderer::Set3D(false);
 }
 
 void Renderer::DrawCubeContour(const glm::vec3& position, const glm::vec3& size, const glm::vec4& color, int entityID)
@@ -1052,10 +887,31 @@ void Renderer::DrawCubeContour(const glm::vec3& position, const glm::vec3& size,
   DrawLine(v3, v7, color, entityID);
 }
 
+void Renderer::DrawCircle(const glm::mat4& transform, const glm::vec4& color, float thickness /*= 1.0f*/, float fade /*= 0.005f*/, int entityID /*= -1*/)
+{
+	// TODO: implement for circles
+	// if (s_Data.QuadIndexCount >= Renderer2DData::MaxIndices)
+	// 	NextBatch();
+
+	for (size_t i = 0; i < 4; i++)
+	{
+		s_Data.CircleVertexBufferPtr->WorldPosition = transform * s_Data.QuadVertexPositions[i];
+		s_Data.CircleVertexBufferPtr->LocalPosition = s_Data.QuadVertexPositions[i] * 2.0f;
+		s_Data.CircleVertexBufferPtr->Color = color;
+		s_Data.CircleVertexBufferPtr->Thickness = thickness;
+		s_Data.CircleVertexBufferPtr->Fade = fade;
+		s_Data.CircleVertexBufferPtr->EntityID = entityID;
+		s_Data.CircleVertexBufferPtr++;
+	}
+
+	s_Data.CircleIndexCount += 6;
+}
+
+
 void Renderer::DrawFramebuffer(uint32_t textureID)
 {
-  s_Data._shaders._FramebufferShader->Use();
-  s_Data._shaders._FramebufferShader->setInt("u_Texture", 0);
+  s_Data._shaders.FramebufferShader->Use();
+  s_Data._shaders.FramebufferShader->setInt("u_Texture", 0);
 
   static uint32_t quadVAO = 0, quadVBO = 0;
   if (quadVAO == 0)
@@ -1137,23 +993,23 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
 
   if(s_Data.m_ShadowPass)
   {
-    s_Data._shaders.PointShadowBufferShader->Use();
+    s_Data._shaders.OmniDirectShadowShader->Use();
 
     glm::mat4 modelMat = glm::mat4(1.0f); 
     if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH)  modelMat = PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose());
     else if (model->GetPhysXMeshType() == MeshType::CONTROLLER) modelMat = model->GetControllerTransform().GetTransform();
     else if (model->GetPhysXMeshType() == MeshType::NONE) modelMat = transform;
 
-    s_Data._shaders.PointShadowBufferShader->setMat4("u_LightViewProjection", s_Data.m_LightProj);
-    s_Data._shaders.PointShadowBufferShader->setMat4("u_ModelTransform", modelMat);
-    s_Data._shaders.PointShadowBufferShader->setBool("isAnimated", model->IsAnimated());
-    s_Data._shaders.PointShadowBufferShader->setBool("isInstanced", false);
+    s_Data._shaders.OmniDirectShadowShader->setMat4("u_LightViewProjection", s_Data.m_LightProj);
+    s_Data._shaders.OmniDirectShadowShader->setMat4("u_ModelTransform", modelMat);
+    s_Data._shaders.OmniDirectShadowShader->setBool("isAnimated", model->IsAnimated());
+    s_Data._shaders.OmniDirectShadowShader->setBool("isInstanced", false);
 
     if(model->IsAnimated())
     {
       auto& transforms = model->GetFinalBoneMatrices();
       for (size_t i = 0; i < transforms.size(); ++i) {
-          s_Data._shaders.PointShadowBufferShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+          s_Data._shaders.OmniDirectShadowShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
       }
     }
 
@@ -1210,19 +1066,19 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_
 
   if(s_Data.m_ShadowPass)
   {
-    s_Data._shaders.PointShadowBufferShader->Use();
+    s_Data._shaders.OmniDirectShadowShader->Use();
     glm::mat4 modelMat = PhysX::PxMat44ToGlmMat4(convex->GetDynamicActor()->getGlobalPose()); 
 
-    s_Data._shaders.PointShadowBufferShader->setMat4("u_LightViewProjection", s_Data.m_LightProj);
-    s_Data._shaders.PointShadowBufferShader->setMat4("u_ModelTransform", modelMat);
-    s_Data._shaders.PointShadowBufferShader->setBool("isAnimated", model->IsAnimated());
-    s_Data._shaders.PointShadowBufferShader->setBool("isInstanced", false);
+    s_Data._shaders.OmniDirectShadowShader->setMat4("u_LightViewProjection", s_Data.m_LightProj);
+    s_Data._shaders.OmniDirectShadowShader->setMat4("u_ModelTransform", modelMat);
+    s_Data._shaders.OmniDirectShadowShader->setBool("isAnimated", model->IsAnimated());
+    s_Data._shaders.OmniDirectShadowShader->setBool("isInstanced", false);
 
     if(model->IsAnimated())
     {
       auto& transforms = model->GetFinalBoneMatrices();
       for (size_t i = 0; i < transforms.size(); ++i) {
-          s_Data._shaders.PointShadowBufferShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+          s_Data._shaders.OmniDirectShadowShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
       }
     }
 
@@ -1285,15 +1141,15 @@ void Renderer::DrawModelInstanced(const std::shared_ptr<Model>& model, const std
 
   if(s_Data.m_ShadowPass)
   {
-    s_Data._shaders.PointShadowBufferShader->Use();
-    s_Data._shaders.PointShadowBufferShader->setBool("isAnimated", model->IsAnimated());
-    s_Data._shaders.PointShadowBufferShader->setBool("isInstanced", false);
+    s_Data._shaders.OmniDirectShadowShader->Use();
+    s_Data._shaders.OmniDirectShadowShader->setBool("isAnimated", model->IsAnimated());
+    s_Data._shaders.OmniDirectShadowShader->setBool("isInstanced", false);
 
     if(model->IsAnimated())
     {
       auto& transforms = model->GetFinalBoneMatrices();
       for (size_t i = 0; i < transforms.size(); ++i) {
-          s_Data._shaders.PointShadowBufferShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+          s_Data._shaders.OmniDirectShadowShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
       }
     }
 
@@ -1352,7 +1208,7 @@ void Renderer::BakeSkyboxTextures(const std::string& name, const std::shared_ptr
   glGenTextures(1, &rendererID);
   GABGL_ASSERT(rendererID != 0, "Failed to generate texture ID!");
 
-  cubemap->SetRendererID(rendererID); // ✅ assign generated ID to the Texture
+  cubemap->SetRendererID(rendererID); 
 
   glBindTexture(GL_TEXTURE_CUBE_MAP, rendererID);
 
@@ -1372,7 +1228,7 @@ void Renderer::BakeSkyboxTextures(const std::string& name, const std::shared_ptr
           pixels[i]
       );
 
-      stbi_image_free(pixels[i]); // ✅ free after upload
+      stbi_image_free(pixels[i]); 
       pixels[i] = nullptr;
   }
 
@@ -1474,15 +1330,26 @@ void Renderer::DrawSkybox(const std::string& name)
   glDepthFunc(GL_LESS); 
 }
 
-void Renderer::Draw3DText(const Font* font, const std::string& text, const glm::vec2& position, float size, const glm::vec4& color, int entityID)
+void Renderer::DrawText(const Font* font, const std::string& text, const glm::vec3& position, const glm::vec3& rotation, float size, const glm::vec4& color)
 {
-  if (font->m_Characters.empty() || font == nullptr)
+  Renderer::Set3D(true);
+  DrawText(font, text, position, rotation, size, color, -1);
+  Renderer::Set3D(false);
+}
+
+void Renderer::DrawText(const Font* font, const std::string& text, const glm::vec2& position, float size, const glm::vec4& color)
+{
+  DrawText(font, text, glm::vec3(position, 0.0f), glm::vec3(0.0f), size, color, -1);
+}
+
+void Renderer::DrawText(const Font* font, const std::string& text, const glm::vec3& position, const glm::vec3& rotation, float size, const glm::vec4& color, int entityID)
+{
+  if (!font || font->m_Characters.empty())
   {
-    GABGL_ERROR("Font is nullptr");
-    return;
+      GABGL_ERROR("Font is nullptr or has no characters");
+      return;
   }
 
-  // --- Precompute total width and height for centering ---
   float textWidth = 0.0f;
   float maxBearingY = 0.0f;
   float maxBelowBaseline = 0.0f;
@@ -1505,11 +1372,12 @@ void Renderer::Draw3DText(const Font* font, const std::string& text, const glm::
 
   float totalHeight = maxBearingY + maxBelowBaseline;
 
-  // Center the starting position
-  float x = position.x - textWidth * 0.5f;
-  float y = position.y - totalHeight * 0.5f;
+  // Center the text origin
+  float originX = -textWidth * 0.5f;
+  float originY = -totalHeight * 0.5f;
 
-  // --- Render characters ---
+  glm::vec3 cursor = glm::vec3(originX, originY, 0.0f);
+
   for (char c : text)
   {
       auto it = font->m_Characters.find(c);
@@ -1518,133 +1386,50 @@ void Renderer::Draw3DText(const Font* font, const std::string& text, const glm::
 
       const Character& ch = it->second;
 
-      if (s_Data._3DQuadIndexCount >= RendererData::MaxIndices)
+      if (s_Data.QuadIndexCount >= RendererData::MaxIndices)
           NextBatch();
 
-      float xpos = x + ch.Bearing.x * size;
-      float ypos = y + (maxBearingY - ch.Bearing.y * size);  // Adjust Y using max bearing
+      float xpos = cursor.x + ch.Bearing.x * size;
+      float ypos = cursor.y + (maxBearingY - ch.Bearing.y * size);
 
       float w = ch.Size.x * size;
       float h = ch.Size.y * size;
 
-      glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(xpos, ypos, 0.0f)) *
+      glm::mat4 transform = glm::translate(glm::mat4(1.0f), position) *
+                            glm::rotate(glm::mat4(1.0f), rotation.x, {1, 0, 0}) *
+                            glm::rotate(glm::mat4(1.0f), rotation.y, {0, 1, 0}) *
+                            glm::rotate(glm::mat4(1.0f), rotation.z, {0, 0, 1}) *
+                            glm::translate(glm::mat4(1.0f), glm::vec3(xpos, ypos, 0.0f)) *
                             glm::scale(glm::mat4(1.0f), glm::vec3(w, h, 1.0f));
 
       float textureIndex = 0.0f;
-      for (uint32_t i = 1; i < s_Data._3DTextureSlotIndex; i++) {
-          if (s_Data._3DTextureSlots[i]->GetRendererID() == ch.TextureID) {
+      for (uint32_t i = 1; i < s_Data.TextureSlotIndex; i++) {
+          if (s_Data.TextureSlots[i]->GetRendererID() == ch.TextureID) {
               textureIndex = (float)i;
               break;
           }
       }
 
       if (textureIndex == 0.0f) {
-          if (s_Data._3DTextureSlotIndex >= RendererData::MaxTextureSlots) NextBatch();
+          if (s_Data.TextureSlotIndex >= RendererData::MaxTextureSlots) NextBatch();
 
-          textureIndex = (float)s_Data._3DTextureSlotIndex;
-          s_Data._3DTextureSlots[s_Data._3DTextureSlotIndex++] = Texture::WrapExisting(ch.TextureID);
+          textureIndex = (float)s_Data.TextureSlotIndex;
+          s_Data.TextureSlots[s_Data.TextureSlotIndex++] = Texture::WrapExisting(ch.TextureID);
       }
 
       for (int i = 0; i < 4; i++) {
-          s_Data._3DQuadVertexBufferPtr->Position = transform * glm::vec4(s_Data.quadPositions[i], 1.0f);
-          s_Data._3DQuadVertexBufferPtr->Color = color;
-          s_Data._3DQuadVertexBufferPtr->TexCoord = s_Data.texCoords[i];
-          s_Data._3DQuadVertexBufferPtr->TexIndex = textureIndex;
-          s_Data._3DQuadVertexBufferPtr->TilingFactor = 1.0f;
-          s_Data._3DQuadVertexBufferPtr->EntityID = entityID;
-          s_Data._3DQuadVertexBufferPtr++;
+          s_Data.QuadVertexBufferPtr->Position = transform * glm::vec4(s_Data.quadPositions[i], 1.0f);
+          s_Data.QuadVertexBufferPtr->Color = color;
+          s_Data.QuadVertexBufferPtr->TexCoord = s_Data.texCoords[i];
+          s_Data.QuadVertexBufferPtr->TexIndex = textureIndex;
+          s_Data.QuadVertexBufferPtr->TilingFactor = 1.0f;
+          s_Data.QuadVertexBufferPtr->EntityID = entityID;
+          s_Data.QuadVertexBufferPtr++;
       }
 
-      s_Data._3DQuadIndexCount += 6;
+      s_Data.QuadIndexCount += 6;
 
-      x += (ch.Advance >> 6) * size;
-  }
-}
-
-void Renderer::Draw2DText(const Font* font, const std::string& text, const glm::vec2& position, float size, const glm::vec4& color, int entityID)
-{
-	if (font->m_Characters.empty() || font == nullptr)
-	{
-		GABGL_ERROR("Font is nullptr");
-		return;
-	}
-
-  // --- Precompute total width and height for centering ---
-  float textWidth = 0.0f;
-  float maxBearingY = 0.0f;
-  float maxBelowBaseline = 0.0f;
-
-  for (char c : text)
-  {
-    auto it = font->m_Characters.find(c);
-    if (it == font->m_Characters.end())
-        continue;
-
-    const auto& ch = it->second;
-    textWidth += (ch.Advance >> 6) * size;
-
-    float bearingY = ch.Bearing.y * size;
-    float belowBaseline = (ch.Size.y - ch.Bearing.y) * size;
-
-    if (bearingY > maxBearingY) maxBearingY = bearingY;
-    if (belowBaseline > maxBelowBaseline) maxBelowBaseline = belowBaseline;
-  }
-
-  float totalHeight = maxBearingY + maxBelowBaseline;
-
-  // Center the starting position
-  float x = position.x - textWidth * 0.5f;
-  float y = position.y - totalHeight * 0.5f;
-
-  // --- Render characters ---
-  for (char c : text)
-  {
-    auto it = font->m_Characters.find(c);
-    if (it == font->m_Characters.end())
-        continue;
-
-    const Character& ch = it->second;
-
-    if (s_Data._2DQuadIndexCount >= RendererData::MaxIndices)
-        NextBatch();
-
-    float xpos = x + ch.Bearing.x * size;
-    float ypos = y + (maxBearingY - ch.Bearing.y * size);  // Adjust Y using max bearing
-
-    float w = ch.Size.x * size;
-    float h = ch.Size.y * size;
-
-    glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(xpos, ypos, 0.0f)) *
-                          glm::scale(glm::mat4(1.0f), glm::vec3(w, h, 1.0f));
-
-    float textureIndex = 0.0f;
-    for (uint32_t i = 1; i < s_Data._2DTextureSlotIndex; i++) {
-        if (s_Data._2DTextureSlots[i]->GetRendererID() == ch.TextureID) {
-            textureIndex = (float)i;
-            break;
-        }
-    }
-
-    if (textureIndex == 0.0f) {
-        if (s_Data._2DTextureSlotIndex >= RendererData::MaxTextureSlots) NextBatch();
-
-        textureIndex = (float)s_Data._2DTextureSlotIndex;
-        s_Data._2DTextureSlots[s_Data._2DTextureSlotIndex++] = Texture::WrapExisting(ch.TextureID);
-    }
-
-    for (int i = 0; i < 4; i++) {
-        s_Data._2DQuadVertexBufferPtr->Position = transform * glm::vec4(s_Data.quadPositions[i], 1.0f);
-        s_Data._2DQuadVertexBufferPtr->Color = color;
-        s_Data._2DQuadVertexBufferPtr->TexCoord = s_Data.texCoords[i];
-        s_Data._2DQuadVertexBufferPtr->TexIndex = textureIndex;
-        s_Data._2DQuadVertexBufferPtr->TilingFactor = 1.0f;
-        s_Data._2DQuadVertexBufferPtr->EntityID = entityID;
-        s_Data._2DQuadVertexBufferPtr++;
-    }
-
-    s_Data._2DQuadIndexCount += 6;
-
-    x += (ch.Advance >> 6) * size;
+      cursor.x += (ch.Advance >> 6) * size;
   }
 }
 
@@ -1711,6 +1496,15 @@ void Renderer::BlockEvents(bool block)
   s_Data.m_BlockEvents = block;
 }
 
+void Renderer::Set3D(bool is3D)
+{
+	if (s_Data.Is3D != is3D)
+	{
+		Flush();             
+		s_Data.Is3D = is3D;  
+	}
+}
+
 void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 {
 	ImGui_ImplOpenGL3_NewFrame();
@@ -1721,7 +1515,7 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 	static bool dockspaceOpen = true;
 	static bool opt_fullscreen_persistant = true;
 	bool opt_fullscreen = opt_fullscreen_persistant;
-	static ImGuiDockNodeFlags dockspace_flags = ImGuiWindowFlags_NoCollapse | ImGuiDockNodeFlags_NoTabBar;
+	static ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_NoTabBar;
 
 	// We are using the ImGuiWindowFlags_NoDocking flag to make the parent window not dockable into,
 	// because it would be confusing to have two docking targets within each others.
@@ -1774,6 +1568,12 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 	ImGui::Begin("Components", nullptr, ImGuiWindowFlags_NoCollapse);
 
 	if (ImGui::Button("Reload Shaders")) LoadShaders();
+
+  for (const auto& result : s_ProfileResults)
+  {
+      ImGui::Text("%s: %.3f ms", result.Name, result.Time);
+  }
+  s_ProfileResults.clear();
 
 	ImGui::End();
 
