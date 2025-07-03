@@ -11,9 +11,9 @@ Application::Application()
 {
   AudioManager::SetListenerVolume(0.05f);
   AudioManager::PlayMusic("night",true);
-  LightManager::AddLight(LightType::POINT, glm::vec4(1.0f,1.0f,0.0,1.0f), glm::vec3(5.0f), glm::vec3(1.0f), glm::vec3(1.0f));
-  LightManager::AddLight(LightType::POINT, glm::vec4(1.0f,1.0f,0.0,1.0f), glm::vec3(15.0f,5.0f,15.0f), glm::vec3(1.0f), glm::vec3(1.0f)); 
-  /*LightManager::AddLight(LightType::DIRECT, glm::vec4(1.0f), glm::vec3(50000.0f), glm::vec3(1.0f), glm::vec3(1.0f));*/
+  /*LightManager::AddLight(LightType::POINT, glm::vec4(1.0f,1.0f,0.0,1.0f), glm::vec3(5.0f), glm::vec3(1.0f), glm::vec3(1.0f));*/
+  /*LightManager::AddLight(LightType::POINT, glm::vec4(1.0f,1.0f,0.0,1.0f), glm::vec3(15.0f,5.0f,15.0f), glm::vec3(1.0f), glm::vec3(1.0f)); */
+  LightManager::AddLight(LightType::DIRECT, glm::vec4(1.0f), glm::vec3(0.0f), glm::vec3(-2.0f, -4.0f, -1.0f), glm::vec3(1.0f));
 
   Transform housetransform;
   housetransform.SetPosition(glm::vec3(0.0f));

@@ -17,6 +17,7 @@ struct LightData
 struct LightManagerData
 {
   std::shared_ptr<StorageBuffer> LightPosStorageBuffer;
+  std::shared_ptr<StorageBuffer> LightRotationStorageBuffer;
   std::shared_ptr<StorageBuffer> LightQuantityStorageBuffer;
   std::shared_ptr<StorageBuffer> LightColorStorageBuffer;
   std::shared_ptr<StorageBuffer> LightTypeStorageBuffer;
@@ -25,6 +26,7 @@ struct LightManagerData
 
   int32_t numLights = 0;
   int32_t numPointLights = 0;
+  int32_t numDirectLights = 0;
   uint32_t maxLights = 30;
   uint32_t maxPointLights = maxLights - 10;
 
@@ -37,12 +39,18 @@ void LightManager::Init()
 
 void LightManager::AddLight(const LightType& type, const glm::vec4& color, const glm::vec3& position, const glm::vec3& rotation, const glm::vec3& scale)
 {
+  if (type == LightType::DIRECT && s_Data.numDirectLights == 1)
+  {
+    GABGL_ERROR("Only one directional light allowed!");
+    return;
+  }
   if (s_Data.numLights >= s_Data.maxLights) ResizeLightBuffers(s_Data.maxLights * 2);
 
   std::shared_ptr<LightData> lightData = std::make_shared<LightData>(position, rotation, scale, color, type);
   s_Data.lights.push_back(lightData);
 
   if (type == LightType::POINT) s_Data.numPointLights++;
+  if (type == LightType::DIRECT) s_Data.numDirectLights++;
   s_Data.numLights++;
 
   UpdateSSBOLightData();
@@ -85,9 +93,10 @@ void LightManager::ResizeLightBuffers(uint32_t newMax)
   s_Data.maxPointLights = newMax - 10;
 
   s_Data.LightPosStorageBuffer = StorageBuffer::Create(sizeof(glm::vec4) * newMax, 0);
-  s_Data.LightQuantityStorageBuffer = StorageBuffer::Create(sizeof(uint32_t), 1);
-  s_Data.LightColorStorageBuffer = StorageBuffer::Create(sizeof(glm::vec4) * newMax, 2);
-  s_Data.LightTypeStorageBuffer = StorageBuffer::Create(sizeof(uint32_t) * newMax, 3);
+  s_Data.LightRotationStorageBuffer = StorageBuffer::Create(sizeof(glm::vec4) * newMax, 1);
+  s_Data.LightQuantityStorageBuffer = StorageBuffer::Create(sizeof(uint32_t), 2);
+  s_Data.LightColorStorageBuffer = StorageBuffer::Create(sizeof(glm::vec4) * newMax, 3);
+  s_Data.LightTypeStorageBuffer = StorageBuffer::Create(sizeof(uint32_t) * newMax, 4);
 }
 
 void LightManager::UpdateSSBOLightData()
@@ -95,35 +104,40 @@ void LightManager::UpdateSSBOLightData()
   s_Data.LightQuantityStorageBuffer->SetData(sizeof(int32_t), &s_Data.numLights);
   
   size_t alignedVec4Size = 16; // vec3 aligned to vec4 size (12 bytes data + 4 bytes padding)
-  size_t bufferSizePositions = s_Data.numLights * alignedVec4Size;
-  std::vector<int8_t> bufferPositions(bufferSizePositions);
+  size_t alignedbufferSize = s_Data.numLights * alignedVec4Size;
+  std::vector<int8_t> bufferPositions(alignedbufferSize);
 
-  for (size_t i = 0; i < s_Data.lights.size(); ++i) {
-      std::memcpy(bufferPositions.data() + (i * alignedVec4Size), &s_Data.lights[i]->position, sizeof(glm::vec3));
-  }
-  s_Data.LightPosStorageBuffer->SetData(bufferSizePositions, bufferPositions.data());
+  for (size_t i = 0; i < s_Data.lights.size(); ++i) std::memcpy(bufferPositions.data() + (i * alignedVec4Size), &s_Data.lights[i]->position, sizeof(glm::vec3));
+  s_Data.LightPosStorageBuffer->SetData(alignedbufferSize, bufferPositions.data());
+
+  std::vector<int8_t> bufferRotations(alignedbufferSize);
+
+  for (size_t i = 0; i < s_Data.lights.size(); ++i) std::memcpy(bufferRotations.data() + (i * alignedVec4Size), &s_Data.lights[i]->rotation, sizeof(glm::vec3));
+  s_Data.LightRotationStorageBuffer->SetData(alignedbufferSize, bufferRotations.data());
 
   size_t bufferSizeTypes = s_Data.numLights * sizeof(int32_t);
   std::vector<int32_t> bufferTypes(s_Data.numLights);
 
-  for (size_t i = 0; i < s_Data.lights.size(); ++i) {
-      bufferTypes[i] = static_cast<int32_t>(s_Data.lights[i]->type);
-  }
+  for (size_t i = 0; i < s_Data.lights.size(); ++i) bufferTypes[i] = static_cast<int32_t>(s_Data.lights[i]->type);
   s_Data.LightTypeStorageBuffer->SetData(bufferSizeTypes, bufferTypes.data());
 
   size_t bufferSizeColors = s_Data.numLights * sizeof(glm::vec4);
   std::vector<int8_t> bufferColors(bufferSizeColors);
-  for (size_t i = 0; i < s_Data.lights.size(); ++i) {
-      std::memcpy(bufferColors.data() + (i * sizeof(glm::vec4)), &s_Data.lights[i]->color, sizeof(glm::vec4));
-  }
+  for (size_t i = 0; i < s_Data.lights.size(); ++i) std::memcpy(bufferColors.data() + (i * sizeof(glm::vec4)), &s_Data.lights[i]->color, sizeof(glm::vec4));
   s_Data.LightColorStorageBuffer->SetData(bufferSizeColors, bufferColors.data());
 
   glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
-glm::vec3 LightManager::GetLightPosition(size_t index)
+std::vector<glm::vec3> LightManager::GetPointLightPositions()
 {
-  return s_Data.lights[index]->position;
+    std::vector<glm::vec3> positions;
+    for (const auto& light : s_Data.lights)
+    {
+        if (light->type == LightType::POINT)
+            positions.push_back(light->position);
+    }
+    return positions;
 }
 
 int32_t LightManager::GetLightsQuantity()

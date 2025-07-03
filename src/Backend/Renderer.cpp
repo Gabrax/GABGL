@@ -136,6 +136,7 @@ struct RendererData
     std::shared_ptr<Shader> UpSampleShader;
     std::shared_ptr<Shader> BloomResultShader;
     std::shared_ptr<Shader> OmniDirectShadowShader;
+    std::shared_ptr<Shader> DirectShadowShader;
 
 	} _shaders;
 
@@ -172,6 +173,7 @@ struct RendererData
   std::shared_ptr<FrameBuffer> m_MSAAFramebuffer;
   std::shared_ptr<BloomBuffer> m_BloomFramebuffer;
   std::shared_ptr<OmniDirectShadowBuffer> m_PointShadowFramebuffer;
+  std::shared_ptr<DirectShadowBuffer> m_DirectShadowFramebuffer;
 
   Window* m_WindowRef = nullptr;
   Camera m_Camera;
@@ -182,7 +184,12 @@ struct RendererData
 
 	} m_SceneState;
 
-  bool m_ShadowPass;
+  enum class RenderState
+	{
+		DIRECTSHADOW = 0, OMNISHADOW = 1, BLOOM = 2, GEOMETRY = 3, NONE = 4
+
+	} m_RenderState;
+
   glm::mat4 m_LightProj = glm::mat4(1.0f);
 
 } s_Data;
@@ -199,7 +206,8 @@ void Renderer::LoadShaders()
   s_Data._shaders.DownSampleShader = Shader::Create("res/shaders/bloom_downsample.glsl");
   s_Data._shaders.UpSampleShader = Shader::Create("res/shaders/bloom_upsample.glsl");
   s_Data._shaders.BloomResultShader = Shader::Create("res/shaders/bloom_final.glsl");
-  s_Data._shaders.OmniDirectShadowShader = Shader::Create("res/shaders/point_shadowFB.glsl");
+  s_Data._shaders.OmniDirectShadowShader = Shader::Create("res/shaders/omni_shadowFB.glsl");
+  s_Data._shaders.DirectShadowShader = Shader::Create("res/shaders/direct_shadowFB.glsl");
 }
 
 void Renderer::Init()
@@ -318,6 +326,8 @@ void Renderer::Init()
 
   s_Data.m_PointShadowFramebuffer = OmniDirectShadowBuffer::Create(512, 512);
 
+  s_Data.m_DirectShadowFramebuffer = DirectShadowBuffer::Create(1024, 1024);
+
   s_Data.m_WindowRef = &Engine::GetInstance().GetMainWindow();
 
   s_Data.m_Camera = Camera(45.0f, (float)s_Data.m_WindowRef->GetWidth() / (float)s_Data.m_WindowRef->GetHeight(), 0.01f, 1000.0f);
@@ -368,18 +378,34 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
   glFrontFace(GL_CW);
 
   {
+    GABGL_PROFILE_SCOPE("DIRECT SHADOW PASS");
+
+    s_Data.m_DirectShadowFramebuffer->Bind();
+    s_Data.m_RenderState = RendererData::RenderState::DIRECTSHADOW;
+    float max = std::numeric_limits<float>::max();
+    SetClearColor({max,max,max,max});
+    glClear(GL_DEPTH_BUFFER_BIT);
+
+
+    geometry();
+
+    s_Data.m_RenderState = RendererData::RenderState::NONE;
+    s_Data.m_DirectShadowFramebuffer->UnBind();
+  }
+
+  {
     GABGL_PROFILE_SCOPE("OMNI SHADOW PASS");
 
     s_Data.m_PointShadowFramebuffer->Bind();
-    s_Data.m_ShadowPass = true;
+    s_Data.m_RenderState = RendererData::RenderState::OMNISHADOW;
     float max = std::numeric_limits<float>::max();
     SetClearColor({max,max,max,max});
 
-    for (auto lightIndex : std::views::iota(0, LightManager::GetPointLightsQuantity()))
+    uint32_t lightIndex = 0;
+    for (const auto& light : LightManager::GetPointLightPositions())
     {
       s_Data._shaders.OmniDirectShadowShader->Use();
-      glm::vec3 lightPosition = LightManager::GetLightPosition(lightIndex);
-      s_Data._shaders.OmniDirectShadowShader->setVec3("gLightWorldPos",lightPosition);
+      s_Data._shaders.OmniDirectShadowShader->setVec3("gLightWorldPos",light);
 
       const auto& directions = s_Data.m_PointShadowFramebuffer->GetFaceDirections();
       for (auto face = 0; face < directions.size(); ++face)
@@ -387,13 +413,14 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
         s_Data.m_PointShadowFramebuffer->BindForWriting(lightIndex, face);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glm::mat4 view = glm::lookAt(lightPosition,lightPosition + directions[face].Target,directions[face].Up);
+        glm::mat4 view = glm::lookAt(light,light + directions[face].Target,directions[face].Up);
         s_Data.m_LightProj = s_Data.m_PointShadowFramebuffer->GetShadowProj() * view;
 
         geometry();
       }
+      lightIndex++;
     }
-    s_Data.m_ShadowPass = false;
+    s_Data.m_RenderState = RendererData::RenderState::NONE;
     s_Data.m_PointShadowFramebuffer->UnBind();
   }
   
@@ -401,16 +428,20 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
     GABGL_PROFILE_SCOPE("GEOMETRY PASS");
 
     s_Data.m_MSAAFramebuffer->Bind();
+    s_Data.m_RenderState = RendererData::RenderState::GEOMETRY;
     SetClearColor(glm::vec4(0.0f));
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     s_Data._shaders.ModelShader->Use();
-    s_Data.m_PointShadowFramebuffer->BindForReading(GL_TEXTURE1);
-    s_Data._shaders.ModelShader->setInt("u_ShadowMap",1);
+    s_Data.m_DirectShadowFramebuffer->BindForReading(GL_TEXTURE1);
+    s_Data.m_PointShadowFramebuffer->BindForReading(GL_TEXTURE2);
+    s_Data._shaders.ModelShader->setInt("u_DirectShadow",1);
+    s_Data._shaders.ModelShader->setInt("u_OmniShadow",2);
     BeginScene(s_Data.m_Camera);
     geometry();
     EndScene();
 
+    s_Data.m_RenderState = RendererData::RenderState::NONE;
     s_Data.m_MSAAFramebuffer->UnBind();
     s_Data.m_MSAAFramebuffer->BlitColor(s_Data.m_Framebuffer);
   }
@@ -420,6 +451,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
 
     s_Data.m_BloomFramebuffer->BlitDepthFrom(s_Data.m_MSAAFramebuffer);
     s_Data.m_BloomFramebuffer->Bind();
+    s_Data.m_RenderState = RendererData::RenderState::BLOOM;
     glClear(GL_COLOR_BUFFER_BIT);
 
     BeginScene(s_Data.m_Camera);
@@ -427,6 +459,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
     EndScene();
 
     s_Data.m_BloomFramebuffer->RenderBloomTexture(0.005f);
+    s_Data.m_RenderState = RendererData::RenderState::NONE;
     s_Data.m_BloomFramebuffer->UnBind();
     s_Data.m_BloomFramebuffer->CompositeBloomOver(s_Data.m_Framebuffer);
     s_Data.m_BloomFramebuffer->BlitDepthTo(s_Data.m_Framebuffer);
@@ -991,7 +1024,36 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
     return;
   }
 
-  if(s_Data.m_ShadowPass)
+  if(s_Data.m_RenderState == RendererData::RenderState::DIRECTSHADOW)
+  {
+    s_Data._shaders.DirectShadowShader->Use();
+
+    glm::mat4 modelMat = glm::mat4(1.0f); 
+    if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH)  modelMat = PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose());
+    else if (model->GetPhysXMeshType() == MeshType::CONTROLLER) modelMat = model->GetControllerTransform().GetTransform();
+    else if (model->GetPhysXMeshType() == MeshType::NONE) modelMat = transform;
+
+    s_Data._shaders.DirectShadowShader->setMat4("u_LightSpaceMatrix", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
+    s_Data._shaders.DirectShadowShader->setMat4("u_ModelTransform", modelMat);
+    s_Data._shaders.DirectShadowShader->setBool("isAnimated", model->IsAnimated());
+    s_Data._shaders.DirectShadowShader->setBool("isInstanced", false);
+
+    if(model->IsAnimated())
+    {
+      auto& transforms = model->GetFinalBoneMatrices();
+      for (size_t i = 0; i < transforms.size(); ++i) {
+          s_Data._shaders.DirectShadowShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+      }
+    }
+
+    for (auto& mesh : model->GetMeshes())
+    {
+      glBindVertexArray(mesh.VAO);
+      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
+      glBindVertexArray(0);
+    }
+  }
+  else if(s_Data.m_RenderState == RendererData::RenderState::OMNISHADOW)
   {
     s_Data._shaders.OmniDirectShadowShader->Use();
 
@@ -1020,7 +1082,7 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
       glBindVertexArray(0);
     }
   }
-  else
+  else if(s_Data.m_RenderState == RendererData::RenderState::GEOMETRY)
   {
     s_Data._shaders.ModelShader->Use();
     if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH) s_Data._shaders.ModelShader->setMat4("model", PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose()));
@@ -1028,6 +1090,7 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
     else if (model->GetPhysXMeshType() == MeshType::NONE) s_Data._shaders.ModelShader->setMat4("model", transform);
     s_Data._shaders.ModelShader->setBool("isAnimated", model->IsAnimated());
     s_Data._shaders.ModelShader->setBool("isInstanced", false);
+    s_Data._shaders.ModelShader->setMat4("u_DirectShadowViewProj", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
     if(model->IsAnimated())
     {
       auto& transforms = model->GetFinalBoneMatrices();
@@ -1064,7 +1127,33 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_
     return;
   }
 
-  if(s_Data.m_ShadowPass)
+  if(s_Data.m_RenderState == RendererData::RenderState::DIRECTSHADOW)
+  {
+    s_Data._shaders.DirectShadowShader->Use();
+    glm::mat4 modelMat = PhysX::PxMat44ToGlmMat4(convex->GetDynamicActor()->getGlobalPose()); 
+
+    s_Data._shaders.DirectShadowShader->setMat4("u_LightSpaceMatrix", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
+    s_Data._shaders.DirectShadowShader->setMat4("u_ModelTransform", modelMat);
+    s_Data._shaders.DirectShadowShader->setBool("isAnimated", model->IsAnimated());
+    s_Data._shaders.DirectShadowShader->setBool("isInstanced", false);
+
+    if(model->IsAnimated())
+    {
+      auto& transforms = model->GetFinalBoneMatrices();
+      for (size_t i = 0; i < transforms.size(); ++i) {
+          s_Data._shaders.DirectShadowShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+      }
+    }
+
+    for (auto& mesh : model->GetMeshes())
+    {
+      glBindVertexArray(mesh.VAO);
+      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
+      glBindVertexArray(0);
+    }
+
+  }
+  else if(s_Data.m_RenderState == RendererData::RenderState::OMNISHADOW)
   {
     s_Data._shaders.OmniDirectShadowShader->Use();
     glm::mat4 modelMat = PhysX::PxMat44ToGlmMat4(convex->GetDynamicActor()->getGlobalPose()); 
@@ -1089,7 +1178,7 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_
       glBindVertexArray(0);
     }
   }
-  else
+  else if(s_Data.m_RenderState == RendererData::RenderState::GEOMETRY)
   {
     s_Data._shaders.ModelShader->Use();
     s_Data._shaders.ModelShader->setMat4("model", PhysX::PxMat44ToGlmMat4(convex->GetDynamicActor()->getGlobalPose()));
@@ -1139,7 +1228,11 @@ void Renderer::DrawModelInstanced(const std::shared_ptr<Model>& model, const std
     return;
   }
 
-  if(s_Data.m_ShadowPass)
+  if(s_Data.m_RenderState == RendererData::RenderState::DIRECTSHADOW)
+  {
+
+  }
+  else if(s_Data.m_RenderState == RendererData::RenderState::OMNISHADOW)
   {
     s_Data._shaders.OmniDirectShadowShader->Use();
     s_Data._shaders.OmniDirectShadowShader->setBool("isAnimated", model->IsAnimated());
@@ -1160,7 +1253,7 @@ void Renderer::DrawModelInstanced(const std::shared_ptr<Model>& model, const std
       glBindVertexArray(0);
     }
   }
-  else
+  else if(s_Data.m_RenderState == RendererData::RenderState::GEOMETRY)
   {
     s_Data._shaders.ModelShader->Use();
     s_Data._shaders.ModelShader->setBool("isAnimated", model->IsAnimated());

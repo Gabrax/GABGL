@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <optional>
+#include <vector>
 
 enum class LightType : int32_t
 {
@@ -22,7 +23,7 @@ struct LightManager
   static void RemoveLight(int32_t index);
   static int32_t GetLightsQuantity();
   static int32_t GetPointLightsQuantity();
-  static glm::vec3 GetLightPosition(size_t index);
+  static std::vector<glm::vec3> GetPointLightPositions();
 
 private:
   static void UpdateSSBOLightData();

@@ -343,7 +343,7 @@ struct DirectShadowBuffer
 
   void BindForReading(GLenum textureUnit) const;
 
-  const glm::mat4& GetLightSpaceMatrix() const { return m_shadowProj; }
+  inline const glm::mat4 GetShadowViewProj() const { return m_shadowProj * m_shadowVIew; }
   GLuint GetDepthMap() const { return m_depthMap; }
 
   static std::shared_ptr<DirectShadowBuffer> Create(uint32_t shadowWidth, uint32_t shadowHeight);
@@ -356,6 +356,7 @@ private:
   GLuint m_depthMap = 0;
 
   glm::mat4 m_shadowProj;
+  glm::mat4 m_shadowVIew;
 };
 
 struct CubemapDirection

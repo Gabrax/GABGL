@@ -892,9 +892,15 @@ DirectShadowBuffer::DirectShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeig
   glReadBuffer(GL_NONE);
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-  float near_plane = 1.0f, far_plane = 100.0f;
-  float orthoSize = 10.0f; // You can customize this
+  float near_plane = 0.01f, far_plane = 100.0f;
+  float orthoSize = 50.0f; // You can customize this
   m_shadowProj = glm::ortho(-orthoSize, orthoSize, -orthoSize, orthoSize, near_plane, far_plane);
+
+  glm::vec3 lightDir = glm::normalize(glm::vec3(-2.0f, -4.0f, -1.0f)); 
+  glm::vec3 lightTarget = glm::vec3(0.0f); 
+  glm::vec3 lightPos = lightTarget - lightDir * 30.0f; 
+
+  m_shadowVIew = glm::lookAt(lightPos, lightTarget, glm::vec3(0, 1, 0));
 }
 
 DirectShadowBuffer::~DirectShadowBuffer()
