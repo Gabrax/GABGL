@@ -24,6 +24,8 @@
 #include <glm/fwd.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
+#include <chrono>
+#include <thread>
 #include "json.hpp"
 
 void MessageCallback(
@@ -45,6 +47,39 @@ void MessageCallback(
 
 	GABGL_ASSERT(false, "Unknown severity level!");
 }
+
+struct CustomRefreshRate
+{
+  using Clock = std::chrono::high_resolution_clock;
+  using TimePoint = std::chrono::time_point<Clock>;
+
+  static void BeginFrame()
+  { 
+    frameStart = Clock::now();
+  }
+
+  static void EndFrame()
+  {
+    auto frameEnd = Clock::now();
+    std::chrono::duration<float, std::milli> elapsed = frameEnd - frameStart;
+
+    if (elapsed.count() < frameDelay)
+    {
+      std::this_thread::sleep_for(std::chrono::duration<float, std::milli>(frameDelay - elapsed.count()));
+    }
+  }
+
+  static void SetTargetFPS(float fps)
+  {
+    targetFPS = fps;
+    frameDelay = 1000.0f / targetFPS;
+  }
+
+private:
+  inline static TimePoint frameStart;
+  inline static float targetFPS = 60.0f;
+  inline static float frameDelay = 1000.0f / 60.0f;
+};
 
 struct QuadVertex
 {
@@ -326,7 +361,7 @@ void Renderer::Init()
 
   s_Data.m_PointShadowFramebuffer = OmniDirectShadowBuffer::Create(512, 512);
 
-  s_Data.m_DirectShadowFramebuffer = DirectShadowBuffer::Create(1024, 1024);
+  s_Data.m_DirectShadowFramebuffer = DirectShadowBuffer::Create(1024, 1024, 16, 8, 3);
 
   s_Data.m_WindowRef = &Engine::GetInstance().GetMainWindow();
 
@@ -378,50 +413,57 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
   glFrontFace(GL_CW);
 
   {
-    GABGL_PROFILE_SCOPE("DIRECT SHADOW PASS");
+    if(!LightManager::DirectLightEmpty())
+    {
+      GABGL_PROFILE_SCOPE("DIRECT SHADOW PASS");
 
-    s_Data.m_DirectShadowFramebuffer->Bind();
-    s_Data.m_RenderState = RendererData::RenderState::DIRECTSHADOW;
-    float max = std::numeric_limits<float>::max();
-    SetClearColor({max,max,max,max});
-    glClear(GL_DEPTH_BUFFER_BIT);
+      s_Data.m_DirectShadowFramebuffer->Bind();
+      s_Data.m_RenderState = RendererData::RenderState::DIRECTSHADOW;
+      float max = std::numeric_limits<float>::max();
+      SetClearColor({max,max,max,max});
+      glClear(GL_DEPTH_BUFFER_BIT);
 
+      s_Data.m_DirectShadowFramebuffer->UpdateShadowView(LightManager::GetDirectLightRotation());
 
-    geometry();
+      geometry();
 
-    s_Data.m_RenderState = RendererData::RenderState::NONE;
-    s_Data.m_DirectShadowFramebuffer->UnBind();
+      s_Data.m_RenderState = RendererData::RenderState::NONE;
+      s_Data.m_DirectShadowFramebuffer->UnBind();
+    }
   }
 
   {
-    GABGL_PROFILE_SCOPE("OMNI SHADOW PASS");
-
-    s_Data.m_PointShadowFramebuffer->Bind();
-    s_Data.m_RenderState = RendererData::RenderState::OMNISHADOW;
-    float max = std::numeric_limits<float>::max();
-    SetClearColor({max,max,max,max});
-
-    uint32_t lightIndex = 0;
-    for (const auto& light : LightManager::GetPointLightPositions())
+    if(!LightManager::PointLightEmpty())
     {
-      s_Data._shaders.OmniDirectShadowShader->Use();
-      s_Data._shaders.OmniDirectShadowShader->setVec3("gLightWorldPos",light);
+      GABGL_PROFILE_SCOPE("OMNI SHADOW PASS");
 
-      const auto& directions = s_Data.m_PointShadowFramebuffer->GetFaceDirections();
-      for (auto face = 0; face < directions.size(); ++face)
+      s_Data.m_PointShadowFramebuffer->Bind();
+      s_Data.m_RenderState = RendererData::RenderState::OMNISHADOW;
+      float max = std::numeric_limits<float>::max();
+      SetClearColor({max,max,max,max});
+
+      uint32_t lightIndex = 0;
+      for (const auto& light : LightManager::GetPointLightPositions())
       {
-        s_Data.m_PointShadowFramebuffer->BindForWriting(lightIndex, face);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        s_Data._shaders.OmniDirectShadowShader->Use();
+        s_Data._shaders.OmniDirectShadowShader->setVec3("gLightWorldPos",light);
 
-        glm::mat4 view = glm::lookAt(light,light + directions[face].Target,directions[face].Up);
-        s_Data.m_LightProj = s_Data.m_PointShadowFramebuffer->GetShadowProj() * view;
+        const auto& directions = s_Data.m_PointShadowFramebuffer->GetFaceDirections();
+        for (auto face = 0; face < directions.size(); ++face)
+        {
+          s_Data.m_PointShadowFramebuffer->BindForWriting(lightIndex, face);
+          glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        geometry();
+          glm::mat4 view = glm::lookAt(light,light + directions[face].Target,directions[face].Up);
+          s_Data.m_LightProj = s_Data.m_PointShadowFramebuffer->GetShadowProj() * view;
+
+          geometry();
+        }
+        lightIndex++;
       }
-      lightIndex++;
+      s_Data.m_RenderState = RendererData::RenderState::NONE;
+      s_Data.m_PointShadowFramebuffer->UnBind();
     }
-    s_Data.m_RenderState = RendererData::RenderState::NONE;
-    s_Data.m_PointShadowFramebuffer->UnBind();
   }
   
   {
@@ -433,10 +475,12 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     s_Data._shaders.ModelShader->Use();
-    s_Data.m_DirectShadowFramebuffer->BindForReading(GL_TEXTURE1);
-    s_Data.m_PointShadowFramebuffer->BindForReading(GL_TEXTURE2);
+    s_Data.m_DirectShadowFramebuffer->BindShadowTextureForReading(GL_TEXTURE1);
+    s_Data.m_DirectShadowFramebuffer->BindOffsetTextureForReading(GL_TEXTURE2);
+    s_Data.m_PointShadowFramebuffer->BindForReading(GL_TEXTURE3);
     s_Data._shaders.ModelShader->setInt("u_DirectShadow",1);
-    s_Data._shaders.ModelShader->setInt("u_OmniShadow",2);
+    s_Data._shaders.ModelShader->setInt("u_OffsetTexture",2);
+    s_Data._shaders.ModelShader->setInt("u_OmniShadow",3);
     BeginScene(s_Data.m_Camera);
     geometry();
     EndScene();
@@ -447,22 +491,25 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
   }
 
   {
-    GABGL_PROFILE_SCOPE("BLOOM PASS");
+    if(lights)
+    {
+      GABGL_PROFILE_SCOPE("BLOOM PASS");
 
-    s_Data.m_BloomFramebuffer->BlitDepthFrom(s_Data.m_MSAAFramebuffer);
-    s_Data.m_BloomFramebuffer->Bind();
-    s_Data.m_RenderState = RendererData::RenderState::BLOOM;
-    glClear(GL_COLOR_BUFFER_BIT);
+      s_Data.m_BloomFramebuffer->BlitDepthFrom(s_Data.m_MSAAFramebuffer);
+      s_Data.m_BloomFramebuffer->Bind();
+      s_Data.m_RenderState = RendererData::RenderState::BLOOM;
+      glClear(GL_COLOR_BUFFER_BIT);
 
-    BeginScene(s_Data.m_Camera);
-    lights();
-    EndScene();
+      BeginScene(s_Data.m_Camera);
+      lights();
+      EndScene();
 
-    s_Data.m_BloomFramebuffer->RenderBloomTexture(0.005f);
-    s_Data.m_RenderState = RendererData::RenderState::NONE;
-    s_Data.m_BloomFramebuffer->UnBind();
-    s_Data.m_BloomFramebuffer->CompositeBloomOver(s_Data.m_Framebuffer);
-    s_Data.m_BloomFramebuffer->BlitDepthTo(s_Data.m_Framebuffer);
+      s_Data.m_BloomFramebuffer->RenderBloomTexture(0.005f);
+      s_Data.m_RenderState = RendererData::RenderState::NONE;
+      s_Data.m_BloomFramebuffer->UnBind();
+      s_Data.m_BloomFramebuffer->CompositeBloomOver(s_Data.m_Framebuffer);
+      s_Data.m_BloomFramebuffer->BlitDepthTo(s_Data.m_Framebuffer);
+    }
   }
 
   s_Data.m_Framebuffer->Bind();

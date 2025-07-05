@@ -9,8 +9,6 @@ layout (location = 5) in ivec4 boneIds;
 layout (location = 6) in vec4 weights;
 layout (location = 7) in mat4 instanceMatrix;
 
-uniform mat4 model;
-
 layout(std140, binding = 0) uniform Camera
 {
   mat4 ViewProjection;
@@ -32,6 +30,7 @@ const int MAX_BONES = 100;
 const int MAX_BONE_INFLUENCE = 4;
 uniform mat4 finalBonesMatrices[MAX_BONES];
 
+uniform mat4 model;
 uniform bool isAnimated;
 uniform bool isInstanced;
 
@@ -94,6 +93,10 @@ void main()
 layout (location = 0) out vec4 FragColor;
 layout (location = 1) out vec4 BrightColor;
 
+layout(binding = 1) uniform sampler2D u_DirectShadow;
+layout(binding = 2) uniform sampler3D u_OffsetTexture;
+layout(binding = 3) uniform samplerCubeArray u_OmniShadow;
+
 layout(std140, binding = 0) uniform Camera
 {
   mat4 ViewProjection;
@@ -101,6 +104,19 @@ layout(std140, binding = 0) uniform Camera
   mat4 NonRotViewProjection;
   vec3 CameraPos;
 };
+
+layout(std140, binding = 1) uniform DirectShadowData
+{
+  vec2 windowSize;
+  vec2 offsetSize_filterSize; // x = offsetSize, y = filterSize 
+  vec2 randomRadius; // x = randomRadius
+};
+
+layout(std430, binding = 0) buffer LightPositions { vec4 positions[30]; };
+layout(std430, binding = 1) buffer LightRotations { vec4 rotations[30]; };
+layout(std430, binding = 2) buffer LightsQuantity { int numLights; };
+layout(std430, binding = 3) buffer LightColors { vec4 colors[30]; };
+layout(std430, binding = 4) buffer LightTypes { int lightTypes[]; };
 
 struct Material
 {
@@ -128,6 +144,9 @@ struct Light
   int type;  // 0 = Directional, 1 = Point, 2 = Spotlight
 };
 
+uniform Material material;
+uniform Light light;
+
 in VS_OUT
 {
   vec2 TexCoords;
@@ -137,28 +156,6 @@ in VS_OUT
   mat3 TBN;
   vec4 FragPosLightSpace;
 } fs_in;
-
-layout(std430, binding = 0) buffer LightPositions {
-    vec4 positions[30];  
-};
-layout(std430, binding = 1) buffer LightRotations {
-    vec4 rotations[30];  
-};
-layout(std430, binding = 2) buffer LightsQuantity {
-    int numLights;      
-};
-layout(std430, binding = 3) buffer LightColors {
-    vec4 colors[30];  
-};
-layout(std430, binding = 4) buffer LightTypes {
-    int lightTypes[];
-};
-
-uniform Material material;
-uniform Light light;
-
-uniform sampler2D u_DirectShadow;
-uniform samplerCubeArray u_OmniShadow;
 
 const float gamma = 2.2;
 
@@ -182,54 +179,76 @@ vec3 toneMappingACES(vec3 color)
   return clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0, 1.0);
 }
 
-// float calculateDirectionalShadow(vec4 fragPosLightSpace)
-// {
-//     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
-//
-//     projCoords = projCoords * 0.5 + 0.5;
-//
-//     if(projCoords.z > 1.0) return 1.0;
-//
-//     float shadow = 0.0;
-//     float bias = 0.005; // tweak this based on your scene and normal/light angle
-//     float texelSize = 1.0 / textureSize(u_DirectShadow, 0).x;
-//
-//     for(int x = -1; x <= 1; ++x)
-//     {
-//         for(int y = -1; y <= 1; ++y)
-//         {
-//             float pcfDepth = texture(u_DirectShadow, projCoords.xy + vec2(x, y) * texelSize).r; 
-//             shadow += (projCoords.z - bias > pcfDepth) ? 0.25 : 1.0;
-//         }
-//     }
-//     shadow /= 9.0;
-//
-//     return shadow;
-// }
-
-float calculateDirectionalShadow(vec4 fragPosLightSpace)
+float CalcShadowFactorWithRandomSampling(vec4 fragPosLightSpace, vec3 LightDirection, vec3 Normal)
 {
-    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
-    projCoords = projCoords * 0.5 + 0.5;
+  ivec3 OffsetCoord;
+  vec2 f = mod(gl_FragCoord.xy, vec2(offsetSize_filterSize.x));
+  OffsetCoord.yz = ivec2(f);
 
-    if(projCoords.z > 1.0) return 1.0;
+  float Sum = 0.0;
 
-    float bias = 0.005; // tweak as needed
+  int SamplesDiv2 = int(offsetSize_filterSize.y * offsetSize_filterSize.y / 2.0);
 
-    float closestDepth = texture(u_DirectShadow, projCoords.xy).r;
-    float currentDepth = projCoords.z;
+  vec3 ProjCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+  vec3 ShadowCoords = ProjCoords * 0.5 + vec3(0.5);
 
-    if(currentDepth - bias > closestDepth)
-        return 0.45; // in shadow
-    else
-        return 1.0; // lit
+  vec4 sc = vec4(ShadowCoords, 1.0);
+
+  float TexelWidth = 1.0 / windowSize.x;
+  float TexelHeight = 1.0 / windowSize.y;
+
+  vec2 TexelSize = vec2(TexelWidth, TexelHeight);
+
+  float DiffuseFactor = dot(Normal, -LightDirection);
+  float bias = mix(0.001, 0.0, DiffuseFactor);
+  float Depth = 0.0;
+
+  for (int i = 0 ; i < 4 ; i++)
+  {
+    OffsetCoord.x = i;
+    vec4 Offsets = texelFetch(u_OffsetTexture, OffsetCoord, 0) * randomRadius.x;
+    sc.xy = ShadowCoords.xy + Offsets.rg * TexelSize;
+    Depth = texture(u_DirectShadow, sc.xy).x;
+
+    Sum += (Depth + bias < ShadowCoords.z) ? 0.0 : 1.0;
+
+    sc.xy = ShadowCoords.xy + Offsets.ba * TexelSize;
+    Depth = texture(u_DirectShadow, sc.xy).x;
+
+    Sum += (Depth + bias < ShadowCoords.z) ? 0.0 : 1.0;
+  }
+
+  float Shadow = Sum / 8.0;
+
+  if (Shadow != 0.0 && Shadow != 1.0)
+  {
+    for (int i = 4 ; i < SamplesDiv2 ; i++)
+    {
+      OffsetCoord.x = i;
+      vec4 Offsets = texelFetch(u_OffsetTexture, OffsetCoord, 0) * randomRadius.x;
+      sc.xy = ShadowCoords.xy + Offsets.rg * TexelSize;
+      Depth = texture(u_DirectShadow, sc.xy).x;
+
+      Sum += (Depth + bias < ShadowCoords.z) ? 0.0 : 1.0;
+
+      sc.xy = ShadowCoords.xy + Offsets.ba * TexelSize;
+      Depth = texture(u_DirectShadow, sc.xy).x;
+
+      Sum += (Depth + bias < ShadowCoords.z) ? 0.0 : 1.0;
+    }
+
+    Shadow = Sum / float(SamplesDiv2 * 2.0);
+  }
+
+  return Shadow;
 }
 
 vec3 calculateDirectionalLight(Light light, vec3 normal, vec3 viewDir, vec3 color, vec4 fragPosLightSpace)
 {
-  float shadow = calculateDirectionalShadow(fragPosLightSpace);
-
   vec3 lightDir = normalize(-light.direction);
+
+  float shadow = CalcShadowFactorWithRandomSampling(fragPosLightSpace, lightDir, normal);
+
   float diff = max(dot(normal, lightDir), 0.0);
 
   vec3 reflectDir = reflect(-lightDir, normal);

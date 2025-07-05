@@ -24,6 +24,9 @@ struct LightManager
   static int32_t GetLightsQuantity();
   static int32_t GetPointLightsQuantity();
   static std::vector<glm::vec3> GetPointLightPositions();
+  static glm::vec3 GetDirectLightRotation();
+  static bool DirectLightEmpty();
+  static bool PointLightEmpty();
 
 private:
   static void UpdateSSBOLightData();

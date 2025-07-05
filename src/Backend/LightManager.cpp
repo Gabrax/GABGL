@@ -131,13 +131,24 @@ void LightManager::UpdateSSBOLightData()
 
 std::vector<glm::vec3> LightManager::GetPointLightPositions()
 {
-    std::vector<glm::vec3> positions;
-    for (const auto& light : s_Data.lights)
-    {
-        if (light->type == LightType::POINT)
-            positions.push_back(light->position);
-    }
-    return positions;
+  std::vector<glm::vec3> positions;
+  for (const auto& light : s_Data.lights)
+  {
+      if (light->type == LightType::POINT)
+          positions.push_back(light->position);
+  }
+  return positions;
+}
+
+glm::vec3 LightManager::GetDirectLightRotation()
+{
+  glm::vec3 rotation;
+  for (const auto& light : s_Data.lights)
+  {
+    if (light->type == LightType::DIRECT)
+        rotation = light->rotation;
+  }
+  return rotation;
 }
 
 int32_t LightManager::GetLightsQuantity()
@@ -149,4 +160,15 @@ int32_t LightManager::GetPointLightsQuantity()
 {
   return s_Data.numPointLights;
 }
+
+bool LightManager::DirectLightEmpty()
+{
+  return s_Data.numDirectLights == 0;
+}
+
+bool LightManager::PointLightEmpty()
+{
+  return s_Data.numPointLights == 0;
+}
+
 

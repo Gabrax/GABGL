@@ -335,25 +335,32 @@ private:
 
 struct DirectShadowBuffer
 {
-  DirectShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeight);
+  DirectShadowBuffer(float shadowWidth, float shadowHeight, float offsetSize, float filterSize, float randomRadius);
   ~DirectShadowBuffer();
 
   void Bind() const;
   void UnBind() const;
 
-  void BindForReading(GLenum textureUnit) const;
+  void BindShadowTextureForReading(GLenum textureUnit) const;
+  void BindOffsetTextureForReading(GLenum textureUnit) const;
+
+  void UpdateShadowView(const glm::vec3& rotation);
 
   inline const glm::mat4 GetShadowViewProj() const { return m_shadowProj * m_shadowVIew; }
-  GLuint GetDepthMap() const { return m_depthMap; }
 
-  static std::shared_ptr<DirectShadowBuffer> Create(uint32_t shadowWidth, uint32_t shadowHeight);
+  static std::shared_ptr<DirectShadowBuffer> Create(float shadowWidth, float shadowHeight, float offsetSize, float filterSize, float randomRadius);
 
 private:
+
+  float Jitter();
 
   uint32_t m_shadowWidth = 0, m_shadowHeight = 0;
 
   GLuint m_FBO = 0;
   GLuint m_depthMap = 0;
+  GLuint m_offsetTexture;
+
+  std::shared_ptr<UniformBuffer> buffer;
 
   glm::mat4 m_shadowProj;
   glm::mat4 m_shadowVIew;

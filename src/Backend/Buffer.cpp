@@ -4,7 +4,8 @@
 #include "glm/trigonometric.hpp"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp> 
-
+#include <random>
+#include <numbers>
 #include <glad/glad.h>
 
 VertexBuffer::VertexBuffer(uint32_t size)
@@ -255,62 +256,60 @@ void StorageBuffer::UnmapBuffer()
 
 PixelBuffer::PixelBuffer(size_t size) : m_Size(size)
 {
-    glGenBuffers(1, &m_ID);
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, m_ID);
-    glBufferData(GL_PIXEL_UNPACK_BUFFER, m_Size, nullptr, GL_STREAM_DRAW);
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+  glGenBuffers(1, &m_ID);
+  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, m_ID);
+  glBufferData(GL_PIXEL_UNPACK_BUFFER, m_Size, nullptr, GL_STREAM_DRAW);
+  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 }
 
 PixelBuffer::~PixelBuffer()
 {
-    if (m_ID) glDeleteBuffers(1, &m_ID);
-    if (m_Sync)
-    {
-        glDeleteSync(m_Sync);
-        m_Sync = nullptr;
-    }
+  if (m_ID) glDeleteBuffers(1, &m_ID);
+  if (m_Sync)
+  {
+      glDeleteSync(m_Sync);
+      m_Sync = nullptr;
+  }
 }
 
 void* PixelBuffer::Map()
 {
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, m_ID);
-    return glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, m_Size,
-        GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT | GL_MAP_UNSYNCHRONIZED_BIT);
+  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, m_ID);
+  return glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, m_Size, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT | GL_MAP_UNSYNCHRONIZED_BIT);
 }
 
 void PixelBuffer::Unmap()
 {
-    glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+  glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
-    // Insert a fence sync after upload for later wait
-    if (m_Sync)
-        glDeleteSync(m_Sync);
-    m_Sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+  // Insert a fence sync after upload for later wait
+  if (m_Sync) glDeleteSync(m_Sync);
+  m_Sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 }
 
 void PixelBuffer::WaitForCompletion()
 {
-    if (m_Sync)
-    {
-        GLenum result = glClientWaitSync(m_Sync, GL_SYNC_FLUSH_COMMANDS_BIT, 1'000'000); // 1ms
-        if (result == GL_TIMEOUT_EXPIRED || result == GL_WAIT_FAILED)
-        {
-            glWaitSync(m_Sync, 0, GL_TIMEOUT_IGNORED); // Block until done
-        }
-        glDeleteSync(m_Sync);
-        m_Sync = nullptr;
-    }
+  if (m_Sync)
+  {
+      GLenum result = glClientWaitSync(m_Sync, GL_SYNC_FLUSH_COMMANDS_BIT, 1'000'000); // 1ms
+      if (result == GL_TIMEOUT_EXPIRED || result == GL_WAIT_FAILED)
+      {
+          glWaitSync(m_Sync, 0, GL_TIMEOUT_IGNORED); // Block until done
+      }
+      glDeleteSync(m_Sync);
+      m_Sync = nullptr;
+  }
 }
 
 void PixelBuffer::Bind() const
 {
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, m_ID);
+  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, m_ID);
 }
 
 void PixelBuffer::Unbind() const
 {
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 }
 
 static const uint32_t s_MaxFramebufferSize = 8192;
@@ -872,7 +871,7 @@ std::shared_ptr<BloomBuffer> BloomBuffer::Create(const std::shared_ptr<Shader>& 
   return std::make_shared<BloomBuffer>(downsampleShader,upsampleShader,finalShader);
 }
 
-DirectShadowBuffer::DirectShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeight) : m_shadowWidth(shadowWidth), m_shadowHeight(shadowHeight)
+DirectShadowBuffer::DirectShadowBuffer(float shadowWidth, float shadowHeight, float offsetSize, float filterSize, float randomRadius) : m_shadowWidth(shadowWidth), m_shadowHeight(shadowHeight)
 {
   glGenTextures(1, &m_depthMap);
   glBindTexture(GL_TEXTURE_2D, m_depthMap);
@@ -892,15 +891,65 @@ DirectShadowBuffer::DirectShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeig
   glReadBuffer(GL_NONE);
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-  float near_plane = 0.01f, far_plane = 100.0f;
-  float orthoSize = 50.0f; // You can customize this
+  std::vector<float> Data;
+
+  int BufferSize = offsetSize * offsetSize * filterSize * filterSize * 2;
+
+  Data.resize(BufferSize);
+
+  float PI = std::numbers::pi;
+
+  int Index = 0;
+  for (int TexY = 0; TexY < offsetSize; TexY++)
+  {
+    for (int TexX = 0; TexX < offsetSize; TexX++)
+    {
+      for (int v = filterSize - 1; v >= 0; v--)
+      {
+        for (int u = 0; u < filterSize; u++)
+        {
+          float x = ((float)u + 0.5f + Jitter()) / (float)filterSize;
+          float y = ((float)v + 0.5f + Jitter()) / (float)filterSize;
+
+          assert(Index + 1 < Data.size());
+          Data[Index]     = sqrtf(y) * cosf(2 * PI * x);
+          Data[Index + 1] = sqrtf(y) * sinf(2 * PI * x);
+
+          Index += 2;
+        }
+      }
+    }
+  }
+
+  int NumFilterSamples = filterSize * filterSize;
+
+  glActiveTexture(GL_TEXTURE1);
+  glGenTextures(1, &m_offsetTexture);
+  glBindTexture(GL_TEXTURE_3D, m_offsetTexture);
+  glTexStorage3D(GL_TEXTURE_3D, 1, GL_RGBA32F, NumFilterSamples / 2, offsetSize, offsetSize );
+  glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, NumFilterSamples / 2, offsetSize, offsetSize, GL_RGBA, GL_FLOAT, &Data[0]);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glBindTexture(GL_TEXTURE_3D, 0);
+
+  float near_plane = 0.01f, far_plane = 100.0f, orthoSize = 50.0f; 
   m_shadowProj = glm::ortho(-orthoSize, orthoSize, -orthoSize, orthoSize, near_plane, far_plane);
 
-  glm::vec3 lightDir = glm::normalize(glm::vec3(-2.0f, -4.0f, -1.0f)); 
-  glm::vec3 lightTarget = glm::vec3(0.0f); 
-  glm::vec3 lightPos = lightTarget - lightDir * 30.0f; 
+  struct Data
+  {
+    glm::vec2 windowSize; 
+    glm::vec2 offsetSize_filterSize; 
+    glm::vec2 randomRadius;
+  } data;
 
-  m_shadowVIew = glm::lookAt(lightPos, lightTarget, glm::vec3(0, 1, 0));
+  data.windowSize = glm::vec2(shadowWidth, shadowHeight);
+  data.offsetSize_filterSize = glm::vec2(float(offsetSize), float(filterSize));
+  data.randomRadius = glm::vec2(3.0f, 0.0f);
+
+  buffer = UniformBuffer::Create(sizeof(Data), 1);
+  buffer->SetData(&data, sizeof(Data));
+
+  m_shadowVIew = glm::mat4(1);
 }
 
 DirectShadowBuffer::~DirectShadowBuffer()
@@ -920,15 +969,37 @@ void DirectShadowBuffer::UnBind() const
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void DirectShadowBuffer::BindForReading(GLenum textureUnit) const
+void DirectShadowBuffer::BindShadowTextureForReading(GLenum textureUnit) const
 {
   glActiveTexture(textureUnit);
   glBindTexture(GL_TEXTURE_2D, m_depthMap);
 }
 
-std::shared_ptr<DirectShadowBuffer> DirectShadowBuffer::Create(uint32_t shadowWidth, uint32_t shadowHeight)
+void DirectShadowBuffer::BindOffsetTextureForReading(GLenum textureUnit) const
 {
-    return std::make_shared<DirectShadowBuffer>(shadowWidth, shadowHeight);
+  glActiveTexture(textureUnit);
+  glBindTexture(GL_TEXTURE_3D, m_offsetTexture);
+}
+
+void DirectShadowBuffer::UpdateShadowView(const glm::vec3& rotation)
+{
+  glm::vec3 lightDir = glm::normalize(rotation); 
+  glm::vec3 lightTarget = glm::vec3(0.0f); 
+  glm::vec3 lightPos = lightTarget - lightDir * 30.0f; 
+
+  m_shadowVIew = glm::lookAt(lightPos, lightTarget, glm::vec3(0, 1, 0));
+}
+
+float DirectShadowBuffer::Jitter()
+{
+  static std::default_random_engine generator;
+  static std::uniform_real_distribution<float> distrib(-0.5f, 0.5f);
+  return distrib(generator);
+}
+
+std::shared_ptr<DirectShadowBuffer> DirectShadowBuffer::Create(float shadowWidth, float shadowHeight, float offsetSize, float filterSize, float randomRadius)
+{
+  return std::make_shared<DirectShadowBuffer>(shadowWidth, shadowHeight, offsetSize, filterSize, randomRadius);
 }
 
 OmniDirectShadowBuffer::OmniDirectShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeight) 
