@@ -54,7 +54,6 @@ UploadContextManager::UploadContextManager(GLFWwindow* sharedContext)
 
   m_UploadWindow = glfwCreateWindow(1, 1, "", nullptr, sharedContext);
   if (!m_UploadWindow) {
-      std::cerr << "Failed to create upload OpenGL context window" << std::endl;
       throw std::runtime_error("Failed to create upload context");
   }
 
@@ -97,31 +96,32 @@ void UploadContextManager::ThreadFunc()
 {
   glfwMakeContextCurrent(m_UploadWindow);
 
-  while (true) {
-      Task task;
+  while (true)
+  {
+    Task task;
 
-      {
-          std::unique_lock<std::mutex> lock(m_Mutex);
-          m_CondVar.wait(lock, [this]() { return !m_TaskQueue.empty() || m_Stop; });
+    {
+        std::unique_lock<std::mutex> lock(m_Mutex);
+        m_CondVar.wait(lock, [this]() { return !m_TaskQueue.empty() || m_Stop; });
 
-          if (m_Stop && m_TaskQueue.empty())
-              break;
+        if (m_Stop && m_TaskQueue.empty())
+            break;
 
-          task = std::move(m_TaskQueue.front());
-          m_TaskQueue.pop();
-      }
+        task = std::move(m_TaskQueue.front());
+        m_TaskQueue.pop();
+    }
 
-      if (task) {
-          task();
-          glFlush();
-      }
+    if (task) {
+        task();
+        glFlush();
+    }
 
-      {
-          std::lock_guard<std::mutex> lock(m_Mutex);
-          if (m_TaskQueue.empty())
-              m_Idle = true;
-      }
-      m_CondVar.notify_all();
+    {
+        std::lock_guard<std::mutex> lock(m_Mutex);
+        if (m_TaskQueue.empty())
+            m_Idle = true;
+    }
+    m_CondVar.notify_all();
   }
 
   glFinish();
@@ -171,7 +171,7 @@ struct AssetsData
 
   std::vector<std::tuple<const char*, float, bool, MeshType>> static_models =
   {
-    { "res/map/objHouse.obj", 1.0f, false, MeshType::TRIANGLEMESH },
+    { "res/map/objHouse.obj", 0.7f, false, MeshType::TRIANGLEMESH },
     { "res/models/aidkit.glb", 1.0f, false, MeshType::NONE },
     { "res/models/aidkit_convex.glb", 1.0f, false, MeshType::CONVEXMESH },
     { "res/models/pistolammo.glb", 1.0f, false, MeshType::NONE },
@@ -186,7 +186,7 @@ struct AssetsData
 
   std::vector<std::tuple<const char*, float, bool, MeshType>> animated_models =
   {
-    { "res/zombie/zombie.glb", 1.0f, false, MeshType::CONTROLLER },
+    { "res/zombie/zombie.glb", 0.5f, false, MeshType::CONTROLLER },
     { "res/models/harry.glb", 1.0f, false, MeshType::CONTROLLER },
   };
 

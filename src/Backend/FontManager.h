@@ -19,6 +19,7 @@ struct Font
 struct FontManager
 {
   static void Init();
+  static void Shutdown();
   static void LoadFont(const char* path);
   static Font* GetFont(const char* name);
 };

@@ -1,5 +1,6 @@
 #include "ModelManager.h"
 #include "BackendLogger.h"
+#include "glad/glad.h"
 #include "meshoptimizer.h"
 #include <filesystem>
 #define GLM_ENABLE_EXPERIMENTAL
@@ -7,7 +8,7 @@
 #include <glm/gtx/matrix_decompose.hpp>
 #include "Buffer.h"
 
-static glm::mat4 ConvertMatrixToGLMFormat(const aiMatrix4x4& from)
+static glm::mat4 AssimpMatToGLMMat(const aiMatrix4x4& from)
 {
   glm::mat4 to;
   //the a,b,c,d in assimp is the row ; the 1,2,3,4 is the column
@@ -18,12 +19,12 @@ static glm::mat4 ConvertMatrixToGLMFormat(const aiMatrix4x4& from)
   return to;
 }
 
-static glm::vec3 GetGLMVec(const aiVector3D& vec) 
+static glm::vec3 AssimpVecToGLMVec(const aiVector3D& vec) 
 { 
   return glm::vec3(vec.x, vec.y, vec.z); 
 }
 
-static glm::quat GetGLMQuat(const aiQuaternion& pOrientation)
+static glm::quat AssimpQuatToGLMQuat(const aiQuaternion& pOrientation)
 {
   return glm::quat(pOrientation.w, pOrientation.x, pOrientation.y, pOrientation.z);
 }
@@ -48,29 +49,35 @@ void ModelManager::BakeModelInstancedBuffers(Mesh& mesh, const std::vector<Trans
   std::vector<glm::mat4> instanceMatrices;
   instanceMatrices.reserve(transforms.size());
 
-  for (const auto& t : transforms) instanceMatrices.push_back(t.GetTransform());
+  for (const auto& t : transforms)
+      instanceMatrices.push_back(t.GetTransform());
 
-  if (mesh.instanceVBO == 0) glGenBuffers(1, &mesh.instanceVBO);
+  if (mesh.instanceVBO == 0)
+      glCreateBuffers(1, &mesh.instanceVBO);
 
-  glBindVertexArray(mesh.VAO);
-  glBindBuffer(GL_ARRAY_BUFFER, mesh.instanceVBO);
-  glBufferData(GL_ARRAY_BUFFER, instanceMatrices.size() * sizeof(glm::mat4), instanceMatrices.data(), GL_STREAM_DRAW);
+  static size_t lastSize = 0;
+  size_t newSize = instanceMatrices.size() * sizeof(glm::mat4);
+  if (lastSize != newSize) {
+      glNamedBufferStorage(mesh.instanceVBO, newSize, instanceMatrices.data(), 0); // immutable
+      lastSize = newSize;
+  } else {
+      glNamedBufferSubData(mesh.instanceVBO, 0, newSize, instanceMatrices.data());
+  }
+
+  glVertexArrayVertexBuffer(mesh.VAO, 1, mesh.instanceVBO, 0, sizeof(glm::mat4));
 
   if (!mesh.instanceAttribsConfigured)
   {
-    std::size_t vec4Size = sizeof(glm::vec4);
-    for (int i = 0; i < 4; ++i)
-    {
-        GLuint loc = 7 + i;
-        glEnableVertexAttribArray(loc);
-        glVertexAttribPointer(loc, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(i * vec4Size));
-        glVertexAttribDivisor(loc, 1);
-    }
+      for (GLuint i = 0; i < 4; ++i) {
+          GLuint loc = 7 + i; // instance matrix starts at attribute 7
+          glEnableVertexArrayAttrib(mesh.VAO, loc);
+          glVertexArrayAttribFormat(mesh.VAO, loc, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec4) * i);
+          glVertexArrayAttribBinding(mesh.VAO, loc, 1); // bind to binding index 1
+          glVertexArrayBindingDivisor(mesh.VAO, 1, 1);  // instanced per-instance
+      }
 
-    mesh.instanceAttribsConfigured = true;
+      mesh.instanceAttribsConfigured = true;
   }
-
-  glBindVertexArray(0);
 }
 
 void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Model>& model)
@@ -141,62 +148,62 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
       }
 
       GLuint id;
-      glGenTextures(1, &id);
-      glBindTexture(GL_TEXTURE_2D, id);
+      glCreateTextures(GL_TEXTURE_2D, 1, &id);
       texture->SetRendererID(id);
 
+      glTextureStorage2D(id, 1, GL_RGBA8, width, height);
       pbo->Bind();
-      glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, nullptr);
+      glTextureSubImage2D(id, 0, 0, 0, width, height, format, GL_UNSIGNED_BYTE, nullptr);
       pbo->Unbind();
 
-      glGenerateMipmap(GL_TEXTURE_2D);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+      glGenerateTextureMipmap(id);
+      glTextureParameteri(id, GL_TEXTURE_WRAP_S, GL_REPEAT );
+      glTextureParameteri(id, GL_TEXTURE_WRAP_T, GL_REPEAT );
+      glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+      glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
       currentPBO = (currentPBO + 1) % NUM_BUFFERS;
     }
 
-    glGenVertexArrays(1, &mesh.VAO);
-    glGenBuffers(1, &mesh.VBO);
-    glGenBuffers(1, &mesh.EBO);
+    glCreateVertexArrays(1, &mesh.VAO);
+    glCreateBuffers(1, &mesh.VBO);
+    glCreateBuffers(1, &mesh.EBO);
 
-    glBindVertexArray(mesh.VAO);
+    glNamedBufferStorage(mesh.VBO,mesh.m_Vertices.size() * sizeof(Vertex),mesh.m_Vertices.data(), 0); // flags: 0 = immutable, no mapping
+    glNamedBufferStorage(mesh.EBO,mesh.m_Indices.size() * sizeof(unsigned int),mesh.m_Indices.data(), 0);
 
-    glBindBuffer(GL_ARRAY_BUFFER, mesh.VBO);
-    glBufferData(GL_ARRAY_BUFFER, mesh.m_Vertices.size() * sizeof(Vertex), &mesh.m_Vertices[0], GL_STATIC_DRAW);
+    glVertexArrayVertexBuffer(mesh.VAO, 0, mesh.VBO, 0, sizeof(Vertex)); // binding index = 0
+    glVertexArrayElementBuffer(mesh.VAO, mesh.EBO);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.m_Indices.size() * sizeof(unsigned int), &mesh.m_Indices[0], GL_STATIC_DRAW);
-
-    struct Attribute {
-        GLint size;
-        GLenum type;
-        GLboolean normalized;
-        size_t offset;
+    struct Attribute
+    {
+      GLint size;
+      GLenum type;
+      GLboolean normalized;
+      size_t offset;
     };
 
-    std::array<Attribute, 7> attributes = { {
-        {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Position)},
-        {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Normal)},
-        {2, GL_FLOAT, GL_FALSE, offsetof(Vertex, TexCoords)},
-        {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Tangent)},
-        {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Bitangent)},
-        {4, GL_INT, GL_FALSE, offsetof(Vertex, m_BoneIDs)},
-        {4, GL_FLOAT, GL_FALSE, offsetof(Vertex, m_Weights)}
-    } };
+    std::array<Attribute, 7> attributes =
+    {{
+      {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Position)},
+      {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Normal)},
+      {2, GL_FLOAT, GL_FALSE, offsetof(Vertex, TexCoords)},
+      {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Tangent)},
+      {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Bitangent)},
+      {4, GL_INT,   GL_FALSE, offsetof(Vertex, m_BoneIDs)},
+      {4, GL_FLOAT, GL_FALSE, offsetof(Vertex, m_Weights)}
+    }};
 
-    for (size_t i = 0; i < attributes.size(); ++i) {
-        glEnableVertexAttribArray(static_cast<GLuint>(i));
-        if (attributes[i].type == GL_INT) {
-            glVertexAttribIPointer(static_cast<GLuint>(i), attributes[i].size, attributes[i].type, sizeof(Vertex), (void*)attributes[i].offset);
-        } else {
-            glVertexAttribPointer(static_cast<GLuint>(i), attributes[i].size, attributes[i].type, attributes[i].normalized, sizeof(Vertex), (void*)attributes[i].offset);
-        }
+    for (GLuint i = 0; i < attributes.size(); ++i)
+    {
+      glEnableVertexArrayAttrib(mesh.VAO, i);
+      if (attributes[i].type == GL_INT) {
+          glVertexArrayAttribIFormat(mesh.VAO, i, attributes[i].size, attributes[i].type, attributes[i].offset);
+      } else {
+          glVertexArrayAttribFormat(mesh.VAO, i, attributes[i].size, attributes[i].type, attributes[i].normalized, attributes[i].offset);
+      }
+      glVertexArrayAttribBinding(mesh.VAO, i, 0); // binding index 0
     }
-
-    glBindVertexArray(0);
 
     for(auto& tex : mesh.m_Textures) tex->ClearRawData();
 
@@ -597,7 +604,7 @@ void Model::ExtractBoneWeightForVertices(std::vector<Vertex>& vertices, aiMesh* 
 
       if (m_BoneInfoMap.find(boneName) == m_BoneInfoMap.end()) {
           boneID = m_BoneCounter++;
-          m_BoneInfoMap[boneName] = { boneID, ConvertMatrixToGLMFormat(mesh->mBones[i]->mOffsetMatrix) };
+          m_BoneInfoMap[boneName] = { boneID, AssimpMatToGLMMat(mesh->mBones[i]->mOffsetMatrix) };
       } else {
           boneID = m_BoneInfoMap[boneName].id;
       }
@@ -905,7 +912,7 @@ void Model::ReadHierarchyData(AssimpNodeData& dest, const aiNode* src)
   dest.children.clear();  // Clear previous children
 
   dest.name = src->mName.data;
-  dest.transformation = ConvertMatrixToGLMFormat(src->mTransformation);
+  dest.transformation = AssimpMatToGLMMat(src->mTransformation);
   dest.childrenCount = src->mNumChildren;
 
   for (int i = 0; i < src->mNumChildren; i++)
@@ -963,7 +970,7 @@ Bone::Bone(const std::string& name, int ID, const aiNodeAnim* channel) : m_Name(
   for (unsigned int i = 0; i < m_NumPositions; ++i) {
       aiVector3D aiPosition = channel->mPositionKeys[i].mValue;
       float timeStamp = static_cast<float>(channel->mPositionKeys[i].mTime);
-      KeyPosition data = { GetGLMVec(aiPosition), timeStamp };
+      KeyPosition data = { AssimpVecToGLMVec(aiPosition), timeStamp };
       m_Positions.emplace_back(data);
   }
 
@@ -972,7 +979,7 @@ Bone::Bone(const std::string& name, int ID, const aiNodeAnim* channel) : m_Name(
   for (unsigned int i = 0; i < m_NumRotations; ++i) {
       aiQuaternion aiOrientation = channel->mRotationKeys[i].mValue;
       float timeStamp = static_cast<float>(channel->mRotationKeys[i].mTime);
-      KeyRotation data = { GetGLMQuat(aiOrientation), timeStamp };
+      KeyRotation data = { AssimpQuatToGLMQuat(aiOrientation), timeStamp };
       m_Rotations.emplace_back(data);
   }
 
@@ -981,7 +988,7 @@ Bone::Bone(const std::string& name, int ID, const aiNodeAnim* channel) : m_Name(
   for (unsigned int i = 0; i < m_NumScalings; ++i) {
       aiVector3D aiScale = channel->mScalingKeys[i].mValue;
       float timeStamp = static_cast<float>(channel->mScalingKeys[i].mTime);
-      KeyScale data = { GetGLMVec(aiScale), timeStamp };
+      KeyScale data = { AssimpVecToGLMVec(aiScale), timeStamp };
       m_Scales.emplace_back(data);
   }
 }

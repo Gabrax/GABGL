@@ -115,13 +115,13 @@ layout(std140, binding = 1) uniform DirectShadowData
 layout(std430, binding = 0) buffer LightPositions { vec4 positions[30]; };
 layout(std430, binding = 1) buffer LightRotations { vec4 rotations[30]; };
 layout(std430, binding = 2) buffer LightsQuantity { int numLights; };
-layout(std430, binding = 3) buffer LightColors { vec4 colors[30]; };
-layout(std430, binding = 4) buffer LightTypes { int lightTypes[]; };
+layout(std430, binding = 3) buffer LightColors    { vec4 colors[30]; };
+layout(std430, binding = 4) buffer LightTypes     { int lightTypes[]; };
 
 struct Material
 {
   sampler2D diffuse;
-  sampler2D normalMap;  // Normal map texture
+  sampler2D normalMap;  
   vec3 specular;    
   float shininess;
 };
@@ -210,12 +210,12 @@ float CalcShadowFactorWithRandomSampling(vec4 fragPosLightSpace, vec3 LightDirec
     sc.xy = ShadowCoords.xy + Offsets.rg * TexelSize;
     Depth = texture(u_DirectShadow, sc.xy).x;
 
-    Sum += (Depth + bias < ShadowCoords.z) ? 0.0 : 1.0;
+    Sum += (Depth + bias < ShadowCoords.z) ? 0.15 : 1.0;
 
     sc.xy = ShadowCoords.xy + Offsets.ba * TexelSize;
     Depth = texture(u_DirectShadow, sc.xy).x;
 
-    Sum += (Depth + bias < ShadowCoords.z) ? 0.0 : 1.0;
+    Sum += (Depth + bias < ShadowCoords.z) ? 0.15 : 1.0;
   }
 
   float Shadow = Sum / 8.0;
@@ -229,12 +229,12 @@ float CalcShadowFactorWithRandomSampling(vec4 fragPosLightSpace, vec3 LightDirec
       sc.xy = ShadowCoords.xy + Offsets.rg * TexelSize;
       Depth = texture(u_DirectShadow, sc.xy).x;
 
-      Sum += (Depth + bias < ShadowCoords.z) ? 0.0 : 1.0;
+      Sum += (Depth + bias < ShadowCoords.z) ? 0.15 : 1.0;
 
       sc.xy = ShadowCoords.xy + Offsets.ba * TexelSize;
       Depth = texture(u_DirectShadow, sc.xy).x;
 
-      Sum += (Depth + bias < ShadowCoords.z) ? 0.0 : 1.0;
+      Sum += (Depth + bias < ShadowCoords.z) ? 0.15 : 1.0;
     }
 
     Shadow = Sum / float(SamplesDiv2 * 2.0);
@@ -333,6 +333,7 @@ void main()
     Light currentLight;
     currentLight.position = positions[i].xyz;
     currentLight.diffuse = colors[i].rgb;
+    currentLight.ambient = currentLight.diffuse * 0.1f;
     currentLight.constant = 1.0;
     currentLight.linear = 0.09;
     currentLight.quadratic = 0.032;

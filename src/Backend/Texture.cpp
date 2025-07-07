@@ -1,7 +1,6 @@
 #include "Texture.h"
 #include "BackendLogger.h"
 #include <stb_image.h>
-#include <iostream>
 
 namespace Utils {
 
@@ -169,68 +168,82 @@ Texture::Texture(const aiTexture* paiTexture, const std::string& path, bool isGL
 {
   if (paiTexture->mHeight == 0)
   {
-      int width, height, channels;
-      unsigned char* data = stbi_load_from_memory(reinterpret_cast<const unsigned char*>(paiTexture->pcData),
-                                                  paiTexture->mWidth, &width, &height, &channels, 0);
-      if (data)
+    int width, height, channels;
+    unsigned char* data = stbi_load_from_memory(reinterpret_cast<const unsigned char*>(paiTexture->pcData),paiTexture->mWidth, &width, &height, &channels, 0);
+
+    if (data)
+    {
+      FlipImageVertically(data, width, height, channels);
+      m_RawData = new uint8_t[width * height * channels];
+      memcpy(m_RawData, data, width * height * channels);
+      m_IsLoaded = true;
+
+      m_Width = width;
+      m_Height = height;
+
+      GLenum internalFormat = 0, dataFormat = 0;
+      if (channels == 4)
       {
-          FlipImageVertically(data, width, height, channels);
-          m_RawData = new uint8_t[width * height * channels];
-          memcpy(m_RawData, data, width * height * channels);
-          m_IsLoaded = true;
-
-          m_Width = width;
-          m_Height = height;
-
-          GLenum internalFormat = 0, dataFormat = 0;
-          if (channels == 4)
-          {
-              internalFormat = GL_RGBA8;
-              dataFormat = GL_RGBA;
-          }
-          else if (channels == 3)
-          {
-              internalFormat = GL_RGB8;
-              dataFormat = GL_RGB;
-          }
-          else if (channels == 1)
-          {
-              internalFormat = GL_R8;
-              dataFormat = GL_RED;
-          }
-
-          m_InternalFormat = internalFormat;
-          m_DataFormat = dataFormat;
-
-          if(isGL)
-          {
-            glTexImage2D(GL_TEXTURE_2D, 0, dataFormat, width, height, 0, dataFormat, GL_UNSIGNED_BYTE, data);
-            glGenerateMipmap(GL_TEXTURE_2D);
-          }
-          stbi_image_free(data);
+          internalFormat = GL_RGBA8;
+          dataFormat = GL_RGBA;
       }
-      else
+      else if (channels == 3)
       {
-          GABGL_ERROR("Failed to load compressed embedded texture!");
+          internalFormat = GL_RGB8;
+          dataFormat = GL_RGB;
       }
+      else if (channels == 1)
+      {
+          internalFormat = GL_R8;
+          dataFormat = GL_RED;
+      }
+
+      m_InternalFormat = internalFormat;
+      m_DataFormat = dataFormat;
+
+      if (isGL)
+      {
+          glCreateTextures(GL_TEXTURE_2D, 1, &m_RendererID);
+          glTextureStorage2D(m_RendererID, 1, internalFormat, width, height);
+
+          glTextureSubImage2D(m_RendererID, 0, 0, 0, width, height, dataFormat, GL_UNSIGNED_BYTE, data);
+
+          glGenerateTextureMipmap(m_RendererID);
+
+          glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_S, GL_REPEAT);
+          glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_T, GL_REPEAT);
+          glTextureParameteri(m_RendererID, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+          glTextureParameteri(m_RendererID, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+      }
+
+      stbi_image_free(data);
+    }
+    else
+    {
+        GABGL_ERROR("Failed to load compressed embedded texture!");
+    }
   }
   else
   {
-      m_IsEmbeddedUnCompressed = true;
-      if(isGL)
-      {
-        printf("Loading uncompressed embedded texture\n");
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, paiTexture->mWidth, paiTexture->mHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, paiTexture->pcData);
-        glGenerateMipmap(GL_TEXTURE_2D);
-      }
-  }
+    m_IsEmbeddedUnCompressed = true;
+    m_Width = paiTexture->mWidth;
+    m_Height = paiTexture->mHeight;
+    m_InternalFormat = GL_RGBA8;
+    m_DataFormat = GL_RGBA;
 
-  if(isGL)
-  {
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    if (isGL)
+    {
+        glCreateTextures(GL_TEXTURE_2D, 1, &m_RendererID);
+        glTextureStorage2D(m_RendererID, 1, GL_RGBA8, m_Width, m_Height);
+
+        glTextureSubImage2D(m_RendererID, 0, 0, 0, m_Width, m_Height, GL_RGBA, GL_UNSIGNED_BYTE, paiTexture->pcData);
+        glGenerateTextureMipmap(m_RendererID);
+
+        glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTextureParameteri(m_RendererID, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTextureParameteri(m_RendererID, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    }
   }
 }
 
@@ -240,9 +253,9 @@ Texture::Texture(const std::vector<std::string>& faces)
 
   GABGL_ASSERT(faces.size() == 6, "Cubemap must have exactly 6 faces!");
 
+  stbi_set_flip_vertically_on_load(false);
   for (int i = 0; i < 6; ++i)
   {
-      stbi_set_flip_vertically_on_load(false);
       int w, h, c;
       unsigned char* data = stbi_load(faces[i].c_str(), &w, &h, &c, 0);
       if (!data)

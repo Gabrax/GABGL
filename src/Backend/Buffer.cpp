@@ -1,89 +1,84 @@
 #include "Buffer.h"
 #include "BackendLogger.h"
-#include "LightManager.h"
 #include "glm/trigonometric.hpp"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp> 
 #include <random>
 #include <numbers>
 #include <glad/glad.h>
+#include "../engine.h"
+
 
 VertexBuffer::VertexBuffer(uint32_t size)
 {
-	glCreateBuffers(1, &m_RendererID);
-	glBindBuffer(GL_ARRAY_BUFFER, m_RendererID);
-	glBufferData(GL_ARRAY_BUFFER, size, nullptr, GL_DYNAMIC_DRAW);
+  glCreateBuffers(1, &m_RendererID);
+  glNamedBufferData(m_RendererID, size, nullptr, GL_DYNAMIC_DRAW);
 }
 
 VertexBuffer::VertexBuffer(float* vertices, uint32_t size)
 {
-	glCreateBuffers(1, &m_RendererID);
-	glBindBuffer(GL_ARRAY_BUFFER, m_RendererID);
-	glBufferData(GL_ARRAY_BUFFER, size, vertices, GL_STATIC_DRAW);
+  glCreateBuffers(1, &m_RendererID);
+  glNamedBufferData(m_RendererID, size, vertices, GL_STATIC_DRAW);
 }
 
 VertexBuffer::~VertexBuffer()
 {
-	glDeleteBuffers(1, &m_RendererID);
+  glDeleteBuffers(1, &m_RendererID);
 }
 
 void VertexBuffer::Bind() const
 {
-	glBindBuffer(GL_ARRAY_BUFFER, m_RendererID);
+  glBindBuffer(GL_ARRAY_BUFFER, m_RendererID);
 }
 
 void VertexBuffer::Unbind() const
 {
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
+  // LEGACY
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 void VertexBuffer::SetData(const void* data, uint32_t size)
 {
-	glBindBuffer(GL_ARRAY_BUFFER, m_RendererID);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, size, data);
+  glNamedBufferSubData(m_RendererID, 0, size, data);
 }
 
-IndexBuffer::IndexBuffer(uint32_t* indices, uint32_t count)
-	: m_Count(count)
+IndexBuffer::IndexBuffer(uint32_t* indices, uint32_t count) : m_Count(count)
 {
-	glCreateBuffers(1, &m_RendererID);
-
-	// GL_ELEMENT_ARRAY_BUFFER is not valid without an actively bound VAO
-	// Binding with GL_ARRAY_BUFFER allows the data to be loaded regardless of VAO state. 
-	glBindBuffer(GL_ARRAY_BUFFER, m_RendererID);
-	glBufferData(GL_ARRAY_BUFFER, count * sizeof(uint32_t), indices, GL_STATIC_DRAW);
+  glCreateBuffers(1, &m_RendererID);
+  glNamedBufferData(m_RendererID, count * sizeof(uint32_t), indices, GL_STATIC_DRAW);
 }
 
 IndexBuffer::~IndexBuffer()
 {
-	glDeleteBuffers(1, &m_RendererID);
+  glDeleteBuffers(1, &m_RendererID);
 }
 
 void IndexBuffer::Bind() const
 {
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_RendererID);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_RendererID);
 }
 
 void IndexBuffer::Unbind() const
 {
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+  // LEGACY
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
 static GLenum ShaderDataTypeToOpenGLBaseType(ShaderDataType type)
 {
 	switch (type)
 	{
-	case ShaderDataType::Float:    return GL_FLOAT;
-	case ShaderDataType::Float2:   return GL_FLOAT;
-	case ShaderDataType::Float3:   return GL_FLOAT;
-	case ShaderDataType::Float4:   return GL_FLOAT;
-	case ShaderDataType::Mat3:     return GL_FLOAT;
-	case ShaderDataType::Mat4:     return GL_FLOAT;
-	case ShaderDataType::Int:      return GL_INT;
-	case ShaderDataType::Int2:     return GL_INT;
-	case ShaderDataType::Int3:     return GL_INT;
-	case ShaderDataType::Int4:     return GL_INT;
-	case ShaderDataType::Bool:     return GL_BOOL;
+    case ShaderDataType::Float:    return GL_FLOAT;
+    case ShaderDataType::Float2:   return GL_FLOAT;
+    case ShaderDataType::Float3:   return GL_FLOAT;
+    case ShaderDataType::Float4:   return GL_FLOAT;
+    case ShaderDataType::Mat3:     return GL_FLOAT;
+    case ShaderDataType::Mat4:     return GL_FLOAT;
+    case ShaderDataType::Int:      return GL_INT;
+    case ShaderDataType::Int2:     return GL_INT;
+    case ShaderDataType::Int3:     return GL_INT;
+    case ShaderDataType::Int4:     return GL_INT;
+    case ShaderDataType::Bool:     return GL_BOOL;
 	}
 
 	GABGL_ASSERT(false, "Unknown ShaderDataType!");
@@ -92,98 +87,98 @@ static GLenum ShaderDataTypeToOpenGLBaseType(ShaderDataType type)
 
 VertexArray::VertexArray()
 {
-	glCreateVertexArrays(1, &m_RendererID);
+  glCreateVertexArrays(1, &m_RendererID);
 }
 
 VertexArray::~VertexArray()
 {
-	glDeleteVertexArrays(1, &m_RendererID);
+  glDeleteVertexArrays(1, &m_RendererID);
 }
 
 void VertexArray::Bind() const
 {
-	glBindVertexArray(m_RendererID);
+  glBindVertexArray(m_RendererID);
 }
 
 void VertexArray::Unbind() const
 {
-	glBindVertexArray(0);
+  glBindVertexArray(0);
 }
 
 void VertexArray::AddVertexBuffer(const std::shared_ptr<VertexBuffer>& vertexBuffer)
 {
-	GABGL_ASSERT(vertexBuffer->GetLayout().GetElements().size(), "Vertex Buffer has no layout!");
+  GABGL_ASSERT(vertexBuffer->GetLayout().GetElements().size(), "Vertex Buffer has no layout!");
 
-	glBindVertexArray(m_RendererID);
-	vertexBuffer->Bind();
+  const auto& layout = vertexBuffer->GetLayout();
+  GLuint vbID = vertexBuffer->GetID();
 
-	const auto& layout = vertexBuffer->GetLayout();
-	for (const auto& element : layout)
-	{
-		switch (element.Type)
-		{
-		case ShaderDataType::Float:
-		case ShaderDataType::Float2:
-		case ShaderDataType::Float3:
-		case ShaderDataType::Float4:
-		{
-			glEnableVertexAttribArray(m_VertexBufferIndex);
-			glVertexAttribPointer(m_VertexBufferIndex,
-				element.GetComponentCount(),
-				ShaderDataTypeToOpenGLBaseType(element.Type),
-				element.Normalized ? GL_TRUE : GL_FALSE,
-				layout.GetStride(),
-				(const void*)element.Offset);
-			m_VertexBufferIndex++;
-			break;
-		}
-		case ShaderDataType::Int:
-		case ShaderDataType::Int2:
-		case ShaderDataType::Int3:
-		case ShaderDataType::Int4:
-		case ShaderDataType::Bool:
-		{
-			glEnableVertexAttribArray(m_VertexBufferIndex);
-			glVertexAttribIPointer(m_VertexBufferIndex,
-				element.GetComponentCount(),
-				ShaderDataTypeToOpenGLBaseType(element.Type),
-				layout.GetStride(),
-				(const void*)element.Offset);
-			m_VertexBufferIndex++;
-			break;
-		}
-		case ShaderDataType::Mat3:
-		case ShaderDataType::Mat4:
-		{
-			uint8_t count = element.GetComponentCount();
-			for (uint8_t i = 0; i < count; i++)
-			{
-				glEnableVertexAttribArray(m_VertexBufferIndex);
-				glVertexAttribPointer(m_VertexBufferIndex,
-					count,
-					ShaderDataTypeToOpenGLBaseType(element.Type),
-					element.Normalized ? GL_TRUE : GL_FALSE,
-					layout.GetStride(),
-					(const void*)(element.Offset + sizeof(float) * count * i));
-				glVertexAttribDivisor(m_VertexBufferIndex, 1);
-				m_VertexBufferIndex++;
-			}
-			break;
-		}
-		default:
-			GABGL_ASSERT(false, "Unknown ShaderDataType!");
-		}
-	}
+  for (const auto& element : layout)
+  {
+    switch (element.Type)
+    {
+      case ShaderDataType::Float:
+      case ShaderDataType::Float2:
+      case ShaderDataType::Float3:
+      case ShaderDataType::Float4:
+      {
+          glEnableVertexArrayAttrib(m_RendererID, m_VertexBufferIndex);
+          glVertexArrayVertexBuffer(m_RendererID, m_VertexBufferIndex, vbID, 0, layout.GetStride());
+          glVertexArrayAttribFormat(m_RendererID, m_VertexBufferIndex,
+              element.GetComponentCount(),
+              ShaderDataTypeToOpenGLBaseType(element.Type),
+              element.Normalized ? GL_TRUE : GL_FALSE,
+              element.Offset);
+          glVertexArrayAttribBinding(m_RendererID, m_VertexBufferIndex, m_VertexBufferIndex);
+          m_VertexBufferIndex++;
+          break;
+      }
+      case ShaderDataType::Int:
+      case ShaderDataType::Int2:
+      case ShaderDataType::Int3:
+      case ShaderDataType::Int4:
+      case ShaderDataType::Bool:
+      {
+          glEnableVertexArrayAttrib(m_RendererID, m_VertexBufferIndex);
+          glVertexArrayVertexBuffer(m_RendererID, m_VertexBufferIndex, vbID, 0, layout.GetStride());
+          glVertexArrayAttribIFormat(m_RendererID, m_VertexBufferIndex,
+              element.GetComponentCount(),
+              ShaderDataTypeToOpenGLBaseType(element.Type),
+              element.Offset);
+          glVertexArrayAttribBinding(m_RendererID, m_VertexBufferIndex, m_VertexBufferIndex);
+          m_VertexBufferIndex++;
+          break;
+      }
+      case ShaderDataType::Mat3:
+      case ShaderDataType::Mat4:
+      {
+          uint8_t count = element.GetComponentCount();
+          for (uint8_t i = 0; i < count; i++)
+          {
+              glEnableVertexArrayAttrib(m_RendererID, m_VertexBufferIndex);
+              glVertexArrayVertexBuffer(m_RendererID, m_VertexBufferIndex, vbID, 0, layout.GetStride());
+              glVertexArrayAttribFormat(m_RendererID, m_VertexBufferIndex,
+                  count,
+                  ShaderDataTypeToOpenGLBaseType(element.Type),
+                  element.Normalized ? GL_TRUE : GL_FALSE,
+                  element.Offset + sizeof(float) * count * i);
+              glVertexArrayAttribBinding(m_RendererID, m_VertexBufferIndex, m_VertexBufferIndex);
+              glVertexArrayBindingDivisor(m_RendererID, m_VertexBufferIndex, 1);
+              m_VertexBufferIndex++;
+          }
+          break;
+      }
+      default:
+        GABGL_ASSERT(false, "Unknown ShaderDataType!");
+    }
+  }
 
-	m_VertexBuffers.push_back(vertexBuffer);
+  m_VertexBuffers.push_back(vertexBuffer);
 }
 
 void VertexArray::SetIndexBuffer(const std::shared_ptr<IndexBuffer>& indexBuffer)
 {
-	glBindVertexArray(m_RendererID);
-	indexBuffer->Bind();
-
-	m_IndexBuffer = indexBuffer;
+  glVertexArrayElementBuffer(m_RendererID, indexBuffer->GetID());
+  m_IndexBuffer = indexBuffer;
 }
 
 UniformBuffer::UniformBuffer(uint32_t size, uint32_t binding)
@@ -197,7 +192,6 @@ UniformBuffer::~UniformBuffer()
 {
 	glDeleteBuffers(1, &m_RendererID);
 }
-
 
 void UniformBuffer::SetData(const void* data, uint32_t size, uint32_t offset)
 {
@@ -245,8 +239,7 @@ void StorageBuffer::SetData(size_t size, void* data)
 
 void* StorageBuffer::MapBuffer()
 {
-  if (m_RendererID == 0) return nullptr;
-  return glMapNamedBuffer(m_RendererID, GL_READ_WRITE);
+  return (m_RendererID != 0) ? glMapNamedBuffer(m_RendererID, GL_READ_WRITE) : nullptr;
 }
 
 void StorageBuffer::UnmapBuffer()
@@ -256,10 +249,8 @@ void StorageBuffer::UnmapBuffer()
 
 PixelBuffer::PixelBuffer(size_t size) : m_Size(size)
 {
-  glGenBuffers(1, &m_ID);
-  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, m_ID);
-  glBufferData(GL_PIXEL_UNPACK_BUFFER, m_Size, nullptr, GL_STREAM_DRAW);
-  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+  glCreateBuffers(1, &m_ID);
+  glNamedBufferData(m_ID, m_Size, nullptr, GL_STREAM_DRAW); // DSA: allocate storage without binding
 }
 
 PixelBuffer::~PixelBuffer()
@@ -274,17 +265,17 @@ PixelBuffer::~PixelBuffer()
 
 void* PixelBuffer::Map()
 {
-  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, m_ID);
-  return glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, m_Size, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT | GL_MAP_UNSYNCHRONIZED_BIT);
+  return glMapNamedBufferRange(m_ID, 0, m_Size,
+      GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT | GL_MAP_UNSYNCHRONIZED_BIT);
 }
 
 void PixelBuffer::Unmap()
 {
-  glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+  glUnmapNamedBuffer(m_ID);
 
-  // Insert a fence sync after upload for later wait
-  if (m_Sync) glDeleteSync(m_Sync);
+  // Insert fence after unmap for sync (same behavior)
+  if (m_Sync)
+      glDeleteSync(m_Sync);
   m_Sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 }
 
@@ -292,19 +283,19 @@ void PixelBuffer::WaitForCompletion()
 {
   if (m_Sync)
   {
-      GLenum result = glClientWaitSync(m_Sync, GL_SYNC_FLUSH_COMMANDS_BIT, 1'000'000); // 1ms
-      if (result == GL_TIMEOUT_EXPIRED || result == GL_WAIT_FAILED)
-      {
-          glWaitSync(m_Sync, 0, GL_TIMEOUT_IGNORED); // Block until done
-      }
-      glDeleteSync(m_Sync);
-      m_Sync = nullptr;
+    GLenum result = glClientWaitSync(m_Sync, GL_SYNC_FLUSH_COMMANDS_BIT, 1'000'000); // 1ms
+    if (result == GL_TIMEOUT_EXPIRED || result == GL_WAIT_FAILED)
+    {
+        glWaitSync(m_Sync, 0, GL_TIMEOUT_IGNORED); // Block until finished
+    }
+    glDeleteSync(m_Sync);
+    m_Sync = nullptr;
   }
 }
 
 void PixelBuffer::Bind() const
 {
-  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, m_ID);
+  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, m_ID); 
 }
 
 void PixelBuffer::Unbind() const
@@ -314,8 +305,8 @@ void PixelBuffer::Unbind() const
 
 static const uint32_t s_MaxFramebufferSize = 8192;
 
-namespace Utils {
-
+namespace Utils
+{
 	static GLenum TextureTarget(bool multisampled)
 	{
 		return multisampled ? GL_TEXTURE_2D_MULTISAMPLE : GL_TEXTURE_2D;
@@ -326,57 +317,54 @@ namespace Utils {
 		glCreateTextures(TextureTarget(multisampled), count, outID);
 	}
 
-	static void BindTexture(bool multisampled, uint32_t id)
-	{
-		glBindTexture(TextureTarget(multisampled), id);
-	}
-
-	static void AttachColorTexture(uint32_t id, int samples, GLenum internalFormat, GLenum format, uint32_t width, uint32_t height, int index)
-  {
-    bool multisampled = samples > 1;
-    if (multisampled)
-    {
-      glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, samples, internalFormat, width, height, GL_FALSE);
-    }
-    else
-    {
-      GLenum type = GL_UNSIGNED_BYTE;
-      if (internalFormat == GL_RGBA16F || internalFormat == GL_R11F_G11F_B10F)
-        type = GL_FLOAT;
-      else if (internalFormat == GL_R32I)
-        type = GL_INT;
-
-      glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, nullptr);
-
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    }
-
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + index, TextureTarget(multisampled), id, 0);
-  }
-
-	static void AttachDepthTexture(uint32_t id, int samples, GLenum format, GLenum attachmentType, uint32_t width, uint32_t height)
+	static void AttachColorTexture(uint32_t id, int samples, GLenum internalFormat, GLenum format, uint32_t width, uint32_t height, int index, uint32_t framebufferID)
 	{
 		bool multisampled = samples > 1;
+
 		if (multisampled)
 		{
-			glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, samples, format, width, height, GL_FALSE);
+			glTextureStorage2DMultisample(id, samples, internalFormat, width, height, GL_FALSE);
 		}
 		else
 		{
-			glTexStorage2D(GL_TEXTURE_2D, 1, format, width, height);
+			GLenum type = GL_UNSIGNED_BYTE;
+			if (internalFormat == GL_RGBA16F || internalFormat == GL_R11F_G11F_B10F)
+				type = GL_FLOAT;
+			else if (internalFormat == GL_R32I)
+				type = GL_INT;
 
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTextureStorage2D(id, 1, internalFormat, width, height);
+
+			glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTextureParameteri(id, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTextureParameteri(id, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTextureParameteri(id, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 		}
 
-		glFramebufferTexture2D(GL_FRAMEBUFFER, attachmentType, TextureTarget(multisampled), id, 0);
+		glNamedFramebufferTexture(framebufferID, GL_COLOR_ATTACHMENT0 + index, id, 0);
+	}
+
+	static void AttachDepthTexture(uint32_t id, int samples, GLenum format, GLenum attachmentType, uint32_t width, uint32_t height, uint32_t framebufferID)
+	{
+		bool multisampled = samples > 1;
+
+		if (multisampled)
+		{
+			glTextureStorage2DMultisample(id, samples, format, width, height, GL_FALSE);
+		}
+		else
+		{
+			glTextureStorage2D(id, 1, format, width, height);
+
+			glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTextureParameteri(id, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTextureParameteri(id, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTextureParameteri(id, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+		}
+
+		glNamedFramebufferTexture(framebufferID, attachmentType, id, 0);
 	}
 
 	static bool IsDepthFormat(FramebufferTextureFormat format)
@@ -384,25 +372,23 @@ namespace Utils {
 		switch (format)
 		{
 			case FramebufferTextureFormat::DEPTH24STENCIL8:  return true;
-			case FramebufferTextureFormat::DEPTH:  return true;
+			case FramebufferTextureFormat::DEPTH:            return true;
 		}
-
 		return false;
 	}
 
 	static GLenum FBTextureFormatToGL(FramebufferTextureFormat format)
-  {
-    switch (format)
-    {
-      case FramebufferTextureFormat::RGBA8:         return GL_RGBA8;
-      case FramebufferTextureFormat::RGBA16F:       return GL_RGBA16F;
-      case FramebufferTextureFormat::R11F_G11F_B10F:return GL_R11F_G11F_B10F;
-      case FramebufferTextureFormat::RED_INTEGER:   return GL_RED_INTEGER;
-    }
-    GABGL_ASSERT(false,"");
-    return 0;
-  }
-
+	{
+		switch (format)
+		{
+			case FramebufferTextureFormat::RGBA8:          return GL_RGBA8;
+			case FramebufferTextureFormat::RGBA16F:        return GL_RGBA16F;
+			case FramebufferTextureFormat::R11F_G11F_B10F: return GL_R11F_G11F_B10F;
+			case FramebufferTextureFormat::RED_INTEGER:    return GL_RED_INTEGER;
+		}
+		GABGL_ASSERT(false, "Unknown FramebufferTextureFormat!");
+		return 0;
+	}
 }
 
 FrameBuffer::FrameBuffer(const FramebufferSpecification& spec)
@@ -441,70 +427,70 @@ void FrameBuffer::Invalidate()
 	}
 
 	glCreateFramebuffers(1, &m_RendererID);
-	glBindFramebuffer(GL_FRAMEBUFFER, m_RendererID);
-
 	bool multisample = m_Specification.Samples > 1;
 
-	// Attachments
-	if (m_ColorAttachmentSpecifications.size())
+	// Color attachments
+	if (!m_ColorAttachmentSpecifications.empty())
 	{
 		m_ColorAttachments.resize(m_ColorAttachmentSpecifications.size());
 		Utils::CreateTextures(multisample, m_ColorAttachments.data(), m_ColorAttachments.size());
 
 		for (size_t i = 0; i < m_ColorAttachments.size(); i++)
 		{
-			Utils::BindTexture(multisample, m_ColorAttachments[i]);
-			switch (m_ColorAttachmentSpecifications[i].TextureFormat)
+			auto& spec = m_ColorAttachmentSpecifications[i];
+			GLenum internalFormat = 0, format = 0;
+
+			switch (spec.TextureFormat)
 			{
-			case FramebufferTextureFormat::RGBA8:
-				Utils::AttachColorTexture(m_ColorAttachments[i], m_Specification.Samples, GL_RGBA8, GL_RGBA, m_Specification.Width, m_Specification.Height, i);
-				break;
-			case FramebufferTextureFormat::RED_INTEGER:
-				Utils::AttachColorTexture(m_ColorAttachments[i], m_Specification.Samples, GL_R32I, GL_RED_INTEGER, m_Specification.Width, m_Specification.Height, i);
-				break;
-      case FramebufferTextureFormat::RGBA16F:
-        Utils::AttachColorTexture(m_ColorAttachments[i], m_Specification.Samples, GL_RGBA16F, GL_RGBA, m_Specification.Width, m_Specification.Height, i);
-        break;
-      case FramebufferTextureFormat::R11F_G11F_B10F:
-        Utils::AttachColorTexture(m_ColorAttachments[i], m_Specification.Samples, GL_R11F_G11F_B10F, GL_RGB, m_Specification.Width, m_Specification.Height, i);
-        break;
+				case FramebufferTextureFormat::RGBA8:
+					internalFormat = GL_RGBA8; format = GL_RGBA; break;
+				case FramebufferTextureFormat::RED_INTEGER:
+					internalFormat = GL_R32I; format = GL_RED_INTEGER; break;
+				case FramebufferTextureFormat::RGBA16F:
+					internalFormat = GL_RGBA16F; format = GL_RGBA; break;
+				case FramebufferTextureFormat::R11F_G11F_B10F:
+					internalFormat = GL_R11F_G11F_B10F; format = GL_RGB; break;
 			}
+
+			Utils::AttachColorTexture(m_ColorAttachments[i], m_Specification.Samples, internalFormat, format,
+									  m_Specification.Width, m_Specification.Height, static_cast<int>(i), m_RendererID);
 		}
 	}
 
+	// Depth attachment
 	if (m_DepthAttachmentSpecification.TextureFormat != FramebufferTextureFormat::None)
 	{
 		Utils::CreateTextures(multisample, &m_DepthAttachment, 1);
-		Utils::BindTexture(multisample, m_DepthAttachment);
+
 		switch (m_DepthAttachmentSpecification.TextureFormat)
 		{
-		case FramebufferTextureFormat::DEPTH24STENCIL8:
-			Utils::AttachDepthTexture(m_DepthAttachment, m_Specification.Samples, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL_ATTACHMENT, m_Specification.Width, m_Specification.Height);
-			break;
-		case FramebufferTextureFormat::DEPTH:
-			Utils::AttachDepthTexture(m_DepthAttachment, m_Specification.Samples, GL_DEPTH_COMPONENT32, GL_DEPTH_ATTACHMENT, m_Specification.Width, m_Specification.Height);
-			break;
+			case FramebufferTextureFormat::DEPTH24STENCIL8:
+				Utils::AttachDepthTexture(m_DepthAttachment, m_Specification.Samples, GL_DEPTH24_STENCIL8,
+										  GL_DEPTH_STENCIL_ATTACHMENT, m_Specification.Width, m_Specification.Height, m_RendererID);
+				break;
+			case FramebufferTextureFormat::DEPTH:
+				Utils::AttachDepthTexture(m_DepthAttachment, m_Specification.Samples, GL_DEPTH_COMPONENT32,
+										  GL_DEPTH_ATTACHMENT, m_Specification.Width, m_Specification.Height, m_RendererID);
+				break;
 		}
 	}
 
+	// Draw buffers
 	if (m_ColorAttachments.size() > 1)
 	{
-		GABGL_ASSERT(m_ColorAttachments.size() <= 4,"");
+		GABGL_ASSERT(m_ColorAttachments.size() <= 4, "");
 		GLenum buffers[4] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3 };
-		glDrawBuffers(m_ColorAttachments.size(), buffers);
+		glNamedFramebufferDrawBuffers(m_RendererID, static_cast<GLsizei>(m_ColorAttachments.size()), buffers);
 	}
 	else if (m_ColorAttachments.empty())
 	{
-		// Only depth-pass
-		glDrawBuffer(GL_NONE);
-    glReadBuffer(GL_NONE);
+		// Only depth pass
+		glNamedFramebufferDrawBuffer(m_RendererID, GL_NONE);
+		glNamedFramebufferReadBuffer(m_RendererID, GL_NONE);
 	}
 
-	GABGL_ASSERT(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE, "Framebuffer is incomplete!");
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	GABGL_ASSERT(glCheckNamedFramebufferStatus(m_RendererID, GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE, "Framebuffer is incomplete!");
 }
-
 void FrameBuffer::Bind()
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, m_RendererID);
@@ -537,7 +523,6 @@ int FrameBuffer::ReadPixel(uint32_t attachmentIndex, int x, int y)
 	int pixelData;
 	glReadPixels(x, y, 1, 1, GL_RED_INTEGER, GL_INT, &pixelData);
 	return pixelData;
-
 }
 
 void FrameBuffer::ClearAttachment(uint32_t attachmentIndex, int value)
@@ -545,27 +530,20 @@ void FrameBuffer::ClearAttachment(uint32_t attachmentIndex, int value)
 	GABGL_ASSERT(attachmentIndex < m_ColorAttachments.size(),"");
 
 	auto& spec = m_ColorAttachmentSpecifications[attachmentIndex];
-	glClearTexImage(m_ColorAttachments[attachmentIndex], 0,
-	Utils::FBTextureFormatToGL(spec.TextureFormat), GL_INT, &value);
+	glClearTexImage(m_ColorAttachments[attachmentIndex],0,Utils::FBTextureFormatToGL(spec.TextureFormat), GL_INT, &value);
 }
 
 void FrameBuffer::AttachExternalColorTexture(GLuint textureID, uint32_t slot)
 {
-	glBindFramebuffer(GL_FRAMEBUFFER, m_RendererID);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + slot, GL_TEXTURE_2D, textureID, 0);
+	GABGL_ASSERT(slot < m_ColorAttachments.size(), "Invalid attachment slot");
+	glNamedFramebufferTexture(m_RendererID, GL_COLOR_ATTACHMENT0 + slot, textureID, 0);
 	m_ColorAttachments[slot] = textureID;
 }
 
 void FrameBuffer::AttachExternalDepthTexture(GLuint textureID)
 {
-  glBindFramebuffer(GL_FRAMEBUFFER, m_RendererID);
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, textureID, 0);
-  m_DepthAttachment = textureID;
-}
-
-std::shared_ptr<FrameBuffer> FrameBuffer::Create(const FramebufferSpecification& spec)
-{
-	return std::make_shared<FrameBuffer>(spec);
+	glNamedFramebufferTexture(m_RendererID, GL_DEPTH_ATTACHMENT, textureID, 0);
+	m_DepthAttachment = textureID;
 }
 
 void FrameBuffer::BlitColor(const std::shared_ptr<FrameBuffer>& dst)
@@ -579,49 +557,54 @@ void FrameBuffer::BlitColor(const std::shared_ptr<FrameBuffer>& dst)
   const auto& srcSpec = this->GetSpecification();
   const auto& dstSpec = dst->GetSpecification();
 
-  glBlitFramebuffer(
-      0, 0, srcSpec.Width, srcSpec.Height,
-      0, 0, dstSpec.Width, dstSpec.Height,
-      GL_COLOR_BUFFER_BIT,
-      GL_NEAREST
-  );
-
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glBlitNamedFramebuffer(
+		this->GetID(), dst->GetID(),
+		0, 0, srcSpec.Width, srcSpec.Height,
+		0, 0, dstSpec.Width, dstSpec.Height,
+		GL_COLOR_BUFFER_BIT,
+		GL_NEAREST
+	);
 }
 
-
+std::shared_ptr<FrameBuffer> FrameBuffer::Create(const FramebufferSpecification& spec)
+{
+	return std::make_shared<FrameBuffer>(spec);
+}
 
 static unsigned int quadVAO = 0;
 static unsigned int quadVBO;
 static void renderQuad()
 {
-    if (quadVAO == 0)
-    {
-        float quadVertices[] = {
-            // positions        // texture Coords
-            -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
-            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
-             1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
-             1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
-        };
-        // setup plane VAO
-        glGenVertexArrays(1, &quadVAO);
-        glGenBuffers(1, &quadVBO);
-        glBindVertexArray(quadVAO);
-        glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-    }
-    glBindVertexArray(quadVAO);
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    glBindVertexArray(0);
+  if (quadVAO == 0)
+  {
+    float quadVertices[] = {
+        // positions        // texture Coords
+        -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+        -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+         1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+         1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+    };
+
+    glCreateVertexArrays(1, &quadVAO);
+    glCreateBuffers(1, &quadVBO);
+
+    glNamedBufferData(quadVBO, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+
+    glVertexArrayVertexBuffer(quadVAO, 0, quadVBO, 0, 5 * sizeof(float));
+
+    glEnableVertexArrayAttrib(quadVAO, 0);
+    glVertexArrayAttribFormat(quadVAO, 0, 3, GL_FLOAT, GL_FALSE, 0);
+    glVertexArrayAttribBinding(quadVAO, 0, 0);
+
+    glEnableVertexArrayAttrib(quadVAO, 1);
+    glVertexArrayAttribFormat(quadVAO, 1, 2, GL_FLOAT, GL_FALSE, 3 * sizeof(float));
+    glVertexArrayAttribBinding(quadVAO, 1, 0);
+  }
+
+  glBindVertexArray(quadVAO);
+  glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+  glBindVertexArray(0);
 }
-
-
-#include "../engine.h"
 
 BloomBuffer::BloomBuffer(const std::shared_ptr<Shader>& downsampleShader, const std::shared_ptr<Shader>& upsampleShader, const std::shared_ptr<Shader>& finalShader) : downsampleShader(downsampleShader), upsampleShader(upsampleShader), finalShader(finalShader)
 {
@@ -657,37 +640,36 @@ BloomBuffer::BloomBuffer(const std::shared_ptr<Shader>& downsampleShader, const 
 
   for (GLuint i = 0; i < mipChainLength; i++)
   {
-      bloomMip mip;
+    bloomMip mip;
 
-      mip.size = mipSize;
-      mip.intSize = mipIntSize;
+    mip.size = mipSize;
+    mip.intSize = mipIntSize;
 
-      glGenTextures(1, &mip.texture);
-      glBindTexture(GL_TEXTURE_2D, mip.texture);
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_R11F_G11F_B10F, mip.intSize.x, mip.intSize.y, 0, GL_RGB, GL_FLOAT, nullptr);
+    glCreateTextures(GL_TEXTURE_2D, 1, &mip.texture);
+    glTextureStorage2D(mip.texture, 1, GL_R11F_G11F_B10F, mip.intSize.x, mip.intSize.y);
 
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(mip.texture, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTextureParameteri(mip.texture, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(mip.texture, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(mip.texture, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-      GABGL_INFO("Created bloom mip x: {0}, y: {1}", mipIntSize.x, mipIntSize.y);
+    GABGL_INFO("Created bloom mip x: {0}, y: {1}", mipIntSize.x, mipIntSize.y);
 
-      mMipChain.emplace_back(mip);
+    mMipChain.emplace_back(mip);
 
-      // Halve for next level, clamped to 1
-      mipSize *= 0.5f;
-      mipIntSize /= 2;
-      mipSize = glm::max(mipSize, glm::vec2(1.0f));
-      mipIntSize = glm::max(mipIntSize, glm::ivec2(1));
+    // Halve for next level, clamped to 1
+    mipSize *= 0.5f;
+    mipIntSize /= 2;
+    mipSize = glm::max(mipSize, glm::vec2(1.0f));
+    mipIntSize = glm::max(mipIntSize, glm::ivec2(1));
   }
 
   downsampleShader->Use();
-  downsampleShader->setInt("srcTexture", 0);
+  downsampleShader->SetInt("srcTexture", 0);
   glUseProgram(0);
 
   upsampleShader->Use();
-  upsampleShader->setInt("srcTexture", 0);
+  upsampleShader->SetInt("srcTexture", 0);
   glUseProgram(0);
 }
 
@@ -698,13 +680,11 @@ void BloomBuffer::RenderBloomTexture(float filterRadius)
   auto srcTexture = m_hdrFB->GetColorAttachmentRendererID(1);
 
   downsampleShader->Use();
-  downsampleShader->setVec2("srcResolution", mSrcViewportSizeFloat);
-  if (mKarisAverageOnDownsample) downsampleShader->setInt("mipLevel", 0);
+  downsampleShader->SetVec2("srcResolution", mSrcViewportSizeFloat);
+  if (mKarisAverageOnDownsample) downsampleShader->SetInt("mipLevel", 0);
 
-  glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_2D, srcTexture);
+  glBindTextureUnit(0, srcTexture);
 
-  // ⬇️ Downsample through mip chain
   for (int i = 0; i < (int)mMipChain.size(); i++)
   {
     const bloomMip& mip = mMipChain[i];
@@ -714,17 +694,16 @@ void BloomBuffer::RenderBloomTexture(float filterRadius)
 
     renderQuad();
 
-    downsampleShader->setVec2("srcResolution", mip.size);
-    glBindTexture(GL_TEXTURE_2D, mip.texture);
+    downsampleShader->SetVec2("srcResolution", mip.size);
+    glBindTextureUnit(0, mip.texture);
 
-    if (i == 0) downsampleShader->setInt("mipLevel", 1);
+    if (i == 0) downsampleShader->SetInt("mipLevel", 1);
   }
 
   glUseProgram(0);
 
-  // ⬆️ Upsample pass
   upsampleShader->Use();
-  upsampleShader->setFloat("filterRadius", filterRadius);
+  upsampleShader->SetFloat("filterRadius", filterRadius);
 
   glEnable(GL_BLEND);
   glBlendFunc(GL_ONE, GL_ONE);
@@ -737,8 +716,7 @@ void BloomBuffer::RenderBloomTexture(float filterRadius)
 
     glViewport(0, 0, nextMip.size.x, nextMip.size.y);
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, mip.texture);
+    glBindTextureUnit(0, mip.texture);
 
     m_mipFB->AttachExternalColorTexture(nextMip.texture, 0);
 
@@ -752,47 +730,44 @@ void BloomBuffer::RenderBloomTexture(float filterRadius)
 
 void BloomBuffer::Resize(int newWidth, int newHeight)
 {
-  // Destroy old mip textures
   for (auto& mip : mMipChain)
   {
-      glDeleteTextures(1, &mip.texture);
-      mip.texture = 0;
+    glDeleteTextures(1, &mip.texture);
+    mip.texture = 0;
   }
   mMipChain.clear();
 
   glm::vec2 mipSize = glm::vec2((float)newWidth, (float)newHeight);
   glm::ivec2 mipIntSize = glm::ivec2(newWidth, newHeight);
 
-  // Rebuild mip chain
   for (GLuint i = 0; i < mipChainLength; i++)
   {
-    bloomMip mip;
-    mip.size = mipSize;
-    mip.intSize = mipIntSize;
+      bloomMip mip;
+      mip.size = mipSize;
+      mip.intSize = mipIntSize;
 
-    glGenTextures(1, &mip.texture);
-    glBindTexture(GL_TEXTURE_2D, mip.texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R11F_G11F_B10F, mipIntSize.x, mipIntSize.y, 0, GL_RGB, GL_FLOAT, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+      glCreateTextures(GL_TEXTURE_2D, 1, &mip.texture);
 
-    GABGL_INFO("Resized bloom mip x: {0}, y: {1}", mipIntSize.x, mipIntSize.y);
-    mMipChain.emplace_back(mip);
+      glTextureStorage2D(mip.texture, 1, GL_R11F_G11F_B10F, mip.intSize.x, mip.intSize.y);
 
-    mipSize *= 0.5f;
-    mipIntSize /= 2;
-    mipSize = glm::max(mipSize, glm::vec2(1.0f));
-    mipIntSize = glm::max(mipIntSize, glm::ivec2(1));
+      glTextureParameteri(mip.texture, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTextureParameteri(mip.texture, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+      glTextureParameteri(mip.texture, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+      glTextureParameteri(mip.texture, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+      GABGL_INFO("Resized bloom mip x: {0}, y: {1}", mipIntSize.x, mipIntSize.y);
+      mMipChain.emplace_back(mip);
+
+      mipSize *= 0.5f;
+      mipIntSize /= 2;
+      mipSize = glm::max(mipSize, glm::vec2(1.0f));
+      mipIntSize = glm::max(mipIntSize, glm::ivec2(1));
   }
 
-  // Attach first mip texture to framebuffer using your API
   m_mipFB->Bind();
   m_mipFB->AttachExternalColorTexture(mMipChain[0].texture, 0);
   m_mipFB->UnBind();
 
-  // Resize main HDR framebuffer
   m_hdrFB->Resize(newWidth, newHeight);
 }
 
@@ -816,13 +791,11 @@ void BloomBuffer::CompositeBloomOver(const std::shared_ptr<FrameBuffer>& target)
 
   finalShader->Use();
 
-  glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_2D, m_hdrFB->GetColorAttachmentRendererID(0));
-  finalShader->setInt("scene", 0);
+  glBindTextureUnit(0, m_hdrFB->GetColorAttachmentRendererID(0));
+  finalShader->SetInt("scene", 0);
 
-  glActiveTexture(GL_TEXTURE1);
-  glBindTexture(GL_TEXTURE_2D, mMipChain[0].texture);
-  finalShader->setInt("bloomBlur", 1);
+  glBindTextureUnit(1, mMipChain[0].texture);
+  finalShader->SetInt("bloomBlur", 1);
 
   renderQuad();
 
@@ -838,14 +811,13 @@ void BloomBuffer::BlitDepthFrom(const std::shared_ptr<FrameBuffer>& src)
   const auto& srcSpec = src->GetSpecification();
   const auto& dstSpec = m_hdrFB->GetSpecification();
 
-  glBlitFramebuffer(
-      0, 0, srcSpec.Width, srcSpec.Height,
-      0, 0, dstSpec.Width, dstSpec.Height,
-      GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT, 
-      GL_NEAREST
-  );
-
-  glBindFramebuffer(GL_FRAMEBUFFER, 0); 
+  glBlitNamedFramebuffer(
+		src->GetID(), m_hdrFB->GetID(),
+		0, 0, srcSpec.Width, srcSpec.Height,
+		0, 0, dstSpec.Width, dstSpec.Height,
+		GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT,
+		GL_NEAREST
+	);
 }
 
 void BloomBuffer::BlitDepthTo(const std::shared_ptr<FrameBuffer>& dst)
@@ -856,14 +828,13 @@ void BloomBuffer::BlitDepthTo(const std::shared_ptr<FrameBuffer>& dst)
   const auto& srcSpec = m_hdrFB->GetSpecification();
   const auto& dstSpec = dst->GetSpecification();
 
-  glBlitFramebuffer(
-      0, 0, srcSpec.Width, srcSpec.Height,
-      0, 0, dstSpec.Width, dstSpec.Height,
-      GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT, 
-      GL_NEAREST
-  );
-
-  glBindFramebuffer(GL_FRAMEBUFFER, 0); 
+  glBlitNamedFramebuffer(
+		m_hdrFB->GetID(), dst->GetID(),
+		0, 0, srcSpec.Width, srcSpec.Height,
+		0, 0, dstSpec.Width, dstSpec.Height,
+		GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT,
+		GL_NEAREST
+	);
 }
 
 std::shared_ptr<BloomBuffer> BloomBuffer::Create(const std::shared_ptr<Shader>& downsampleShader, const std::shared_ptr<Shader>& upsampleShader, const std::shared_ptr<Shader>& finalShader)
@@ -871,85 +842,70 @@ std::shared_ptr<BloomBuffer> BloomBuffer::Create(const std::shared_ptr<Shader>& 
   return std::make_shared<BloomBuffer>(downsampleShader,upsampleShader,finalShader);
 }
 
-DirectShadowBuffer::DirectShadowBuffer(float shadowWidth, float shadowHeight, float offsetSize, float filterSize, float randomRadius) : m_shadowWidth(shadowWidth), m_shadowHeight(shadowHeight)
+DirectShadowBuffer::DirectShadowBuffer(float shadowWidth, float shadowHeight, float offsetSize, float filterSize, float randomRadius)
+    : m_shadowWidth(shadowWidth), m_shadowHeight(shadowHeight)
 {
-  glGenTextures(1, &m_depthMap);
-  glBindTexture(GL_TEXTURE_2D, m_depthMap);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, shadowWidth, shadowHeight, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+  glCreateTextures(GL_TEXTURE_2D, 1, &m_depthMap);
+  glTextureStorage2D(m_depthMap, 1, GL_DEPTH_COMPONENT32F, shadowWidth, shadowHeight);
+  glTextureParameteri(m_depthMap, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTextureParameteri(m_depthMap, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTextureParameteri(m_depthMap, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+  glTextureParameteri(m_depthMap, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+  float borderColor[] = {1.0f, 1.0f, 1.0f, 1.0f};
+  glTextureParameterfv(m_depthMap, GL_TEXTURE_BORDER_COLOR, borderColor);
 
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-  float borderColor[] = {1.0, 1.0, 1.0, 1.0};
-  glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
-
-  glGenFramebuffers(1, &m_FBO);
-  glBindFramebuffer(GL_FRAMEBUFFER, m_FBO);
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, m_depthMap, 0);
-  glDrawBuffer(GL_NONE);
-  glReadBuffer(GL_NONE);
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glCreateFramebuffers(1, &m_FBO);
+  glNamedFramebufferTexture(m_FBO, GL_DEPTH_ATTACHMENT, m_depthMap, 0);
+  glNamedFramebufferDrawBuffer(m_FBO, GL_NONE);
+  glNamedFramebufferReadBuffer(m_FBO, GL_NONE);
 
   std::vector<float> Data;
-
   int BufferSize = offsetSize * offsetSize * filterSize * filterSize * 2;
-
   Data.resize(BufferSize);
 
-  float PI = std::numbers::pi;
-
+  float PI = std::numbers::pi_v<float>;
   int Index = 0;
-  for (int TexY = 0; TexY < offsetSize; TexY++)
-  {
-    for (int TexX = 0; TexX < offsetSize; TexX++)
-    {
-      for (int v = filterSize - 1; v >= 0; v--)
-      {
-        for (int u = 0; u < filterSize; u++)
-        {
-          float x = ((float)u + 0.5f + Jitter()) / (float)filterSize;
-          float y = ((float)v + 0.5f + Jitter()) / (float)filterSize;
+  for (int TexY = 0; TexY < offsetSize; TexY++) {
+      for (int TexX = 0; TexX < offsetSize; TexX++) {
+          for (int v = filterSize - 1; v >= 0; v--) {
+              for (int u = 0; u < filterSize; u++) {
+                  float x = ((float)u + 0.5f + Jitter()) / (float)filterSize;
+                  float y = ((float)v + 0.5f + Jitter()) / (float)filterSize;
 
-          assert(Index + 1 < Data.size());
-          Data[Index]     = sqrtf(y) * cosf(2 * PI * x);
-          Data[Index + 1] = sqrtf(y) * sinf(2 * PI * x);
-
-          Index += 2;
-        }
+                  assert(Index + 1 < Data.size());
+                  Data[Index]     = sqrtf(y) * cosf(2 * PI * x);
+                  Data[Index + 1] = sqrtf(y) * sinf(2 * PI * x);
+                  Index += 2;
+              }
+          }
       }
-    }
   }
 
-  int NumFilterSamples = filterSize * filterSize;
+  int32_t NumFilterSamples = filterSize * filterSize;
+  
+  glCreateTextures(GL_TEXTURE_3D, 1, &m_offsetTexture);
+  glTextureStorage3D(m_offsetTexture, 1, GL_RGBA32F, NumFilterSamples / 2, offsetSize, offsetSize);
+  glTextureSubImage3D(m_offsetTexture, 0, 0, 0, 0, NumFilterSamples / 2, offsetSize, offsetSize,GL_RGBA, GL_FLOAT, Data.data());
+  glTextureParameteri(m_offsetTexture, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTextureParameteri(m_offsetTexture, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
-  glActiveTexture(GL_TEXTURE1);
-  glGenTextures(1, &m_offsetTexture);
-  glBindTexture(GL_TEXTURE_3D, m_offsetTexture);
-  glTexStorage3D(GL_TEXTURE_3D, 1, GL_RGBA32F, NumFilterSamples / 2, offsetSize, offsetSize );
-  glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, NumFilterSamples / 2, offsetSize, offsetSize, GL_RGBA, GL_FLOAT, &Data[0]);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glBindTexture(GL_TEXTURE_3D, 0);
-
-  float near_plane = 0.01f, far_plane = 100.0f, orthoSize = 50.0f; 
+  float near_plane = 0.01f, far_plane = 100.0f, orthoSize = 50.0f;
   m_shadowProj = glm::ortho(-orthoSize, orthoSize, -orthoSize, orthoSize, near_plane, far_plane);
 
-  struct Data
-  {
-    glm::vec2 windowSize; 
-    glm::vec2 offsetSize_filterSize; 
-    glm::vec2 randomRadius;
-  } data;
+  struct UBOData {
+      glm::vec2 windowSize;
+      glm::vec2 offsetSize_filterSize;
+      glm::vec2 randomRadius;
+  } uboData;
 
-  data.windowSize = glm::vec2(shadowWidth, shadowHeight);
-  data.offsetSize_filterSize = glm::vec2(float(offsetSize), float(filterSize));
-  data.randomRadius = glm::vec2(3.0f, 0.0f);
+  uboData.windowSize = glm::vec2(shadowWidth, shadowHeight);
+  uboData.offsetSize_filterSize = glm::vec2(offsetSize, filterSize);
+  uboData.randomRadius = glm::vec2(randomRadius, 0.0f);
 
-  buffer = UniformBuffer::Create(sizeof(Data), 1);
-  buffer->SetData(&data, sizeof(Data));
+  buffer = UniformBuffer::Create(sizeof(UBOData), 1);
+  buffer->SetData(&uboData, sizeof(UBOData));
 
-  m_shadowVIew = glm::mat4(1);
+  m_shadowVIew = glm::mat4(1.0f);
 }
 
 DirectShadowBuffer::~DirectShadowBuffer()
@@ -971,14 +927,12 @@ void DirectShadowBuffer::UnBind() const
 
 void DirectShadowBuffer::BindShadowTextureForReading(GLenum textureUnit) const
 {
-  glActiveTexture(textureUnit);
-  glBindTexture(GL_TEXTURE_2D, m_depthMap);
+  glBindTextureUnit(textureUnit - GL_TEXTURE0, m_depthMap);
 }
 
 void DirectShadowBuffer::BindOffsetTextureForReading(GLenum textureUnit) const
 {
-  glActiveTexture(textureUnit);
-  glBindTexture(GL_TEXTURE_3D, m_offsetTexture);
+  glBindTextureUnit(textureUnit - GL_TEXTURE0, m_offsetTexture);
 }
 
 void DirectShadowBuffer::UpdateShadowView(const glm::vec3& rotation)
@@ -1012,14 +966,14 @@ OmniDirectShadowBuffer::OmniDirectShadowBuffer(uint32_t shadowWidth, uint32_t sh
   mipFBOspec.Height = shadowHeight;
   m_testFB = FrameBuffer::Create(mipFBOspec);
 
-  glGenTextures(1, &m_depthCubemapArray);
-  glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, m_depthCubemapArray);
-  glTexImage3D(GL_TEXTURE_CUBE_MAP_ARRAY,0,GL_R16F,shadowWidth,shadowHeight,6 * 20,0,GL_RED,GL_FLOAT,nullptr);
-  glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+  glCreateTextures(GL_TEXTURE_CUBE_MAP_ARRAY, 1, &m_depthCubemapArray);
+  glTextureStorage3D(m_depthCubemapArray, 1, GL_R16F, shadowWidth, shadowHeight, 6 * 20);
+
+  glTextureParameteri(m_depthCubemapArray, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTextureParameteri(m_depthCubemapArray, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTextureParameteri(m_depthCubemapArray, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTextureParameteri(m_depthCubemapArray, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTextureParameteri(m_depthCubemapArray, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
   m_Directions =
   {
@@ -1039,14 +993,13 @@ void OmniDirectShadowBuffer::Bind() const
 
 void OmniDirectShadowBuffer::BindForWriting(uint32_t cubemapIndex, uint32_t faceIndex)
 {
-  glFramebufferTextureLayer(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,m_depthCubemapArray,0,cubemapIndex * 6 + faceIndex);
-  glDrawBuffer(GL_COLOR_ATTACHMENT0);
+  glNamedFramebufferTextureLayer(m_testFB->GetID(), GL_COLOR_ATTACHMENT0, m_depthCubemapArray, 0, cubemapIndex * 6 + faceIndex);
+  glNamedFramebufferDrawBuffer(m_testFB->GetID(), GL_COLOR_ATTACHMENT0);
 }
 
-void OmniDirectShadowBuffer::BindForReading(GLenum TextureUnit)
+void OmniDirectShadowBuffer::BindForReading(GLenum textureUnit)
 {
-  glActiveTexture(TextureUnit);
-  glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, m_depthCubemapArray);
+  glBindTextureUnit(textureUnit - GL_TEXTURE0, m_depthCubemapArray);
 }
 
 void OmniDirectShadowBuffer::UnBind() const 

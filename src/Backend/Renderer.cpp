@@ -28,14 +28,7 @@
 #include <thread>
 #include "json.hpp"
 
-void MessageCallback(
-	unsigned source,
-	unsigned type,
-	unsigned id,
-	unsigned severity,
-	int length,
-	const char* message,
-	const void* userParam)
+void MessageCallback(unsigned source,unsigned type,unsigned id,unsigned severity,int length,const char* message,const void* userParam)
 {
 	switch (severity)
 	{
@@ -157,27 +150,6 @@ struct RendererData
 	LineVertex* LineVertexBufferPtr = nullptr;
 	float LineWidth = 2.0f;
 
-  bool Is3D = false;
-
-  struct Shaders
-	{
-		std::shared_ptr<Shader> QuadShader;
-		std::shared_ptr<Shader> CircleShader;
-		std::shared_ptr<Shader> LineShader;
-		std::shared_ptr<Shader> FramebufferShader;
-    std::shared_ptr<Shader> skyboxShader;
-    std::shared_ptr<Shader> ModelShader;
-    std::shared_ptr<Shader> DownSampleShader;
-    std::shared_ptr<Shader> UpSampleShader;
-    std::shared_ptr<Shader> BloomResultShader;
-    std::shared_ptr<Shader> OmniDirectShadowShader;
-    std::shared_ptr<Shader> DirectShadowShader;
-
-	} _shaders;
-
-  CameraData m_CameraBuffer;
-  std::shared_ptr<UniformBuffer> m_CameraUniformBuffer;
-
   static constexpr glm::vec3 quadPositions[4] = {
       { 0.0f, 0.0f, 0.0f },
       { 1.0f, 0.0f, 0.0f },
@@ -202,6 +174,25 @@ struct RendererData
       {"texture_height", 1}
   };
 
+  struct Shaders
+	{
+		std::shared_ptr<Shader> QuadShader;
+		std::shared_ptr<Shader> CircleShader;
+		std::shared_ptr<Shader> LineShader;
+		std::shared_ptr<Shader> FramebufferShader;
+    std::shared_ptr<Shader> skyboxShader;
+    std::shared_ptr<Shader> ModelShader;
+    std::shared_ptr<Shader> DownSampleShader;
+    std::shared_ptr<Shader> UpSampleShader;
+    std::shared_ptr<Shader> BloomResultShader;
+    std::shared_ptr<Shader> OmniDirectShadowShader;
+    std::shared_ptr<Shader> DirectShadowShader;
+
+	} s_Shaders;
+
+  CameraData m_CameraBuffer;
+  std::shared_ptr<UniformBuffer> m_CameraUniformBuffer;
+
   std::unordered_map<std::string, std::shared_ptr<Texture>> skyboxes;
 
   std::shared_ptr<FrameBuffer> m_Framebuffer;
@@ -225,24 +216,25 @@ struct RendererData
 
 	} m_RenderState;
 
-  glm::mat4 m_LightProj = glm::mat4(1.0f);
+  bool Is3D = false;
+
+  glm::mat4 m_OmniLightProj = glm::mat4(1.0f);
 
 } s_Data;
 
-
 void Renderer::LoadShaders()
 {
-	s_Data._shaders.QuadShader = Shader::Create("res/shaders/batch_quad.glsl");
-	s_Data._shaders.CircleShader = Shader::Create("res/shaders/batch_circle.glsl");
-	s_Data._shaders.LineShader = Shader::Create("res/shaders/batch_line.glsl");
-	s_Data._shaders.FramebufferShader = Shader::Create("res/shaders/finalFB.glsl");
-  s_Data._shaders.skyboxShader = Shader::Create("res/shaders/skybox.glsl");
-  s_Data._shaders.ModelShader = Shader::Create("res/shaders/static_anim_model.glsl");
-  s_Data._shaders.DownSampleShader = Shader::Create("res/shaders/bloom_downsample.glsl");
-  s_Data._shaders.UpSampleShader = Shader::Create("res/shaders/bloom_upsample.glsl");
-  s_Data._shaders.BloomResultShader = Shader::Create("res/shaders/bloom_final.glsl");
-  s_Data._shaders.OmniDirectShadowShader = Shader::Create("res/shaders/omni_shadowFB.glsl");
-  s_Data._shaders.DirectShadowShader = Shader::Create("res/shaders/direct_shadowFB.glsl");
+	s_Data.s_Shaders.QuadShader = Shader::Create("res/shaders/batch_quad.glsl");
+	s_Data.s_Shaders.CircleShader = Shader::Create("res/shaders/batch_circle.glsl");
+	s_Data.s_Shaders.LineShader = Shader::Create("res/shaders/batch_line.glsl");
+	s_Data.s_Shaders.FramebufferShader = Shader::Create("res/shaders/finalFB.glsl");
+  s_Data.s_Shaders.skyboxShader = Shader::Create("res/shaders/skybox.glsl");
+  s_Data.s_Shaders.ModelShader = Shader::Create("res/shaders/static_anim_model.glsl");
+  s_Data.s_Shaders.DownSampleShader = Shader::Create("res/shaders/bloom_downsample.glsl");
+  s_Data.s_Shaders.UpSampleShader = Shader::Create("res/shaders/bloom_upsample.glsl");
+  s_Data.s_Shaders.BloomResultShader = Shader::Create("res/shaders/bloom_final.glsl");
+  s_Data.s_Shaders.OmniDirectShadowShader = Shader::Create("res/shaders/omni_shadowFB.glsl");
+  s_Data.s_Shaders.DirectShadowShader = Shader::Create("res/shaders/direct_shadowFB.glsl");
 }
 
 void Renderer::Init()
@@ -294,7 +286,6 @@ void Renderer::Init()
 	s_Data.QuadVertexArray->SetIndexBuffer(_2DquadIB);
 	delete[] quadIndices;
 
-	// Circles
 	s_Data.CircleVertexArray = VertexArray::Create();
 	s_Data.CircleVertexBuffer = VertexBuffer::Create(s_Data.MaxVertices * sizeof(CircleVertex));
 	s_Data.CircleVertexBuffer->SetLayout({
@@ -312,7 +303,6 @@ void Renderer::Init()
 	s_Data.CircleVertexArray->SetIndexBuffer(_2DquadIB); // Use quad IB
 	s_Data.CircleVertexBufferBase = new CircleVertex[s_Data.MaxVertices];
 
-	// Lines
 	s_Data.LineVertexArray = VertexArray::Create();
 	s_Data.LineVertexBuffer = VertexBuffer::Create(s_Data.MaxVertices * sizeof(LineVertex));
 	s_Data.LineVertexBuffer->SetLayout({
@@ -357,11 +347,11 @@ void Renderer::Init()
 	fbSpec.Height = Engine::GetInstance().GetMainWindow().GetHeight();
 	s_Data.m_Framebuffer = FrameBuffer::Create(fbSpec);
 
-  s_Data.m_BloomFramebuffer = BloomBuffer::Create(s_Data._shaders.DownSampleShader, s_Data._shaders.UpSampleShader, s_Data._shaders.BloomResultShader);
+  s_Data.m_BloomFramebuffer = BloomBuffer::Create(s_Data.s_Shaders.DownSampleShader, s_Data.s_Shaders.UpSampleShader, s_Data.s_Shaders.BloomResultShader);
 
   s_Data.m_PointShadowFramebuffer = OmniDirectShadowBuffer::Create(512, 512);
 
-  s_Data.m_DirectShadowFramebuffer = DirectShadowBuffer::Create(1024, 1024, 16, 8, 3);
+  s_Data.m_DirectShadowFramebuffer = DirectShadowBuffer::Create(2048, 2048, 16, 8, 3);
 
   s_Data.m_WindowRef = &Engine::GetInstance().GetMainWindow();
 
@@ -445,8 +435,8 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
       uint32_t lightIndex = 0;
       for (const auto& light : LightManager::GetPointLightPositions())
       {
-        s_Data._shaders.OmniDirectShadowShader->Use();
-        s_Data._shaders.OmniDirectShadowShader->setVec3("gLightWorldPos",light);
+        s_Data.s_Shaders.OmniDirectShadowShader->Use();
+        s_Data.s_Shaders.OmniDirectShadowShader->SetVec3("gLightWorldPos",light);
 
         const auto& directions = s_Data.m_PointShadowFramebuffer->GetFaceDirections();
         for (auto face = 0; face < directions.size(); ++face)
@@ -455,7 +445,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
           glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
           glm::mat4 view = glm::lookAt(light,light + directions[face].Target,directions[face].Up);
-          s_Data.m_LightProj = s_Data.m_PointShadowFramebuffer->GetShadowProj() * view;
+          s_Data.m_OmniLightProj = s_Data.m_PointShadowFramebuffer->GetShadowProj() * view;
 
           geometry();
         }
@@ -474,13 +464,13 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
     SetClearColor(glm::vec4(0.0f));
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    s_Data._shaders.ModelShader->Use();
+    s_Data.s_Shaders.ModelShader->Use();
     s_Data.m_DirectShadowFramebuffer->BindShadowTextureForReading(GL_TEXTURE1);
     s_Data.m_DirectShadowFramebuffer->BindOffsetTextureForReading(GL_TEXTURE2);
     s_Data.m_PointShadowFramebuffer->BindForReading(GL_TEXTURE3);
-    s_Data._shaders.ModelShader->setInt("u_DirectShadow",1);
-    s_Data._shaders.ModelShader->setInt("u_OffsetTexture",2);
-    s_Data._shaders.ModelShader->setInt("u_OmniShadow",3);
+    s_Data.s_Shaders.ModelShader->SetInt("u_DirectShadow",1);
+    s_Data.s_Shaders.ModelShader->SetInt("u_OffsetTexture",2);
+    s_Data.s_Shaders.ModelShader->SetInt("u_OmniShadow",3);
     BeginScene(s_Data.m_Camera);
     geometry();
     EndScene();
@@ -607,8 +597,8 @@ void Renderer::Flush()
 		for (uint32_t i = 0; i < s_Data.TextureSlotIndex; i++)
 			s_Data.TextureSlots[i]->Bind(i);
 
-		s_Data._shaders.QuadShader->Use();
-    s_Data._shaders.QuadShader->setBool("u_Is3D", s_Data.Is3D);
+		s_Data.s_Shaders.QuadShader->Use();
+    s_Data.s_Shaders.QuadShader->SetBool("u_Is3D", s_Data.Is3D);
 		Renderer::DrawIndexed(s_Data.QuadVertexArray, s_Data.QuadIndexCount);
 	}
 	if (s_Data.CircleIndexCount)
@@ -616,7 +606,7 @@ void Renderer::Flush()
 		uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.CircleVertexBufferPtr - (uint8_t*)s_Data.CircleVertexBufferBase);
 		s_Data.CircleVertexBuffer->SetData(s_Data.CircleVertexBufferBase, dataSize);
 
-		s_Data._shaders.CircleShader->Use();
+		s_Data.s_Shaders.CircleShader->Use();
 		Renderer::DrawIndexed(s_Data.CircleVertexArray, s_Data.CircleIndexCount);
 	}
 	if (s_Data.LineVertexCount)
@@ -624,7 +614,7 @@ void Renderer::Flush()
 		uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.LineVertexBufferPtr - (uint8_t*)s_Data.LineVertexBufferBase);
 		s_Data.LineVertexBuffer->SetData(s_Data.LineVertexBufferBase, dataSize);
 
-		s_Data._shaders.LineShader->Use();
+		s_Data.s_Shaders.LineShader->Use();
 		Renderer::SetLineWidth(s_Data.LineWidth);
 		Renderer::DrawLines(s_Data.LineVertexArray, s_Data.LineVertexCount);
 	}
@@ -987,39 +977,42 @@ void Renderer::DrawCircle(const glm::mat4& transform, const glm::vec4& color, fl
 	s_Data.CircleIndexCount += 6;
 }
 
-
 void Renderer::DrawFramebuffer(uint32_t textureID)
 {
-  s_Data._shaders.FramebufferShader->Use();
-  s_Data._shaders.FramebufferShader->setInt("u_Texture", 0);
+  s_Data.s_Shaders.FramebufferShader->Use();
+  s_Data.s_Shaders.FramebufferShader->SetInt("u_Texture", 0);
 
-  static uint32_t quadVAO = 0, quadVBO = 0;
+  static GLuint quadVAO = 0, quadVBO = 0;
   if (quadVAO == 0)
   {
-      float quadVertices[] = {
-          // positions   // texCoords
-          -1.0f,  1.0f,  0.0f, 1.0f,
-          -1.0f, -1.0f,  0.0f, 0.0f,
-           1.0f, -1.0f,  1.0f, 0.0f,
+    float quadVertices[] = {
+        // positions   // texCoords
+        -1.0f,  1.0f,  0.0f, 1.0f,
+        -1.0f, -1.0f,  0.0f, 0.0f,
+         1.0f, -1.0f,  1.0f, 0.0f,
 
-          -1.0f,  1.0f,  0.0f, 1.0f,
-           1.0f, -1.0f,  1.0f, 0.0f,
-           1.0f,  1.0f,  1.0f, 1.0f
-      };
+        -1.0f,  1.0f,  0.0f, 1.0f,
+         1.0f, -1.0f,  1.0f, 0.0f,
+         1.0f,  1.0f,  1.0f, 1.0f
+    };
 
-      glGenVertexArrays(1, &quadVAO);
-      glGenBuffers(1, &quadVBO);
-      glBindVertexArray(quadVAO);
-      glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-      glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
-      glEnableVertexAttribArray(0);
-      glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-      glEnableVertexAttribArray(1);
-      glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+    glCreateVertexArrays(1, &quadVAO);
+
+    glCreateBuffers(1, &quadVBO);
+    glNamedBufferData(quadVBO, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+
+    glVertexArrayVertexBuffer(quadVAO, 0, quadVBO, 0, 4 * sizeof(float));
+
+    glEnableVertexArrayAttrib(quadVAO, 0);
+    glVertexArrayAttribFormat(quadVAO, 0, 2, GL_FLOAT, GL_FALSE, 0);
+    glVertexArrayAttribBinding(quadVAO, 0, 0);
+
+    glEnableVertexArrayAttrib(quadVAO, 1);
+    glVertexArrayAttribFormat(quadVAO, 1, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float));
+    glVertexArrayAttribBinding(quadVAO, 1, 0);
   }
 
-  glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_2D, textureID);
+  glBindTextureUnit(0, textureID);
 
   glBindVertexArray(quadVAO);
   glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -1073,23 +1066,23 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
 
   if(s_Data.m_RenderState == RendererData::RenderState::DIRECTSHADOW)
   {
-    s_Data._shaders.DirectShadowShader->Use();
+    s_Data.s_Shaders.DirectShadowShader->Use();
 
     glm::mat4 modelMat = glm::mat4(1.0f); 
     if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH)  modelMat = PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose());
     else if (model->GetPhysXMeshType() == MeshType::CONTROLLER) modelMat = model->GetControllerTransform().GetTransform();
     else if (model->GetPhysXMeshType() == MeshType::NONE) modelMat = transform;
 
-    s_Data._shaders.DirectShadowShader->setMat4("u_LightSpaceMatrix", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
-    s_Data._shaders.DirectShadowShader->setMat4("u_ModelTransform", modelMat);
-    s_Data._shaders.DirectShadowShader->setBool("isAnimated", model->IsAnimated());
-    s_Data._shaders.DirectShadowShader->setBool("isInstanced", false);
+    s_Data.s_Shaders.DirectShadowShader->SetMat4("u_LightSpaceMatrix", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
+    s_Data.s_Shaders.DirectShadowShader->SetMat4("u_ModelTransform", modelMat);
+    s_Data.s_Shaders.DirectShadowShader->SetBool("isAnimated", model->IsAnimated());
+    s_Data.s_Shaders.DirectShadowShader->SetBool("isInstanced", false);
 
     if(model->IsAnimated())
     {
       auto& transforms = model->GetFinalBoneMatrices();
       for (size_t i = 0; i < transforms.size(); ++i) {
-          s_Data._shaders.DirectShadowShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+          s_Data.s_Shaders.DirectShadowShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
       }
     }
 
@@ -1102,23 +1095,23 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
   }
   else if(s_Data.m_RenderState == RendererData::RenderState::OMNISHADOW)
   {
-    s_Data._shaders.OmniDirectShadowShader->Use();
+    s_Data.s_Shaders.OmniDirectShadowShader->Use();
 
     glm::mat4 modelMat = glm::mat4(1.0f); 
     if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH)  modelMat = PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose());
     else if (model->GetPhysXMeshType() == MeshType::CONTROLLER) modelMat = model->GetControllerTransform().GetTransform();
     else if (model->GetPhysXMeshType() == MeshType::NONE) modelMat = transform;
 
-    s_Data._shaders.OmniDirectShadowShader->setMat4("u_LightViewProjection", s_Data.m_LightProj);
-    s_Data._shaders.OmniDirectShadowShader->setMat4("u_ModelTransform", modelMat);
-    s_Data._shaders.OmniDirectShadowShader->setBool("isAnimated", model->IsAnimated());
-    s_Data._shaders.OmniDirectShadowShader->setBool("isInstanced", false);
+    s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("u_LightViewProjection", s_Data.m_OmniLightProj);
+    s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("u_ModelTransform", modelMat);
+    s_Data.s_Shaders.OmniDirectShadowShader->SetBool("isAnimated", model->IsAnimated());
+    s_Data.s_Shaders.OmniDirectShadowShader->SetBool("isInstanced", false);
 
     if(model->IsAnimated())
     {
       auto& transforms = model->GetFinalBoneMatrices();
       for (size_t i = 0; i < transforms.size(); ++i) {
-          s_Data._shaders.OmniDirectShadowShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+          s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
       }
     }
 
@@ -1131,18 +1124,18 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
   }
   else if(s_Data.m_RenderState == RendererData::RenderState::GEOMETRY)
   {
-    s_Data._shaders.ModelShader->Use();
-    if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH) s_Data._shaders.ModelShader->setMat4("model", PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose()));
-    else if (model->GetPhysXMeshType() == MeshType::CONTROLLER) s_Data._shaders.ModelShader->setMat4("model", model->GetControllerTransform().GetTransform());
-    else if (model->GetPhysXMeshType() == MeshType::NONE) s_Data._shaders.ModelShader->setMat4("model", transform);
-    s_Data._shaders.ModelShader->setBool("isAnimated", model->IsAnimated());
-    s_Data._shaders.ModelShader->setBool("isInstanced", false);
-    s_Data._shaders.ModelShader->setMat4("u_DirectShadowViewProj", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
+    s_Data.s_Shaders.ModelShader->Use();
+    if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH) s_Data.s_Shaders.ModelShader->SetMat4("model", PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose()));
+    else if (model->GetPhysXMeshType() == MeshType::CONTROLLER) s_Data.s_Shaders.ModelShader->SetMat4("model", model->GetControllerTransform().GetTransform());
+    else if (model->GetPhysXMeshType() == MeshType::NONE) s_Data.s_Shaders.ModelShader->SetMat4("model", transform);
+    s_Data.s_Shaders.ModelShader->SetBool("isAnimated", model->IsAnimated());
+    s_Data.s_Shaders.ModelShader->SetBool("isInstanced", false);
+    s_Data.s_Shaders.ModelShader->SetMat4("u_DirectShadowViewProj", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
     if(model->IsAnimated())
     {
       auto& transforms = model->GetFinalBoneMatrices();
       for (size_t i = 0; i < transforms.size(); ++i) {
-          s_Data._shaders.ModelShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+          s_Data.s_Shaders.ModelShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
       }
     }
 
@@ -1151,17 +1144,15 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
       auto& textures = mesh.m_Textures;
       for (GLuint i = 0; i < textures.size(); i++)
       {
-        glActiveTexture(GL_TEXTURE0 + i);
-
         std::string number = std::to_string(s_Data.textureCounters[textures[i]->GetType()]++);
-        s_Data._shaders.ModelShader->setInt(textures[i]->GetType() + number, i);
-        glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
+        s_Data.s_Shaders.ModelShader->SetInt(textures[i]->GetType() + number, i);
+
+        glBindTextureUnit(i, textures[i]->GetRendererID());
       }
       
       glBindVertexArray(mesh.VAO);
       glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
       glBindVertexArray(0);
-      glActiveTexture(GL_TEXTURE0);
     }
   }
 }
@@ -1176,19 +1167,19 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_
 
   if(s_Data.m_RenderState == RendererData::RenderState::DIRECTSHADOW)
   {
-    s_Data._shaders.DirectShadowShader->Use();
+    s_Data.s_Shaders.DirectShadowShader->Use();
     glm::mat4 modelMat = PhysX::PxMat44ToGlmMat4(convex->GetDynamicActor()->getGlobalPose()); 
 
-    s_Data._shaders.DirectShadowShader->setMat4("u_LightSpaceMatrix", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
-    s_Data._shaders.DirectShadowShader->setMat4("u_ModelTransform", modelMat);
-    s_Data._shaders.DirectShadowShader->setBool("isAnimated", model->IsAnimated());
-    s_Data._shaders.DirectShadowShader->setBool("isInstanced", false);
+    s_Data.s_Shaders.DirectShadowShader->SetMat4("u_LightSpaceMatrix", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
+    s_Data.s_Shaders.DirectShadowShader->SetMat4("u_ModelTransform", modelMat);
+    s_Data.s_Shaders.DirectShadowShader->SetBool("isAnimated", model->IsAnimated());
+    s_Data.s_Shaders.DirectShadowShader->SetBool("isInstanced", false);
 
     if(model->IsAnimated())
     {
       auto& transforms = model->GetFinalBoneMatrices();
       for (size_t i = 0; i < transforms.size(); ++i) {
-          s_Data._shaders.DirectShadowShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+          s_Data.s_Shaders.DirectShadowShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
       }
     }
 
@@ -1198,23 +1189,22 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_
       glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
       glBindVertexArray(0);
     }
-
   }
   else if(s_Data.m_RenderState == RendererData::RenderState::OMNISHADOW)
   {
-    s_Data._shaders.OmniDirectShadowShader->Use();
+    s_Data.s_Shaders.OmniDirectShadowShader->Use();
     glm::mat4 modelMat = PhysX::PxMat44ToGlmMat4(convex->GetDynamicActor()->getGlobalPose()); 
 
-    s_Data._shaders.OmniDirectShadowShader->setMat4("u_LightViewProjection", s_Data.m_LightProj);
-    s_Data._shaders.OmniDirectShadowShader->setMat4("u_ModelTransform", modelMat);
-    s_Data._shaders.OmniDirectShadowShader->setBool("isAnimated", model->IsAnimated());
-    s_Data._shaders.OmniDirectShadowShader->setBool("isInstanced", false);
+    s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("u_LightViewProjection", s_Data.m_OmniLightProj);
+    s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("u_ModelTransform", modelMat);
+    s_Data.s_Shaders.OmniDirectShadowShader->SetBool("isAnimated", model->IsAnimated());
+    s_Data.s_Shaders.OmniDirectShadowShader->SetBool("isInstanced", false);
 
     if(model->IsAnimated())
     {
       auto& transforms = model->GetFinalBoneMatrices();
       for (size_t i = 0; i < transforms.size(); ++i) {
-          s_Data._shaders.OmniDirectShadowShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+          s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
       }
     }
 
@@ -1227,16 +1217,16 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_
   }
   else if(s_Data.m_RenderState == RendererData::RenderState::GEOMETRY)
   {
-    s_Data._shaders.ModelShader->Use();
-    s_Data._shaders.ModelShader->setMat4("model", PhysX::PxMat44ToGlmMat4(convex->GetDynamicActor()->getGlobalPose()));
-    s_Data._shaders.ModelShader->setBool("isAnimated", model->IsAnimated());
-    s_Data._shaders.ModelShader->setBool("isInstanced", false);
+    s_Data.s_Shaders.ModelShader->Use();
+    s_Data.s_Shaders.ModelShader->SetMat4("model", PhysX::PxMat44ToGlmMat4(convex->GetDynamicActor()->getGlobalPose()));
+    s_Data.s_Shaders.ModelShader->SetBool("isAnimated", model->IsAnimated());
+    s_Data.s_Shaders.ModelShader->SetBool("isInstanced", false);
 
     if(model->IsAnimated())
     {
       auto& transforms = model->GetFinalBoneMatrices();
       for (size_t i = 0; i < transforms.size(); ++i) {
-          s_Data._shaders.ModelShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+          s_Data.s_Shaders.ModelShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
       }
     }
 
@@ -1245,17 +1235,15 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_
       auto& textures = mesh.m_Textures;
       for (GLuint i = 0; i < textures.size(); i++)
       {
-        glActiveTexture(GL_TEXTURE0 + i);
-
         std::string number = std::to_string(s_Data.textureCounters[textures[i]->GetType()]++);
-        s_Data._shaders.ModelShader->setInt(textures[i]->GetType() + number, i);
-        glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
+        s_Data.s_Shaders.ModelShader->SetInt(textures[i]->GetType() + number, i);
+
+        glBindTextureUnit(i, textures[i]->GetRendererID());
       }
       
       glBindVertexArray(mesh.VAO);
       glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
       glBindVertexArray(0);
-      glActiveTexture(GL_TEXTURE0);
     }
 
     /*for (auto& mesh : convex->GetMeshes())*/
@@ -1277,24 +1265,46 @@ void Renderer::DrawModelInstanced(const std::shared_ptr<Model>& model, const std
 
   if(s_Data.m_RenderState == RendererData::RenderState::DIRECTSHADOW)
   {
-
-  }
-  else if(s_Data.m_RenderState == RendererData::RenderState::OMNISHADOW)
-  {
-    s_Data._shaders.OmniDirectShadowShader->Use();
-    s_Data._shaders.OmniDirectShadowShader->setBool("isAnimated", model->IsAnimated());
-    s_Data._shaders.OmniDirectShadowShader->setBool("isInstanced", false);
+    s_Data.s_Shaders.DirectShadowShader->Use();
+    s_Data.s_Shaders.DirectShadowShader->SetMat4("u_LightSpaceMatrix", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
+    s_Data.s_Shaders.DirectShadowShader->SetBool("isAnimated", model->IsAnimated());
+    s_Data.s_Shaders.DirectShadowShader->SetBool("isInstanced", false);
 
     if(model->IsAnimated())
     {
       auto& transforms = model->GetFinalBoneMatrices();
       for (size_t i = 0; i < transforms.size(); ++i) {
-          s_Data._shaders.OmniDirectShadowShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+          s_Data.s_Shaders.DirectShadowShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
       }
     }
 
     for (auto& mesh : model->GetMeshes())
     {
+      ModelManager::BakeModelInstancedBuffers(mesh, instances); 
+
+      glBindVertexArray(mesh.VAO);
+      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
+      glBindVertexArray(0);
+    }
+  }
+  else if(s_Data.m_RenderState == RendererData::RenderState::OMNISHADOW)
+  {
+    s_Data.s_Shaders.OmniDirectShadowShader->Use();
+    s_Data.s_Shaders.OmniDirectShadowShader->SetBool("isAnimated", model->IsAnimated());
+    s_Data.s_Shaders.OmniDirectShadowShader->SetBool("isInstanced", false);
+
+    if(model->IsAnimated())
+    {
+      auto& transforms = model->GetFinalBoneMatrices();
+      for (size_t i = 0; i < transforms.size(); ++i) {
+          s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+      }
+    }
+
+    for (auto& mesh : model->GetMeshes())
+    {
+      ModelManager::BakeModelInstancedBuffers(mesh, instances); 
+
       glBindVertexArray(mesh.VAO);
       glDrawElementsInstanced(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0, static_cast<GLsizei>(instances.size()));
       glBindVertexArray(0);
@@ -1302,35 +1312,35 @@ void Renderer::DrawModelInstanced(const std::shared_ptr<Model>& model, const std
   }
   else if(s_Data.m_RenderState == RendererData::RenderState::GEOMETRY)
   {
-    s_Data._shaders.ModelShader->Use();
-    s_Data._shaders.ModelShader->setBool("isAnimated", model->IsAnimated());
-    s_Data._shaders.ModelShader->setBool("isInstanced", true);
+    s_Data.s_Shaders.ModelShader->Use();
+    s_Data.s_Shaders.ModelShader->SetBool("isAnimated", model->IsAnimated());
+    s_Data.s_Shaders.ModelShader->SetBool("isInstanced", true);
 
     if (model->IsAnimated())
     {
       auto& transforms = model->GetFinalBoneMatrices();
       for (size_t i = 0; i < transforms.size(); ++i)
       {
-          s_Data._shaders.ModelShader->setMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
+          s_Data.s_Shaders.ModelShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
       }
     }
 
     for (auto& mesh : model->GetMeshes())
     {
-      ModelManager::BakeModelInstancedBuffers(mesh, instances); // Upload instance data
+      ModelManager::BakeModelInstancedBuffers(mesh, instances); 
 
       auto& textures = mesh.m_Textures;
-      for (GLuint i = 0; i < textures.size(); i++) {
-          glActiveTexture(GL_TEXTURE0 + i);
-          std::string number = std::to_string(s_Data.textureCounters[textures[i]->GetType()]++);
-          s_Data._shaders.ModelShader->setInt(textures[i]->GetType() + number, i);
-          glBindTexture(GL_TEXTURE_2D, textures[i]->GetRendererID());
+      for (GLuint i = 0; i < textures.size(); i++)
+      {
+        std::string number = std::to_string(s_Data.textureCounters[textures[i]->GetType()]++);
+        s_Data.s_Shaders.ModelShader->SetInt(textures[i]->GetType() + number, i);
+
+        glBindTextureUnit(i, textures[i]->GetRendererID());
       }
 
       glBindVertexArray(mesh.VAO);
       glDrawElementsInstanced(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0, static_cast<GLsizei>(instances.size()));
       glBindVertexArray(0);
-      glActiveTexture(GL_TEXTURE0);
     }
   }
 }
@@ -1344,44 +1354,43 @@ void Renderer::BakeSkyboxTextures(const std::string& name, const std::shared_ptr
   auto height = cubemap->GetHeight();
   auto pixels = cubemap->GetPixels();
 
-  uint32_t rendererID = 0;
-  glGenTextures(1, &rendererID);
-  GABGL_ASSERT(rendererID != 0, "Failed to generate texture ID!");
+  GLuint rendererID = 0;
+  glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &rendererID);
+  GABGL_ASSERT(rendererID != 0, "Failed to create cube map texture!");
 
-  cubemap->SetRendererID(rendererID); 
+  cubemap->SetRendererID(rendererID);
 
-  glBindTexture(GL_TEXTURE_CUBE_MAP, rendererID);
+  GLenum internalFormat = (channels == 4) ? GL_RGBA8 : GL_RGB8;
+  GLenum dataFormat     = (channels == 4) ? GL_RGBA  : GL_RGB;
 
-  GLenum format = (channels == 4) ? GL_RGBA : GL_RGB;
+  glTextureStorage2D(rendererID, 1, internalFormat, width, height);
 
   for (int i = 0; i < 6; ++i)
   {
-      glTexImage2D(
-          GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
-          0,
-          format,
-          width,
-          height,
-          0,
-          format,
+      glTextureSubImage3D(
+          rendererID,
+          0,                // mip level
+          0, 0, i,          // x, y, z offset — z=i for cube face
+          width, height, 1, // width, height, depth (1 face)
+          dataFormat,
           GL_UNSIGNED_BYTE,
           pixels[i]
       );
 
-      stbi_image_free(pixels[i]); 
+      stbi_image_free(pixels[i]);
       pixels[i] = nullptr;
   }
 
-  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-  glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
+  glTextureParameteri(rendererID, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+  glTextureParameteri(rendererID, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTextureParameteri(rendererID, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTextureParameteri(rendererID, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTextureParameteri(rendererID, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
-  glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+  glGenerateTextureMipmap(rendererID);
 
   s_Data.skyboxes[name] = std::move(cubemap);
+
   GABGL_WARN("Skybox uploading took {0} ms", timer.ElapsedMillis());
 }
 
@@ -1390,84 +1399,58 @@ void Renderer::DrawSkybox(const std::string& name)
   static uint32_t SkyboxVAO = 0, SkyboxVBO = 0;
   if (SkyboxVAO == 0)
   {
+    float skyboxVertices[] =
+    {
+        // positions
+        -1.0f,  1.0f, -1.0f,  -1.0f, -1.0f, -1.0f,   1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,   1.0f,  1.0f, -1.0f,  -1.0f,  1.0f, -1.0f,
 
-    float skyboxVertices[] = {
-        // positions          
-       -1.0f,  1.0f, -1.0f,
-       -1.0f, -1.0f, -1.0f,
-        1.0f, -1.0f, -1.0f,
-        1.0f, -1.0f, -1.0f,
-        1.0f,  1.0f, -1.0f,
-       -1.0f,  1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f,  -1.0f, -1.0f, -1.0f,  -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,  -1.0f,  1.0f,  1.0f,  -1.0f, -1.0f,  1.0f,
 
-       -1.0f, -1.0f,  1.0f,
-       -1.0f, -1.0f, -1.0f,
-       -1.0f,  1.0f, -1.0f,
-       -1.0f,  1.0f, -1.0f,
-       -1.0f,  1.0f,  1.0f,
-       -1.0f, -1.0f,  1.0f,
+         1.0f, -1.0f, -1.0f,   1.0f, -1.0f,  1.0f,   1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,   1.0f,  1.0f, -1.0f,   1.0f, -1.0f, -1.0f,
 
-        1.0f, -1.0f, -1.0f,
-        1.0f, -1.0f,  1.0f,
-        1.0f,  1.0f,  1.0f,
-        1.0f,  1.0f,  1.0f,
-        1.0f,  1.0f, -1.0f,
-        1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f,  -1.0f,  1.0f,  1.0f,   1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,   1.0f, -1.0f,  1.0f,  -1.0f, -1.0f,  1.0f,
 
-       -1.0f, -1.0f,  1.0f,
-       -1.0f,  1.0f,  1.0f,
-        1.0f,  1.0f,  1.0f,
-        1.0f,  1.0f,  1.0f,
-        1.0f, -1.0f,  1.0f,
-       -1.0f, -1.0f,  1.0f,
+        -1.0f,  1.0f, -1.0f,   1.0f,  1.0f, -1.0f,   1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,  -1.0f,  1.0f,  1.0f,  -1.0f,  1.0f, -1.0f,
 
-       -1.0f,  1.0f, -1.0f,
-        1.0f,  1.0f, -1.0f,
-        1.0f,  1.0f,  1.0f,
-        1.0f,  1.0f,  1.0f,
-       -1.0f,  1.0f,  1.0f,
-       -1.0f,  1.0f, -1.0f,
-
-       -1.0f, -1.0f, -1.0f,
-       -1.0f, -1.0f,  1.0f,
-        1.0f, -1.0f, -1.0f,
-        1.0f, -1.0f, -1.0f,
-       -1.0f, -1.0f,  1.0f,
-        1.0f, -1.0f,  1.0f
+        -1.0f, -1.0f, -1.0f,  -1.0f, -1.0f,  1.0f,   1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,  -1.0f, -1.0f,  1.0f,   1.0f, -1.0f,  1.0f
     };
 
-    glGenVertexArrays(1, &SkyboxVAO);
-    glGenBuffers(1, &SkyboxVBO);
+    glCreateVertexArrays(1, &SkyboxVAO);
+    glCreateBuffers(1, &SkyboxVBO);
+    glNamedBufferData(SkyboxVBO, sizeof(skyboxVertices), skyboxVertices, GL_STATIC_DRAW);
 
-    glBindVertexArray(SkyboxVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, SkyboxVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), skyboxVertices, GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glBindVertexArray(0);
-
+    glVertexArrayVertexBuffer(SkyboxVAO, 0, SkyboxVBO, 0, 3 * sizeof(float));
+    glEnableVertexArrayAttrib(SkyboxVAO, 0);
+    glVertexArrayAttribFormat(SkyboxVAO, 0, 3, GL_FLOAT, GL_FALSE, 0);
+    glVertexArrayAttribBinding(SkyboxVAO, 0, 0);
   }
 
-  glDepthFunc(GL_LEQUAL); 
+  glDepthFunc(GL_LEQUAL);
 
-  s_Data._shaders.skyboxShader->Use();
+  s_Data.s_Shaders.skyboxShader->Use();
 
-  glActiveTexture(GL_TEXTURE0);
   auto it = s_Data.skyboxes.find(name);
   if (it != s_Data.skyboxes.end())
   {
-      glBindTexture(GL_TEXTURE_CUBE_MAP, it->second->GetRendererID());
+    glBindTextureUnit(0, it->second->GetRendererID());  
   }
   else
   {
-      GABGL_ERROR("Skybox texture not found: " + name);
-      return;
+    GABGL_ERROR("Skybox texture not found: " + name);
+    return;
   }
+
   glBindVertexArray(SkyboxVAO);
   glDrawArrays(GL_TRIANGLES, 0, 36);
   glBindVertexArray(0);
 
-  glDepthFunc(GL_LESS); 
+  glDepthFunc(GL_LESS);
 }
 
 void Renderer::DrawText(const Font* font, const std::string& text, const glm::vec3& position, const glm::vec3& rotation, float size, const glm::vec4& color)

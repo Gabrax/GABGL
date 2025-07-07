@@ -116,8 +116,9 @@ struct VertexBuffer
 
 	void SetData(const void* data, uint32_t size);
 
-	const BufferLayout& GetLayout() const { return m_Layout; }
-	void SetLayout(const BufferLayout& layout) { m_Layout = layout; }
+	inline const BufferLayout& GetLayout() const { return m_Layout; }
+	inline const GLuint GetID() const { return m_RendererID; }
+	inline void SetLayout(const BufferLayout& layout) { m_Layout = layout; }
 	inline static std::shared_ptr<VertexBuffer> Create(uint32_t size) { return std::make_shared<VertexBuffer>(size); }
 	inline static std::shared_ptr<VertexBuffer> Create(float* vertices, uint32_t size) { return std::make_shared<VertexBuffer>(vertices, size); }
 private:
@@ -133,7 +134,8 @@ struct IndexBuffer
 	void Bind() const;
 	void Unbind() const;
 
-	uint32_t GetCount() const { return m_Count; }
+	inline uint32_t GetCount() const { return m_Count; }
+	inline GLuint GetID() const { return m_RendererID; }
 	inline static std::shared_ptr<IndexBuffer> Create(uint32_t* indices, uint32_t count) { return std::make_shared<IndexBuffer>(indices,count); }
 private:
 	uint32_t m_RendererID;
