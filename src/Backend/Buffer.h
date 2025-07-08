@@ -292,7 +292,29 @@ private:
 
 struct GeometryBuffer
 {
+  GeometryBuffer(uint32_t width, uint32_t height);
+  ~GeometryBuffer();
 
+  void Bind() const;
+  void Unbind() const;
+  void Resize(uint32_t width, uint32_t height);
+
+  inline GLuint GetPositionTexture() const { return m_PositionAttachment; }
+  inline GLuint GetNormalTexture() const { return m_NormalAttachment; }
+  inline GLuint GetAlbedoSpecTexture() const { return m_AlbedoSpecAttachment; }
+  inline GLuint GetDepthAttachment() const { return m_DepthAttachment; }
+
+  static std::shared_ptr<GeometryBuffer> Create(uint32_t width, uint32_t height);
+
+private:
+  void Invalidate();  
+
+  uint32_t m_Width = 0, m_Height = 0;
+  GLuint m_FBO = 0;
+  GLuint m_PositionAttachment = 0;
+  GLuint m_NormalAttachment = 0;
+  GLuint m_AlbedoSpecAttachment = 0;
+  GLuint m_DepthAttachment = 0;
 };
 
 struct BloomBuffer

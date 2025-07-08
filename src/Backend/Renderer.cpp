@@ -435,7 +435,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
       uint32_t lightIndex = 0;
       for (const auto& light : LightManager::GetPointLightPositions())
       {
-        s_Data.s_Shaders.OmniDirectShadowShader->Use();
+        s_Data.s_Shaders.OmniDirectShadowShader->Bind();
         s_Data.s_Shaders.OmniDirectShadowShader->SetVec3("gLightWorldPos",light);
 
         const auto& directions = s_Data.m_PointShadowFramebuffer->GetFaceDirections();
@@ -464,7 +464,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
     SetClearColor(glm::vec4(0.0f));
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    s_Data.s_Shaders.ModelShader->Use();
+    s_Data.s_Shaders.ModelShader->Bind();
     s_Data.m_DirectShadowFramebuffer->BindShadowTextureForReading(GL_TEXTURE1);
     s_Data.m_DirectShadowFramebuffer->BindOffsetTextureForReading(GL_TEXTURE2);
     s_Data.m_PointShadowFramebuffer->BindForReading(GL_TEXTURE3);
@@ -597,7 +597,7 @@ void Renderer::Flush()
 		for (uint32_t i = 0; i < s_Data.TextureSlotIndex; i++)
 			s_Data.TextureSlots[i]->Bind(i);
 
-		s_Data.s_Shaders.QuadShader->Use();
+		s_Data.s_Shaders.QuadShader->Bind();
     s_Data.s_Shaders.QuadShader->SetBool("u_Is3D", s_Data.Is3D);
 		Renderer::DrawIndexed(s_Data.QuadVertexArray, s_Data.QuadIndexCount);
 	}
@@ -606,7 +606,7 @@ void Renderer::Flush()
 		uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.CircleVertexBufferPtr - (uint8_t*)s_Data.CircleVertexBufferBase);
 		s_Data.CircleVertexBuffer->SetData(s_Data.CircleVertexBufferBase, dataSize);
 
-		s_Data.s_Shaders.CircleShader->Use();
+		s_Data.s_Shaders.CircleShader->Bind();
 		Renderer::DrawIndexed(s_Data.CircleVertexArray, s_Data.CircleIndexCount);
 	}
 	if (s_Data.LineVertexCount)
@@ -614,7 +614,7 @@ void Renderer::Flush()
 		uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.LineVertexBufferPtr - (uint8_t*)s_Data.LineVertexBufferBase);
 		s_Data.LineVertexBuffer->SetData(s_Data.LineVertexBufferBase, dataSize);
 
-		s_Data.s_Shaders.LineShader->Use();
+		s_Data.s_Shaders.LineShader->Bind();
 		Renderer::SetLineWidth(s_Data.LineWidth);
 		Renderer::DrawLines(s_Data.LineVertexArray, s_Data.LineVertexCount);
 	}
@@ -979,7 +979,7 @@ void Renderer::DrawCircle(const glm::mat4& transform, const glm::vec4& color, fl
 
 void Renderer::DrawFramebuffer(uint32_t textureID)
 {
-  s_Data.s_Shaders.FramebufferShader->Use();
+  s_Data.s_Shaders.FramebufferShader->Bind();
   s_Data.s_Shaders.FramebufferShader->SetInt("u_Texture", 0);
 
   static GLuint quadVAO = 0, quadVBO = 0;
@@ -1066,7 +1066,7 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
 
   if(s_Data.m_RenderState == RendererData::RenderState::DIRECTSHADOW)
   {
-    s_Data.s_Shaders.DirectShadowShader->Use();
+    s_Data.s_Shaders.DirectShadowShader->Bind();
 
     glm::mat4 modelMat = glm::mat4(1.0f); 
     if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH)  modelMat = PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose());
@@ -1095,7 +1095,7 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
   }
   else if(s_Data.m_RenderState == RendererData::RenderState::OMNISHADOW)
   {
-    s_Data.s_Shaders.OmniDirectShadowShader->Use();
+    s_Data.s_Shaders.OmniDirectShadowShader->Bind();
 
     glm::mat4 modelMat = glm::mat4(1.0f); 
     if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH)  modelMat = PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose());
@@ -1110,6 +1110,7 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
     if(model->IsAnimated())
     {
       auto& transforms = model->GetFinalBoneMatrices();
+
       for (size_t i = 0; i < transforms.size(); ++i) {
           s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
       }
@@ -1124,7 +1125,7 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
   }
   else if(s_Data.m_RenderState == RendererData::RenderState::GEOMETRY)
   {
-    s_Data.s_Shaders.ModelShader->Use();
+    s_Data.s_Shaders.ModelShader->Bind();
     if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH) s_Data.s_Shaders.ModelShader->SetMat4("model", PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose()));
     else if (model->GetPhysXMeshType() == MeshType::CONTROLLER) s_Data.s_Shaders.ModelShader->SetMat4("model", model->GetControllerTransform().GetTransform());
     else if (model->GetPhysXMeshType() == MeshType::NONE) s_Data.s_Shaders.ModelShader->SetMat4("model", transform);
@@ -1167,7 +1168,7 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_
 
   if(s_Data.m_RenderState == RendererData::RenderState::DIRECTSHADOW)
   {
-    s_Data.s_Shaders.DirectShadowShader->Use();
+    s_Data.s_Shaders.DirectShadowShader->Bind();
     glm::mat4 modelMat = PhysX::PxMat44ToGlmMat4(convex->GetDynamicActor()->getGlobalPose()); 
 
     s_Data.s_Shaders.DirectShadowShader->SetMat4("u_LightSpaceMatrix", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
@@ -1192,7 +1193,7 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_
   }
   else if(s_Data.m_RenderState == RendererData::RenderState::OMNISHADOW)
   {
-    s_Data.s_Shaders.OmniDirectShadowShader->Use();
+    s_Data.s_Shaders.OmniDirectShadowShader->Bind();
     glm::mat4 modelMat = PhysX::PxMat44ToGlmMat4(convex->GetDynamicActor()->getGlobalPose()); 
 
     s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("u_LightViewProjection", s_Data.m_OmniLightProj);
@@ -1217,7 +1218,7 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_
   }
   else if(s_Data.m_RenderState == RendererData::RenderState::GEOMETRY)
   {
-    s_Data.s_Shaders.ModelShader->Use();
+    s_Data.s_Shaders.ModelShader->Bind();
     s_Data.s_Shaders.ModelShader->SetMat4("model", PhysX::PxMat44ToGlmMat4(convex->GetDynamicActor()->getGlobalPose()));
     s_Data.s_Shaders.ModelShader->SetBool("isAnimated", model->IsAnimated());
     s_Data.s_Shaders.ModelShader->SetBool("isInstanced", false);
@@ -1265,7 +1266,7 @@ void Renderer::DrawModelInstanced(const std::shared_ptr<Model>& model, const std
 
   if(s_Data.m_RenderState == RendererData::RenderState::DIRECTSHADOW)
   {
-    s_Data.s_Shaders.DirectShadowShader->Use();
+    s_Data.s_Shaders.DirectShadowShader->Bind();
     s_Data.s_Shaders.DirectShadowShader->SetMat4("u_LightSpaceMatrix", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
     s_Data.s_Shaders.DirectShadowShader->SetBool("isAnimated", model->IsAnimated());
     s_Data.s_Shaders.DirectShadowShader->SetBool("isInstanced", false);
@@ -1289,7 +1290,7 @@ void Renderer::DrawModelInstanced(const std::shared_ptr<Model>& model, const std
   }
   else if(s_Data.m_RenderState == RendererData::RenderState::OMNISHADOW)
   {
-    s_Data.s_Shaders.OmniDirectShadowShader->Use();
+    s_Data.s_Shaders.OmniDirectShadowShader->Bind();
     s_Data.s_Shaders.OmniDirectShadowShader->SetBool("isAnimated", model->IsAnimated());
     s_Data.s_Shaders.OmniDirectShadowShader->SetBool("isInstanced", false);
 
@@ -1312,7 +1313,7 @@ void Renderer::DrawModelInstanced(const std::shared_ptr<Model>& model, const std
   }
   else if(s_Data.m_RenderState == RendererData::RenderState::GEOMETRY)
   {
-    s_Data.s_Shaders.ModelShader->Use();
+    s_Data.s_Shaders.ModelShader->Bind();
     s_Data.s_Shaders.ModelShader->SetBool("isAnimated", model->IsAnimated());
     s_Data.s_Shaders.ModelShader->SetBool("isInstanced", true);
 
@@ -1433,7 +1434,7 @@ void Renderer::DrawSkybox(const std::string& name)
 
   glDepthFunc(GL_LEQUAL);
 
-  s_Data.s_Shaders.skyboxShader->Use();
+  s_Data.s_Shaders.skyboxShader->Bind();
 
   auto it = s_Data.skyboxes.find(name);
   if (it != s_Data.skyboxes.end())

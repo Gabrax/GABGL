@@ -8,7 +8,6 @@
 #include <glad/glad.h>
 #include "../engine.h"
 
-
 VertexBuffer::VertexBuffer(uint32_t size)
 {
   glCreateBuffers(1, &m_RendererID);
@@ -571,6 +570,89 @@ std::shared_ptr<FrameBuffer> FrameBuffer::Create(const FramebufferSpecification&
 	return std::make_shared<FrameBuffer>(spec);
 }
 
+GeometryBuffer::GeometryBuffer(uint32_t width, uint32_t height) : m_Width(width), m_Height(height)
+{
+  Invalidate();
+}
+
+GeometryBuffer::~GeometryBuffer()
+{
+  glDeleteFramebuffers(1, &m_FBO);
+  glDeleteTextures(1, &m_PositionAttachment);
+  glDeleteTextures(1, &m_NormalAttachment);
+  glDeleteTextures(1, &m_AlbedoSpecAttachment);
+  glDeleteTextures(1, &m_DepthAttachment);
+}
+
+void GeometryBuffer::Invalidate()
+{
+  if (m_FBO)
+  {
+    glDeleteFramebuffers(1, &m_FBO);
+    glDeleteTextures(1, &m_PositionAttachment);
+    glDeleteTextures(1, &m_NormalAttachment);
+    glDeleteTextures(1, &m_AlbedoSpecAttachment);
+    glDeleteTextures(1, &m_DepthAttachment);
+  }
+
+  glCreateFramebuffers(1, &m_FBO);
+
+  glCreateTextures(GL_TEXTURE_2D, 1, &m_PositionAttachment);
+  glTextureStorage2D(m_PositionAttachment, 1, GL_RGBA16F, m_Width, m_Height);
+  glTextureParameteri(m_PositionAttachment, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTextureParameteri(m_PositionAttachment, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glNamedFramebufferTexture(m_FBO, GL_COLOR_ATTACHMENT0, m_PositionAttachment, 0);
+
+  glCreateTextures(GL_TEXTURE_2D, 1, &m_NormalAttachment);
+  glTextureStorage2D(m_NormalAttachment, 1, GL_RGBA16F, m_Width, m_Height);
+  glTextureParameteri(m_NormalAttachment, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTextureParameteri(m_NormalAttachment, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glNamedFramebufferTexture(m_FBO, GL_COLOR_ATTACHMENT1, m_NormalAttachment, 0);
+
+  glCreateTextures(GL_TEXTURE_2D, 1, &m_AlbedoSpecAttachment);
+  glTextureStorage2D(m_AlbedoSpecAttachment, 1, GL_RGBA8, m_Width, m_Height);
+  glTextureParameteri(m_AlbedoSpecAttachment, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTextureParameteri(m_AlbedoSpecAttachment, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glNamedFramebufferTexture(m_FBO, GL_COLOR_ATTACHMENT2, m_AlbedoSpecAttachment, 0);
+
+  glCreateTextures(GL_TEXTURE_2D, 1, &m_DepthAttachment);
+  glTextureStorage2D(m_DepthAttachment, 1, GL_DEPTH_COMPONENT24, m_Width, m_Height);
+  glTextureParameteri(m_DepthAttachment, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTextureParameteri(m_DepthAttachment, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glNamedFramebufferTexture(m_FBO, GL_DEPTH_ATTACHMENT, m_DepthAttachment, 0);
+
+  GLenum attachments[3] = {GL_COLOR_ATTACHMENT0,GL_COLOR_ATTACHMENT1,GL_COLOR_ATTACHMENT2};
+  glNamedFramebufferDrawBuffers(m_FBO, 3, attachments);
+
+  if (glCheckNamedFramebufferStatus(m_FBO, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) GABGL_ERROR("GeometryBuffer Error: Framebuffer is not complete!");
+
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void GeometryBuffer::Bind() const
+{
+  glBindFramebuffer(GL_FRAMEBUFFER, m_FBO);
+}
+
+void GeometryBuffer::Unbind() const
+{
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void GeometryBuffer::Resize(uint32_t width, uint32_t height)
+{
+  if (m_Width == width && m_Height == height) return;
+
+  m_Width = width;
+  m_Height = height;
+  Invalidate();
+}
+
+std::shared_ptr<GeometryBuffer> GeometryBuffer::Create(uint32_t width, uint32_t height)
+{
+    return std::make_shared<GeometryBuffer>(width, height);
+}
+
 static unsigned int quadVAO = 0;
 static unsigned int quadVBO;
 static void renderQuad()
@@ -664,13 +746,13 @@ BloomBuffer::BloomBuffer(const std::shared_ptr<Shader>& downsampleShader, const 
     mipIntSize = glm::max(mipIntSize, glm::ivec2(1));
   }
 
-  downsampleShader->Use();
+  downsampleShader->Bind();
   downsampleShader->SetInt("srcTexture", 0);
-  glUseProgram(0);
+  downsampleShader->UnBind();
 
-  upsampleShader->Use();
+  upsampleShader->Bind();
   upsampleShader->SetInt("srcTexture", 0);
-  glUseProgram(0);
+  upsampleShader->UnBind();
 }
 
 void BloomBuffer::RenderBloomTexture(float filterRadius)
@@ -679,7 +761,7 @@ void BloomBuffer::RenderBloomTexture(float filterRadius)
 
   auto srcTexture = m_hdrFB->GetColorAttachmentRendererID(1);
 
-  downsampleShader->Use();
+  downsampleShader->Bind();
   downsampleShader->SetVec2("srcResolution", mSrcViewportSizeFloat);
   if (mKarisAverageOnDownsample) downsampleShader->SetInt("mipLevel", 0);
 
@@ -700,9 +782,9 @@ void BloomBuffer::RenderBloomTexture(float filterRadius)
     if (i == 0) downsampleShader->SetInt("mipLevel", 1);
   }
 
-  glUseProgram(0);
+  downsampleShader->UnBind();
 
-  upsampleShader->Use();
+  upsampleShader->Bind();
   upsampleShader->SetFloat("filterRadius", filterRadius);
 
   glEnable(GL_BLEND);
@@ -725,7 +807,7 @@ void BloomBuffer::RenderBloomTexture(float filterRadius)
 
   glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
   glDisable(GL_BLEND);
-  glUseProgram(0);
+  upsampleShader->UnBind();
 }
 
 void BloomBuffer::Resize(int newWidth, int newHeight)
@@ -789,7 +871,7 @@ void BloomBuffer::CompositeBloomOver(const std::shared_ptr<FrameBuffer>& target)
   glBlendFunc(GL_ONE, GL_ONE); 
   glBlendEquation(GL_FUNC_ADD);
 
-  finalShader->Use();
+  finalShader->Bind();
 
   glBindTextureUnit(0, m_hdrFB->GetColorAttachmentRendererID(0));
   finalShader->SetInt("scene", 0);

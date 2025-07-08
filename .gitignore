@@ -13,3 +13,5 @@ CMakeSettings.json
 *.log
 .GABGL.txt
 imgui.ini
+*.rdi
+*.pdb

@@ -5,11 +5,18 @@ include(FetchContent)
 # Set this to false if you don’t use clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Compiler settings for Clang, MSVC, and GCC
 if(MSVC)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
-    add_compile_options(/MP /O2)
-    add_compile_options(/fsanitize=address)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded") # Or "MultiThreadedDLL" if you prefer /MD
+
+    if(RELEASE)
+        add_compile_options(/MP /O2)
+    endif()
+
+    if(DEBUG)
+        add_compile_options(/MP /Zi /Od) 
+        add_link_options(/DEBUG /INCREMENTAL)
+    endif()
+
     target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC _CRT_SECURE_NO_WARNINGS)
 
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")

@@ -13,7 +13,8 @@ struct Shader
 
   void Load(const char* fullshader);
   void Load(const char* vertexPath, const char* fragmentPath, const char* geometryPath = nullptr);
-  void Use() const;
+  void Bind() const;
+  void UnBind() const;
   GLuint GetID() const;
 
   void SetBool(const std::string& name, bool value) const;
