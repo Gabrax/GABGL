@@ -1,5 +1,5 @@
 #type VERTEX
-#version 330 core
+#version 460 core
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec3 Normal;   
 layout (location = 2) in vec2 TexCoord; 
@@ -16,12 +16,14 @@ const int MAX_BONES = 100;
 const int MAX_BONE_INFLUENCE = 4;
 uniform mat4 finalBonesMatrices[MAX_BONES];
 
+layout(std430, binding = 5) buffer ModelTransforms { mat4 transforms[]; };
+
 uniform bool isAnimated;
 uniform bool isInstanced;
 
 void main()
 {
-  mat4 modelMat = isInstanced ? instanceMatrix : u_ModelTransform;
+  mat4 modelMat = isInstanced ? instanceMatrix : transforms[gl_DrawID];
 
   if (isAnimated)
   {

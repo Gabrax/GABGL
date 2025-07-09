@@ -245,10 +245,16 @@ private:
 
 struct ModelManager
 {
+  static void Init();
   static void BakeModel(const std::string& path, const std::shared_ptr<Model>& model);
   static void BakeModelInstancedBuffers(Mesh& mesh, const std::vector<Transform>& instances);
+  static void FinalizeBuffers();
   static std::shared_ptr<Model> GetModel(const std::string& name);
   static void UpdateAnimations(const DeltaTime& dt);
   static std::vector<glm::mat4> GetTransforms();
+  static GLsizei GetModelsQuantity();
+  static GLuint GetModelsVAO();
+  static void SetModelTransform(const std::string& name, const glm::mat4& transform);
+  static void SetModelTransform(const std::string& name, const glm::mat4& transform, float radius, float height, bool slopeLimit);
 };
 

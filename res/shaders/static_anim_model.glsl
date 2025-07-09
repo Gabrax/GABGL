@@ -1,5 +1,5 @@
 #type VERTEX
-#version 450 core
+#version 460 core
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec3 aNormal;
 layout (location = 2) in vec2 aTexCoords;
@@ -16,6 +16,8 @@ layout(std140, binding = 0) uniform Camera
 	mat4 NonRotViewProjection;
   vec3 CameraPos;
 };
+
+layout(std430, binding = 5) buffer ModelTransforms { mat4 transforms[]; };
 
 out VS_OUT{
     vec2 TexCoords;
@@ -38,7 +40,7 @@ uniform mat4 u_DirectShadowViewProj;
 
 void main()
 {
-  mat4 modelMat = isInstanced ? instanceMatrix : model;
+  mat4 modelMat = isInstanced ? instanceMatrix : transforms[gl_DrawID];
 
   if (isAnimated)
   {

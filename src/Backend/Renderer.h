@@ -53,6 +53,9 @@ struct Renderer
 	static void SetLineWidth(float width);
 	static void DrawLine(const glm::vec3& p0, const glm::vec3& p1, const glm::vec4& color, int entityID = -1);
 
+  static void AddDrawCommand(uint32_t verticesSize, uint32_t indicesSize);
+  static void InitDrawCommandBuffer();
+
   static void OnWindowResize(uint32_t width, uint32_t height);
 	static void SetViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height);
 	static void SetClearColor(const glm::vec4& color);

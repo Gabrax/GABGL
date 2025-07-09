@@ -236,6 +236,14 @@ void StorageBuffer::SetData(size_t size, void* data)
   if (data != nullptr) glNamedBufferSubData(m_RendererID, 0, (GLsizeiptr)size, data); 
 }
 
+void StorageBuffer::SetSubData(GLintptr offset, GLsizeiptr size, const void* data)
+{
+  if (m_RendererID != 0 && data != nullptr)
+  {
+      glNamedBufferSubData(m_RendererID, offset, size, data);
+  }
+}
+
 void* StorageBuffer::MapBuffer()
 {
   return (m_RendererID != 0) ? glMapNamedBuffer(m_RendererID, GL_READ_WRITE) : nullptr;

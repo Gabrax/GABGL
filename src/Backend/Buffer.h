@@ -180,6 +180,7 @@ struct StorageBuffer
   virtual ~StorageBuffer();
   void Allocate(size_t size);
   void SetData(size_t size, void* data);
+  void SetSubData(GLintptr offset, GLsizeiptr size, const void* data);
   void CleanUp();
   void* MapBuffer();
   void UnmapBuffer();

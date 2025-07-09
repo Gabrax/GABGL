@@ -6,7 +6,8 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
-#include "Buffer.h"
+#include <glm/gtc/type_ptr.hpp>
+#include "Renderer.h"
 
 static glm::mat4 AssimpMatToGLMMat(const aiMatrix4x4& from)
 {
@@ -31,52 +32,57 @@ static glm::quat AssimpQuatToGLMQuat(const aiQuaternion& pOrientation)
 
 struct ModelsData
 {
-  std::shared_ptr<StorageBuffer> InPositionsBuffer;
-  std::shared_ptr<StorageBuffer> InNormalsBuffer;
-  std::shared_ptr<StorageBuffer> BoneIDBuffer;
-  std::shared_ptr<StorageBuffer> BoneWeightBuffer;
-  std::shared_ptr<StorageBuffer> OutPositionsBuffer;
-  std::shared_ptr<StorageBuffer> OutNormalsBuffer;
-
   std::unordered_map<std::string, std::shared_ptr<Model>> m_Models;
+  std::vector<std::string> m_ModelsNames;
+
+  std::shared_ptr<StorageBuffer> m_ModelsTransforms;
+
+  GLuint sharedVBO, sharedEBO, sharedVAO;
+
+  std::vector<Vertex> allVertices;
+  std::vector<uint32_t> allIndices;
 
 } s_Data; 
 
-void ModelManager::BakeModelInstancedBuffers(Mesh& mesh, const std::vector<Transform>& transforms)
+void ModelManager::Init()
 {
-  if (transforms.empty()) return;
+  if (s_Data.sharedVBO == 0)
+    glCreateBuffers(1, &s_Data.sharedVBO);
+  if (s_Data.sharedEBO == 0)
+    glCreateBuffers(1, &s_Data.sharedEBO);
+  if (s_Data.sharedVAO == 0)
+    glCreateVertexArrays(1, &s_Data.sharedVAO);
 
-  std::vector<glm::mat4> instanceMatrices;
-  instanceMatrices.reserve(transforms.size());
+  glVertexArrayVertexBuffer(s_Data.sharedVAO, 0, s_Data.sharedVBO, 0, sizeof(Vertex));
+  glVertexArrayElementBuffer(s_Data.sharedVAO, s_Data.sharedEBO);
 
-  for (const auto& t : transforms)
-      instanceMatrices.push_back(t.GetTransform());
-
-  if (mesh.instanceVBO == 0)
-      glCreateBuffers(1, &mesh.instanceVBO);
-
-  static size_t lastSize = 0;
-  size_t newSize = instanceMatrices.size() * sizeof(glm::mat4);
-  if (lastSize != newSize) {
-      glNamedBufferStorage(mesh.instanceVBO, newSize, instanceMatrices.data(), 0); // immutable
-      lastSize = newSize;
-  } else {
-      glNamedBufferSubData(mesh.instanceVBO, 0, newSize, instanceMatrices.data());
-  }
-
-  glVertexArrayVertexBuffer(mesh.VAO, 1, mesh.instanceVBO, 0, sizeof(glm::mat4));
-
-  if (!mesh.instanceAttribsConfigured)
+  struct Attribute
   {
-      for (GLuint i = 0; i < 4; ++i) {
-          GLuint loc = 7 + i; // instance matrix starts at attribute 7
-          glEnableVertexArrayAttrib(mesh.VAO, loc);
-          glVertexArrayAttribFormat(mesh.VAO, loc, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec4) * i);
-          glVertexArrayAttribBinding(mesh.VAO, loc, 1); // bind to binding index 1
-          glVertexArrayBindingDivisor(mesh.VAO, 1, 1);  // instanced per-instance
-      }
+    GLint size;
+    GLenum type;
+    GLboolean normalized;
+    size_t offset;
+  };
 
-      mesh.instanceAttribsConfigured = true;
+  std::array<Attribute, 7> attributes =
+  {{
+    {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Position)},
+    {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Normal)},
+    {2, GL_FLOAT, GL_FALSE, offsetof(Vertex, TexCoords)},
+    {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Tangent)},
+    {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Bitangent)},
+    {4, GL_INT,   GL_FALSE, offsetof(Vertex, m_BoneIDs)},
+    {4, GL_FLOAT, GL_FALSE, offsetof(Vertex, m_Weights)}
+  }};
+
+  for (GLuint i = 0; i < attributes.size(); ++i)
+  {
+    glEnableVertexArrayAttrib(s_Data.sharedVAO, i);
+    if (attributes[i].type == GL_INT)
+      glVertexArrayAttribIFormat(s_Data.sharedVAO, i, attributes[i].size, attributes[i].type, attributes[i].offset);
+    else
+      glVertexArrayAttribFormat(s_Data.sharedVAO, i, attributes[i].size, attributes[i].type, attributes[i].normalized, attributes[i].offset);
+    glVertexArrayAttribBinding(s_Data.sharedVAO, i, 0);
   }
 }
 
@@ -165,45 +171,10 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
       currentPBO = (currentPBO + 1) % NUM_BUFFERS;
     }
 
-    glCreateVertexArrays(1, &mesh.VAO);
-    glCreateBuffers(1, &mesh.VBO);
-    glCreateBuffers(1, &mesh.EBO);
+    s_Data.allVertices.insert(s_Data.allVertices.end(), mesh.m_Vertices.begin(), mesh.m_Vertices.end());
+    s_Data.allIndices.insert(s_Data.allIndices.end(), mesh.m_Indices.begin(), mesh.m_Indices.end());
 
-    glNamedBufferStorage(mesh.VBO,mesh.m_Vertices.size() * sizeof(Vertex),mesh.m_Vertices.data(), 0); // flags: 0 = immutable, no mapping
-    glNamedBufferStorage(mesh.EBO,mesh.m_Indices.size() * sizeof(unsigned int),mesh.m_Indices.data(), 0);
-
-    glVertexArrayVertexBuffer(mesh.VAO, 0, mesh.VBO, 0, sizeof(Vertex)); // binding index = 0
-    glVertexArrayElementBuffer(mesh.VAO, mesh.EBO);
-
-    struct Attribute
-    {
-      GLint size;
-      GLenum type;
-      GLboolean normalized;
-      size_t offset;
-    };
-
-    std::array<Attribute, 7> attributes =
-    {{
-      {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Position)},
-      {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Normal)},
-      {2, GL_FLOAT, GL_FALSE, offsetof(Vertex, TexCoords)},
-      {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Tangent)},
-      {3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Bitangent)},
-      {4, GL_INT,   GL_FALSE, offsetof(Vertex, m_BoneIDs)},
-      {4, GL_FLOAT, GL_FALSE, offsetof(Vertex, m_Weights)}
-    }};
-
-    for (GLuint i = 0; i < attributes.size(); ++i)
-    {
-      glEnableVertexArrayAttrib(mesh.VAO, i);
-      if (attributes[i].type == GL_INT) {
-          glVertexArrayAttribIFormat(mesh.VAO, i, attributes[i].size, attributes[i].type, attributes[i].offset);
-      } else {
-          glVertexArrayAttribFormat(mesh.VAO, i, attributes[i].size, attributes[i].type, attributes[i].normalized, attributes[i].offset);
-      }
-      glVertexArrayAttribBinding(mesh.VAO, i, 0); // binding index 0
-    }
+    Renderer::AddDrawCommand(static_cast<uint32_t>(mesh.m_Vertices.size()), static_cast<uint32_t>(mesh.m_Indices.size()));
 
     for(auto& tex : mesh.m_Textures) tex->ClearRawData();
 
@@ -213,8 +184,120 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
 
   std::string name = std::filesystem::path(path).stem().string();
   s_Data.m_Models[name] = std::move(model);
+  s_Data.m_ModelsNames.emplace_back(name);
 
   GABGL_WARN("Model: {0} baking took {1} ms", name, timer.ElapsedMillis());
+}
+
+
+void ModelManager::SetModelTransform(const std::string& name, const glm::mat4& transform, float radius, float height, bool slopeLimit)
+{
+  auto it = s_Data.m_Models.find(name);
+  if (it == s_Data.m_Models.end())
+  {
+      GABGL_WARN("Model '{}' not found in ModelManager!", name);
+      return;
+  }
+
+  std::shared_ptr<Model> model = it->second;
+  model->SetPosition(transform,radius,height,slopeLimit);
+
+  // Find index in the names vector
+  auto vecIt = std::find(s_Data.m_ModelsNames.begin(), s_Data.m_ModelsNames.end(), name);
+  if (vecIt == s_Data.m_ModelsNames.end())
+  {
+      GABGL_WARN("Model '{}' not found in name list for SSBO!", name);
+      return;
+  }
+
+  int ssboIndex = static_cast<int>(std::distance(s_Data.m_ModelsNames.begin(), vecIt));
+
+  s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4),sizeof(glm::mat4),glm::value_ptr(transform));
+}
+
+void ModelManager::SetModelTransform(const std::string& name, const glm::mat4& transform)
+{
+  auto it = s_Data.m_Models.find(name);
+  if (it == s_Data.m_Models.end())
+  {
+      GABGL_WARN("Model '{}' not found in ModelManager!", name);
+      return;
+  }
+
+  std::shared_ptr<Model> model = it->second;
+  model->SetPosition(transform);
+
+  // Find index in the names vector
+  auto vecIt = std::find(s_Data.m_ModelsNames.begin(), s_Data.m_ModelsNames.end(), name);
+  if (vecIt == s_Data.m_ModelsNames.end())
+  {
+      GABGL_WARN("Model '{}' not found in name list for SSBO!", name);
+      return;
+  }
+
+  int ssboIndex = static_cast<int>(std::distance(s_Data.m_ModelsNames.begin(), vecIt));
+
+  s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4),sizeof(glm::mat4),glm::value_ptr(transform));
+}
+
+GLsizei ModelManager::GetModelsQuantity()
+{
+  return s_Data.m_Models.size();
+}
+
+GLuint ModelManager::GetModelsVAO()
+{
+  return s_Data.sharedVAO;
+}
+
+void ModelManager::FinalizeBuffers()
+{
+  glNamedBufferStorage(s_Data.sharedVBO, s_Data.allVertices.size() * sizeof(Vertex), s_Data.allVertices.data(), 0);
+  glNamedBufferStorage(s_Data.sharedEBO, s_Data.allIndices.size() * sizeof(uint32_t), s_Data.allIndices.data(), 0);
+
+  s_Data.m_ModelsTransforms = StorageBuffer::Create(sizeof(glm::mat4) * s_Data.m_Models.size(), 5);
+
+  auto transform = GetTransforms();
+  s_Data.m_ModelsTransforms->SetData(transform.size() * sizeof(glm::mat4), transform.data());
+
+  s_Data.allVertices.clear();
+  s_Data.allIndices.clear();
+}
+
+void ModelManager::BakeModelInstancedBuffers(Mesh& mesh, const std::vector<Transform>& transforms)
+{
+  if (transforms.empty()) return;
+
+  std::vector<glm::mat4> instanceMatrices;
+  instanceMatrices.reserve(transforms.size());
+
+  for (const auto& t : transforms) instanceMatrices.push_back(t.GetTransform());
+
+  if (mesh.instanceVBO == 0) glCreateBuffers(1, &mesh.instanceVBO);
+
+  static size_t lastSize = 0;
+  size_t newSize = instanceMatrices.size() * sizeof(glm::mat4);
+  if (lastSize != newSize) {
+      glNamedBufferStorage(mesh.instanceVBO, newSize, instanceMatrices.data(), 0); // immutable
+      lastSize = newSize;
+  } else {
+      glNamedBufferSubData(mesh.instanceVBO, 0, newSize, instanceMatrices.data());
+  }
+
+  glVertexArrayVertexBuffer(mesh.VAO, 1, mesh.instanceVBO, 0, sizeof(glm::mat4));
+
+  if (!mesh.instanceAttribsConfigured)
+  {
+      for (GLuint i = 0; i < 4; ++i) {
+          GLuint loc = 7 + i; // instance matrix starts at attribute 7
+          glEnableVertexArrayAttrib(mesh.VAO, loc);
+          glVertexArrayAttribFormat(mesh.VAO, loc, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec4) * i);
+          glVertexArrayAttribBinding(mesh.VAO, loc, 1); // bind to binding index 1
+          glVertexArrayBindingDivisor(mesh.VAO, 1, 1);  // instanced per-instance
+      }
+
+      mesh.instanceAttribsConfigured = true;
+  }
 }
 
 std::shared_ptr<Model> ModelManager::GetModel(const std::string& name)
@@ -240,21 +323,25 @@ std::vector<glm::mat4> ModelManager::GetTransforms()
 
   for (const auto& [key, model] : s_Data.m_Models)
   {
-      if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH)
-      {
-          glm::mat4 mat = PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose());
-          transforms.push_back(mat);
-      }
-      else if (model->GetPhysXMeshType() == MeshType::CONVEXMESH)
-      {
-          glm::mat4 mat = PhysX::PxMat44ToGlmMat4(model->GetDynamicActor()->getGlobalPose());
-          transforms.push_back(mat);
-      }
-      else if (model->GetPhysXMeshType() == MeshType::CONTROLLER)
-      {
-          glm::mat4 mat = model->GetControllerTransform().GetTransform();
-          transforms.push_back(mat);
-      }
+      /*if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH)*/
+      /*{*/
+      /*    glm::mat4 mat = PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose());*/
+      /*    transforms.push_back(mat);*/
+      /*}*/
+      /*else if (model->GetPhysXMeshType() == MeshType::CONVEXMESH)*/
+      /*{*/
+      /*    glm::mat4 mat = PhysX::PxMat44ToGlmMat4(model->GetDynamicActor()->getGlobalPose());*/
+      /*    transforms.push_back(mat);*/
+      /*}*/
+      /*else if (model->GetPhysXMeshType() == MeshType::CONTROLLER)*/
+      /*{*/
+      /*    glm::mat4 mat = model->GetControllerTransform().GetTransform();*/
+      /*    transforms.push_back(mat);*/
+      /*}*/
+
+    Transform transform;
+    transform.SetPosition(glm::vec3(0.0f));
+          transforms.push_back(transform.GetTransform());
   }
 
   return transforms;

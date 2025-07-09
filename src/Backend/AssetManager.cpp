@@ -268,6 +268,10 @@ void AssetManager::UpdateLoading()
     s_Data.m_FutureAnimModels.clear();
 
     s_LoadState = LoadState::Done;
+
+    ModelManager::FinalizeBuffers();
+    Renderer::InitDrawCommandBuffer();
+
     s_Data.m_LoadingDone = true;
     s_Data.m_LoadingStarted = false;
     s_Data.m_UploadStarted = false;

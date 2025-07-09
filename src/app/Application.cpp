@@ -17,28 +17,28 @@ Application::Application()
 
   Transform housetransform;
   housetransform.SetPosition(glm::vec3(0.0f));
-  ModelManager::GetModel("objHouse")->SetPosition(housetransform.GetTransform());
+  ModelManager::SetModelTransform("objHouse", housetransform.GetTransform());
   Transform pistoltransform;
   pistoltransform.SetPosition(glm::vec3(15.0f,4.0f,13.0f));
-  ModelManager::GetModel("pistol_convex")->SetPosition(pistoltransform.GetTransform());
+  ModelManager::SetModelTransform("pistol_convex", pistoltransform.GetTransform());
   Transform pistolammotransform;
   pistolammotransform.SetPosition(glm::vec3(11.0f,4.0f,5.0f));
-  ModelManager::GetModel("pistolammo_convex")->SetPosition(pistolammotransform.GetTransform());
+  ModelManager::SetModelTransform("pistolammo_convex", pistolammotransform.GetTransform());
   Transform shotguntransform;
   shotguntransform.SetPosition(glm::vec3(14.0f,4.0f,11.0f));
-  ModelManager::GetModel("shotgun_convex")->SetPosition(shotguntransform.GetTransform());
+  ModelManager::SetModelTransform("shotgun_convex", shotguntransform.GetTransform());
   Transform shotgunammotransform;
   shotgunammotransform.SetPosition(glm::vec3(12.0f,4.0f,7.0f));
-  ModelManager::GetModel("shotgunammo_convex")->SetPosition(shotgunammotransform.GetTransform());
+  ModelManager::SetModelTransform("shotgunammo_convex", shotgunammotransform.GetTransform());
   Transform aidkittransform;
   aidkittransform.SetPosition(glm::vec3(13.0f,4.0f,9.0f));
-  ModelManager::GetModel("aidkit_convex")->SetPosition(aidkittransform.GetTransform());
+  ModelManager::SetModelTransform("aidkit_convex", aidkittransform.GetTransform());
   Transform harrytransform;
   harrytransform.SetPosition(glm::vec3(5.0f,0.0f,0.0f));
-  ModelManager::GetModel("harry")->SetPosition(harrytransform,1.0f,1.0f,true);
+  ModelManager::SetModelTransform("harry", harrytransform.GetTransform());
   Transform zombietransform;
   zombietransform.SetPosition(glm::vec3(10.0f,0.0f,0.0f));
-  ModelManager::GetModel("zombie")->SetPosition(zombietransform,1.0f,1.0f,true);
+  ModelManager::SetModelTransform("zombie", zombietransform.GetTransform());
 }
 
 void Application::OnUpdate(DeltaTime& dt)
@@ -46,14 +46,14 @@ void Application::OnUpdate(DeltaTime& dt)
   Renderer::DrawScene(dt, 
     [&dt]()
     {
-      Renderer::DrawModel(ModelManager::GetModel("objHouse"));
-      Renderer::DrawModel(ModelManager::GetModel("zombie"));
-      Renderer::DrawModel(ModelManager::GetModel("harry"));
-      Renderer::DrawModel(ModelManager::GetModel("pistol"),ModelManager::GetModel("pistol_convex"));
-      Renderer::DrawModel(ModelManager::GetModel("pistolammo"),ModelManager::GetModel("pistolammo_convex"));
-      Renderer::DrawModel(ModelManager::GetModel("shotgun"),ModelManager::GetModel("shotgun_convex"));
-      Renderer::DrawModel(ModelManager::GetModel("shotgunammo"),ModelManager::GetModel("shotgunammo_convex"));
-      Renderer::DrawModel(ModelManager::GetModel("aidkit"),ModelManager::GetModel("aidkit_convex"));
+      /*Renderer::DrawModel(ModelManager::GetModel("objHouse"));*/
+      /*Renderer::DrawModel(ModelManager::GetModel("zombie"));*/
+      /*Renderer::DrawModel(ModelManager::GetModel("harry"));*/
+      /*Renderer::DrawModel(ModelManager::GetModel("pistol"),ModelManager::GetModel("pistol_convex"));*/
+      /*Renderer::DrawModel(ModelManager::GetModel("pistolammo"),ModelManager::GetModel("pistolammo_convex"));*/
+      /*Renderer::DrawModel(ModelManager::GetModel("shotgun"),ModelManager::GetModel("shotgun_convex"));*/
+      /*Renderer::DrawModel(ModelManager::GetModel("shotgunammo"),ModelManager::GetModel("shotgunammo_convex"));*/
+      /*Renderer::DrawModel(ModelManager::GetModel("aidkit"),ModelManager::GetModel("aidkit_convex"));*/
 
       Renderer::DrawSkybox("night");
       Renderer::DrawText(FontManager::GetFont("dpcomic"),"FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f,50.0f), 0.5f, glm::vec4(1.0f));

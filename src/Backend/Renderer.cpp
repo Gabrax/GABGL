@@ -46,12 +46,12 @@ struct CustomRefreshRate
   using Clock = std::chrono::high_resolution_clock;
   using TimePoint = std::chrono::time_point<Clock>;
 
-  static void BeginFrame()
+  inline static void BeginFrame()
   { 
     frameStart = Clock::now();
   }
 
-  static void EndFrame()
+  inline static void EndFrame()
   {
     auto frameEnd = Clock::now();
     std::chrono::duration<float, std::milli> elapsed = frameEnd - frameStart;
@@ -62,7 +62,7 @@ struct CustomRefreshRate
     }
   }
 
-  static void SetTargetFPS(float fps)
+  inline static void SetTargetFPS(float fps)
   {
     targetFPS = fps;
     frameDelay = 1000.0f / targetFPS;
@@ -110,6 +110,15 @@ struct CameraData
 	glm::mat4 OrtoProjection;
   glm::mat4 NonRotViewProjection;
   glm::vec3 CameraPos;
+};
+
+struct DrawElementsIndirectCommand
+{
+  GLuint count;         // Number of indices
+  GLuint instanceCount; // Usually 1
+  GLuint firstIndex;    // Offset into the index buffer
+  GLint baseVertex;    // Base vertex for this draw
+  GLuint baseInstance;  // You can use this to index per-object data
 };
 
 struct RendererData
@@ -201,6 +210,11 @@ struct RendererData
   std::shared_ptr<OmniDirectShadowBuffer> m_PointShadowFramebuffer;
   std::shared_ptr<DirectShadowBuffer> m_DirectShadowFramebuffer;
 
+  std::vector<DrawElementsIndirectCommand> drawCommands;
+  uint32_t m_DrawIndexOffset = 0;
+  uint32_t m_DrawVertexOffset = 0;
+  uint32_t m_cmdBufer;
+
   Window* m_WindowRef = nullptr;
   Camera m_Camera;
 
@@ -282,8 +296,8 @@ void Renderer::Init()
 		offset += 4;
 	}
 
-	std::shared_ptr<IndexBuffer> _2DquadIB = IndexBuffer::Create(quadIndices, s_Data.MaxIndices);
-	s_Data.QuadVertexArray->SetIndexBuffer(_2DquadIB);
+	std::shared_ptr<IndexBuffer> quadIB = IndexBuffer::Create(quadIndices, s_Data.MaxIndices);
+	s_Data.QuadVertexArray->SetIndexBuffer(quadIB);
 	delete[] quadIndices;
 
 	s_Data.CircleVertexArray = VertexArray::Create();
@@ -300,7 +314,7 @@ void Renderer::Init()
 		{ ShaderDataType::Float,  "a_TexIndex"		}*/
 		});
 	s_Data.CircleVertexArray->AddVertexBuffer(s_Data.CircleVertexBuffer);
-	s_Data.CircleVertexArray->SetIndexBuffer(_2DquadIB); // Use quad IB
+	s_Data.CircleVertexArray->SetIndexBuffer(quadIB); // Use quad IB
 	s_Data.CircleVertexBufferBase = new CircleVertex[s_Data.MaxVertices];
 
 	s_Data.LineVertexArray = VertexArray::Create();
@@ -413,10 +427,19 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
       SetClearColor({max,max,max,max});
       glClear(GL_DEPTH_BUFFER_BIT);
 
+      s_Data.s_Shaders.DirectShadowShader->Bind();
       s_Data.m_DirectShadowFramebuffer->UpdateShadowView(LightManager::GetDirectLightRotation());
+      s_Data.s_Shaders.DirectShadowShader->SetMat4("u_LightSpaceMatrix", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
+      s_Data.s_Shaders.DirectShadowShader->SetBool("isAnimated", false);
+      s_Data.s_Shaders.DirectShadowShader->SetBool("isInstanced", false);
 
-      geometry();
+      glBindVertexArray(ModelManager::GetModelsVAO());
+      glBindBuffer(GL_DRAW_INDIRECT_BUFFER,s_Data.m_cmdBufer);
+      glMultiDrawElementsIndirect(GL_TRIANGLES,GL_UNSIGNED_INT,NULL,s_Data.drawCommands.size(),0);
+      glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
+      glBindVertexArray(0);
 
+      s_Data.s_Shaders.DirectShadowShader->UnBind();
       s_Data.m_RenderState = RendererData::RenderState::NONE;
       s_Data.m_DirectShadowFramebuffer->UnBind();
     }
@@ -447,7 +470,12 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
           glm::mat4 view = glm::lookAt(light,light + directions[face].Target,directions[face].Up);
           s_Data.m_OmniLightProj = s_Data.m_PointShadowFramebuffer->GetShadowProj() * view;
 
-          geometry();
+          glBindVertexArray(ModelManager::GetModelsVAO());
+          glBindBuffer(GL_DRAW_INDIRECT_BUFFER,s_Data.m_cmdBufer);
+
+          glMultiDrawElementsIndirect(GL_TRIANGLES,GL_UNSIGNED_INT,NULL,s_Data.drawCommands.size(),0);
+          glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
+          glBindVertexArray(0);
         }
         lightIndex++;
       }
@@ -471,9 +499,18 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
     s_Data.s_Shaders.ModelShader->SetInt("u_DirectShadow",1);
     s_Data.s_Shaders.ModelShader->SetInt("u_OffsetTexture",2);
     s_Data.s_Shaders.ModelShader->SetInt("u_OmniShadow",3);
+    s_Data.s_Shaders.ModelShader->SetBool("isAnimated", false);
+    s_Data.s_Shaders.ModelShader->SetBool("isInstanced", false);
+    s_Data.s_Shaders.ModelShader->SetMat4("u_DirectShadowViewProj", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
     BeginScene(s_Data.m_Camera);
+    glBindVertexArray(ModelManager::GetModelsVAO());
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER,s_Data.m_cmdBufer);
+    glMultiDrawElementsIndirect(GL_TRIANGLES,GL_UNSIGNED_INT,NULL,s_Data.drawCommands.size(),0);
     geometry();
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
+    glBindVertexArray(0);
     EndScene();
+    s_Data.s_Shaders.ModelShader->UnBind();
 
     s_Data.m_RenderState = RendererData::RenderState::NONE;
     s_Data.m_MSAAFramebuffer->UnBind();
@@ -1075,7 +1112,7 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
 
     s_Data.s_Shaders.DirectShadowShader->SetMat4("u_LightSpaceMatrix", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
     s_Data.s_Shaders.DirectShadowShader->SetMat4("u_ModelTransform", modelMat);
-    s_Data.s_Shaders.DirectShadowShader->SetBool("isAnimated", model->IsAnimated());
+    /*s_Data.s_Shaders.DirectShadowShader->SetBool("isAnimated", model->IsAnimated());*/
     s_Data.s_Shaders.DirectShadowShader->SetBool("isInstanced", false);
 
     if(model->IsAnimated())
@@ -1086,12 +1123,12 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
       }
     }
 
-    for (auto& mesh : model->GetMeshes())
-    {
-      glBindVertexArray(mesh.VAO);
-      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
-      glBindVertexArray(0);
-    }
+    /*for (auto& mesh : model->GetMeshes())*/
+    /*{*/
+    /*  glBindVertexArray(mesh.VAO);*/
+    /*  glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);*/
+    /*  glBindVertexArray(0);*/
+    /*}*/
   }
   else if(s_Data.m_RenderState == RendererData::RenderState::OMNISHADOW)
   {
@@ -1103,7 +1140,7 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
     else if (model->GetPhysXMeshType() == MeshType::NONE) modelMat = transform;
 
     s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("u_LightViewProjection", s_Data.m_OmniLightProj);
-    s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("u_ModelTransform", modelMat);
+    /*s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("u_ModelTransform", modelMat);*/
     s_Data.s_Shaders.OmniDirectShadowShader->SetBool("isAnimated", model->IsAnimated());
     s_Data.s_Shaders.OmniDirectShadowShader->SetBool("isInstanced", false);
 
@@ -1116,19 +1153,19 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
       }
     }
 
-    for (auto& mesh : model->GetMeshes())
-    {
-      glBindVertexArray(mesh.VAO);
-      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
-      glBindVertexArray(0);
-    }
+    /*for (auto& mesh : model->GetMeshes())*/
+    /*{*/
+    /*  glBindVertexArray(mesh.VAO);*/
+    /*  glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);*/
+    /*  glBindVertexArray(0);*/
+    /*}*/
   }
   else if(s_Data.m_RenderState == RendererData::RenderState::GEOMETRY)
   {
     s_Data.s_Shaders.ModelShader->Bind();
-    if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH) s_Data.s_Shaders.ModelShader->SetMat4("model", PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose()));
-    else if (model->GetPhysXMeshType() == MeshType::CONTROLLER) s_Data.s_Shaders.ModelShader->SetMat4("model", model->GetControllerTransform().GetTransform());
-    else if (model->GetPhysXMeshType() == MeshType::NONE) s_Data.s_Shaders.ModelShader->SetMat4("model", transform);
+    /*if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH) s_Data.s_Shaders.ModelShader->SetMat4("model", PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose()));*/
+    /*else if (model->GetPhysXMeshType() == MeshType::CONTROLLER) s_Data.s_Shaders.ModelShader->SetMat4("model", model->GetControllerTransform().GetTransform());*/
+    /*else if (model->GetPhysXMeshType() == MeshType::NONE) s_Data.s_Shaders.ModelShader->SetMat4("model", transform);*/
     s_Data.s_Shaders.ModelShader->SetBool("isAnimated", model->IsAnimated());
     s_Data.s_Shaders.ModelShader->SetBool("isInstanced", false);
     s_Data.s_Shaders.ModelShader->SetMat4("u_DirectShadowViewProj", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
@@ -1151,9 +1188,9 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
         glBindTextureUnit(i, textures[i]->GetRendererID());
       }
       
-      glBindVertexArray(mesh.VAO);
-      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
-      glBindVertexArray(0);
+      /*glBindVertexArray(mesh.VAO);*/
+      /*glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);*/
+      /*glBindVertexArray(0);*/
     }
   }
 }
@@ -1184,12 +1221,12 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_
       }
     }
 
-    for (auto& mesh : model->GetMeshes())
-    {
-      glBindVertexArray(mesh.VAO);
-      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
-      glBindVertexArray(0);
-    }
+    /*for (auto& mesh : model->GetMeshes())*/
+    /*{*/
+    /*  glBindVertexArray(mesh.VAO);*/
+    /*  glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);*/
+    /*  glBindVertexArray(0);*/
+    /*}*/
   }
   else if(s_Data.m_RenderState == RendererData::RenderState::OMNISHADOW)
   {
@@ -1209,12 +1246,12 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_
       }
     }
 
-    for (auto& mesh : model->GetMeshes())
-    {
-      glBindVertexArray(mesh.VAO);
-      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
-      glBindVertexArray(0);
-    }
+    /*for (auto& mesh : model->GetMeshes())*/
+    /*{*/
+    /*  glBindVertexArray(mesh.VAO);*/
+    /*  glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);*/
+    /*  glBindVertexArray(0);*/
+    /*}*/
   }
   else if(s_Data.m_RenderState == RendererData::RenderState::GEOMETRY)
   {
@@ -1242,9 +1279,9 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_
         glBindTextureUnit(i, textures[i]->GetRendererID());
       }
       
-      glBindVertexArray(mesh.VAO);
-      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
-      glBindVertexArray(0);
+      /*glBindVertexArray(mesh.VAO);*/
+      /*glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);*/
+      /*glBindVertexArray(0);*/
     }
 
     /*for (auto& mesh : convex->GetMeshes())*/
@@ -1555,6 +1592,27 @@ void Renderer::DrawText(const Font* font, const std::string& text, const glm::ve
 
       cursor.x += (ch.Advance >> 6) * size;
   }
+}
+
+void Renderer::AddDrawCommand(uint32_t verticesSize, uint32_t indicesSize)
+{
+  DrawElementsIndirectCommand cmd =
+  {
+    .count = static_cast<GLuint>(indicesSize),
+    .instanceCount = 1,
+    .firstIndex = static_cast<GLuint>(s_Data.m_DrawIndexOffset),
+    .baseVertex = static_cast<GLint>(s_Data.m_DrawVertexOffset),
+    .baseInstance = 0,
+  };
+  s_Data.drawCommands.push_back(cmd);
+  s_Data.m_DrawIndexOffset += indicesSize; 
+  s_Data.m_DrawVertexOffset += verticesSize;
+}
+
+void Renderer::InitDrawCommandBuffer()
+{
+  glCreateBuffers(1, &s_Data.m_cmdBufer);
+  glNamedBufferStorage(s_Data.m_cmdBufer,sizeof(s_Data.drawCommands[0]) * s_Data.drawCommands.size(),(const void*)s_Data.drawCommands.data(), 0);
 }
 
 void Renderer::OnWindowResize(uint32_t width, uint32_t height)

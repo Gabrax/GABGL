@@ -4,6 +4,7 @@
 #include "backend/AudioManager.h"
 #include "backend/LayerStack.h"
 #include "backend/LightManager.h"
+#include "backend/ModelManager.h"
 #include "backend/Renderer.h"
 #include "app/Application.h"
 #include "backend/AssetManager.h"
@@ -31,6 +32,7 @@ void Engine::Run()
   FontManager::Init();
   PhysX::Init();
 	Renderer::Init();
+  ModelManager::Init();
 
   AssetManager::StartLoadingAssets();
 
