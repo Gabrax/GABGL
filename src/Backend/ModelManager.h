@@ -113,6 +113,7 @@ struct Mesh
   std::vector<Vertex> m_Vertices;
   std::vector<GLuint> m_Indices;
   std::vector<std::shared_ptr<Texture>> m_Textures;
+  std::vector<GLuint64> m_TexturesBindlessHandles;
 
   GLuint VAO, VBO, EBO;
   GLuint instanceVBO = 0;
@@ -255,6 +256,6 @@ struct ModelManager
   static GLsizei GetModelsQuantity();
   static GLuint GetModelsVAO();
   static void SetModelTransform(const std::string& name, const glm::mat4& transform);
-  static void SetModelTransform(const std::string& name, const glm::mat4& transform, float radius, float height, bool slopeLimit);
+  static void SetModelTransform(const std::string& name, const Transform& transform, float radius, float height, bool slopeLimit);
 };
 

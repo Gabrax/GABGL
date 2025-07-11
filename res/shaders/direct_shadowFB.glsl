@@ -17,13 +17,15 @@ const int MAX_BONE_INFLUENCE = 4;
 uniform mat4 finalBonesMatrices[MAX_BONES];
 
 layout(std430, binding = 5) buffer ModelTransforms { mat4 transforms[]; };
+layout(std430, binding = 6) buffer MeshToTransformMap { int meshToTransform[]; };
 
 uniform bool isAnimated;
 uniform bool isInstanced;
 
 void main()
 {
-  mat4 modelMat = isInstanced ? instanceMatrix : transforms[gl_DrawID];
+  int transformIndex = meshToTransform[gl_DrawID];
+  mat4 modelMat = isInstanced ? instanceMatrix : transforms[transformIndex];
 
   if (isAnimated)
   {

@@ -35,10 +35,10 @@ Application::Application()
   ModelManager::SetModelTransform("aidkit_convex", aidkittransform.GetTransform());
   Transform harrytransform;
   harrytransform.SetPosition(glm::vec3(5.0f,0.0f,0.0f));
-  ModelManager::SetModelTransform("harry", harrytransform.GetTransform());
+  ModelManager::SetModelTransform("harry", harrytransform,1.0f,1.0f,true);
   Transform zombietransform;
   zombietransform.SetPosition(glm::vec3(10.0f,0.0f,0.0f));
-  ModelManager::SetModelTransform("zombie", zombietransform.GetTransform());
+  ModelManager::SetModelTransform("zombie", zombietransform,1.0f,1.0f,true);
 }
 
 void Application::OnUpdate(DeltaTime& dt)

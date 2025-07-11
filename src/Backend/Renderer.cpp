@@ -1112,7 +1112,7 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
 
     s_Data.s_Shaders.DirectShadowShader->SetMat4("u_LightSpaceMatrix", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
     s_Data.s_Shaders.DirectShadowShader->SetMat4("u_ModelTransform", modelMat);
-    /*s_Data.s_Shaders.DirectShadowShader->SetBool("isAnimated", model->IsAnimated());*/
+    s_Data.s_Shaders.DirectShadowShader->SetBool("isAnimated", model->IsAnimated());
     s_Data.s_Shaders.DirectShadowShader->SetBool("isInstanced", false);
 
     if(model->IsAnimated())
@@ -1122,13 +1122,12 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
           s_Data.s_Shaders.DirectShadowShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
       }
     }
-
-    /*for (auto& mesh : model->GetMeshes())*/
-    /*{*/
-    /*  glBindVertexArray(mesh.VAO);*/
-    /*  glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);*/
-    /*  glBindVertexArray(0);*/
-    /*}*/
+    for (auto& mesh : model->GetMeshes())
+    {
+      glBindVertexArray(mesh.VAO);
+      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
+      glBindVertexArray(0);
+    }
   }
   else if(s_Data.m_RenderState == RendererData::RenderState::OMNISHADOW)
   {
@@ -1140,7 +1139,7 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
     else if (model->GetPhysXMeshType() == MeshType::NONE) modelMat = transform;
 
     s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("u_LightViewProjection", s_Data.m_OmniLightProj);
-    /*s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("u_ModelTransform", modelMat);*/
+    s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("u_ModelTransform", modelMat);
     s_Data.s_Shaders.OmniDirectShadowShader->SetBool("isAnimated", model->IsAnimated());
     s_Data.s_Shaders.OmniDirectShadowShader->SetBool("isInstanced", false);
 
@@ -1152,20 +1151,19 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
           s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
       }
     }
-
-    /*for (auto& mesh : model->GetMeshes())*/
-    /*{*/
-    /*  glBindVertexArray(mesh.VAO);*/
-    /*  glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);*/
-    /*  glBindVertexArray(0);*/
-    /*}*/
+    for (auto& mesh : model->GetMeshes())
+    {
+      glBindVertexArray(mesh.VAO);
+      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
+      glBindVertexArray(0);
+    }
   }
   else if(s_Data.m_RenderState == RendererData::RenderState::GEOMETRY)
   {
     s_Data.s_Shaders.ModelShader->Bind();
-    /*if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH) s_Data.s_Shaders.ModelShader->SetMat4("model", PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose()));*/
-    /*else if (model->GetPhysXMeshType() == MeshType::CONTROLLER) s_Data.s_Shaders.ModelShader->SetMat4("model", model->GetControllerTransform().GetTransform());*/
-    /*else if (model->GetPhysXMeshType() == MeshType::NONE) s_Data.s_Shaders.ModelShader->SetMat4("model", transform);*/
+    if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH) s_Data.s_Shaders.ModelShader->SetMat4("model", PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose()));
+    else if (model->GetPhysXMeshType() == MeshType::CONTROLLER) s_Data.s_Shaders.ModelShader->SetMat4("model", model->GetControllerTransform().GetTransform());
+    else if (model->GetPhysXMeshType() == MeshType::NONE) s_Data.s_Shaders.ModelShader->SetMat4("model", transform);
     s_Data.s_Shaders.ModelShader->SetBool("isAnimated", model->IsAnimated());
     s_Data.s_Shaders.ModelShader->SetBool("isInstanced", false);
     s_Data.s_Shaders.ModelShader->SetMat4("u_DirectShadowViewProj", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
@@ -1176,7 +1174,6 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
           s_Data.s_Shaders.ModelShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
       }
     }
-
     for (auto& mesh : model->GetMeshes())
     {
       auto& textures = mesh.m_Textures;
@@ -1187,10 +1184,9 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& t
 
         glBindTextureUnit(i, textures[i]->GetRendererID());
       }
-      
-      /*glBindVertexArray(mesh.VAO);*/
-      /*glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);*/
-      /*glBindVertexArray(0);*/
+      glBindVertexArray(mesh.VAO);
+      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
+      glBindVertexArray(0);
     }
   }
 }
@@ -1220,13 +1216,12 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_
           s_Data.s_Shaders.DirectShadowShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
       }
     }
-
-    /*for (auto& mesh : model->GetMeshes())*/
-    /*{*/
-    /*  glBindVertexArray(mesh.VAO);*/
-    /*  glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);*/
-    /*  glBindVertexArray(0);*/
-    /*}*/
+    for (auto& mesh : model->GetMeshes())
+    {
+      glBindVertexArray(mesh.VAO);
+      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
+      glBindVertexArray(0);
+    }
   }
   else if(s_Data.m_RenderState == RendererData::RenderState::OMNISHADOW)
   {
@@ -1245,13 +1240,12 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_
           s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
       }
     }
-
-    /*for (auto& mesh : model->GetMeshes())*/
-    /*{*/
-    /*  glBindVertexArray(mesh.VAO);*/
-    /*  glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);*/
-    /*  glBindVertexArray(0);*/
-    /*}*/
+    for (auto& mesh : model->GetMeshes())
+    {
+      glBindVertexArray(mesh.VAO);
+      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
+      glBindVertexArray(0);
+    }
   }
   else if(s_Data.m_RenderState == RendererData::RenderState::GEOMETRY)
   {
@@ -1278,10 +1272,9 @@ void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_
 
         glBindTextureUnit(i, textures[i]->GetRendererID());
       }
-      
-      /*glBindVertexArray(mesh.VAO);*/
-      /*glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);*/
-      /*glBindVertexArray(0);*/
+      glBindVertexArray(mesh.VAO);
+      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
+      glBindVertexArray(0);
     }
 
     /*for (auto& mesh : convex->GetMeshes())*/
@@ -1375,7 +1368,6 @@ void Renderer::DrawModelInstanced(const std::shared_ptr<Model>& model, const std
 
         glBindTextureUnit(i, textures[i]->GetRendererID());
       }
-
       glBindVertexArray(mesh.VAO);
       glDrawElementsInstanced(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0, static_cast<GLsizei>(instances.size()));
       glBindVertexArray(0);

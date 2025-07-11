@@ -30,12 +30,21 @@ static glm::quat AssimpQuatToGLMQuat(const aiQuaternion& pOrientation)
   return glm::quat(pOrientation.w, pOrientation.x, pOrientation.y, pOrientation.z);
 }
 
+struct MeshTextureRange
+{
+  uint32_t StartIndex; // Offset in the textureHandles array
+  uint32_t Count;      // How many textures this mesh has
+};
+
 struct ModelsData
 {
   std::unordered_map<std::string, std::shared_ptr<Model>> m_Models;
   std::vector<std::string> m_ModelsNames;
 
   std::shared_ptr<StorageBuffer> m_ModelsTransforms;
+  std::shared_ptr<StorageBuffer> m_MeshToTransformSSBO;
+  std::shared_ptr<StorageBuffer> m_BindlessTextureSSBO;
+  std::shared_ptr<StorageBuffer> m_MeshToTextureRangeSSBO;
 
   GLuint sharedVBO, sharedEBO, sharedVAO;
 
@@ -168,6 +177,11 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
       glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
       glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
+      GLuint64 handle = glGetTextureHandleARB(id);
+      glMakeTextureHandleResidentARB(handle);
+
+      mesh.m_TexturesBindlessHandles.push_back(handle);
+
       currentPBO = (currentPBO + 1) % NUM_BUFFERS;
     }
 
@@ -190,7 +204,7 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
 }
 
 
-void ModelManager::SetModelTransform(const std::string& name, const glm::mat4& transform, float radius, float height, bool slopeLimit)
+void ModelManager::SetModelTransform(const std::string& name, const Transform& transform, float radius, float height, bool slopeLimit)
 {
   auto it = s_Data.m_Models.find(name);
   if (it == s_Data.m_Models.end())
@@ -212,7 +226,7 @@ void ModelManager::SetModelTransform(const std::string& name, const glm::mat4& t
 
   int ssboIndex = static_cast<int>(std::distance(s_Data.m_ModelsNames.begin(), vecIt));
 
-  s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4),sizeof(glm::mat4),glm::value_ptr(transform));
+  s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4),sizeof(glm::mat4),glm::value_ptr(transform.GetTransform()));
 }
 
 void ModelManager::SetModelTransform(const std::string& name, const glm::mat4& transform)
@@ -260,6 +274,51 @@ void ModelManager::FinalizeBuffers()
   auto transform = GetTransforms();
   s_Data.m_ModelsTransforms->SetData(transform.size() * sizeof(glm::mat4), transform.data());
 
+  std::vector<int> meshToTransformIndex;
+
+  int currentMeshIndex = 0;
+  for (int modelIndex = 0; modelIndex < s_Data.m_ModelsNames.size(); ++modelIndex)
+  {
+      const std::string& modelName = s_Data.m_ModelsNames[modelIndex];
+      std::shared_ptr<Model> model = s_Data.m_Models[modelName];
+
+      int meshCount = model->GetMeshes().size(); 
+
+      for (int i = 0; i < meshCount; ++i)
+      {
+          meshToTransformIndex.push_back(modelIndex); 
+          currentMeshIndex++;
+      }
+  }
+
+  s_Data.m_MeshToTransformSSBO = StorageBuffer::Create(meshToTransformIndex.size() * sizeof(int), 6);
+  s_Data.m_MeshToTransformSSBO->SetData(meshToTransformIndex.size() * sizeof(int), meshToTransformIndex.data());
+
+  std::vector<GLuint64> textureHandles;
+  std::vector<MeshTextureRange> meshTextureRanges;
+
+  for (const auto& modelName : s_Data.m_ModelsNames)
+  {
+      auto& model = s_Data.m_Models[modelName];
+      for (auto& mesh : model->GetMeshes())
+      {
+          MeshTextureRange range;
+          range.StartIndex = static_cast<uint32_t>(textureHandles.size());
+          range.Count = static_cast<uint32_t>(mesh.m_TexturesBindlessHandles.size());
+
+          for (GLuint64 handle : mesh.m_TexturesBindlessHandles)
+              textureHandles.push_back(handle);
+
+          meshTextureRanges.push_back(range);
+      }
+  }
+
+  s_Data.m_BindlessTextureSSBO = StorageBuffer::Create(textureHandles.size() * sizeof(GLuint64), 7);
+  s_Data.m_BindlessTextureSSBO->SetData(textureHandles.size() * sizeof(GLuint64), textureHandles.data());
+
+  s_Data.m_MeshToTextureRangeSSBO = StorageBuffer::Create(meshTextureRanges.size() * sizeof(MeshTextureRange), 8);
+  s_Data.m_MeshToTextureRangeSSBO->SetData(meshTextureRanges.size() * sizeof(MeshTextureRange), meshTextureRanges.data());
+
   s_Data.allVertices.clear();
   s_Data.allIndices.clear();
 }
@@ -288,15 +347,16 @@ void ModelManager::BakeModelInstancedBuffers(Mesh& mesh, const std::vector<Trans
 
   if (!mesh.instanceAttribsConfigured)
   {
-      for (GLuint i = 0; i < 4; ++i) {
-          GLuint loc = 7 + i; // instance matrix starts at attribute 7
-          glEnableVertexArrayAttrib(mesh.VAO, loc);
-          glVertexArrayAttribFormat(mesh.VAO, loc, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec4) * i);
-          glVertexArrayAttribBinding(mesh.VAO, loc, 1); // bind to binding index 1
-          glVertexArrayBindingDivisor(mesh.VAO, 1, 1);  // instanced per-instance
-      }
+    for (GLuint i = 0; i < 4; ++i)
+    {
+      GLuint loc = 7 + i; // instance matrix starts at attribute 7
+      glEnableVertexArrayAttrib(mesh.VAO, loc);
+      glVertexArrayAttribFormat(mesh.VAO, loc, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec4) * i);
+      glVertexArrayAttribBinding(mesh.VAO, loc, 1); // bind to binding index 1
+      glVertexArrayBindingDivisor(mesh.VAO, 1, 1);  // instanced per-instance
+    }
 
-      mesh.instanceAttribsConfigured = true;
+    mesh.instanceAttribsConfigured = true;
   }
 }
 
@@ -323,25 +383,21 @@ std::vector<glm::mat4> ModelManager::GetTransforms()
 
   for (const auto& [key, model] : s_Data.m_Models)
   {
-      /*if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH)*/
-      /*{*/
-      /*    glm::mat4 mat = PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose());*/
-      /*    transforms.push_back(mat);*/
-      /*}*/
-      /*else if (model->GetPhysXMeshType() == MeshType::CONVEXMESH)*/
-      /*{*/
-      /*    glm::mat4 mat = PhysX::PxMat44ToGlmMat4(model->GetDynamicActor()->getGlobalPose());*/
-      /*    transforms.push_back(mat);*/
-      /*}*/
-      /*else if (model->GetPhysXMeshType() == MeshType::CONTROLLER)*/
-      /*{*/
-      /*    glm::mat4 mat = model->GetControllerTransform().GetTransform();*/
-      /*    transforms.push_back(mat);*/
-      /*}*/
-
-    Transform transform;
-    transform.SetPosition(glm::vec3(0.0f));
-          transforms.push_back(transform.GetTransform());
+    if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH)
+    {
+        glm::mat4 mat = PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose());
+        transforms.push_back(mat);
+    }
+    else if (model->GetPhysXMeshType() == MeshType::CONVEXMESH)
+    {
+        glm::mat4 mat = PhysX::PxMat44ToGlmMat4(model->GetDynamicActor()->getGlobalPose());
+        transforms.push_back(mat);
+    }
+    else if (model->GetPhysXMeshType() == MeshType::CONTROLLER)
+    {
+        glm::mat4 mat = model->GetControllerTransform().GetTransform();
+        transforms.push_back(mat);
+    }
   }
 
   return transforms;

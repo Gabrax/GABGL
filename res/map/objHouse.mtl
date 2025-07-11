@@ -1,7 +1,7 @@
-# Blender 3.6.0 MTL File: 'None'
+# Blender 3.6.23 MTL File: 'None'
 # www.blender.org
 
-newmtl lambert2SG
+newmtl lambert2SG.001
 Ns 0.000000
 Ka 1.000000 1.000000 1.000000
 Ks 0.000000 0.000000 0.000000
@@ -9,10 +9,10 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.000000
 d 1.000000
 illum 1
-map_Kd -s_0.833333_0.833333_housecolor.jpg
+map_Kd -s_0.833333_0.833333_brck49Lb.jpg
 map_Bump -bm 0.100000 -s_0.833333_0.833333_brck49Lb.jpg
 
-newmtl lambert3SG
+newmtl lambert3SG.001
 Ns 0.000000
 Ka 1.000000 1.000000 1.000000
 Ks 0.000000 0.000000 0.000000
@@ -23,7 +23,7 @@ illum 1
 map_Kd a3v.jpg
 map_Bump -bm 0.100000 germany010b.jpg
 
-newmtl lambert4SG
+newmtl lambert4SG.001
 Ns 0.000000
 Ka 1.000000 1.000000 1.000000
 Ks 0.000000 0.000000 0.000000
@@ -34,7 +34,7 @@ illum 1
 map_Kd wall2color.jpg
 map_Bump -bm 0.100000 CNCR04LB.JPG
 
-newmtl lambert5SG
+newmtl lambert5SG.001
 Ns 0.000000
 Ka 1.000000 1.000000 1.000000
 Ks 0.000000 0.000000 0.000000
@@ -45,7 +45,7 @@ illum 1
 map_Kd entr002M.jpg
 map_Bump -bm 0.100000 entr002Mb.jpg
 
-newmtl lambert7SG
+newmtl lambert7SG.001
 Ns 0.000000
 Ka 1.000000 1.000000 1.000000
 Ks 0.000000 0.000000 0.000000
@@ -56,7 +56,7 @@ illum 1
 map_Kd wndw038M.jpg
 map_Bump -bm 0.100000 wndw038M.jpg
 
-newmtl lambert8SG
+newmtl lambert8SG.001
 Ns 0.000000
 Ka 1.000000 1.000000 1.000000
 Ks 0.000000 0.000000 0.000000

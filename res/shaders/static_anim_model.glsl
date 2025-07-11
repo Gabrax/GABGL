@@ -1,5 +1,6 @@
 #type VERTEX
 #version 460 core
+
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec3 aNormal;
 layout (location = 2) in vec2 aTexCoords;
@@ -9,6 +10,7 @@ layout (location = 5) in ivec4 boneIds;
 layout (location = 6) in vec4 weights;
 layout (location = 7) in mat4 instanceMatrix;
 
+
 layout(std140, binding = 0) uniform Camera
 {
   mat4 ViewProjection;
@@ -17,7 +19,8 @@ layout(std140, binding = 0) uniform Camera
   vec3 CameraPos;
 };
 
-layout(std430, binding = 5) buffer ModelTransforms { mat4 transforms[]; };
+layout(std430, binding = 5) buffer ModelTransforms    { mat4 transforms[]; };
+layout(std430, binding = 6) buffer MeshToTransformMap { int meshToTransform[]; };
 
 out VS_OUT{
     vec2 TexCoords;
@@ -26,6 +29,7 @@ out VS_OUT{
     vec3 TBN_FragPos;
     mat3 TBN;
     vec4 FragPosLightSpace;
+    flat uint DrawID;
 } vs_out;
 
 const int MAX_BONES = 100;
@@ -40,7 +44,9 @@ uniform mat4 u_DirectShadowViewProj;
 
 void main()
 {
-  mat4 modelMat = isInstanced ? instanceMatrix : transforms[gl_DrawID];
+  vs_out.DrawID = gl_DrawID;
+  int transformIndex = meshToTransform[vs_out.DrawID];
+  mat4 modelMat = isInstanced ? instanceMatrix : transforms[transformIndex];
 
   if (isAnimated)
   {
@@ -90,7 +96,8 @@ void main()
 }
 
 #type FRAGMENT
-#version 450 core
+#version 460 core
+#extension GL_ARB_bindless_texture : require
 
 layout (location = 0) out vec4 FragColor;
 layout (location = 1) out vec4 BrightColor;
@@ -114,11 +121,13 @@ layout(std140, binding = 1) uniform DirectShadowData
   vec2 randomRadius; // x = randomRadius
 };
 
-layout(std430, binding = 0) buffer LightPositions { vec4 positions[30]; };
-layout(std430, binding = 1) buffer LightRotations { vec4 rotations[30]; };
-layout(std430, binding = 2) buffer LightsQuantity { int numLights; };
-layout(std430, binding = 3) buffer LightColors    { vec4 colors[30]; };
-layout(std430, binding = 4) buffer LightTypes     { int lightTypes[]; };
+layout(std430, binding = 0) buffer LightPositions    { vec4 positions[30]; };
+layout(std430, binding = 1) buffer LightRotations    { vec4 rotations[30]; };
+layout(std430, binding = 2) buffer LightsQuantity    { int numLights; };
+layout(std430, binding = 3) buffer LightColors       { vec4 colors[30]; };
+layout(std430, binding = 4) buffer LightTypes        { int lightTypes[]; };
+layout(std430, binding = 7) buffer MeshTextures      { sampler2D meshTextures[]; };
+layout(std430, binding = 8) buffer MeshTextureRanges { uvec2 meshTextureRanges[]; }; // .x = start, .y = count
 
 struct Material
 {
@@ -127,6 +136,20 @@ struct Material
   vec3 specular;    
   float shininess;
 };
+
+Material getMaterial(uint drawID)
+{
+  Material mat;
+  uvec2 texRange = meshTextureRanges[drawID];
+  
+  mat.diffuse = meshTextures[texRange.x];
+  mat.normalMap = meshTextures[texRange.x + 1];
+
+  // mat.specular = vec3(0.5); 
+  // mat.shininess = 32.0;     
+
+  return mat;
+}
 
 struct Light
 {
@@ -157,6 +180,7 @@ in VS_OUT
   vec3 TBN_FragPos;
   mat3 TBN;
   vec4 FragPosLightSpace;
+  flat uint DrawID;
 } fs_in;
 
 const float gamma = 2.2;
@@ -324,6 +348,7 @@ vec3 calculateSpotlight(Light light, vec3 fragPos, vec3 normal, vec3 viewDir, ve
 
 void main()
 {
+  Material material = getMaterial(fs_in.DrawID);
   vec3 color = texture(material.diffuse, fs_in.TexCoords).rgb;
   vec3 normal = normalize(fs_in.Normal);
   vec3 viewDir = normalize(CameraPos - fs_in.FragPos);
