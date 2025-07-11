@@ -10,7 +10,6 @@ layout (location = 5) in ivec4 boneIds;
 layout (location = 6) in vec4 weights;
 layout (location = 7) in mat4 instanceMatrix;
 
-
 layout(std140, binding = 0) uniform Camera
 {
   mat4 ViewProjection;
@@ -44,7 +43,7 @@ uniform mat4 u_DirectShadowViewProj;
 
 void main()
 {
-  vs_out.DrawID = gl_DrawID;
+  vs_out.DrawID = gl_BaseInstance;
   int transformIndex = meshToTransform[vs_out.DrawID];
   mat4 modelMat = isInstanced ? instanceMatrix : transforms[transformIndex];
 

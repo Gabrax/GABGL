@@ -213,6 +213,7 @@ struct RendererData
   std::vector<DrawElementsIndirectCommand> drawCommands;
   uint32_t m_DrawIndexOffset = 0;
   uint32_t m_DrawVertexOffset = 0;
+  uint32_t m_DrawInstanceOffset = 0;
   uint32_t m_cmdBufer;
 
   Window* m_WindowRef = nullptr;
@@ -550,6 +551,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
 
   s_Data.m_Camera.OnUpdate(dt);
   ModelManager::UpdateAnimations(dt);
+  ModelManager::UpdateConvexModels();
   PhysX::Simulate(dt);
   AudioManager::UpdateAllMusic();
 
@@ -562,7 +564,6 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
      Renderer::DrawEditorFrameBuffer(finalTexture);
      break;
    }
-
    case RendererData::SceneState::Play:
    {
      Renderer::DrawFramebuffer(finalTexture);
@@ -1594,11 +1595,14 @@ void Renderer::AddDrawCommand(uint32_t verticesSize, uint32_t indicesSize)
     .instanceCount = 1,
     .firstIndex = static_cast<GLuint>(s_Data.m_DrawIndexOffset),
     .baseVertex = static_cast<GLint>(s_Data.m_DrawVertexOffset),
-    .baseInstance = 0,
+    .baseInstance = static_cast<GLuint>(s_Data.m_DrawInstanceOffset), 
   };
+
   s_Data.drawCommands.push_back(cmd);
-  s_Data.m_DrawIndexOffset += indicesSize; 
+
+  s_Data.m_DrawIndexOffset += indicesSize;
   s_Data.m_DrawVertexOffset += verticesSize;
+  s_Data.m_DrawInstanceOffset += 1; 
 }
 
 void Renderer::InitDrawCommandBuffer()

@@ -147,9 +147,6 @@ struct Model
   void UpdateAnimation(const DeltaTime& dt);
   void SetAnimationbyIndex(int animationIndex);
   void SetAnimationByName(const std::string& animationName);
-  void SetPosition(const glm::mat4& transform);
-  void SetPosition(const Transform& transform, float radius, float height, bool slopeLimit);
-  void Move(const Movement& movement, float speed, const DeltaTime& dt);
   void StartBlendToAnimation(int32_t nextAnimationIndex, float blendDuration);
   bool IsInAnimation(int index) const;
   void CreatePhysXStaticMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m_Indices);
@@ -167,9 +164,16 @@ struct Model
   inline const MeshType& GetPhysXMeshType() { return m_meshType; }
   inline const PxRigidStatic* GetStaticActor() { return m_StaticMeshActor; }
   inline const PxRigidDynamic* GetDynamicActor() { return m_DynamicMeshActor; }
+  inline PxController* GetController() { return m_ActorController; }
   inline Transform& GetControllerTransform() { return m_ControllerTransform; }
 
-private:
+  Transform m_ControllerTransform;
+  PxVec3 m_ControllerPosition;
+  PxVec3 m_ControllerVelocity = PxVec3(0.0f);
+  float m_ControllerRadius; 
+  float m_ControllerHeight; 
+  bool m_ControllerSlopeLimit;
+  bool m_ControllerIsGrounded = false;
 
   std::unordered_map<std::string, std::shared_ptr<Texture>> m_TexturesLoaded; 
   std::vector<Mesh> m_Meshes;
@@ -209,14 +213,6 @@ private:
   PxController* m_ActorController = nullptr;
   MeshType m_meshType;
 
-  Transform m_ControllerTransform;
-  PxVec3 m_ControllerPosition;
-  PxVec3 m_ControllerVelocity = PxVec3(0.0f);
-  float m_ControllerRadius; 
-  float m_ControllerHeight; 
-  bool m_ControllerSlopeLimit;
-  bool m_ControllerIsGrounded = false;
-
 private:
 
   void processNode(aiNode* node, const aiScene* scene);
@@ -228,13 +224,7 @@ private:
   void SetBoneData(Vertex& vertex, int boneID, float weight);
   void CalculateBoneTransform(const AssimpNodeData* node, const glm::mat4& parentTransform);
   void CalculateBoneTransform(const AssimpNodeData* node, const glm::mat4& parentTransform, std::vector<glm::mat4>& outMatrices, std::vector<Bone>& bones, float time);
-  void CalculateBlendedBoneTransform(
-    const AssimpNodeData* node,
-    const AssimpNodeData* nodeNext,
-    float timeCurrent,
-    float timeNext,
-    const glm::mat4& parentTransform,
-    float blendFactor);
+  void CalculateBlendedBoneTransform(const AssimpNodeData* node,const AssimpNodeData* nodeNext,float timeCurrent,float timeNext,const glm::mat4& parentTransform,float blendFactor);
 
   Bone* FindBone(const std::string& name);
   Bone* FindBoneInList(const std::string& name, std::vector<Bone>& bones);
@@ -255,7 +245,9 @@ struct ModelManager
   static std::vector<glm::mat4> GetTransforms();
   static GLsizei GetModelsQuantity();
   static GLuint GetModelsVAO();
-  static void SetModelTransform(const std::string& name, const glm::mat4& transform);
-  static void SetModelTransform(const std::string& name, const Transform& transform, float radius, float height, bool slopeLimit);
+  static void SetInitialModelTransform(const std::string& name, const glm::mat4& transform);
+  static void SetInitialControllerTransform(const std::string& name, const Transform& transform, float radius, float height, bool slopeLimit);
+  static void UpdateConvexModels();
+  static void MoveController(const std::string& name, const Movement& movement, float speed, const DeltaTime& dt);
 };
 

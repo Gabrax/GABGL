@@ -17,28 +17,28 @@ Application::Application()
 
   Transform housetransform;
   housetransform.SetPosition(glm::vec3(0.0f));
-  ModelManager::SetModelTransform("objHouse", housetransform.GetTransform());
+  ModelManager::SetInitialModelTransform("objHouse", housetransform.GetTransform());
   Transform pistoltransform;
   pistoltransform.SetPosition(glm::vec3(15.0f,4.0f,13.0f));
-  ModelManager::SetModelTransform("pistol_convex", pistoltransform.GetTransform());
+  ModelManager::SetInitialModelTransform("pistol", pistoltransform.GetTransform());
   Transform pistolammotransform;
   pistolammotransform.SetPosition(glm::vec3(11.0f,4.0f,5.0f));
-  ModelManager::SetModelTransform("pistolammo_convex", pistolammotransform.GetTransform());
+  ModelManager::SetInitialModelTransform("pistolammo", pistolammotransform.GetTransform());
   Transform shotguntransform;
   shotguntransform.SetPosition(glm::vec3(14.0f,4.0f,11.0f));
-  ModelManager::SetModelTransform("shotgun_convex", shotguntransform.GetTransform());
+  ModelManager::SetInitialModelTransform("shotgun", shotguntransform.GetTransform());
   Transform shotgunammotransform;
   shotgunammotransform.SetPosition(glm::vec3(12.0f,4.0f,7.0f));
-  ModelManager::SetModelTransform("shotgunammo_convex", shotgunammotransform.GetTransform());
+  ModelManager::SetInitialModelTransform("shotgunammo", shotgunammotransform.GetTransform());
   Transform aidkittransform;
   aidkittransform.SetPosition(glm::vec3(13.0f,4.0f,9.0f));
-  ModelManager::SetModelTransform("aidkit_convex", aidkittransform.GetTransform());
+  ModelManager::SetInitialModelTransform("aidkit", aidkittransform.GetTransform());
   Transform harrytransform;
   harrytransform.SetPosition(glm::vec3(5.0f,0.0f,0.0f));
-  ModelManager::SetModelTransform("harry", harrytransform,1.0f,1.0f,true);
+  ModelManager::SetInitialControllerTransform("harry", harrytransform,1.0f,1.0f,true);
   Transform zombietransform;
   zombietransform.SetPosition(glm::vec3(10.0f,0.0f,0.0f));
-  ModelManager::SetModelTransform("zombie", zombietransform,1.0f,1.0f,true);
+  ModelManager::SetInitialControllerTransform("zombie", zombietransform,1.0f,1.0f,true);
 }
 
 void Application::OnUpdate(DeltaTime& dt)
@@ -66,7 +66,7 @@ void Application::OnUpdate(DeltaTime& dt)
       if (Input::IsKeyPressed(Key::X))
       {
           ModelManager::GetModel("harry")->StartBlendToAnimation(1, 0.8f);
-          ModelManager::GetModel("harry")->Move(Movement::FORWARD,5.0f,dt);
+          ModelManager::MoveController("harry", Movement::FORWARD,5.0f,dt);
       }
       else
       {
@@ -74,15 +74,15 @@ void Application::OnUpdate(DeltaTime& dt)
       }
       if (Input::IsKeyPressed(Key::C))
       {
-          ModelManager::GetModel("harry")->Move(Movement::BACKWARD,5.0f,dt);
+          ModelManager::MoveController("harry", Movement::BACKWARD,5.0f,dt);
       }
       if (Input::IsKeyPressed(Key::Z))
       {
-          ModelManager::GetModel("harry")->Move(Movement::LEFT,5.0f,dt);
+          ModelManager::MoveController("harry", Movement::LEFT,5.0f,dt);
       }
       if (Input::IsKeyPressed(Key::V))
       {
-          ModelManager::GetModel("harry")->Move(Movement::RIGHT,5.0f,dt);
+          ModelManager::MoveController("harry", Movement::RIGHT,5.0f,dt);
       }
     }
   );

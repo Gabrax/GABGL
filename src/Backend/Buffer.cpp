@@ -257,7 +257,7 @@ void StorageBuffer::UnmapBuffer()
 PixelBuffer::PixelBuffer(size_t size) : m_Size(size)
 {
   glCreateBuffers(1, &m_ID);
-  glNamedBufferData(m_ID, m_Size, nullptr, GL_STREAM_DRAW); // DSA: allocate storage without binding
+  glNamedBufferData(m_ID, m_Size, nullptr, GL_STREAM_DRAW); 
 }
 
 PixelBuffer::~PixelBuffer()
@@ -272,8 +272,7 @@ PixelBuffer::~PixelBuffer()
 
 void* PixelBuffer::Map()
 {
-  return glMapNamedBufferRange(m_ID, 0, m_Size,
-      GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT | GL_MAP_UNSYNCHRONIZED_BIT);
+  return glMapNamedBufferRange(m_ID, 0, m_Size, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT | GL_MAP_UNSYNCHRONIZED_BIT);
 }
 
 void PixelBuffer::Unmap()

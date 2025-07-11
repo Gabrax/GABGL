@@ -103,13 +103,26 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
   std::array<std::unique_ptr<PixelBuffer>, NUM_BUFFERS> pboBuffers;
   int currentPBO = 0;
 
-  for (auto& mesh : model->GetMeshes())
-  {
-    for (auto& texture : mesh.m_Textures)
-    {
-      if (!texture)
-          continue;
+  // Check if model has exactly one texture total shared by all meshes
+  bool singleTextureModel = false;
+  GLuint64 sharedTextureHandle = 0;
 
+  if (model->GetMeshes().size() > 0)
+  {
+    auto& firstMesh = model->GetMeshes()[0];
+    if (firstMesh.m_Textures.size() == 1)
+      singleTextureModel = true;
+  }
+
+  if (singleTextureModel)
+  {
+    // Bake the texture only for the first mesh
+    auto& firstMesh = model->GetMeshes()[0];
+    firstMesh.m_TexturesBindlessHandles.clear();
+
+    auto& texture = firstMesh.m_Textures[0];
+    if (texture)
+    {
       int width, height;
       GLenum format;
       const void* srcData;
@@ -117,74 +130,177 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
 
       if (texture->IsUnCompressed())
       {
-          auto* embeddedTex = texture->GetEmbeddedTexture();
-          if (!embeddedTex || !embeddedTex->pcData)
-              continue;
-
+        auto* embeddedTex = texture->GetEmbeddedTexture();
+        if (embeddedTex && embeddedTex->pcData)
+        {
           width = embeddedTex->mWidth;
           height = embeddedTex->mHeight;
           format = GL_RGBA;
           dataSize = width * height * 4;
           srcData = embeddedTex->pcData;
+        }
+        else
+          srcData = nullptr;
       }
       else
       {
-          width = texture->GetWidth();
-          height = texture->GetHeight();
-          format = texture->GetDataFormat();
-          if (format != GL_RGB && format != GL_RGBA)
-              format = GL_RGBA;
+        width = texture->GetWidth();
+        height = texture->GetHeight();
+        format = texture->GetDataFormat();
+        if (format != GL_RGB && format != GL_RGBA)
+          format = GL_RGBA;
 
-          int bytesPerPixel = (format == GL_RGBA) ? 4 : 3;
-          dataSize = width * height * bytesPerPixel;
-          srcData = texture->GetRawData();
+        int bytesPerPixel = (format == GL_RGBA) ? 4 : 3;
+        dataSize = width * height * bytesPerPixel;
+        srcData = texture->GetRawData();
       }
 
-      if (!srcData || width <= 0 || height <= 0)
-          continue;
-
-      if (!pboBuffers[currentPBO] || pboBuffers[currentPBO]->GetSize() != dataSize)
+      if (srcData && width > 0 && height > 0)
+      {
+        if (!pboBuffers[currentPBO] || pboBuffers[currentPBO]->GetSize() != dataSize)
           pboBuffers[currentPBO] = std::make_unique<PixelBuffer>(dataSize);
 
-      auto& pbo = pboBuffers[currentPBO];
+        auto& pbo = pboBuffers[currentPBO];
+        pbo->WaitForCompletion();
 
-      pbo->WaitForCompletion();
-
-      void* ptr = pbo->Map();
-      if (ptr)
-      {
+        void* ptr = pbo->Map();
+        if (ptr)
+        {
           memcpy(ptr, srcData, dataSize);
           pbo->Unmap(); // Also inserts a sync
-      }
-      else
-      {
+        }
+        else
+        {
           GABGL_ERROR("Failed to map PixelBuffer for texture upload.");
-          continue;
+          // fallback - don't assign texture
+        }
+
+        GLuint id;
+        glCreateTextures(GL_TEXTURE_2D, 1, &id);
+        texture->SetRendererID(id);
+
+        glTextureStorage2D(id, 1, GL_RGBA8, width, height);
+        pbo->Bind();
+        glTextureSubImage2D(id, 0, 0, 0, width, height, format, GL_UNSIGNED_BYTE, nullptr);
+        pbo->Unbind();
+
+        glGenerateTextureMipmap(id);
+        glTextureParameteri(id, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTextureParameteri(id, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        sharedTextureHandle = glGetTextureHandleARB(id);
+        glMakeTextureHandleResidentARB(sharedTextureHandle);
+
+        firstMesh.m_TexturesBindlessHandles.push_back(sharedTextureHandle);
+
+        currentPBO = (currentPBO + 1) % NUM_BUFFERS;
       }
-
-      GLuint id;
-      glCreateTextures(GL_TEXTURE_2D, 1, &id);
-      texture->SetRendererID(id);
-
-      glTextureStorage2D(id, 1, GL_RGBA8, width, height);
-      pbo->Bind();
-      glTextureSubImage2D(id, 0, 0, 0, width, height, format, GL_UNSIGNED_BYTE, nullptr);
-      pbo->Unbind();
-
-      glGenerateTextureMipmap(id);
-      glTextureParameteri(id, GL_TEXTURE_WRAP_S, GL_REPEAT );
-      glTextureParameteri(id, GL_TEXTURE_WRAP_T, GL_REPEAT );
-      glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-      glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-      GLuint64 handle = glGetTextureHandleARB(id);
-      glMakeTextureHandleResidentARB(handle);
-
-      mesh.m_TexturesBindlessHandles.push_back(handle);
-
-      currentPBO = (currentPBO + 1) % NUM_BUFFERS;
     }
 
+    // Now assign the same handle to all other meshes
+    for (size_t i = 1; i < model->GetMeshes().size(); ++i)
+    {
+      auto& mesh = model->GetMeshes()[i];
+      mesh.m_TexturesBindlessHandles.clear();
+      if (sharedTextureHandle != 0)
+        mesh.m_TexturesBindlessHandles.push_back(sharedTextureHandle);
+    }
+  }
+  else
+  {
+    // Normal per-mesh texture baking
+    for (auto& mesh : model->GetMeshes())
+    {
+      mesh.m_TexturesBindlessHandles.clear();
+
+      for (auto& texture : mesh.m_Textures)
+      {
+        if (!texture)
+            continue;
+
+        int width, height;
+        GLenum format;
+        const void* srcData;
+        GLsizei dataSize;
+
+        if (texture->IsUnCompressed())
+        {
+            auto* embeddedTex = texture->GetEmbeddedTexture();
+            if (!embeddedTex || !embeddedTex->pcData)
+                continue;
+
+            width = embeddedTex->mWidth;
+            height = embeddedTex->mHeight;
+            format = GL_RGBA;
+            dataSize = width * height * 4;
+            srcData = embeddedTex->pcData;
+        }
+        else
+        {
+            width = texture->GetWidth();
+            height = texture->GetHeight();
+            format = texture->GetDataFormat();
+            if (format != GL_RGB && format != GL_RGBA)
+                format = GL_RGBA;
+
+            int bytesPerPixel = (format == GL_RGBA) ? 4 : 3;
+            dataSize = width * height * bytesPerPixel;
+            srcData = texture->GetRawData();
+        }
+
+        if (!srcData || width <= 0 || height <= 0)
+            continue;
+
+        if (!pboBuffers[currentPBO] || pboBuffers[currentPBO]->GetSize() != dataSize)
+            pboBuffers[currentPBO] = std::make_unique<PixelBuffer>(dataSize);
+
+        auto& pbo = pboBuffers[currentPBO];
+
+        pbo->WaitForCompletion();
+
+        void* ptr = pbo->Map();
+        if (ptr)
+        {
+            memcpy(ptr, srcData, dataSize);
+            pbo->Unmap(); // Also inserts a sync
+        }
+        else
+        {
+            GABGL_ERROR("Failed to map PixelBuffer for texture upload.");
+            continue;
+        }
+
+        GLuint id;
+        glCreateTextures(GL_TEXTURE_2D, 1, &id);
+        texture->SetRendererID(id);
+
+        glTextureStorage2D(id, 1, GL_RGBA8, width, height);
+        pbo->Bind();
+        glTextureSubImage2D(id, 0, 0, 0, width, height, format, GL_UNSIGNED_BYTE, nullptr);
+        pbo->Unbind();
+
+        glGenerateTextureMipmap(id);
+        glTextureParameteri(id, GL_TEXTURE_WRAP_S, GL_REPEAT );
+        glTextureParameteri(id, GL_TEXTURE_WRAP_T, GL_REPEAT );
+        glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        GLuint64 handle = glGetTextureHandleARB(id);
+        glMakeTextureHandleResidentARB(handle);
+
+        mesh.m_TexturesBindlessHandles.push_back(handle);
+
+        currentPBO = (currentPBO + 1) % NUM_BUFFERS;
+      }
+    }
+  }
+
+  std::string name = std::filesystem::path(path).stem().string();
+
+  for (auto& mesh : model->GetMeshes())
+  {
     s_Data.allVertices.insert(s_Data.allVertices.end(), mesh.m_Vertices.begin(), mesh.m_Vertices.end());
     s_Data.allIndices.insert(s_Data.allIndices.end(), mesh.m_Indices.begin(), mesh.m_Indices.end());
 
@@ -196,15 +312,13 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
     else if(model->GetPhysXMeshType() == MeshType::CONVEXMESH) model->CreatePhysXDynamicMesh(mesh.m_Vertices);
   }
 
-  std::string name = std::filesystem::path(path).stem().string();
   s_Data.m_Models[name] = std::move(model);
   s_Data.m_ModelsNames.emplace_back(name);
 
   GABGL_WARN("Model: {0} baking took {1} ms", name, timer.ElapsedMillis());
 }
 
-
-void ModelManager::SetModelTransform(const std::string& name, const Transform& transform, float radius, float height, bool slopeLimit)
+void ModelManager::SetInitialControllerTransform(const std::string& name, const Transform& transform, float radius, float height, bool slopeLimit)
 {
   auto it = s_Data.m_Models.find(name);
   if (it == s_Data.m_Models.end())
@@ -214,7 +328,16 @@ void ModelManager::SetModelTransform(const std::string& name, const Transform& t
   }
 
   std::shared_ptr<Model> model = it->second;
-  model->SetPosition(transform,radius,height,slopeLimit);
+
+  if(model->GetPhysXMeshType() != MeshType::CONTROLLER)
+  {
+    GABGL_ERROR("This function is for Controller model!");
+    return;
+  }
+
+  model->m_ControllerTransform = transform;
+
+  model->CreateCharacterController(PhysX::GlmVec3ToPxVec3(model->m_ControllerTransform.GetPosition()), radius, height, slopeLimit);
 
   // Find index in the names vector
   auto vecIt = std::find(s_Data.m_ModelsNames.begin(), s_Data.m_ModelsNames.end(), name);
@@ -225,11 +348,10 @@ void ModelManager::SetModelTransform(const std::string& name, const Transform& t
   }
 
   int ssboIndex = static_cast<int>(std::distance(s_Data.m_ModelsNames.begin(), vecIt));
-
-  s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4),sizeof(glm::mat4),glm::value_ptr(transform.GetTransform()));
+  s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4),sizeof(glm::mat4),glm::value_ptr(model->m_ControllerTransform.GetTransform()));
 }
 
-void ModelManager::SetModelTransform(const std::string& name, const glm::mat4& transform)
+void ModelManager::SetInitialModelTransform(const std::string& name, const glm::mat4& transform)
 {
   auto it = s_Data.m_Models.find(name);
   if (it == s_Data.m_Models.end())
@@ -238,20 +360,100 @@ void ModelManager::SetModelTransform(const std::string& name, const glm::mat4& t
       return;
   }
 
-  std::shared_ptr<Model> model = it->second;
-  model->SetPosition(transform);
+  const auto& model = it->second;
 
-  // Find index in the names vector
-  auto vecIt = std::find(s_Data.m_ModelsNames.begin(), s_Data.m_ModelsNames.end(), name);
-  if (vecIt == s_Data.m_ModelsNames.end())
+  if(model->GetPhysXMeshType() == MeshType::CONTROLLER)
   {
-      GABGL_WARN("Model '{}' not found in name list for SSBO!", name);
-      return;
+    GABGL_ERROR("This function is for non Controller model!");
+    return;
   }
 
-  int ssboIndex = static_cast<int>(std::distance(s_Data.m_ModelsNames.begin(), vecIt));
+  std::string convexName = name + "_convex";
 
-  s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4),sizeof(glm::mat4),glm::value_ptr(transform));
+  auto convexIt = s_Data.m_Models.find(convexName);
+  if (convexIt != s_Data.m_Models.end())
+  {
+    GABGL_WARN("Convex version '{}' found for model '{}'. Applying same transform.", convexName, name);
+
+    const auto& convex = convexIt->second;
+
+    PxTransform pxTransform = PxTransform(PhysX::GlmMat4ToPxTransform(transform));
+
+    if(convex->GetPhysXMeshType() == MeshType::TRIANGLEMESH) convex->m_StaticMeshActor->setGlobalPose(pxTransform);
+    else if(convex->GetPhysXMeshType() == MeshType::CONVEXMESH)
+    {
+      if (convex->m_isKinematic) convex->m_DynamicMeshActor->setKinematicTarget(pxTransform);
+      else convex->m_DynamicMeshActor->setGlobalPose(pxTransform);
+    }
+
+    glm::mat4 convexTransform = PhysX::PxMat44ToGlmMat4(convexIt->second->GetDynamicActor()->getGlobalPose());
+
+    pxTransform = PxTransform(PhysX::GlmMat4ToPxTransform(convexTransform));
+
+    if(model->GetPhysXMeshType() == MeshType::TRIANGLEMESH) model->m_StaticMeshActor->setGlobalPose(pxTransform);
+    else if(model->GetPhysXMeshType() == MeshType::CONVEXMESH)
+    {
+      if (model->m_isKinematic) model->m_DynamicMeshActor->setKinematicTarget(pxTransform);
+      else model->m_DynamicMeshActor->setGlobalPose(pxTransform);
+    }
+
+    auto vec2It = std::find(s_Data.m_ModelsNames.begin(), s_Data.m_ModelsNames.end(), name);
+    if (vec2It != s_Data.m_ModelsNames.end())
+    {
+      int ssboIndex = static_cast<int>(std::distance(s_Data.m_ModelsNames.begin(), vec2It));
+      s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(convexTransform));
+    }
+    else
+    {
+      GABGL_WARN("Main model '{}' not found in name list for SSBO!", name);
+    }
+  }
+  else
+  {
+    // No convex model, fallback to normal update
+    auto vecIt = std::find(s_Data.m_ModelsNames.begin(), s_Data.m_ModelsNames.end(), name);
+    if (vecIt == s_Data.m_ModelsNames.end())
+    {
+      GABGL_WARN("Model '{}' not found in name list for SSBO!", name);
+      return;
+    }
+
+    int ssboIndex = static_cast<int>(std::distance(s_Data.m_ModelsNames.begin(), vecIt));
+    s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(transform));
+  }
+}
+
+void ModelManager::UpdateConvexModels()
+{
+  for (const auto& [key, convexModel] : s_Data.m_Models)
+  {
+    const std::string& convexName = key;
+    constexpr const char* suffix = "_convex";
+    if (convexName.size() < 7 || convexName.compare(convexName.size() - 7, 7, suffix) != 0)
+      continue;
+
+    std::string baseName = convexName.substr(0, convexName.size() - 7);
+
+    auto baseModelIt = s_Data.m_Models.find(baseName);
+    if (baseModelIt == s_Data.m_Models.end())
+    {
+      GABGL_WARN("Base model '{}' not found for convex '{}'", baseName, convexName);
+      continue;
+    }
+
+    glm::mat4 convexTransform = PhysX::PxMat44ToGlmMat4(convexModel->GetDynamicActor()->getGlobalPose());
+
+    auto nameIt = std::find(s_Data.m_ModelsNames.begin(), s_Data.m_ModelsNames.end(), baseName);
+    if (nameIt != s_Data.m_ModelsNames.end())
+    {
+      int ssboIndex = static_cast<int>(std::distance(s_Data.m_ModelsNames.begin(), nameIt));
+      s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(convexTransform));
+    }
+    else
+    {
+      GABGL_WARN("Base model '{}' not found in name list for SSBO!", baseName);
+    }
+  }
 }
 
 GLsizei ModelManager::GetModelsQuantity()
@@ -263,6 +465,8 @@ GLuint ModelManager::GetModelsVAO()
 {
   return s_Data.sharedVAO;
 }
+
+#include <iostream>
 
 void ModelManager::FinalizeBuffers()
 {
@@ -300,14 +504,24 @@ void ModelManager::FinalizeBuffers()
   for (const auto& modelName : s_Data.m_ModelsNames)
   {
       auto& model = s_Data.m_Models[modelName];
-      for (auto& mesh : model->GetMeshes())
+      const auto& meshes = model->GetMeshes();
+
+      for (size_t meshIndex = 0; meshIndex < meshes.size(); ++meshIndex)
       {
+          const auto& mesh = meshes[meshIndex];
+
           MeshTextureRange range;
           range.StartIndex = static_cast<uint32_t>(textureHandles.size());
           range.Count = static_cast<uint32_t>(mesh.m_TexturesBindlessHandles.size());
 
-          for (GLuint64 handle : mesh.m_TexturesBindlessHandles)
-              textureHandles.push_back(handle);
+          std::cout << "Model: " << modelName << ", Mesh: " << meshIndex << std::endl;
+            std::cout << "  Texture Handles (" << range.Count << "):" << std::endl;
+
+          for (GLuint64 handle : mesh.m_TexturesBindlessHandles) 
+          {
+            std::cout << "    Handle: 0x" << std::hex << handle << std::dec << std::endl;
+           textureHandles.push_back(handle);
+          }
 
           meshTextureRanges.push_back(range);
       }
@@ -358,6 +572,80 @@ void ModelManager::BakeModelInstancedBuffers(Mesh& mesh, const std::vector<Trans
 
     mesh.instanceAttribsConfigured = true;
   }
+}
+
+void ModelManager::MoveController(const std::string& name, const Movement& movement, float speed, const DeltaTime& dt)
+{
+  auto it = s_Data.m_Models.find(name);
+  if (it == s_Data.m_Models.end()) GABGL_ERROR("Model doesnt exist!");
+
+  auto vecIt = std::find(s_Data.m_ModelsNames.begin(), s_Data.m_ModelsNames.end(), name);
+  if (vecIt == s_Data.m_ModelsNames.end())
+  {
+      GABGL_WARN("Model '{}' not found in name list for SSBO!", name);
+      return;
+  }
+
+  const auto& model = it->second;
+
+  if (model->GetPhysXMeshType() != MeshType::CONTROLLER)
+  {
+      GABGL_ERROR("This function is for Controller model!");
+      return;
+  }
+
+  // Constants
+  const float gravity = -9.81f;
+  const float damping = 0.9f;
+  const float jumpSpeed = 5.5f;
+
+  // Apply gravity
+  model->m_ControllerVelocity.y += gravity * dt;
+
+  // Horizontal movement
+  PxVec3 direction(0.0f);
+  switch (movement)
+  {
+      case Movement::FORWARD:  direction.z += 1.0f; break;
+      case Movement::BACKWARD: direction.z -= 1.0f; break;
+      case Movement::LEFT:     direction.x -= 1.0f; break;
+      case Movement::RIGHT:    direction.x += 1.0f; break;
+      default: break;
+  }
+
+  if (direction.magnitudeSquared() > 0.0f)
+  {
+      direction = direction.getNormalized();
+      model->m_ControllerVelocity.x = direction.x * speed;
+      model->m_ControllerVelocity.z = direction.z * speed;
+  }
+  else
+  {
+      // Apply damping when no input
+      model->m_ControllerVelocity.x *= damping;
+      model->m_ControllerVelocity.z *= damping;
+  }
+
+  // Move controller
+  PxVec3 displacement = model->m_ControllerVelocity * dt;
+  PxControllerCollisionFlags flags = model->GetController()->move(displacement, 0.001f, dt, PxControllerFilters());
+
+  // Ground check and vertical reset
+  if (flags.isSet(PxControllerCollisionFlag::eCOLLISION_DOWN))
+  {
+      model->m_ControllerVelocity.y = 0.0f;
+      model->m_ControllerIsGrounded = true;
+  }
+  else
+  {
+      model->m_ControllerIsGrounded = false;
+  }
+
+  PxExtendedVec3 footPos = model->GetController()->getFootPosition();
+  model->m_ControllerTransform.SetPosition(glm::vec3(footPos.x, footPos.y, footPos.z));
+
+  int ssboIndex = static_cast<int>(std::distance(s_Data.m_ModelsNames.begin(), vecIt));
+  s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4),sizeof(glm::mat4),glm::value_ptr(model->m_ControllerTransform.GetTransform()));
 }
 
 std::shared_ptr<Model> ModelManager::GetModel(const std::string& name)
@@ -562,97 +850,6 @@ void Model::OptimizeMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m
 
   m_Indices = std::move(SimplifiedIndices);
   m_Vertices = std::move(OptVertices);
-}
-
-void Model::SetPosition(const glm::mat4& transform)
-{
-  if(m_meshType == MeshType::CONTROLLER)
-  {
-    GABGL_ERROR("This function is for non Controller model!");
-    return;
-  }
-
-  PxTransform pxTransform = PxTransform(PhysX::GlmMat4ToPxTransform(transform));
-
-  if(m_meshType == MeshType::TRIANGLEMESH) m_StaticMeshActor->setGlobalPose(pxTransform);
-  else if(m_meshType == MeshType::CONVEXMESH)
-  {
-    if (m_isKinematic) m_DynamicMeshActor->setKinematicTarget(pxTransform);
-    else m_DynamicMeshActor->setGlobalPose(pxTransform);
-  }
-}
-
-void Model::SetPosition(const Transform& transform, float radius, float height, bool slopeLimit)
-{
-  if(m_meshType != MeshType::CONTROLLER)
-  {
-    GABGL_ERROR("This function is for Controller model!");
-    return;
-  }
-
-  m_ControllerTransform = transform;
-
-  CreateCharacterController(PhysX::GlmVec3ToPxVec3(m_ControllerTransform.GetPosition()), radius, height, slopeLimit);
-}
-
-void Model::Move(const Movement& movement, float speed, const DeltaTime& dt)
-{
-    if (m_meshType != MeshType::CONTROLLER)
-    {
-        GABGL_ERROR("This function is for Controller model!");
-        return;
-    }
-
-    // Constants
-    const float gravity = -9.81f;
-    const float damping = 0.9f;
-    const float jumpSpeed = 5.5f;
-
-    // Apply gravity
-    m_ControllerVelocity.y += gravity * dt;
-
-    // Horizontal movement
-    PxVec3 direction(0.0f);
-    switch (movement)
-    {
-        case Movement::FORWARD:  direction.z += 1.0f; break;
-        case Movement::BACKWARD: direction.z -= 1.0f; break;
-        case Movement::LEFT:     direction.x -= 1.0f; break;
-        case Movement::RIGHT:    direction.x += 1.0f; break;
-        default: break;
-    }
-
-    if (direction.magnitudeSquared() > 0.0f)
-    {
-        direction = direction.getNormalized();
-        m_ControllerVelocity.x = direction.x * speed;
-        m_ControllerVelocity.z = direction.z * speed;
-    }
-    else
-    {
-        // Apply damping when no input
-        m_ControllerVelocity.x *= damping;
-        m_ControllerVelocity.z *= damping;
-    }
-
-    // Move controller
-    PxVec3 displacement = m_ControllerVelocity * dt;
-    PxControllerCollisionFlags flags = m_ActorController->move(displacement, 0.001f, dt, PxControllerFilters());
-
-    // Ground check and vertical reset
-    if (flags.isSet(PxControllerCollisionFlag::eCOLLISION_DOWN))
-    {
-        m_ControllerVelocity.y = 0.0f;
-        m_ControllerIsGrounded = true;
-    }
-    else
-    {
-        m_ControllerIsGrounded = false;
-    }
-
-    // Update internal transform
-    PxExtendedVec3 footPos = m_ActorController->getFootPosition();
-    m_ControllerTransform.SetPosition(glm::vec3(footPos.x, footPos.y, footPos.z));
 }
 
 void Model::CreatePhysXStaticMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m_Indices)
