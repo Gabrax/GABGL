@@ -9,8 +9,8 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.000000
 d 1.000000
 illum 1
-map_Kd -s_0.833333_0.833333_brck49Lb.jpg
-map_Bump -bm 0.100000 -s_0.833333_0.833333_brck49Lb.jpg
+map_Kd Wall2.jpg
+map_Bump brck49Lb.jpg
 
 newmtl lambert3SG.001
 Ns 0.000000

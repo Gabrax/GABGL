@@ -33,22 +33,23 @@ out VS_OUT{
 
 const int MAX_BONES = 100;
 const int MAX_BONE_INFLUENCE = 4;
-uniform mat4 finalBonesMatrices[MAX_BONES];
+layout(std430, binding = 9) buffer FinalBoneMatrices { mat4 boneMatrices[]; };
+layout(std430, binding = 10) buffer ModelIsAnimated  { int modelIsAnimated[]; };
 
-uniform mat4 model;
-uniform bool isAnimated;
 uniform bool isInstanced;
 
 uniform mat4 u_DirectShadowViewProj;
 
 void main()
 {
-  vs_out.DrawID = gl_BaseInstance;
+  vs_out.DrawID = gl_DrawID;
   int transformIndex = meshToTransform[vs_out.DrawID];
+  bool isAnimated = (modelIsAnimated[transformIndex] == 1);
   mat4 modelMat = isInstanced ? instanceMatrix : transforms[transformIndex];
 
   if (isAnimated)
   {
+    int boneBaseIndex = transformIndex * MAX_BONES;
     vec4 totalPosition = vec4(0.0f);
     for (int i = 0; i < MAX_BONE_INFLUENCE; i++)
     {
@@ -58,7 +59,7 @@ void main()
             totalPosition = vec4(aPos, 1.0f);
             break;
         }
-        vec4 localPosition = finalBonesMatrices[boneIds[i]] * vec4(aPos, 1.0f);
+        vec4 localPosition = boneMatrices[boneBaseIndex + boneIds[i]] * vec4(aPos, 1.0f);
         totalPosition += localPosition * weights[i];
     }
 

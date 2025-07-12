@@ -54,7 +54,7 @@ void Application::OnUpdate(DeltaTime& dt)
       /*Renderer::DrawModel(ModelManager::GetModel("shotgun"),ModelManager::GetModel("shotgun_convex"));*/
       /*Renderer::DrawModel(ModelManager::GetModel("shotgunammo"),ModelManager::GetModel("shotgunammo_convex"));*/
       /*Renderer::DrawModel(ModelManager::GetModel("aidkit"),ModelManager::GetModel("aidkit_convex"));*/
-
+      /**/
       Renderer::DrawSkybox("night");
       Renderer::DrawText(FontManager::GetFont("dpcomic"),"FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f,50.0f), 0.5f, glm::vec4(1.0f));
     },

@@ -45,6 +45,8 @@ struct ModelsData
   std::shared_ptr<StorageBuffer> m_MeshToTransformSSBO;
   std::shared_ptr<StorageBuffer> m_BindlessTextureSSBO;
   std::shared_ptr<StorageBuffer> m_MeshToTextureRangeSSBO;
+  std::shared_ptr<StorageBuffer> m_FinalBoneMatricesSSBO;
+  std::shared_ptr<StorageBuffer> m_ModelIsAnimatedSSBO; 
 
   GLuint sharedVBO, sharedEBO, sharedVAO;
 
@@ -111,7 +113,20 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
   {
     auto& firstMesh = model->GetMeshes()[0];
     if (firstMesh.m_Textures.size() == 1)
+    {
+      auto sharedTexture = firstMesh.m_Textures[0];
       singleTextureModel = true;
+
+      for (size_t i = 1; i < model->GetMeshes().size(); ++i)
+      {
+        auto& mesh = model->GetMeshes()[i];
+        if (mesh.m_Textures.size() != 1 || mesh.m_Textures[0] != sharedTexture)
+        {
+          singleTextureModel = false;
+          break;
+        }
+      }
+    }
   }
 
   if (singleTextureModel)
@@ -423,10 +438,30 @@ void ModelManager::SetInitialModelTransform(const std::string& name, const glm::
   }
 }
 
-void ModelManager::UpdateConvexModels()
+void ModelManager::UpdateConvexModels(const DeltaTime& dt)
 {
-  for (const auto& [key, convexModel] : s_Data.m_Models)
+  for (const auto& [key, model] : s_Data.m_Models)
   {
+    if(model->IsAnimated())
+    { 
+      auto& transforms = model->GetFinalBoneMatrices();
+
+      auto nameIt = std::find(s_Data.m_ModelsNames.begin(), s_Data.m_ModelsNames.end(), key);
+      if (nameIt != s_Data.m_ModelsNames.end())
+      {
+        int ssboIndex = static_cast<int>(std::distance(s_Data.m_ModelsNames.begin(), nameIt));
+        size_t offset = ssboIndex * MAX_BONES * sizeof(glm::mat4); // assuming MAX_BONES is defined
+        size_t size = transforms.size() * sizeof(glm::mat4);
+
+        s_Data.m_FinalBoneMatricesSSBO->SetSubData(offset, size, transforms.data());
+      }
+      else
+      {
+        GABGL_WARN("Animated model '{}' not found in name list for bone SSBO!", key);
+      }
+      model->UpdateAnimation(dt);
+    }
+
     const std::string& convexName = key;
     constexpr const char* suffix = "_convex";
     if (convexName.size() < 7 || convexName.compare(convexName.size() - 7, 7, suffix) != 0)
@@ -441,7 +476,7 @@ void ModelManager::UpdateConvexModels()
       continue;
     }
 
-    glm::mat4 convexTransform = PhysX::PxMat44ToGlmMat4(convexModel->GetDynamicActor()->getGlobalPose());
+    glm::mat4 convexTransform = PhysX::PxMat44ToGlmMat4(model->GetDynamicActor()->getGlobalPose());
 
     auto nameIt = std::find(s_Data.m_ModelsNames.begin(), s_Data.m_ModelsNames.end(), baseName);
     if (nameIt != s_Data.m_ModelsNames.end())
@@ -465,8 +500,6 @@ GLuint ModelManager::GetModelsVAO()
 {
   return s_Data.sharedVAO;
 }
-
-#include <iostream>
 
 void ModelManager::FinalizeBuffers()
 {
@@ -498,6 +531,22 @@ void ModelManager::FinalizeBuffers()
   s_Data.m_MeshToTransformSSBO = StorageBuffer::Create(meshToTransformIndex.size() * sizeof(int), 6);
   s_Data.m_MeshToTransformSSBO->SetData(meshToTransformIndex.size() * sizeof(int), meshToTransformIndex.data());
 
+  std::vector<glm::mat4> identityBones(s_Data.m_Models.size() * MAX_BONES, glm::mat4(1.0f));
+
+  s_Data.m_FinalBoneMatricesSSBO = StorageBuffer::Create(identityBones.size() * sizeof(glm::mat4), 9);
+  s_Data.m_FinalBoneMatricesSSBO->SetData(identityBones.size() * sizeof(glm::mat4), identityBones.data());
+
+  std::vector<int> isAnimatedFlags;
+
+  for (const auto& modelName : s_Data.m_ModelsNames)
+  {
+      const auto& model = s_Data.m_Models[modelName];
+      isAnimatedFlags.push_back(model->IsAnimated() ? 1 : 0);
+  }
+
+  s_Data.m_ModelIsAnimatedSSBO = StorageBuffer::Create(isAnimatedFlags.size() * sizeof(int), 10); // binding = 10
+  s_Data.m_ModelIsAnimatedSSBO->SetData(isAnimatedFlags.size() * sizeof(int), isAnimatedFlags.data());
+
   std::vector<GLuint64> textureHandles;
   std::vector<MeshTextureRange> meshTextureRanges;
 
@@ -514,12 +563,8 @@ void ModelManager::FinalizeBuffers()
           range.StartIndex = static_cast<uint32_t>(textureHandles.size());
           range.Count = static_cast<uint32_t>(mesh.m_TexturesBindlessHandles.size());
 
-          std::cout << "Model: " << modelName << ", Mesh: " << meshIndex << std::endl;
-            std::cout << "  Texture Handles (" << range.Count << "):" << std::endl;
-
           for (GLuint64 handle : mesh.m_TexturesBindlessHandles) 
           {
-            std::cout << "    Handle: 0x" << std::hex << handle << std::dec << std::endl;
            textureHandles.push_back(handle);
           }
 

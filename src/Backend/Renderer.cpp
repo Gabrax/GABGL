@@ -213,7 +213,6 @@ struct RendererData
   std::vector<DrawElementsIndirectCommand> drawCommands;
   uint32_t m_DrawIndexOffset = 0;
   uint32_t m_DrawVertexOffset = 0;
-  uint32_t m_DrawInstanceOffset = 0;
   uint32_t m_cmdBufer;
 
   Window* m_WindowRef = nullptr;
@@ -473,7 +472,6 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
 
           glBindVertexArray(ModelManager::GetModelsVAO());
           glBindBuffer(GL_DRAW_INDIRECT_BUFFER,s_Data.m_cmdBufer);
-
           glMultiDrawElementsIndirect(GL_TRIANGLES,GL_UNSIGNED_INT,NULL,s_Data.drawCommands.size(),0);
           glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
           glBindVertexArray(0);
@@ -500,19 +498,17 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
     s_Data.s_Shaders.ModelShader->SetInt("u_DirectShadow",1);
     s_Data.s_Shaders.ModelShader->SetInt("u_OffsetTexture",2);
     s_Data.s_Shaders.ModelShader->SetInt("u_OmniShadow",3);
-    s_Data.s_Shaders.ModelShader->SetBool("isAnimated", false);
     s_Data.s_Shaders.ModelShader->SetBool("isInstanced", false);
     s_Data.s_Shaders.ModelShader->SetMat4("u_DirectShadowViewProj", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
     BeginScene(s_Data.m_Camera);
     glBindVertexArray(ModelManager::GetModelsVAO());
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER,s_Data.m_cmdBufer);
     glMultiDrawElementsIndirect(GL_TRIANGLES,GL_UNSIGNED_INT,NULL,s_Data.drawCommands.size(),0);
-    geometry();
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
     glBindVertexArray(0);
+    geometry();
     EndScene();
     s_Data.s_Shaders.ModelShader->UnBind();
-
     s_Data.m_RenderState = RendererData::RenderState::NONE;
     s_Data.m_MSAAFramebuffer->UnBind();
     s_Data.m_MSAAFramebuffer->BlitColor(s_Data.m_Framebuffer);
@@ -549,11 +545,14 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
   SetClearColor(glm::vec4(0.0f));
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  s_Data.m_Camera.OnUpdate(dt);
-  ModelManager::UpdateAnimations(dt);
-  ModelManager::UpdateConvexModels();
-  PhysX::Simulate(dt);
-  AudioManager::UpdateAllMusic();
+  {
+    GABGL_PROFILE_SCOPE("MISC UPDATE PASS");
+
+    s_Data.m_Camera.OnUpdate(dt);
+    ModelManager::UpdateConvexModels(dt);
+    PhysX::Simulate(dt);
+    AudioManager::UpdateAllMusic();
+  }
 
   uint32_t finalTexture = s_Data.m_Framebuffer->GetColorAttachmentRendererID();
 
@@ -1595,14 +1594,13 @@ void Renderer::AddDrawCommand(uint32_t verticesSize, uint32_t indicesSize)
     .instanceCount = 1,
     .firstIndex = static_cast<GLuint>(s_Data.m_DrawIndexOffset),
     .baseVertex = static_cast<GLint>(s_Data.m_DrawVertexOffset),
-    .baseInstance = static_cast<GLuint>(s_Data.m_DrawInstanceOffset), 
+    .baseInstance = 0, 
   };
 
   s_Data.drawCommands.push_back(cmd);
 
   s_Data.m_DrawIndexOffset += indicesSize;
   s_Data.m_DrawVertexOffset += verticesSize;
-  s_Data.m_DrawInstanceOffset += 1; 
 }
 
 void Renderer::InitDrawCommandBuffer()

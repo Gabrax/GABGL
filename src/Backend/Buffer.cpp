@@ -948,6 +948,8 @@ DirectShadowBuffer::DirectShadowBuffer(float shadowWidth, float shadowHeight, fl
   glNamedFramebufferDrawBuffer(m_FBO, GL_NONE);
   glNamedFramebufferReadBuffer(m_FBO, GL_NONE);
 
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
   std::vector<float> Data;
   int BufferSize = offsetSize * offsetSize * filterSize * filterSize * 2;
   Data.resize(BufferSize);

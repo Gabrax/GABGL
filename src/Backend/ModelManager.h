@@ -247,7 +247,7 @@ struct ModelManager
   static GLuint GetModelsVAO();
   static void SetInitialModelTransform(const std::string& name, const glm::mat4& transform);
   static void SetInitialControllerTransform(const std::string& name, const Transform& transform, float radius, float height, bool slopeLimit);
-  static void UpdateConvexModels();
+  static void UpdateConvexModels(const DeltaTime& dt);
   static void MoveController(const std::string& name, const Movement& movement, float speed, const DeltaTime& dt);
 };
 
