@@ -641,7 +641,7 @@ void GeometryBuffer::Bind() const
   glBindFramebuffer(GL_FRAMEBUFFER, m_FBO);
 }
 
-void GeometryBuffer::Unbind() const
+void GeometryBuffer::UnBind() const
 {
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
@@ -931,8 +931,7 @@ std::shared_ptr<BloomBuffer> BloomBuffer::Create(const std::shared_ptr<Shader>& 
   return std::make_shared<BloomBuffer>(downsampleShader,upsampleShader,finalShader);
 }
 
-DirectShadowBuffer::DirectShadowBuffer(float shadowWidth, float shadowHeight, float offsetSize, float filterSize, float randomRadius)
-    : m_shadowWidth(shadowWidth), m_shadowHeight(shadowHeight)
+DirectShadowBuffer::DirectShadowBuffer(float shadowWidth, float shadowHeight, float offsetSize, float filterSize, float randomRadius) : m_shadowWidth(shadowWidth), m_shadowHeight(shadowHeight)
 {
   glCreateTextures(GL_TEXTURE_2D, 1, &m_depthMap);
   glTextureStorage2D(m_depthMap, 1, GL_DEPTH_COMPONENT32F, shadowWidth, shadowHeight);
@@ -956,20 +955,24 @@ DirectShadowBuffer::DirectShadowBuffer(float shadowWidth, float shadowHeight, fl
 
   float PI = std::numbers::pi_v<float>;
   int Index = 0;
-  for (int TexY = 0; TexY < offsetSize; TexY++) {
-      for (int TexX = 0; TexX < offsetSize; TexX++) {
-          for (int v = filterSize - 1; v >= 0; v--) {
-              for (int u = 0; u < filterSize; u++) {
-                  float x = ((float)u + 0.5f + Jitter()) / (float)filterSize;
-                  float y = ((float)v + 0.5f + Jitter()) / (float)filterSize;
+  for (int TexY = 0; TexY < offsetSize; TexY++)
+  {
+    for (int TexX = 0; TexX < offsetSize; TexX++)
+    {
+      for (int v = filterSize - 1; v >= 0; v--)
+      {
+        for (int u = 0; u < filterSize; u++)
+        {
+          float x = ((float)u + 0.5f + Jitter()) / (float)filterSize;
+          float y = ((float)v + 0.5f + Jitter()) / (float)filterSize;
 
-                  assert(Index + 1 < Data.size());
-                  Data[Index]     = sqrtf(y) * cosf(2 * PI * x);
-                  Data[Index + 1] = sqrtf(y) * sinf(2 * PI * x);
-                  Index += 2;
-              }
-          }
+          assert(Index + 1 < Data.size());
+          Data[Index]     = sqrtf(y) * cosf(2 * PI * x);
+          Data[Index + 1] = sqrtf(y) * sinf(2 * PI * x);
+          Index += 2;
+        }
       }
+    }
   }
 
   int32_t NumFilterSamples = filterSize * filterSize;
@@ -995,8 +998,6 @@ DirectShadowBuffer::DirectShadowBuffer(float shadowWidth, float shadowHeight, fl
 
   buffer = UniformBuffer::Create(sizeof(UBOData), 1);
   buffer->SetData(&uboData, sizeof(UBOData));
-
-  m_shadowVIew = glm::mat4(1.0f);
 }
 
 DirectShadowBuffer::~DirectShadowBuffer()

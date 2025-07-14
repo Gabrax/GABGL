@@ -297,7 +297,7 @@ struct GeometryBuffer
   ~GeometryBuffer();
 
   void Bind() const;
-  void Unbind() const;
+  void UnBind() const;
   void Resize(uint32_t width, uint32_t height);
 
   inline GLuint GetPositionTexture() const { return m_PositionAttachment; }
@@ -388,7 +388,7 @@ private:
   std::shared_ptr<UniformBuffer> buffer;
 
   glm::mat4 m_shadowProj;
-  glm::mat4 m_shadowVIew;
+  glm::mat4 m_shadowVIew = glm::mat4(1.0f);
 };
 
 struct CubemapDirection

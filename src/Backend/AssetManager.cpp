@@ -269,7 +269,7 @@ void AssetManager::UpdateLoading()
 
     s_LoadState = LoadState::Done;
 
-    ModelManager::FinalizeBuffers();
+    ModelManager::UploadToGPU();
     Renderer::InitDrawCommandBuffer();
 
     s_Data.m_LoadingDone = true;

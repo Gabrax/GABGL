@@ -239,7 +239,7 @@ struct ModelManager
   static void Init();
   static void BakeModel(const std::string& path, const std::shared_ptr<Model>& model);
   static void BakeModelInstancedBuffers(Mesh& mesh, const std::vector<Transform>& instances);
-  static void FinalizeBuffers();
+  static void UploadToGPU();
   static std::shared_ptr<Model> GetModel(const std::string& name);
   static void UpdateAnimations(const DeltaTime& dt);
   static std::vector<glm::mat4> GetTransforms();

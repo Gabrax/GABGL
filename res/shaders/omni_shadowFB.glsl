@@ -1,5 +1,5 @@
 #type VERTEX
-#version 450 core
+#version 460 core
 
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec3 Normal;   
@@ -11,25 +11,30 @@ layout (location = 6) in vec4 weights;
 layout (location = 7) in mat4 instanceMatrix;
 
 uniform mat4 u_LightViewProjection;     
-uniform mat4 u_ModelTransform;   
+
+layout(std430, binding = 5) buffer ModelTransforms { mat4 transforms[]; };
+layout(std430, binding = 6) buffer MeshToTransformMap { int meshToTransform[]; };
 
 const int MAX_BONES = 100;
 const int MAX_BONE_INFLUENCE = 4;
-uniform mat4 finalBonesMatrices[MAX_BONES];
+layout(std430, binding = 9) buffer FinalBoneMatrices { mat4 boneMatrices[]; };
+layout(std430, binding = 10) buffer ModelIsAnimated  { int modelIsAnimated[]; };
 
-uniform bool isAnimated;
 uniform bool isInstanced;
 
 out vec3 WorldPos;
 
 void main()
 {
-  mat4 modelMat = isInstanced ? instanceMatrix : u_ModelTransform;
+  int transformIndex = meshToTransform[gl_DrawID];
+  bool isAnimated = (modelIsAnimated[transformIndex] == 1);
+  mat4 modelMat = isInstanced ? instanceMatrix : transforms[transformIndex];
 
   if (isAnimated)
   {
-    vec4 totalPosition = vec4(0.0);
-    for (int i = 0; i < MAX_BONE_INFLUENCE; ++i)
+    int boneBaseIndex = transformIndex * MAX_BONES;
+    vec4 totalPosition = vec4(0.0f);
+    for (int i = 0; i < MAX_BONE_INFLUENCE; i++)
     {
       if (boneIds[i] == -1) continue;
       if (boneIds[i] >= MAX_BONES)
@@ -37,7 +42,7 @@ void main()
           totalPosition = vec4(aPos, 1.0f);
           break;
       }
-      vec4 localPosition = finalBonesMatrices[boneIds[i]] * vec4(aPos, 1.0f);
+      vec4 localPosition = boneMatrices[boneBaseIndex + boneIds[i]] * vec4(aPos, 1.0f);
       totalPosition += localPosition * weights[i];
     }
 

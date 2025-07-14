@@ -501,7 +501,7 @@ GLuint ModelManager::GetModelsVAO()
   return s_Data.sharedVAO;
 }
 
-void ModelManager::FinalizeBuffers()
+void ModelManager::UploadToGPU()
 {
   glNamedBufferStorage(s_Data.sharedVBO, s_Data.allVertices.size() * sizeof(Vertex), s_Data.allVertices.data(), 0);
   glNamedBufferStorage(s_Data.sharedEBO, s_Data.allIndices.size() * sizeof(uint32_t), s_Data.allIndices.data(), 0);

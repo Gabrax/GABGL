@@ -190,7 +190,10 @@ struct RendererData
 		std::shared_ptr<Shader> LineShader;
 		std::shared_ptr<Shader> FramebufferShader;
     std::shared_ptr<Shader> skyboxShader;
-    std::shared_ptr<Shader> ModelShader;
+    std::shared_ptr<Shader> DepthPrePassShader;
+    std::shared_ptr<Shader> GeometryShader;
+    std::shared_ptr<Shader> LightShader;
+    std::shared_ptr<Shader> GBufferShader;
     std::shared_ptr<Shader> DownSampleShader;
     std::shared_ptr<Shader> UpSampleShader;
     std::shared_ptr<Shader> BloomResultShader;
@@ -207,8 +210,9 @@ struct RendererData
   std::shared_ptr<FrameBuffer> m_Framebuffer;
   std::shared_ptr<FrameBuffer> m_MSAAFramebuffer;
   std::shared_ptr<BloomBuffer> m_BloomFramebuffer;
-  std::shared_ptr<OmniDirectShadowBuffer> m_PointShadowFramebuffer;
+  std::shared_ptr<OmniDirectShadowBuffer> m_OmniDirectShadowFramebuffer;
   std::shared_ptr<DirectShadowBuffer> m_DirectShadowFramebuffer;
+  std::shared_ptr<GeometryBuffer> m_GeometryBuffer;
 
   std::vector<DrawElementsIndirectCommand> drawCommands;
   uint32_t m_DrawIndexOffset = 0;
@@ -224,15 +228,7 @@ struct RendererData
 
 	} m_SceneState;
 
-  enum class RenderState
-	{
-		DIRECTSHADOW = 0, OMNISHADOW = 1, BLOOM = 2, GEOMETRY = 3, NONE = 4
-
-	} m_RenderState;
-
   bool Is3D = false;
-
-  glm::mat4 m_OmniLightProj = glm::mat4(1.0f);
 
 } s_Data;
 
@@ -243,7 +239,10 @@ void Renderer::LoadShaders()
 	s_Data.s_Shaders.LineShader = Shader::Create("res/shaders/batch_line.glsl");
 	s_Data.s_Shaders.FramebufferShader = Shader::Create("res/shaders/finalFB.glsl");
   s_Data.s_Shaders.skyboxShader = Shader::Create("res/shaders/skybox.glsl");
-  s_Data.s_Shaders.ModelShader = Shader::Create("res/shaders/static_anim_model.glsl");
+  s_Data.s_Shaders.DepthPrePassShader = Shader::Create("res/shaders/geometry_z_prepass.glsl");
+  s_Data.s_Shaders.GeometryShader = Shader::Create("res/shaders/test.glsl");
+  /*s_Data.s_Shaders.LightShader = Shader::Create("res/shaders/light.glsl");*/
+  s_Data.s_Shaders.GBufferShader = Shader::Create("res/shaders/geometry.glsl");
   s_Data.s_Shaders.DownSampleShader = Shader::Create("res/shaders/bloom_downsample.glsl");
   s_Data.s_Shaders.UpSampleShader = Shader::Create("res/shaders/bloom_upsample.glsl");
   s_Data.s_Shaders.BloomResultShader = Shader::Create("res/shaders/bloom_final.glsl");
@@ -344,31 +343,29 @@ void Renderer::Init()
   std::vector<uint32_t> indices;
   indices.reserve(s_Data.MaxIndices);
 
-  s_Data.m_CameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 0);
-
   LoadShaders();
+
+  s_Data.m_WindowRef = &Engine::GetInstance().GetMainWindow();
 
   FramebufferSpecification fbSpec2;
 	fbSpec2.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::DEPTH24STENCIL8 };
-	fbSpec2.Width = Engine::GetInstance().GetMainWindow().GetWidth();
-	fbSpec2.Height = Engine::GetInstance().GetMainWindow().GetHeight();
+	fbSpec2.Width = s_Data.m_WindowRef->GetWidth();
+	fbSpec2.Height = s_Data.m_WindowRef->GetHeight();
   fbSpec2.Samples = 4;
 	s_Data.m_MSAAFramebuffer = FrameBuffer::Create(fbSpec2);
 
   FramebufferSpecification fbSpec;
 	fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::DEPTH24STENCIL8 };
-	fbSpec.Width = Engine::GetInstance().GetMainWindow().GetWidth();
-	fbSpec.Height = Engine::GetInstance().GetMainWindow().GetHeight();
+	fbSpec.Width = s_Data.m_WindowRef->GetWidth();
+	fbSpec.Height = s_Data.m_WindowRef->GetHeight();
 	s_Data.m_Framebuffer = FrameBuffer::Create(fbSpec);
 
+  s_Data.m_GeometryBuffer = GeometryBuffer::Create(s_Data.m_WindowRef->GetWidth(), s_Data.m_WindowRef->GetHeight());
   s_Data.m_BloomFramebuffer = BloomBuffer::Create(s_Data.s_Shaders.DownSampleShader, s_Data.s_Shaders.UpSampleShader, s_Data.s_Shaders.BloomResultShader);
-
-  s_Data.m_PointShadowFramebuffer = OmniDirectShadowBuffer::Create(512, 512);
-
+  s_Data.m_OmniDirectShadowFramebuffer = OmniDirectShadowBuffer::Create(512, 512);
   s_Data.m_DirectShadowFramebuffer = DirectShadowBuffer::Create(2048, 2048, 16, 8, 3);
 
-  s_Data.m_WindowRef = &Engine::GetInstance().GetMainWindow();
-
+  s_Data.m_CameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 0);
   s_Data.m_Camera = Camera(45.0f, (float)s_Data.m_WindowRef->GetWidth() / (float)s_Data.m_WindowRef->GetHeight(), 0.01f, 1000.0f);
   s_Data.m_Camera.SetViewportSize((float)s_Data.m_WindowRef->GetWidth(), (float)s_Data.m_WindowRef->GetHeight());
 
@@ -411,6 +408,7 @@ void Renderer::Shutdown()
 
 void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, const std::function<void()>& lights)
 {
+  glDisable(GL_DITHER);
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_CULL_FACE);
   glCullFace(GL_FRONT);
@@ -422,7 +420,6 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
       GABGL_PROFILE_SCOPE("DIRECT SHADOW PASS");
 
       s_Data.m_DirectShadowFramebuffer->Bind();
-      s_Data.m_RenderState = RendererData::RenderState::DIRECTSHADOW;
       float max = std::numeric_limits<float>::max();
       SetClearColor({max,max,max,max});
       glClear(GL_DEPTH_BUFFER_BIT);
@@ -430,7 +427,6 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
       s_Data.s_Shaders.DirectShadowShader->Bind();
       s_Data.m_DirectShadowFramebuffer->UpdateShadowView(LightManager::GetDirectLightRotation());
       s_Data.s_Shaders.DirectShadowShader->SetMat4("u_LightSpaceMatrix", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
-      s_Data.s_Shaders.DirectShadowShader->SetBool("isAnimated", false);
       s_Data.s_Shaders.DirectShadowShader->SetBool("isInstanced", false);
 
       glBindVertexArray(ModelManager::GetModelsVAO());
@@ -440,35 +436,32 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
       glBindVertexArray(0);
 
       s_Data.s_Shaders.DirectShadowShader->UnBind();
-      s_Data.m_RenderState = RendererData::RenderState::NONE;
       s_Data.m_DirectShadowFramebuffer->UnBind();
     }
   }
-
   {
     if(!LightManager::PointLightEmpty())
     {
       GABGL_PROFILE_SCOPE("OMNI SHADOW PASS");
 
-      s_Data.m_PointShadowFramebuffer->Bind();
-      s_Data.m_RenderState = RendererData::RenderState::OMNISHADOW;
+      s_Data.m_OmniDirectShadowFramebuffer->Bind();
       float max = std::numeric_limits<float>::max();
       SetClearColor({max,max,max,max});
 
+      s_Data.s_Shaders.OmniDirectShadowShader->Bind();
       uint32_t lightIndex = 0;
       for (const auto& light : LightManager::GetPointLightPositions())
       {
-        s_Data.s_Shaders.OmniDirectShadowShader->Bind();
         s_Data.s_Shaders.OmniDirectShadowShader->SetVec3("gLightWorldPos",light);
 
-        const auto& directions = s_Data.m_PointShadowFramebuffer->GetFaceDirections();
+        const auto& directions = s_Data.m_OmniDirectShadowFramebuffer->GetFaceDirections();
         for (auto face = 0; face < directions.size(); ++face)
         {
-          s_Data.m_PointShadowFramebuffer->BindForWriting(lightIndex, face);
+          s_Data.m_OmniDirectShadowFramebuffer->BindForWriting(lightIndex, face);
           glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
           glm::mat4 view = glm::lookAt(light,light + directions[face].Target,directions[face].Up);
-          s_Data.m_OmniLightProj = s_Data.m_PointShadowFramebuffer->GetShadowProj() * view;
+          s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("u_LightViewProjection", s_Data.m_OmniDirectShadowFramebuffer->GetShadowProj() * view);
 
           glBindVertexArray(ModelManager::GetModelsVAO());
           glBindBuffer(GL_DRAW_INDIRECT_BUFFER,s_Data.m_cmdBufer);
@@ -478,42 +471,126 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
         }
         lightIndex++;
       }
-      s_Data.m_RenderState = RendererData::RenderState::NONE;
-      s_Data.m_PointShadowFramebuffer->UnBind();
+      s_Data.s_Shaders.OmniDirectShadowShader->UnBind();
+      s_Data.m_OmniDirectShadowFramebuffer->UnBind();
     }
   }
-  
+  {
+    GABGL_PROFILE_SCOPE("DEPTH PRE PASS");
+
+    s_Data.m_MSAAFramebuffer->Bind();
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE); 
+    glDepthMask(GL_TRUE);                                
+    glDepthFunc(GL_LESS);                                
+    glClear(GL_DEPTH_BUFFER_BIT);                        
+
+    s_Data.s_Shaders.DepthPrePassShader->Bind();
+    s_Data.s_Shaders.DepthPrePassShader->SetBool("isInstanced", false);
+
+    BeginScene(s_Data.m_Camera);
+    glBindVertexArray(ModelManager::GetModelsVAO());
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s_Data.m_cmdBufer);
+    glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, nullptr, s_Data.drawCommands.size(), 0);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+    glBindVertexArray(0);
+    EndScene();
+    s_Data.s_Shaders.DepthPrePassShader->UnBind();
+
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); 
+  }
   {
     GABGL_PROFILE_SCOPE("GEOMETRY PASS");
 
     s_Data.m_MSAAFramebuffer->Bind();
-    s_Data.m_RenderState = RendererData::RenderState::GEOMETRY;
-    SetClearColor(glm::vec4(0.0f));
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    s_Data.s_Shaders.ModelShader->Bind();
+    glDepthFunc(GL_LEQUAL);               
+    glDepthMask(GL_FALSE);                
+    SetClearColor(glm::vec4(0.0f));
+    glClear(GL_COLOR_BUFFER_BIT);         
+
+    s_Data.s_Shaders.GBufferShader->Bind();
     s_Data.m_DirectShadowFramebuffer->BindShadowTextureForReading(GL_TEXTURE1);
     s_Data.m_DirectShadowFramebuffer->BindOffsetTextureForReading(GL_TEXTURE2);
-    s_Data.m_PointShadowFramebuffer->BindForReading(GL_TEXTURE3);
-    s_Data.s_Shaders.ModelShader->SetInt("u_DirectShadow",1);
-    s_Data.s_Shaders.ModelShader->SetInt("u_OffsetTexture",2);
-    s_Data.s_Shaders.ModelShader->SetInt("u_OmniShadow",3);
-    s_Data.s_Shaders.ModelShader->SetBool("isInstanced", false);
-    s_Data.s_Shaders.ModelShader->SetMat4("u_DirectShadowViewProj", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
+    s_Data.m_OmniDirectShadowFramebuffer->BindForReading(GL_TEXTURE3);
+
+    s_Data.s_Shaders.GBufferShader->SetInt("u_DirectShadow", 1);
+    s_Data.s_Shaders.GBufferShader->SetInt("u_OffsetTexture", 2);
+    s_Data.s_Shaders.GBufferShader->SetInt("u_OmniShadow", 3);
+    s_Data.s_Shaders.GBufferShader->SetBool("isInstanced", false);
+    s_Data.s_Shaders.GBufferShader->SetMat4("u_DirectShadowViewProj", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
+
     BeginScene(s_Data.m_Camera);
     glBindVertexArray(ModelManager::GetModelsVAO());
-    glBindBuffer(GL_DRAW_INDIRECT_BUFFER,s_Data.m_cmdBufer);
-    glMultiDrawElementsIndirect(GL_TRIANGLES,GL_UNSIGNED_INT,NULL,s_Data.drawCommands.size(),0);
-    glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s_Data.m_cmdBufer);
+    glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, NULL, s_Data.drawCommands.size(), 0);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
     glBindVertexArray(0);
     geometry();
     EndScene();
-    s_Data.s_Shaders.ModelShader->UnBind();
-    s_Data.m_RenderState = RendererData::RenderState::NONE;
+    s_Data.s_Shaders.GBufferShader->UnBind();
+
+    glDepthFunc(GL_LESS);
+    glDepthMask(GL_TRUE);
+
     s_Data.m_MSAAFramebuffer->UnBind();
     s_Data.m_MSAAFramebuffer->BlitColor(s_Data.m_Framebuffer);
   }
-
+  /*{*/
+  /*  GABGL_PROFILE_SCOPE("GEOMETRY PASS");*/
+  /**/
+  /*  s_Data.m_GeometryBuffer->Bind();*/
+  /**/
+  /*  //glDepthFunc(GL_LEQUAL);               */
+  /*  //glDepthMask(GL_FALSE);                */
+  /*  SetClearColor(glm::vec4(0.0f));*/
+  /*  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);         */
+  /**/
+  /*  s_Data.s_Shaders.GeometryShader->Bind();*/
+  /*  s_Data.s_Shaders.GeometryShader->SetBool("isInstanced", false);*/
+  /**/
+  /*  BeginScene(s_Data.m_Camera);*/
+  /*  glBindVertexArray(ModelManager::GetModelsVAO());*/
+  /*  glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s_Data.m_cmdBufer);*/
+  /*  glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, NULL, s_Data.drawCommands.size(), 0);*/
+  /*  glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);*/
+  /*  glBindVertexArray(0);*/
+  /*  geometry();*/
+  /*  EndScene();*/
+  /*  s_Data.s_Shaders.GeometryShader->UnBind();*/
+  /**/
+  /*  //glDepthFunc(GL_LESS);*/
+  /*  //glDepthMask(GL_TRUE);*/
+  /**/
+  /*  s_Data.m_GeometryBuffer->UnBind();*/
+  /*  //s_Data.m_MSAAFramebuffer->BlitColor(s_Data.m_Framebuffer);*/
+  /*}*/
+  /*{*/
+  /*  GABGL_PROFILE_SCOPE("LIGHT PASS");*/
+  /**/
+  /*  s_Data.m_Framebuffer->Bind(); // Or 0 for screen output*/
+  /*  SetClearColor(glm::vec4(0.0f));*/
+  /*  glClear(GL_COLOR_BUFFER_BIT);*/
+  /**/
+  /*  s_Data.m_DirectShadowFramebuffer->BindShadowTextureForReading(GL_TEXTURE1);*/
+  /*  s_Data.m_DirectShadowFramebuffer->BindOffsetTextureForReading(GL_TEXTURE2);*/
+  /*  s_Data.m_OmniDirectShadowFramebuffer->BindForReading(GL_TEXTURE3);*/
+  /**/
+  /*  s_Data.s_Shaders.LightShader->SetInt("u_DirectShadow", 1);*/
+  /*  s_Data.s_Shaders.LightShader->SetInt("u_OffsetTexture", 2);*/
+  /*  s_Data.s_Shaders.LightShader->SetInt("u_OmniShadow", 3);*/
+  /*  s_Data.s_Shaders.LightShader->SetMat4("u_DirectShadowViewProj", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());*/
+  /**/
+  /*  s_Data.s_Shaders.LightShader->Bind();*/
+  /**/
+  /*  s_Data.m_GeometryBuffer->BindTexture(0, 0); // gPosition*/
+  /*  s_Data.m_GeometryBuffer->BindTexture(1, 1); // gNormal*/
+  /*  s_Data.m_GeometryBuffer->BindTexture(2, 2); // gAlbedoSpec*/
+  /**/
+  /*  RenderFullscreenQuad();*/
+  /**/
+  /*  s_Data.s_Shaders.LightShader->UnBind();*/
+  /*  s_Data.m_Framebuffer->UnBind(); // If not default framebuffer*/
+  /*}*/
   {
     if(lights)
     {
@@ -521,7 +598,6 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
 
       s_Data.m_BloomFramebuffer->BlitDepthFrom(s_Data.m_MSAAFramebuffer);
       s_Data.m_BloomFramebuffer->Bind();
-      s_Data.m_RenderState = RendererData::RenderState::BLOOM;
       glClear(GL_COLOR_BUFFER_BIT);
 
       BeginScene(s_Data.m_Camera);
@@ -529,7 +605,6 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
       EndScene();
 
       s_Data.m_BloomFramebuffer->RenderBloomTexture(0.005f);
-      s_Data.m_RenderState = RendererData::RenderState::NONE;
       s_Data.m_BloomFramebuffer->UnBind();
       s_Data.m_BloomFramebuffer->CompositeBloomOver(s_Data.m_Framebuffer);
       s_Data.m_BloomFramebuffer->BlitDepthTo(s_Data.m_Framebuffer);
@@ -1053,326 +1128,6 @@ void Renderer::DrawFramebuffer(uint32_t textureID)
 
   glBindVertexArray(quadVAO);
   glDrawArrays(GL_TRIANGLES, 0, 6);
-}
-
-void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::vec3& position, const glm::vec3& size, const glm::vec3& rotation)
-{
-  if(model == nullptr)
-  {
-    GABGL_ERROR("Model doesnt exist");
-    return;
-  }
-
-  glm::mat4 transform = glm::translate(glm::mat4(1.0f), position);
-
-  transform = glm::rotate(transform, rotation.z, glm::vec3(0.0f, 0.0f, 1.0f));
-  transform = glm::rotate(transform, rotation.y, glm::vec3(0.0f, 1.0f, 0.0f));
-  transform = glm::rotate(transform, rotation.x, glm::vec3(1.0f, 0.0f, 0.0f));
-
-  transform = glm::scale(transform, size);
-
-  DrawModel(model, transform);
-}
-
-void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_ptr<Model>& convex, const glm::vec3& position, const glm::vec3& size, const glm::vec3& rotation)
-{
-  if(model == nullptr || convex == nullptr)
-  {
-    GABGL_ERROR("Model doesnt exist");
-    return;
-  }
-
-  glm::mat4 transform = glm::translate(glm::mat4(1.0f), position);
-
-  transform = glm::rotate(transform, rotation.z, glm::vec3(0.0f, 0.0f, 1.0f));
-  transform = glm::rotate(transform, rotation.y, glm::vec3(0.0f, 1.0f, 0.0f));
-  transform = glm::rotate(transform, rotation.x, glm::vec3(1.0f, 0.0f, 0.0f));
-
-  transform = glm::scale(transform, size);
-
-  DrawModel(model, convex, transform);
-}
-
-void Renderer::DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& transform, int entityID)
-{
-  if(model == nullptr)
-  {
-    GABGL_ERROR("Model doesnt exist");
-    return;
-  }
-
-  if(s_Data.m_RenderState == RendererData::RenderState::DIRECTSHADOW)
-  {
-    s_Data.s_Shaders.DirectShadowShader->Bind();
-
-    glm::mat4 modelMat = glm::mat4(1.0f); 
-    if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH)  modelMat = PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose());
-    else if (model->GetPhysXMeshType() == MeshType::CONTROLLER) modelMat = model->GetControllerTransform().GetTransform();
-    else if (model->GetPhysXMeshType() == MeshType::NONE) modelMat = transform;
-
-    s_Data.s_Shaders.DirectShadowShader->SetMat4("u_LightSpaceMatrix", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
-    s_Data.s_Shaders.DirectShadowShader->SetMat4("u_ModelTransform", modelMat);
-    s_Data.s_Shaders.DirectShadowShader->SetBool("isAnimated", model->IsAnimated());
-    s_Data.s_Shaders.DirectShadowShader->SetBool("isInstanced", false);
-
-    if(model->IsAnimated())
-    {
-      auto& transforms = model->GetFinalBoneMatrices();
-      for (size_t i = 0; i < transforms.size(); ++i) {
-          s_Data.s_Shaders.DirectShadowShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
-      }
-    }
-    for (auto& mesh : model->GetMeshes())
-    {
-      glBindVertexArray(mesh.VAO);
-      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
-      glBindVertexArray(0);
-    }
-  }
-  else if(s_Data.m_RenderState == RendererData::RenderState::OMNISHADOW)
-  {
-    s_Data.s_Shaders.OmniDirectShadowShader->Bind();
-
-    glm::mat4 modelMat = glm::mat4(1.0f); 
-    if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH)  modelMat = PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose());
-    else if (model->GetPhysXMeshType() == MeshType::CONTROLLER) modelMat = model->GetControllerTransform().GetTransform();
-    else if (model->GetPhysXMeshType() == MeshType::NONE) modelMat = transform;
-
-    s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("u_LightViewProjection", s_Data.m_OmniLightProj);
-    s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("u_ModelTransform", modelMat);
-    s_Data.s_Shaders.OmniDirectShadowShader->SetBool("isAnimated", model->IsAnimated());
-    s_Data.s_Shaders.OmniDirectShadowShader->SetBool("isInstanced", false);
-
-    if(model->IsAnimated())
-    {
-      auto& transforms = model->GetFinalBoneMatrices();
-
-      for (size_t i = 0; i < transforms.size(); ++i) {
-          s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
-      }
-    }
-    for (auto& mesh : model->GetMeshes())
-    {
-      glBindVertexArray(mesh.VAO);
-      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
-      glBindVertexArray(0);
-    }
-  }
-  else if(s_Data.m_RenderState == RendererData::RenderState::GEOMETRY)
-  {
-    s_Data.s_Shaders.ModelShader->Bind();
-    if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH) s_Data.s_Shaders.ModelShader->SetMat4("model", PhysX::PxMat44ToGlmMat4(model->GetStaticActor()->getGlobalPose()));
-    else if (model->GetPhysXMeshType() == MeshType::CONTROLLER) s_Data.s_Shaders.ModelShader->SetMat4("model", model->GetControllerTransform().GetTransform());
-    else if (model->GetPhysXMeshType() == MeshType::NONE) s_Data.s_Shaders.ModelShader->SetMat4("model", transform);
-    s_Data.s_Shaders.ModelShader->SetBool("isAnimated", model->IsAnimated());
-    s_Data.s_Shaders.ModelShader->SetBool("isInstanced", false);
-    s_Data.s_Shaders.ModelShader->SetMat4("u_DirectShadowViewProj", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
-    if(model->IsAnimated())
-    {
-      auto& transforms = model->GetFinalBoneMatrices();
-      for (size_t i = 0; i < transforms.size(); ++i) {
-          s_Data.s_Shaders.ModelShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
-      }
-    }
-    for (auto& mesh : model->GetMeshes())
-    {
-      auto& textures = mesh.m_Textures;
-      for (GLuint i = 0; i < textures.size(); i++)
-      {
-        std::string number = std::to_string(s_Data.textureCounters[textures[i]->GetType()]++);
-        s_Data.s_Shaders.ModelShader->SetInt(textures[i]->GetType() + number, i);
-
-        glBindTextureUnit(i, textures[i]->GetRendererID());
-      }
-      glBindVertexArray(mesh.VAO);
-      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
-      glBindVertexArray(0);
-    }
-  }
-}
-
-void Renderer::DrawModel(const std::shared_ptr<Model>& model, const std::shared_ptr<Model>& convex, const glm::mat4& transform, int entityID)
-{
-  if(model == nullptr || convex == nullptr)
-  {
-    GABGL_ERROR("Model doesnt exist");
-    return;
-  }
-
-  if(s_Data.m_RenderState == RendererData::RenderState::DIRECTSHADOW)
-  {
-    s_Data.s_Shaders.DirectShadowShader->Bind();
-    glm::mat4 modelMat = PhysX::PxMat44ToGlmMat4(convex->GetDynamicActor()->getGlobalPose()); 
-
-    s_Data.s_Shaders.DirectShadowShader->SetMat4("u_LightSpaceMatrix", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
-    s_Data.s_Shaders.DirectShadowShader->SetMat4("u_ModelTransform", modelMat);
-    s_Data.s_Shaders.DirectShadowShader->SetBool("isAnimated", model->IsAnimated());
-    s_Data.s_Shaders.DirectShadowShader->SetBool("isInstanced", false);
-
-    if(model->IsAnimated())
-    {
-      auto& transforms = model->GetFinalBoneMatrices();
-      for (size_t i = 0; i < transforms.size(); ++i) {
-          s_Data.s_Shaders.DirectShadowShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
-      }
-    }
-    for (auto& mesh : model->GetMeshes())
-    {
-      glBindVertexArray(mesh.VAO);
-      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
-      glBindVertexArray(0);
-    }
-  }
-  else if(s_Data.m_RenderState == RendererData::RenderState::OMNISHADOW)
-  {
-    s_Data.s_Shaders.OmniDirectShadowShader->Bind();
-    glm::mat4 modelMat = PhysX::PxMat44ToGlmMat4(convex->GetDynamicActor()->getGlobalPose()); 
-
-    s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("u_LightViewProjection", s_Data.m_OmniLightProj);
-    s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("u_ModelTransform", modelMat);
-    s_Data.s_Shaders.OmniDirectShadowShader->SetBool("isAnimated", model->IsAnimated());
-    s_Data.s_Shaders.OmniDirectShadowShader->SetBool("isInstanced", false);
-
-    if(model->IsAnimated())
-    {
-      auto& transforms = model->GetFinalBoneMatrices();
-      for (size_t i = 0; i < transforms.size(); ++i) {
-          s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
-      }
-    }
-    for (auto& mesh : model->GetMeshes())
-    {
-      glBindVertexArray(mesh.VAO);
-      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
-      glBindVertexArray(0);
-    }
-  }
-  else if(s_Data.m_RenderState == RendererData::RenderState::GEOMETRY)
-  {
-    s_Data.s_Shaders.ModelShader->Bind();
-    s_Data.s_Shaders.ModelShader->SetMat4("model", PhysX::PxMat44ToGlmMat4(convex->GetDynamicActor()->getGlobalPose()));
-    s_Data.s_Shaders.ModelShader->SetBool("isAnimated", model->IsAnimated());
-    s_Data.s_Shaders.ModelShader->SetBool("isInstanced", false);
-
-    if(model->IsAnimated())
-    {
-      auto& transforms = model->GetFinalBoneMatrices();
-      for (size_t i = 0; i < transforms.size(); ++i) {
-          s_Data.s_Shaders.ModelShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
-      }
-    }
-
-    for (auto& mesh : model->GetMeshes())
-    {
-      auto& textures = mesh.m_Textures;
-      for (GLuint i = 0; i < textures.size(); i++)
-      {
-        std::string number = std::to_string(s_Data.textureCounters[textures[i]->GetType()]++);
-        s_Data.s_Shaders.ModelShader->SetInt(textures[i]->GetType() + number, i);
-
-        glBindTextureUnit(i, textures[i]->GetRendererID());
-      }
-      glBindVertexArray(mesh.VAO);
-      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
-      glBindVertexArray(0);
-    }
-
-    /*for (auto& mesh : convex->GetMeshes())*/
-    /*{*/
-    /*  glBindVertexArray(mesh.VAO);*/
-    /*  glDrawElements(GL_LINES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);*/
-    /*  glBindVertexArray(0);*/
-    /*}*/
-  }
-}
-
-void Renderer::DrawModelInstanced(const std::shared_ptr<Model>& model, const std::vector<Transform>& instances, int entityID)
-{
-  if(model == nullptr)
-  {
-    GABGL_ERROR("Model doesnt exist");
-    return;
-  }
-
-  if(s_Data.m_RenderState == RendererData::RenderState::DIRECTSHADOW)
-  {
-    s_Data.s_Shaders.DirectShadowShader->Bind();
-    s_Data.s_Shaders.DirectShadowShader->SetMat4("u_LightSpaceMatrix", s_Data.m_DirectShadowFramebuffer->GetShadowViewProj());
-    s_Data.s_Shaders.DirectShadowShader->SetBool("isAnimated", model->IsAnimated());
-    s_Data.s_Shaders.DirectShadowShader->SetBool("isInstanced", false);
-
-    if(model->IsAnimated())
-    {
-      auto& transforms = model->GetFinalBoneMatrices();
-      for (size_t i = 0; i < transforms.size(); ++i) {
-          s_Data.s_Shaders.DirectShadowShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
-      }
-    }
-
-    for (auto& mesh : model->GetMeshes())
-    {
-      ModelManager::BakeModelInstancedBuffers(mesh, instances); 
-
-      glBindVertexArray(mesh.VAO);
-      glDrawElements(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0);
-      glBindVertexArray(0);
-    }
-  }
-  else if(s_Data.m_RenderState == RendererData::RenderState::OMNISHADOW)
-  {
-    s_Data.s_Shaders.OmniDirectShadowShader->Bind();
-    s_Data.s_Shaders.OmniDirectShadowShader->SetBool("isAnimated", model->IsAnimated());
-    s_Data.s_Shaders.OmniDirectShadowShader->SetBool("isInstanced", false);
-
-    if(model->IsAnimated())
-    {
-      auto& transforms = model->GetFinalBoneMatrices();
-      for (size_t i = 0; i < transforms.size(); ++i) {
-          s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
-      }
-    }
-
-    for (auto& mesh : model->GetMeshes())
-    {
-      ModelManager::BakeModelInstancedBuffers(mesh, instances); 
-
-      glBindVertexArray(mesh.VAO);
-      glDrawElementsInstanced(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0, static_cast<GLsizei>(instances.size()));
-      glBindVertexArray(0);
-    }
-  }
-  else if(s_Data.m_RenderState == RendererData::RenderState::GEOMETRY)
-  {
-    s_Data.s_Shaders.ModelShader->Bind();
-    s_Data.s_Shaders.ModelShader->SetBool("isAnimated", model->IsAnimated());
-    s_Data.s_Shaders.ModelShader->SetBool("isInstanced", true);
-
-    if (model->IsAnimated())
-    {
-      auto& transforms = model->GetFinalBoneMatrices();
-      for (size_t i = 0; i < transforms.size(); ++i)
-      {
-          s_Data.s_Shaders.ModelShader->SetMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
-      }
-    }
-
-    for (auto& mesh : model->GetMeshes())
-    {
-      ModelManager::BakeModelInstancedBuffers(mesh, instances); 
-
-      auto& textures = mesh.m_Textures;
-      for (GLuint i = 0; i < textures.size(); i++)
-      {
-        std::string number = std::to_string(s_Data.textureCounters[textures[i]->GetType()]++);
-        s_Data.s_Shaders.ModelShader->SetInt(textures[i]->GetType() + number, i);
-
-        glBindTextureUnit(i, textures[i]->GetRendererID());
-      }
-      glBindVertexArray(mesh.VAO);
-      glDrawElementsInstanced(GL_TRIANGLES, static_cast<GLuint>(mesh.m_Indices.size()), GL_UNSIGNED_INT, 0, static_cast<GLsizei>(instances.size()));
-      glBindVertexArray(0);
-    }
-  }
 }
 
 void Renderer::BakeSkyboxTextures(const std::string& name, const std::shared_ptr<Texture>& cubemap)

@@ -4,7 +4,6 @@
 #include "Texture.h"
 #include "Transform.hpp"
 #include "Buffer.h"
-#include "ModelManager.h"
 #include "DeltaTime.h"
 #include "FontManager.h"
 
@@ -34,13 +33,6 @@ struct Renderer
   static void DrawCube(const glm::vec3& position, const glm::vec3& size, const glm::vec4& color, int entityID = -1);
   static void DrawCube(const glm::vec3& position, const glm::vec3& size, const std::shared_ptr<Texture>& texture, const glm::vec4& tintColor = glm::vec4(1.0f), int entityID = -1);
   static void DrawCubeContour(const glm::vec3& position, const glm::vec3& size, const glm::vec4& color, int entityID = -1);
-
-  static void DrawModel(const std::shared_ptr<Model>& model, const glm::vec3& position, const glm::vec3& size, const glm::vec3& rotation);
-  static void DrawModel(const std::shared_ptr<Model>& model, const std::shared_ptr<Model>& convex, const glm::vec3& position, const glm::vec3& size, const glm::vec3& rotation);
-  static void DrawModel(const std::shared_ptr<Model>& model, const glm::mat4& transform = glm::mat4(0.0f), int entityID = -1);
-  static void DrawModel(const std::shared_ptr<Model>& model, const std::shared_ptr<Model>& convex, const glm::mat4& transform = glm::mat4(0.0f), int entityID = -1);
-  static void DrawModelInstanced(const std::shared_ptr<Model>& model, const std::vector<Transform>& instances, int entityID = -1);
-  static void DrawModelInstanced(const std::shared_ptr<Model>& model, const std::shared_ptr<Model>& convex, const std::vector<Transform>& instances, int entityID = -1);
 
   static void DrawText(const Font* font, const std::string& text, const glm::vec3& position, const glm::vec3& rotation, float size, const glm::vec4& color = glm::vec4(1.0f));
   static void DrawText(const Font* font, const std::string& text, const glm::vec2& position, float size, const glm::vec4& color = glm::vec4(1.0f));

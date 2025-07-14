@@ -38,14 +38,14 @@ enum RaycastGroup { RAYCAST_DISABLED = 0, RAYCAST_ENABLED = 1 };
 void PhysX::Init()
 {
   s_PhysXData.gFoundation = PxCreateFoundation(PX_PHYSICS_VERSION, s_PhysXData.gAllocator, gErrorCallback);
-  if (s_PhysXData.gFoundation) GABGL_INFO("PxCreateFoundation success!");
+  if (!s_PhysXData.gFoundation) GABGL_ERROR("PxCreateFoundation init failed!");
 
   s_PhysXData.gPvd = PxCreatePvd(*s_PhysXData.gFoundation);
   PxPvdTransport* transport = PxDefaultPvdSocketTransportCreate(PVD_HOST, 5425, 10);
   s_PhysXData.gPvd->connect(*transport,PxPvdInstrumentationFlag::eALL);
 
   s_PhysXData.gPhysics = PxCreatePhysics(PX_PHYSICS_VERSION, *s_PhysXData.gFoundation, PxTolerancesScale(), true, s_PhysXData.gPvd);
-  if (s_PhysXData.gPhysics) GABGL_INFO("PxCreatePhysics success!");
+  if (!s_PhysXData.gPhysics) GABGL_ERROR("PxCreatePhysics init failed!");
 
   PxSceneDesc sceneDesc(s_PhysXData.gPhysics->getTolerancesScale());
   sceneDesc.gravity = PxVec3(0.0f, -9.81f, 0.0f);
@@ -64,6 +64,8 @@ void PhysX::Init()
   s_PhysXData.gMaterial = s_PhysXData.gPhysics->createMaterial(0.5f, 0.5f, 0.6f);
 
   s_PhysXData.controllerManager = PxCreateControllerManager(*s_PhysXData.gScene);
+
+  GABGL_WARN("PhysX init success!");
 }
 
 void PhysX::Simulate(DeltaTime& dt)

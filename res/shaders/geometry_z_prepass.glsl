@@ -9,7 +9,13 @@ layout (location = 5) in ivec4 boneIds;
 layout (location = 6) in vec4 weights;
 layout (location = 7) in mat4 instanceMatrix;
 
-uniform mat4 u_LightSpaceMatrix;
+layout(std140, binding = 0) uniform Camera
+{
+  mat4 ViewProjection;
+	mat4 OrtoProjection;
+	mat4 NonRotViewProjection;
+  vec3 CameraPos;
+};
 
 layout(std430, binding = 5) buffer ModelTransforms { mat4 transforms[]; };
 layout(std430, binding = 6) buffer MeshToTransformMap { int meshToTransform[]; };
@@ -43,11 +49,11 @@ void main()
       totalPosition += localPosition * weights[i];
     }
 
-    gl_Position = u_LightSpaceMatrix * modelMat  * totalPosition;
+    gl_Position = ViewProjection * modelMat * totalPosition;
   }
   else
   {
-    gl_Position = u_LightSpaceMatrix * modelMat * vec4(aPos, 1.0f);
+    gl_Position = ViewProjection * modelMat * vec4(aPos, 1.0f);
   }
 }
 
