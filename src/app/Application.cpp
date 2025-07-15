@@ -47,14 +47,9 @@ void Application::OnUpdate(DeltaTime& dt)
   Renderer::DrawScene(dt, 
     [&dt]()
     {
-      Renderer::DrawSkybox("night");
-      Renderer::DrawText(FontManager::GetFont("dpcomic"),"FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f,50.0f), 0.5f, glm::vec4(1.0f));
     },
     [&dt]()
     {
-      Renderer::DrawCube(glm::vec3(5.0f),glm::vec3(1.0f),glm::vec4(1.0,1.0,0.0,1.0));
-      Renderer::DrawCube(glm::vec3(15.0f,5.0f,15.0f),glm::vec3(1.0f),glm::vec4(1.0f));
-
       if (Input::IsKeyPressed(Key::X))
       {
           ModelManager::GetModel("harry")->StartBlendToAnimation(1, 0.8f);

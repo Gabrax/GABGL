@@ -639,11 +639,27 @@ void GeometryBuffer::Invalidate()
 void GeometryBuffer::Bind() const
 {
   glBindFramebuffer(GL_FRAMEBUFFER, m_FBO);
+	glViewport(0, 0, m_Width, m_Height);
 }
 
 void GeometryBuffer::UnBind() const
 {
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void GeometryBuffer::BindPositionTextureForReading(GLenum textureUnit)
+{
+  glBindTextureUnit(textureUnit - GL_TEXTURE0, m_PositionAttachment);
+}
+
+void GeometryBuffer::BindNormalTextureForReading(GLenum textureUnit)
+{
+  glBindTextureUnit(textureUnit - GL_TEXTURE0, m_NormalAttachment);
+}
+
+void GeometryBuffer::BindAlbedoTextureForReading(GLenum textureUnit)
+{
+  glBindTextureUnit(textureUnit - GL_TEXTURE0, m_AlbedoSpecAttachment);
 }
 
 void GeometryBuffer::Resize(uint32_t width, uint32_t height)
@@ -657,7 +673,7 @@ void GeometryBuffer::Resize(uint32_t width, uint32_t height)
 
 std::shared_ptr<GeometryBuffer> GeometryBuffer::Create(uint32_t width, uint32_t height)
 {
-    return std::make_shared<GeometryBuffer>(width, height);
+  return std::make_shared<GeometryBuffer>(width, height);
 }
 
 static unsigned int quadVAO = 0;
@@ -1083,13 +1099,13 @@ void OmniDirectShadowBuffer::Bind() const
   m_testFB->Bind();
 }
 
-void OmniDirectShadowBuffer::BindForWriting(uint32_t cubemapIndex, uint32_t faceIndex)
+void OmniDirectShadowBuffer::BindCubemapFaceForWriting(uint32_t cubemapIndex, uint32_t faceIndex)
 {
   glNamedFramebufferTextureLayer(m_testFB->GetID(), GL_COLOR_ATTACHMENT0, m_depthCubemapArray, 0, cubemapIndex * 6 + faceIndex);
   glNamedFramebufferDrawBuffer(m_testFB->GetID(), GL_COLOR_ATTACHMENT0);
 }
 
-void OmniDirectShadowBuffer::BindForReading(GLenum textureUnit)
+void OmniDirectShadowBuffer::BindShadowTextureForReading(GLenum textureUnit)
 {
   glBindTextureUnit(textureUnit - GL_TEXTURE0, m_depthCubemapArray);
 }

@@ -48,6 +48,7 @@ struct Renderer
   static void AddDrawCommand(uint32_t verticesSize, uint32_t indicesSize);
   static void InitDrawCommandBuffer();
 
+  static void DrawFullscreenQuad();
   static void OnWindowResize(uint32_t width, uint32_t height);
 	static void SetViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height);
 	static void SetClearColor(const glm::vec4& color);

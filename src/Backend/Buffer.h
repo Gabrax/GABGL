@@ -300,10 +300,9 @@ struct GeometryBuffer
   void UnBind() const;
   void Resize(uint32_t width, uint32_t height);
 
-  inline GLuint GetPositionTexture() const { return m_PositionAttachment; }
-  inline GLuint GetNormalTexture() const { return m_NormalAttachment; }
-  inline GLuint GetAlbedoSpecTexture() const { return m_AlbedoSpecAttachment; }
-  inline GLuint GetDepthAttachment() const { return m_DepthAttachment; }
+  void BindPositionTextureForReading(GLenum textureUnit);
+  void BindNormalTextureForReading(GLenum textureUnit);
+  void BindAlbedoTextureForReading(GLenum textureUnit);
 
   static std::shared_ptr<GeometryBuffer> Create(uint32_t width, uint32_t height);
 
@@ -405,8 +404,8 @@ struct OmniDirectShadowBuffer
 
   void Bind() const;
   void UnBind() const;
-  void BindForWriting(uint32_t cubemapIndex, uint32_t faceIndex);
-  void BindForReading(GLenum TextureUnit);
+  void BindCubemapFaceForWriting(uint32_t cubemapIndex, uint32_t faceIndex);
+  void BindShadowTextureForReading(GLenum TextureUnit);
 
   inline glm::mat4 GetShadowProj() { return m_shadowProj; }
 

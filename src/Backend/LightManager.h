@@ -7,8 +7,8 @@
 
 enum class LightType : int32_t
 {
-  POINT = 0,
-  DIRECT = 1,
+  DIRECT = 0,
+  POINT = 1,
   SPOT = 2
 };
 
