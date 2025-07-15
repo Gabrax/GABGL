@@ -203,6 +203,7 @@ struct RendererData
 
   std::shared_ptr<FrameBuffer> m_ResultBuffer;
   std::shared_ptr<FrameBuffer> m_LightBuffer;
+  std::shared_ptr<FrameBuffer> m_SkyboxBuffer;
   std::shared_ptr<BloomBuffer> m_BloomBuffer;
   std::shared_ptr<OmniDirectShadowBuffer> m_OmniDirectShadowBuffer;
   std::shared_ptr<DirectShadowBuffer> m_DirectShadowBuffer;
@@ -346,11 +347,17 @@ void Renderer::Init()
 	fbSpec.Height = s_Data.m_WindowRef->GetHeight();
 	s_Data.m_ResultBuffer = FrameBuffer::Create(fbSpec);
 
+  FramebufferSpecification fbSpec2;
+	fbSpec2.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RGBA16F};
+	fbSpec2.Width = s_Data.m_WindowRef->GetWidth();
+	fbSpec2.Height = s_Data.m_WindowRef->GetHeight();
+	s_Data.m_LightBuffer = FrameBuffer::Create(fbSpec2);
+
   FramebufferSpecification fbSpec3;
-	fbSpec3.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RGBA16F};
+	fbSpec3.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::DEPTH };
 	fbSpec3.Width = s_Data.m_WindowRef->GetWidth();
 	fbSpec3.Height = s_Data.m_WindowRef->GetHeight();
-	s_Data.m_LightBuffer = FrameBuffer::Create(fbSpec3);
+	s_Data.m_SkyboxBuffer = FrameBuffer::Create(fbSpec3);
 
   s_Data.m_GeometryBuffer = GeometryBuffer::Create(s_Data.m_WindowRef->GetWidth(), s_Data.m_WindowRef->GetHeight());
   s_Data.m_BloomBuffer = BloomBuffer::Create(s_Data.s_Shaders.DownSampleShader, s_Data.s_Shaders.UpSampleShader, s_Data.s_Shaders.BloomResultShader);
@@ -407,66 +414,62 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
   glCullFace(GL_FRONT);
   glFrontFace(GL_CW);
 
+  if(!LightManager::DirectLightEmpty())
   {
-    if(!LightManager::DirectLightEmpty())
-    {
-      GABGL_PROFILE_SCOPE("DIRECT SHADOW PASS");
+    GABGL_PROFILE_SCOPE("DIRECT SHADOW PASS");
 
-      s_Data.m_DirectShadowBuffer->Bind();
-      float max = std::numeric_limits<float>::max();
-      SetClearColor({max,max,max,max});
-      glClear(GL_DEPTH_BUFFER_BIT);
+    s_Data.m_DirectShadowBuffer->Bind();
+    float max = std::numeric_limits<float>::max();
+    SetClearColor({max,max,max,max});
+    glClear(GL_DEPTH_BUFFER_BIT);
 
-      s_Data.s_Shaders.DirectShadowShader->Bind();
-      s_Data.m_DirectShadowBuffer->UpdateShadowView(LightManager::GetDirectLightRotation());
-      s_Data.s_Shaders.DirectShadowShader->SetMat4("u_LightSpaceMatrix", s_Data.m_DirectShadowBuffer->GetShadowViewProj());
-      s_Data.s_Shaders.DirectShadowShader->SetBool("isInstanced", false);
+    s_Data.s_Shaders.DirectShadowShader->Bind();
+    s_Data.m_DirectShadowBuffer->UpdateShadowView(LightManager::GetDirectLightRotation());
+    s_Data.s_Shaders.DirectShadowShader->SetMat4("u_LightSpaceMatrix", s_Data.m_DirectShadowBuffer->GetShadowViewProj());
+    s_Data.s_Shaders.DirectShadowShader->SetBool("isInstanced", false);
 
-      glBindVertexArray(ModelManager::GetModelsVAO());
-      glBindBuffer(GL_DRAW_INDIRECT_BUFFER,s_Data.m_cmdBufer);
-      glMultiDrawElementsIndirect(GL_TRIANGLES,GL_UNSIGNED_INT,NULL,s_Data.m_DrawCommands.size(),0);
-      glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
-      glBindVertexArray(0);
+    glBindVertexArray(ModelManager::GetModelsVAO());
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER,s_Data.m_cmdBufer);
+    glMultiDrawElementsIndirect(GL_TRIANGLES,GL_UNSIGNED_INT,NULL,s_Data.m_DrawCommands.size(),0);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
+    glBindVertexArray(0);
 
-      s_Data.s_Shaders.DirectShadowShader->UnBind();
-      s_Data.m_DirectShadowBuffer->UnBind();
-    }
+    s_Data.s_Shaders.DirectShadowShader->UnBind();
+    s_Data.m_DirectShadowBuffer->UnBind();
   }
+  if(!LightManager::PointLightEmpty())
   {
-    if(!LightManager::PointLightEmpty())
+    GABGL_PROFILE_SCOPE("OMNI SHADOW PASS");
+
+    s_Data.m_OmniDirectShadowBuffer->Bind();
+    float max = std::numeric_limits<float>::max();
+    SetClearColor({max,max,max,max});
+
+    s_Data.s_Shaders.OmniDirectShadowShader->Bind();
+    uint32_t lightIndex = 0;
+    for (const auto& light : LightManager::GetPointLightPositions())
     {
-      GABGL_PROFILE_SCOPE("OMNI SHADOW PASS");
+      s_Data.s_Shaders.OmniDirectShadowShader->SetVec3("gLightWorldPos",light);
 
-      s_Data.m_OmniDirectShadowBuffer->Bind();
-      float max = std::numeric_limits<float>::max();
-      SetClearColor({max,max,max,max});
-
-      s_Data.s_Shaders.OmniDirectShadowShader->Bind();
-      uint32_t lightIndex = 0;
-      for (const auto& light : LightManager::GetPointLightPositions())
+      const auto& directions = s_Data.m_OmniDirectShadowBuffer->GetFaceDirections();
+      for (auto face = 0; face < directions.size(); ++face)
       {
-        s_Data.s_Shaders.OmniDirectShadowShader->SetVec3("gLightWorldPos",light);
+        s_Data.m_OmniDirectShadowBuffer->BindCubemapFaceForWriting(lightIndex, face);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        const auto& directions = s_Data.m_OmniDirectShadowBuffer->GetFaceDirections();
-        for (auto face = 0; face < directions.size(); ++face)
-        {
-          s_Data.m_OmniDirectShadowBuffer->BindCubemapFaceForWriting(lightIndex, face);
-          glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glm::mat4 view = glm::lookAt(light,light + directions[face].Target,directions[face].Up);
+        s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("u_LightViewProjection", s_Data.m_OmniDirectShadowBuffer->GetShadowProj() * view);
 
-          glm::mat4 view = glm::lookAt(light,light + directions[face].Target,directions[face].Up);
-          s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("u_LightViewProjection", s_Data.m_OmniDirectShadowBuffer->GetShadowProj() * view);
-
-          glBindVertexArray(ModelManager::GetModelsVAO());
-          glBindBuffer(GL_DRAW_INDIRECT_BUFFER,s_Data.m_cmdBufer);
-          glMultiDrawElementsIndirect(GL_TRIANGLES,GL_UNSIGNED_INT,NULL,s_Data.m_DrawCommands.size(),0);
-          glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
-          glBindVertexArray(0);
-        }
-        lightIndex++;
+        glBindVertexArray(ModelManager::GetModelsVAO());
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER,s_Data.m_cmdBufer);
+        glMultiDrawElementsIndirect(GL_TRIANGLES,GL_UNSIGNED_INT,NULL,s_Data.m_DrawCommands.size(),0);
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
+        glBindVertexArray(0);
       }
-      s_Data.s_Shaders.OmniDirectShadowShader->UnBind();
-      s_Data.m_OmniDirectShadowBuffer->UnBind();
+      lightIndex++;
     }
+    s_Data.s_Shaders.OmniDirectShadowShader->UnBind();
+    s_Data.m_OmniDirectShadowBuffer->UnBind();
   }
   {
     GABGL_PROFILE_SCOPE("DEPTH PRE PASS");
@@ -512,9 +515,6 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
     glBindVertexArray(0);
 
-    Renderer::DrawSkybox("night");
-    Renderer::DrawText(FontManager::GetFont("dpcomic"), "FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f, 50.0f), 0.5f, glm::vec4(1.0f));
-
     EndScene();
     s_Data.s_Shaders.GeometryShader->UnBind();
 
@@ -522,6 +522,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
     glDepthMask(GL_TRUE);   
 
     s_Data.m_GeometryBuffer->UnBind();
+    s_Data.m_GeometryBuffer->BlitDepthTo(s_Data.m_SkyboxBuffer);
   }
   {
     GABGL_PROFILE_SCOPE("LIGHT PASS");
@@ -550,7 +551,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
 
     s_Data.s_Shaders.LightShader->UnBind();
     s_Data.m_LightBuffer->UnBind(); 
-    s_Data.m_LightBuffer->BlitColor(s_Data.m_ResultBuffer);
+    s_Data.m_LightBuffer->BlitColor(s_Data.m_SkyboxBuffer);
   }
   /*{*/
   /*  if(lights)*/
@@ -572,6 +573,35 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
   /*    s_Data.m_BloomFramebuffer->BlitDepthTo(s_Data.m_Framebuffer);*/
   /*  }*/
   /*}*/
+  {
+    GABGL_PROFILE_SCOPE("SKYBOX && UI PASS");
+
+    s_Data.m_SkyboxBuffer->Bind();
+
+    glDepthFunc(GL_LEQUAL);   
+    glDepthMask(GL_FALSE);    
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
+    Renderer::DrawSkybox("night");
+
+    BeginScene(s_Data.m_Camera);
+    Renderer::DrawText(FontManager::GetFont("dpcomic"), "FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f, 50.0f), 0.5f, glm::vec4(1.0f));
+    EndScene();
+
+    glDepthFunc(GL_LESS);
+    glDepthMask(GL_TRUE);
+
+    s_Data.m_SkyboxBuffer->UnBind();
+    s_Data.m_SkyboxBuffer->BlitColor(s_Data.m_ResultBuffer);
+  }
+  {
+    GABGL_PROFILE_SCOPE("MISC UPDATE PASS");
+
+    s_Data.m_Camera.OnUpdate(dt);
+    ModelManager::UpdateConvexModels(dt);
+    PhysX::Simulate(dt);
+    AudioManager::UpdateAllMusic();
+  }
 
   s_Data.m_ResultBuffer->Bind();
   s_Data.m_ResultBuffer->ClearAttachment(1, -1);
@@ -581,15 +611,6 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
   glDisable(GL_DEPTH_TEST);
   SetClearColor(glm::vec4(0.0f));
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-  {
-    GABGL_PROFILE_SCOPE("MISC UPDATE PASS");
-
-    s_Data.m_Camera.OnUpdate(dt);
-    ModelManager::UpdateConvexModels(dt);
-    PhysX::Simulate(dt);
-    AudioManager::UpdateAllMusic();
-  }
 
   uint32_t finalTexture = s_Data.m_ResultBuffer->GetColorAttachmentRendererID();
 

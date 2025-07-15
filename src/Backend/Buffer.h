@@ -303,6 +303,7 @@ struct GeometryBuffer
   void BindPositionTextureForReading(GLenum textureUnit);
   void BindNormalTextureForReading(GLenum textureUnit);
   void BindAlbedoTextureForReading(GLenum textureUnit);
+  void BlitDepthTo(const std::shared_ptr<FrameBuffer>& dst);
 
   static std::shared_ptr<GeometryBuffer> Create(uint32_t width, uint32_t height);
 

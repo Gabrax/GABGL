@@ -662,6 +662,22 @@ void GeometryBuffer::BindAlbedoTextureForReading(GLenum textureUnit)
   glBindTextureUnit(textureUnit - GL_TEXTURE0, m_AlbedoSpecAttachment);
 }
 
+void GeometryBuffer::BlitDepthTo(const std::shared_ptr<FrameBuffer>& dst)
+{
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, m_FBO);      
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dst->GetID());     
+
+  const auto& dstSpec = dst->GetSpecification();
+
+  glBlitNamedFramebuffer(
+		m_FBO, dst->GetID(),
+		0, 0, m_Width, m_Height,
+		0, 0, dstSpec.Width, dstSpec.Height,
+		GL_DEPTH_BUFFER_BIT,
+		GL_NEAREST
+	);
+}
+
 void GeometryBuffer::Resize(uint32_t width, uint32_t height)
 {
   if (m_Width == width && m_Height == height) return;
