@@ -260,6 +260,8 @@ void Renderer::Init()
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_LINE_SMOOTH);
 
+  glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+
   s_Data.QuadVertexArray = VertexArray::Create();
 	s_Data.QuadVertexBuffer = VertexBuffer::Create(s_Data.MaxVertices * sizeof(QuadVertex));
 	s_Data.QuadVertexBuffer->SetLayout({
@@ -348,13 +350,13 @@ void Renderer::Init()
 	s_Data.m_ResultBuffer = FrameBuffer::Create(fbSpec);
 
   FramebufferSpecification fbSpec2;
-	fbSpec2.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RGBA16F};
+	fbSpec2.Attachments = { FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::RGBA16F };
 	fbSpec2.Width = s_Data.m_WindowRef->GetWidth();
 	fbSpec2.Height = s_Data.m_WindowRef->GetHeight();
 	s_Data.m_LightBuffer = FrameBuffer::Create(fbSpec2);
 
   FramebufferSpecification fbSpec3;
-	fbSpec3.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::DEPTH };
+	fbSpec3.Attachments = { FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::DEPTH };
 	fbSpec3.Width = s_Data.m_WindowRef->GetWidth();
 	fbSpec3.Height = s_Data.m_WindowRef->GetHeight();
 	s_Data.m_SkyboxBuffer = FrameBuffer::Create(fbSpec3);
@@ -514,7 +516,6 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
     glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, NULL, s_Data.m_DrawCommands.size(), 0);
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
     glBindVertexArray(0);
-
     EndScene();
     s_Data.s_Shaders.GeometryShader->UnBind();
 
@@ -551,33 +552,22 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
 
     s_Data.s_Shaders.LightShader->UnBind();
     s_Data.m_LightBuffer->UnBind(); 
-    s_Data.m_LightBuffer->BlitColor(s_Data.m_SkyboxBuffer);
   }
-  /*{*/
-  /*  if(lights)*/
-  /*  {*/
-  /*    GABGL_PROFILE_SCOPE("BLOOM PASS");*/
-  /**/
-  /*    s_Data.m_BloomFramebuffer->BlitDepthFrom(s_Data.m_MSAAFramebuffer);*/
-  /*    s_Data.m_BloomFramebuffer->Bind();*/
-  /*    glClear(GL_COLOR_BUFFER_BIT);*/
-  /**/
-  /*    BeginScene(s_Data.m_Camera);*/
-  /*    Renderer::DrawCube(glm::vec3(5.0f),glm::vec3(1.0f),glm::vec4(1.0,1.0,0.0,1.0));*/
-  /*    Renderer::DrawCube(glm::vec3(15.0f,5.0f,15.0f),glm::vec3(1.0f),glm::vec4(1.0f));*/
-  /*    EndScene();*/
-  /**/
-  /*    s_Data.m_BloomFramebuffer->RenderBloomTexture(0.005f);*/
-  /*    s_Data.m_BloomFramebuffer->UnBind();*/
-  /*    s_Data.m_BloomFramebuffer->CompositeBloomOver(s_Data.m_Framebuffer);*/
-  /*    s_Data.m_BloomFramebuffer->BlitDepthTo(s_Data.m_Framebuffer);*/
-  /*  }*/
-  /*}*/
+  {
+    GABGL_PROFILE_SCOPE("BLOOM PASS");
+
+    s_Data.m_BloomBuffer->BlitColorFrom(s_Data.m_LightBuffer,0);
+    s_Data.m_BloomBuffer->BlitColorFrom(s_Data.m_LightBuffer,1);
+    s_Data.m_BloomBuffer->Bind();
+    s_Data.m_BloomBuffer->RenderBloomTexture(0.005f);
+    s_Data.m_BloomBuffer->CompositeBloomOver();
+    s_Data.m_BloomBuffer->UnBind();
+    s_Data.m_BloomBuffer->BlitColorTo(s_Data.m_SkyboxBuffer);
+  }
   {
     GABGL_PROFILE_SCOPE("SKYBOX && UI PASS");
 
     s_Data.m_SkyboxBuffer->Bind();
-
     glDepthFunc(GL_LEQUAL);   
     glDepthMask(GL_FALSE);    
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
@@ -590,7 +580,6 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
 
     glDepthFunc(GL_LESS);
     glDepthMask(GL_TRUE);
-
     s_Data.m_SkyboxBuffer->UnBind();
     s_Data.m_SkyboxBuffer->BlitColor(s_Data.m_ResultBuffer);
   }

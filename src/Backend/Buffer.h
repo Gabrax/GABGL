@@ -327,9 +327,9 @@ struct BloomBuffer
   void Bind() const;
   void UnBind() const;
   void Resize(int32_t newWidth, int32_t newHeight);
-  void CompositeBloomOver(const std::shared_ptr<FrameBuffer>& target);
-  void BlitDepthFrom(const std::shared_ptr<FrameBuffer>& src);
-  void BlitDepthTo(const std::shared_ptr<FrameBuffer>& dst);
+  void CompositeBloomOver();
+  void BlitColorFrom(const std::shared_ptr<FrameBuffer>& src, uint32_t attachmentIndex);
+  void BlitColorTo(const std::shared_ptr<FrameBuffer>& dst);
 
 	static std::shared_ptr<BloomBuffer> Create(const std::shared_ptr<Shader>& downsampleShader, const std::shared_ptr<Shader>& upsampleShader, const std::shared_ptr<Shader>& finalShader);
 

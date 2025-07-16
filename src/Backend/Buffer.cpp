@@ -733,13 +733,13 @@ BloomBuffer::BloomBuffer(const std::shared_ptr<Shader>& downsampleShader, const 
   float windowHeight = Engine::GetInstance().GetMainWindow().GetHeight();
 
   FramebufferSpecification hdrSpec;
-	hdrSpec.Attachments = { FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::DEPTH24STENCIL8 };
+	hdrSpec.Attachments = { FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::RGBA16F };
 	hdrSpec.Width = Engine::GetInstance().GetMainWindow().GetWidth();
 	hdrSpec.Height = Engine::GetInstance().GetMainWindow().GetHeight();
 	m_hdrFB = FrameBuffer::Create(hdrSpec); 
 
   FramebufferSpecification blurSpec;
-  blurSpec.Attachments = { FramebufferTextureFormat::RGBA16F};
+  blurSpec.Attachments = { FramebufferTextureFormat::RGBA16F };
   blurSpec.Width = windowWidth;
   blurSpec.Height = windowHeight;
   m_pingpongFB[0] = FrameBuffer::Create(blurSpec);
@@ -834,7 +834,6 @@ void BloomBuffer::RenderBloomTexture(float filterRadius)
   {
     const bloomMip& mip = mMipChain[i];
     const bloomMip& nextMip = mMipChain[i - 1];
-
     glViewport(0, 0, nextMip.size.x, nextMip.size.y);
 
     glBindTextureUnit(0, mip.texture);
@@ -902,14 +901,10 @@ void BloomBuffer::UnBind() const
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void BloomBuffer::CompositeBloomOver(const std::shared_ptr<FrameBuffer>& target)
+void BloomBuffer::CompositeBloomOver()
 {
-  target->Bind();
-
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_ONE, GL_ONE); 
-  glBlendEquation(GL_FUNC_ADD);
-
+  m_hdrFB->Bind();
+  glDrawBuffer(GL_COLOR_ATTACHMENT0);
   finalShader->Bind();
 
   glBindTextureUnit(0, m_hdrFB->GetColorAttachmentRendererID(0));
@@ -920,42 +915,45 @@ void BloomBuffer::CompositeBloomOver(const std::shared_ptr<FrameBuffer>& target)
 
   renderQuad();
 
-  glDisable(GL_BLEND);
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  finalShader->UnBind();
 }
 
-void BloomBuffer::BlitDepthFrom(const std::shared_ptr<FrameBuffer>& src)
+void BloomBuffer::BlitColorFrom(const std::shared_ptr<FrameBuffer>& src, uint32_t attachmentIndex)
 {
-  glBindFramebuffer(GL_READ_FRAMEBUFFER, src->GetID());      
-  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_hdrFB->GetID());     
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, src->GetID());
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_hdrFB->GetID());
+
+  glReadBuffer(GL_COLOR_ATTACHMENT0 + attachmentIndex);
+  glDrawBuffer(GL_COLOR_ATTACHMENT0 + attachmentIndex); 
 
   const auto& srcSpec = src->GetSpecification();
   const auto& dstSpec = m_hdrFB->GetSpecification();
 
-  glBlitNamedFramebuffer(
-		src->GetID(), m_hdrFB->GetID(),
-		0, 0, srcSpec.Width, srcSpec.Height,
-		0, 0, dstSpec.Width, dstSpec.Height,
-		GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT,
-		GL_NEAREST
-	);
+  glBlitFramebuffer(
+      0, 0, srcSpec.Width, srcSpec.Height,
+      0, 0, dstSpec.Width, dstSpec.Height,
+      GL_COLOR_BUFFER_BIT,
+      GL_NEAREST
+  );
+
+  glReadBuffer(GL_COLOR_ATTACHMENT0);
+  glDrawBuffer(GL_COLOR_ATTACHMENT0);
 }
 
-void BloomBuffer::BlitDepthTo(const std::shared_ptr<FrameBuffer>& dst)
+void BloomBuffer::BlitColorTo(const std::shared_ptr<FrameBuffer>& dst)
 {
-  glBindFramebuffer(GL_READ_FRAMEBUFFER, m_hdrFB->GetID());      
-  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dst->GetID());     
-
   const auto& srcSpec = m_hdrFB->GetSpecification();
   const auto& dstSpec = dst->GetSpecification();
 
+  glNamedFramebufferReadBuffer(m_hdrFB->GetID(), GL_COLOR_ATTACHMENT0);
+
   glBlitNamedFramebuffer(
-		m_hdrFB->GetID(), dst->GetID(),
-		0, 0, srcSpec.Width, srcSpec.Height,
-		0, 0, dstSpec.Width, dstSpec.Height,
-		GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT,
-		GL_NEAREST
-	);
+      m_hdrFB->GetID(), dst->GetID(),
+      0, 0, srcSpec.Width, srcSpec.Height,
+      0, 0, dstSpec.Width, dstSpec.Height,
+      GL_COLOR_BUFFER_BIT,
+      GL_NEAREST
+  );
 }
 
 std::shared_ptr<BloomBuffer> BloomBuffer::Create(const std::shared_ptr<Shader>& downsampleShader, const std::shared_ptr<Shader>& upsampleShader, const std::shared_ptr<Shader>& finalShader)
