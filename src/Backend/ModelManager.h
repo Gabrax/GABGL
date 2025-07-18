@@ -80,18 +80,19 @@ struct BoneInfo
 
 struct AssimpNodeData
 {
-    glm::mat4 transformation;
-    std::string name;
-    int childrenCount;
-    std::vector<AssimpNodeData> children;
+  glm::mat4 transformation;
+  std::string name;
+  int childrenCount;
+  std::vector<AssimpNodeData> children;
 };
 
-struct AnimationData {
-    std::string name;
-    float duration;
-    float ticksPerSecond;
-    std::vector<Bone> bones;  // Preprocessed bone data for the animation.
-    AssimpNodeData hierarchy; // Precomputed node hierarchy for the animation.
+struct AnimationData
+{
+  std::string name;
+  float duration;
+  float ticksPerSecond;
+  std::vector<Bone> bones;  // Preprocessed bone data for the animation.
+  AssimpNodeData hierarchy; // Precomputed node hierarchy for the animation.
 };
 
 struct Vertex
@@ -127,14 +128,6 @@ enum class MeshType : int32_t
   CONTROLLER = 1,
   TRIANGLEMESH = 2,
   CONVEXMESH = 3
-};
-
-enum class Movement : int32_t
-{
-  FORWARD = 0,
-  BACKWARD = 1,
-  LEFT = 2,
-  RIGHT = 3
 };
 
 struct Model
@@ -232,6 +225,14 @@ private:
   void ResizeFinalBoneMatrices();
   void ReadHierarchyData(AssimpNodeData& dest, const aiNode* src);
   void ReadMissingBones(const aiAnimation* animation);
+};
+
+enum class Movement : int32_t
+{
+  FORWARD = 0,
+  BACKWARD = 1,
+  LEFT = 2,
+  RIGHT = 3
 };
 
 struct ModelManager

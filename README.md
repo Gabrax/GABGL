@@ -2,8 +2,6 @@
     <img src="https://github.com/user-attachments/assets/35a03295-7d87-471c-8f86-cd28b3f4d5ea" alt="GABGLlogo" width="200"/>
 </p>
 
-<p align="center"> 3D C++ OpenGL engine </p>
-
 ## Getting started
 > [!WARNING]
 > Dependencies: CMake, C++20 <br>

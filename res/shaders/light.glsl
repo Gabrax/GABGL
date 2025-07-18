@@ -50,12 +50,6 @@ uniform mat4 u_DirectShadowViewProj;
 
 const float gamma = 1.2;
 
-struct Material {
-  float shininess;
-  vec3 specular;
-};
-const Material material = Material(32.0, vec3(0.5));
-
 float gammaCorrection(float value) {
   return pow(value, 1.0 / gamma);
 }
@@ -120,45 +114,45 @@ float calculatePointShadow(vec3 fragPos, vec3 lightPos, vec3 normal, int lightIn
   return (currentDepth - bias > closestDepth) ? 0.15 : 1.0;
 }
 
-vec3 calculateDirectionalLight(vec3 lightDir, vec3 normal, vec3 viewDir, vec3 color, vec4 fragPosLightSpace, vec3 ambientCol, vec3 specularCol) {
+vec3 calculateDirectionalLight(vec3 lightDir, vec3 normal, vec3 viewDir, vec3 surfaceColor, vec4 fragPosLightSpace, vec3 ambientCol, vec3 specularCol, vec3 lightColor, float shininess) {
   lightDir = normalize(-lightDir);
   float shadow = CalcShadowFactorWithRandomSampling(fragPosLightSpace, lightDir, normal);
-
   float diff = max(dot(normal, lightDir), 0.0);
-  vec3 reflectDir = reflect(-lightDir, normal);
-  float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
 
-  vec3 ambient = ambientCol * color;
-  vec3 diffuse = color * diff * shadow;
+  vec3 reflectDir = reflect(-lightDir, normal);
+  float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
+
+  vec3 ambient = ambientCol * surfaceColor;
+  vec3 diffuse = lightColor * diff * surfaceColor * shadow;
   vec3 specular = specularCol * spec * shadow;
 
   return ambient + diffuse + specular;
 }
 
-vec3 calculatePointLight(vec3 lightPos, vec3 fragPos, vec3 normal, vec3 viewDir, vec3 color, vec3 ambientCol, vec3 specularCol, int lightIndex) {
+vec3 calculatePointLight(vec3 lightPos, vec3 fragPos, vec3 normal, vec3 viewDir, vec3 surfaceColor, vec3 ambientCol, vec3 specularCol, int lightIndex, vec3 lightColor, float shininess) {
   vec3 lightDir = normalize(lightPos - fragPos);
   float diff = max(dot(normal, lightDir), 0.0);
 
   vec3 reflectDir = reflect(-lightDir, normal);
-  float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+  float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
 
   float distance = length(lightPos - fragPos);
   float attenuation = 1.0 / (1.0 + 0.09 * distance + 0.032 * (distance * distance));
   float shadow = calculatePointShadow(fragPos, lightPos, normal, lightIndex);
 
-  vec3 ambient = ambientCol * color * attenuation;
-  vec3 diffuse = color * diff * shadow * attenuation;
-  vec3 specular = specularCol * spec * shadow * attenuation;
+  vec3 ambient = ambientCol * surfaceColor * attenuation;
+  vec3 diffuse = lightColor * diff * surfaceColor * shadow * attenuation;
+  vec3 specular = specularCol * spec * shadow;
 
   return ambient + diffuse + specular;
 }
 
-vec3 calculateSpotlight(vec3 lightPos, vec3 lightDir, vec3 fragPos, vec3 normal, vec3 viewDir, vec3 color, vec3 ambientCol, vec3 specularCol) {
+vec3 calculateSpotlight(vec3 lightPos, vec3 lightDir, vec3 fragPos, vec3 normal, vec3 viewDir, vec3 surfaceColor, vec3 ambientCol, vec3 specularCol, vec3 lightColor, float shininess) {
   lightDir = normalize(lightPos - fragPos);
   float diff = max(dot(normal, lightDir), 0.0);
 
   vec3 reflectDir = reflect(-lightDir, normal);
-  float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+  float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
 
   float distance = length(lightPos - fragPos);
   float attenuation = 1.0 / (1.0 + 0.09 * distance + 0.032 * (distance * distance));
@@ -169,8 +163,8 @@ vec3 calculateSpotlight(vec3 lightPos, vec3 lightDir, vec3 fragPos, vec3 normal,
   float epsilon = cutOff - outerCutOff;
   float intensity = clamp((theta - outerCutOff) / epsilon, 0.0, 1.0);
 
-  vec3 ambient = ambientCol * color * attenuation * intensity;
-  vec3 diffuse = color * diff * attenuation * intensity;
+  vec3 ambient = ambientCol * surfaceColor * attenuation * intensity;
+  vec3 diffuse = lightColor * diff * surfaceColor * attenuation * intensity;
   vec3 specular = specularCol * spec * attenuation * intensity;
 
   return ambient + diffuse + specular;
@@ -184,6 +178,9 @@ void main()
   vec3 Color = AlbedoSpec.rgb;
   vec3 viewDir = normalize(CameraPos - FragPos);
   vec4 fragPosLightSpace = u_DirectShadowViewProj * vec4(FragPos, 1.0);
+  vec3 specularCol = vec3(AlbedoSpec.a);
+
+  float shininess = mix(8.0, 128.0, AlbedoSpec.a);
 
   vec3 result = vec3(0.0);
 
@@ -191,18 +188,17 @@ void main()
   {
     vec3 position = positions[i].xyz;
     vec3 rotation = rotations[i].xyz;
-    vec3 diffuse = colors[i].rgb;
-    vec3 ambient = diffuse * 0.1;
-    vec3 specular = vec3(1.0);
+    vec3 lightColor = colors[i].rgb;
+    vec3 ambient = lightColor * 0.1;
 
     int type = lightTypes[i];
 
     if (type == 0) {
-      result += calculateDirectionalLight(rotation, Normal, viewDir, Color, fragPosLightSpace, ambient, specular);
+      result += calculateDirectionalLight(rotation, Normal, viewDir, Color, fragPosLightSpace, ambient, specularCol, lightColor, shininess);
     } else if (type == 1) {
-      result += calculatePointLight(position, FragPos, Normal, viewDir, Color, ambient, specular, i);
+      result += calculatePointLight(position, FragPos, Normal, viewDir, Color, ambient, specularCol, i, lightColor, shininess);
     } else if (type == 2) {
-      result += calculateSpotlight(position, rotation, FragPos, Normal, viewDir, Color, ambient, specular);
+      result += calculateSpotlight(position, rotation, FragPos, Normal, viewDir, Color, ambient, specularCol, lightColor, shininess);
     }
   }
 

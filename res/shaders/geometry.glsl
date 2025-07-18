@@ -88,10 +88,11 @@ layout(location = 2) out vec4 gAlbedoSpec;
 layout(std430, binding = 7) buffer MeshTextures      { sampler2D meshTextures[]; };
 layout(std430, binding = 8) buffer MeshTextureRanges { uvec2 meshTextureRanges[]; };
 
-struct Material {
+struct Material
+{
   sampler2D diffuse;
   sampler2D normalMap;  
-  vec3 specular;    
+  sampler2D specular;    
   float shininess;
 };
 
@@ -101,12 +102,13 @@ Material getMaterial(uint drawID)
   uvec2 texRange = meshTextureRanges[drawID];
   mat.diffuse = meshTextures[texRange.x];
   mat.normalMap = meshTextures[texRange.x + 1];
-  mat.specular = vec3(0.5);
+  mat.specular = meshTextures[texRange.x + 2];
   mat.shininess = 32.0;
   return mat;
 }
 
-in VS_OUT {
+in VS_OUT
+{
   vec3 FragPos;
   vec3 Normal;
   vec2 TexCoords;
@@ -117,12 +119,11 @@ void main()
 {
   Material material = getMaterial(fs_in.DrawID);
   
-  vec3 albedo = texture(material.diffuse, fs_in.TexCoords).rgb;
-  float specStrength = 0.5; // or material.specular strength per channel
-
   gPosition = fs_in.FragPos;
   gNormal = normalize(fs_in.Normal);
+
+  vec3 albedo = texture(material.diffuse, fs_in.TexCoords).rgb;
   gAlbedoSpec.rgb = albedo;
-  gAlbedoSpec.a = specStrength;
+  gAlbedoSpec.a = texture(material.specular, fs_in.TexCoords).r;
 }
 

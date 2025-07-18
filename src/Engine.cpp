@@ -10,6 +10,7 @@
 #include "backend/AssetManager.h"
 #include "backend/PhysX.h"
 #include "backend/FontManager.h"
+#include "glad/glad.h"
 
 Engine* Engine::s_Instance = nullptr;
 
@@ -33,18 +34,21 @@ void Engine::Run()
   PhysX::Init();
 	Renderer::Init();
   ModelManager::Init();
+  AssetManager::Init();
 
-  AssetManager::StartLoadingAssets();
+  /*CustomRefreshRate::SetTargetFPS(60);*/
 
   while(m_Window->IsRunning())
   {
-    Renderer::ClearBuffers();
+    /*CustomRefreshRate::BeginFrame();*/
+
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     DeltaTime dt;
 
     if (!AssetManager::LoadingComplete())
     {
-      AssetManager::UpdateLoading();
+      AssetManager::Update();
 
       Renderer::DrawLoadingScreen();
 
@@ -60,6 +64,8 @@ void Engine::Run()
     }
 
     m_Window->Update();
+
+    /*CustomRefreshRate::EndFrame();*/
   }
 }
 

@@ -201,7 +201,7 @@ struct AssetsData
 
 } s_Data;
 
-void AssetManager::StartLoadingAssets()
+void AssetManager::Init()
 {
   if (s_Data.m_LoadingStarted) return; // Already started
 
@@ -226,7 +226,7 @@ void AssetManager::StartLoadingAssets()
   );
 }
 
-void AssetManager::UpdateLoading()
+void AssetManager::Update()
 {
   if (!s_Data.m_LoadingStarted || s_Data.m_LoadingDone)
       return;
@@ -247,13 +247,11 @@ void AssetManager::UpdateLoading()
   {
     s_Data.m_UploadStarted = true;
 
-    s_LoadState = LoadState::UploadingAssets;
     for (size_t i = 0; i < s_Data.static_models.size(); ++i)
     {
       ModelManager::BakeModel(std::get<0>(s_Data.static_models[i]), s_Data.m_FutureStaticModels[i].get());
     }
 
-    s_LoadState = LoadState::Finalizing;
     for (size_t i = 0; i < s_Data.animated_models.size(); ++i)
     {
       ModelManager::BakeModel(std::get<0>(s_Data.animated_models[i]), s_Data.m_FutureAnimModels[i].get());
@@ -266,8 +264,6 @@ void AssetManager::UpdateLoading()
     s_Data.m_FutureTextures.clear();
     s_Data.m_FutureStaticModels.clear();
     s_Data.m_FutureAnimModels.clear();
-
-    s_LoadState = LoadState::Done;
 
     ModelManager::UploadToGPU();
     Renderer::InitDrawCommandBuffer();

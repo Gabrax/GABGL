@@ -24,9 +24,8 @@
 #include <glm/fwd.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
-#include <chrono>
-#include <thread>
 #include "json.hpp"
+#include "../input/UserInput.h"
 
 void MessageCallback(unsigned source,unsigned type,unsigned id,unsigned severity,int length,const char* message,const void* userParam)
 {
@@ -40,39 +39,6 @@ void MessageCallback(unsigned source,unsigned type,unsigned id,unsigned severity
 
 	GABGL_ASSERT(false, "Unknown severity level!");
 }
-
-struct CustomRefreshRate
-{
-  using Clock = std::chrono::high_resolution_clock;
-  using TimePoint = std::chrono::time_point<Clock>;
-
-  inline static void BeginFrame()
-  { 
-    frameStart = Clock::now();
-  }
-
-  inline static void EndFrame()
-  {
-    auto frameEnd = Clock::now();
-    std::chrono::duration<float, std::milli> elapsed = frameEnd - frameStart;
-
-    if (elapsed.count() < frameDelay)
-    {
-      std::this_thread::sleep_for(std::chrono::duration<float, std::milli>(frameDelay - elapsed.count()));
-    }
-  }
-
-  inline static void SetTargetFPS(float fps)
-  {
-    targetFPS = fps;
-    frameDelay = 1000.0f / targetFPS;
-  }
-
-private:
-  inline static TimePoint frameStart;
-  inline static float targetFPS = 60.0f;
-  inline static float frameDelay = 1000.0f / 60.0f;
-};
 
 struct QuadVertex
 {
@@ -422,7 +388,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
 
     s_Data.m_DirectShadowBuffer->Bind();
     float max = std::numeric_limits<float>::max();
-    SetClearColor({max,max,max,max});
+  	glClearColor(max, max, max, max);
     glClear(GL_DEPTH_BUFFER_BIT);
 
     s_Data.s_Shaders.DirectShadowShader->Bind();
@@ -445,7 +411,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
 
     s_Data.m_OmniDirectShadowBuffer->Bind();
     float max = std::numeric_limits<float>::max();
-    SetClearColor({max,max,max,max});
+  	glClearColor(max, max, max, max);
 
     s_Data.s_Shaders.OmniDirectShadowShader->Bind();
     uint32_t lightIndex = 0;
@@ -504,7 +470,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
 
     glDepthFunc(GL_EQUAL);       
     glDepthMask(GL_FALSE);       
-    SetClearColor(glm::vec4(0.0f));
+  	glClearColor(0, 0, 0, 0);
     glClear(GL_COLOR_BUFFER_BIT); 
 
     s_Data.s_Shaders.GeometryShader->Bind();
@@ -529,7 +495,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
     GABGL_PROFILE_SCOPE("LIGHT PASS");
 
     s_Data.m_LightBuffer->Bind(); 
-    SetClearColor(glm::vec4(0.0f));
+  	glClearColor(0, 0, 0, 0);
     glClear(GL_COLOR_BUFFER_BIT);
 
     s_Data.m_GeometryBuffer->BindPositionTextureForReading(GL_TEXTURE1); 
@@ -598,8 +564,30 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
 
   glDisable(GL_CULL_FACE);
   glDisable(GL_DEPTH_TEST);
-  SetClearColor(glm::vec4(0.0f));
+  glClearColor(0, 0, 0, 0);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  if (Input::IsKeyPressed(Key::X))
+  {
+      ModelManager::GetModel("harry")->StartBlendToAnimation(1, 0.8f);
+      ModelManager::MoveController("harry", Movement::FORWARD,5.0f,dt);
+  }
+  else
+  {
+      ModelManager::GetModel("harry")->StartBlendToAnimation(0, 0.8f); 
+  }
+  if (Input::IsKeyPressed(Key::C))
+  {
+      ModelManager::MoveController("harry", Movement::BACKWARD,5.0f,dt);
+  }
+  if (Input::IsKeyPressed(Key::Z))
+  {
+      ModelManager::MoveController("harry", Movement::LEFT,5.0f,dt);
+  }
+  if (Input::IsKeyPressed(Key::V))
+  {
+      ModelManager::MoveController("harry", Movement::RIGHT,5.0f,dt);
+  }
 
   uint32_t finalTexture = s_Data.m_ResultBuffer->GetColorAttachmentRendererID();
 
@@ -648,10 +636,10 @@ void Renderer::SetFullscreen(const std::string& sound, bool windowed)
   uint32_t width = (uint32_t)s_Data.m_WindowRef->GetWidth(); 
   uint32_t height = (uint32_t)s_Data.m_WindowRef->GetHeight(); 
 
-  /*s_Data.m_MSAAFramebuffer->Resize(width, height);*/
-  /*s_Data.m_BloomFramebuffer->Resize(width,height);*/
   s_Data.m_GeometryBuffer->Resize(width, height);
   s_Data.m_LightBuffer->Resize(width, height);
+  /*s_Data.m_BloomFramebuffer->Resize(width,height);*/
+  s_Data.m_SkyboxBuffer->Resize(width,height);
   s_Data.m_ResultBuffer->Resize(width, height);
   s_Data.m_Camera.SetViewportSize(width, height);
   AudioManager::PlaySound(sound);
@@ -1372,35 +1360,6 @@ void Renderer::InitDrawCommandBuffer()
   glNamedBufferStorage(s_Data.m_cmdBufer,sizeof(s_Data.m_DrawCommands[0]) * s_Data.m_DrawCommands.size(),(const void*)s_Data.m_DrawCommands.data(), 0);
 }
 
-void Renderer::OnWindowResize(uint32_t width, uint32_t height)
-{
-	SetViewport(0, 0, width, height);
-}
-
-void Renderer::SetViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height)
-{
-	glViewport(x, y, width, height);
-}
-
-void Renderer::SetClearColor(const glm::vec4& color)
-{
-	glClearColor(color.r, color.g, color.b, color.a);
-}
-
-void Renderer::ClearBuffers()
-{
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-}
-
-void Renderer::ClearColorBuffers()
-{
-	glClear(GL_COLOR_BUFFER_BIT);
-}
-
-void Renderer::ClearDepthBuffers()
-{
-	glClear(GL_DEPTH_BUFFER_BIT);
-}
 
 void Renderer::DrawIndexed(const std::shared_ptr<VertexArray>& vertexArray, uint32_t indexCount)
 {

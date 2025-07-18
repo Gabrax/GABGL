@@ -48,12 +48,6 @@ struct Renderer
   static void InitDrawCommandBuffer();
 
   static void DrawFullscreenQuad();
-  static void OnWindowResize(uint32_t width, uint32_t height);
-	static void SetViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height);
-	static void SetClearColor(const glm::vec4& color);
-	static void ClearBuffers();
-	static void ClearColorBuffers();
-	static void ClearDepthBuffers();
   static void SetFullscreen(const std::string& sound, bool windowed);
   static void SwitchRenderState();
 

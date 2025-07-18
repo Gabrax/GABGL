@@ -185,10 +185,8 @@ void Window::SetWindowIcon(const char* iconpath, GLFWwindow* window)
 
 void Window::SetVSync(bool enabled)
 {
-  if(enabled)
-    glfwSwapInterval(1);
-  else
-    glfwSwapInterval(0);
+  if(enabled) glfwSwapInterval(1);
+  else glfwSwapInterval(0);
 
   m_Data.VSync = enabled;
 }
@@ -215,10 +213,13 @@ void Window::CenterWindowPos()
 
 void Window::SetFullscreen(bool full)
 {
-  if(full){
+  if(full)
+  {
     glfwSetWindowMonitor(m_Window, m_Monitor, 0, 0, m_Mode->width, m_Mode->height, m_Mode->refreshRate);
-    SetVSync(true);
-  } else {
+    if(IsVSync()) SetVSync(true);
+  } 
+  else
+  {
     glfwSetWindowMonitor(m_Window, nullptr, currWidth, currHeight, 1000, 600, 0);
     CenterWindowPos();
   }
@@ -226,10 +227,7 @@ void Window::SetFullscreen(bool full)
 
 void Window::Maximize(bool maximize)  
 {
-  if(maximize)
-    glfwMaximizeWindow(m_Window);
-  else
-    NULL;
+  if(maximize) glfwMaximizeWindow(m_Window);
 }
 
 void Window::SetResizable(bool enable)
@@ -285,7 +283,7 @@ bool Window::OnWindowResize(WindowResizeEvent& e)
 	}
 
 	m_isMinimized = false;
-	Renderer::OnWindowResize(e.GetWidth(), e.GetHeight());
+  glViewport(0, 0, e.GetWidth(), e.GetHeight());
 
 	return false;
 }
