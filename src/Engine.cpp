@@ -10,7 +10,7 @@
 #include "backend/AssetManager.h"
 #include "backend/PhysX.h"
 #include "backend/FontManager.h"
-#include "glad/glad.h"
+#include "backend/CustomFrameRate.hpp"
 
 Engine* Engine::s_Instance = nullptr;
 
@@ -36,11 +36,11 @@ void Engine::Run()
   ModelManager::Init();
   AssetManager::Init();
 
-  /*CustomRefreshRate::SetTargetFPS(60);*/
+  /*CustomFrameRate::SetTargetFPS(60);*/
 
   while(m_Window->IsRunning())
   {
-    /*CustomRefreshRate::BeginFrame();*/
+    /*CustomFrameRate::BeginFrame();*/
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -60,12 +60,13 @@ void Engine::Run()
     }
     else
     {
+
       if (!m_Window->IsMinimized()) LayerStack::OnUpdate(dt);
     }
 
     m_Window->Update();
 
-    /*CustomRefreshRate::EndFrame();*/
+    /*CustomFrameRate::EndFrame();*/
   }
 }
 

@@ -120,6 +120,8 @@ struct Mesh
   GLuint instanceVBO = 0;
   bool instanceAttribsConfigured = false;
   bool instanceDataDirty = true;
+  bool hasNormalMap;
+  bool hasSpecularMap;
 };
 
 enum class MeshType : int32_t
@@ -210,7 +212,7 @@ private:
 
   void processNode(aiNode* node, const aiScene* scene);
   Mesh processMesh(aiMesh* mesh, const aiScene* scene);
-  void loadMaterialTextures(aiMaterial* mat, aiTextureType type, const std::string& typeName, std::vector<std::shared_ptr<Texture>>& textures);
+  bool loadMaterialTextures(aiMaterial* mat, aiTextureType type, const std::string& typeName, std::vector<std::shared_ptr<Texture>>& textures);
   void OptimizeMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m_Indices);
   void ExtractBoneWeightForVertices(std::vector<Vertex>& vertices, aiMesh* mesh);
   void SetDefaultBoneData(Vertex& vertex);

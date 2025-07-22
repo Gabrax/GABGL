@@ -18,7 +18,7 @@ layout(std140, binding = 0) uniform Camera
   vec3 CameraPos;
 };
 
-layout(std430, binding = 5) buffer ModelTransforms    { mat4 transforms[]; };
+layout(std430, binding = 5) buffer ModelTransforms    { mat4 transforms[];     };
 layout(std430, binding = 6) buffer MeshToTransformMap { int meshToTransform[]; };
 
 out VS_OUT
@@ -31,8 +31,8 @@ out VS_OUT
 
 const int MAX_BONES = 100;
 const int MAX_BONE_INFLUENCE = 4;
-layout(std430, binding = 9) buffer FinalBoneMatrices { mat4 boneMatrices[]; };
-layout(std430, binding = 10) buffer ModelIsAnimated  { int modelIsAnimated[]; };
+layout(std430, binding = 9) buffer FinalBoneMatrices  { mat4 boneMatrices[];    };
+layout(std430, binding = 10) buffer ModelIsAnimated   { int modelIsAnimated[];  };
 
 uniform bool isInstanced;
 
@@ -88,6 +88,9 @@ layout(location = 2) out vec4 gAlbedoSpec;
 layout(std430, binding = 7) buffer MeshTextures      { sampler2D meshTextures[]; };
 layout(std430, binding = 8) buffer MeshTextureRanges { uvec2 meshTextureRanges[]; };
 
+layout(std430, binding = 11) buffer NormalMapFlags    { int normalMapFlags[];   };
+layout(std430, binding = 12) buffer SpecularMapFlags  { int specularMapFlags[]; };
+
 struct Material
 {
   sampler2D diffuse;
@@ -95,17 +98,6 @@ struct Material
   sampler2D specular;    
   float shininess;
 };
-
-Material getMaterial(uint drawID)
-{
-  Material mat;
-  uvec2 texRange = meshTextureRanges[drawID];
-  mat.diffuse = meshTextures[texRange.x];
-  mat.normalMap = meshTextures[texRange.x + 1];
-  mat.specular = meshTextures[texRange.x + 2];
-  mat.shininess = 32.0;
-  return mat;
-}
 
 in VS_OUT
 {
@@ -117,13 +109,36 @@ in VS_OUT
 
 void main()
 {
-  Material material = getMaterial(fs_in.DrawID);
+  Material material;
+  uvec2 texRange = meshTextureRanges[fs_in.DrawID];
+  material.diffuse = meshTextures[texRange.x];
+  material.normalMap = meshTextures[texRange.x + 1];
+  material.specular = meshTextures[texRange.x + 2];
+  material.shininess = 32.0;
   
   gPosition = fs_in.FragPos;
-  gNormal = normalize(fs_in.Normal);
+
+  vec3 normal;
+  if (normalMapFlags[fs_in.DrawID] == 1)
+  {
+    vec3 tangentNormal = texture(material.normalMap, fs_in.TexCoords).rgb;
+    tangentNormal = tangentNormal * 2.0 - 1.0; // Remap from [0,1] to [-1,1]
+    normal = normalize(tangentNormal); 
+  }
+  else
+  {
+    normal = normalize(fs_in.Normal);
+  }
+  gNormal = normal;
 
   vec3 albedo = texture(material.diffuse, fs_in.TexCoords).rgb;
   gAlbedoSpec.rgb = albedo;
-  gAlbedoSpec.a = texture(material.specular, fs_in.TexCoords).r;
+
+  float specular = 0.0;
+  if (specularMapFlags[fs_in.DrawID] == 1)
+  {
+      specular = texture(material.specular, fs_in.TexCoords).r;
+  }
+  gAlbedoSpec.a = specular;
 }
 

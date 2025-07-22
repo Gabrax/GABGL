@@ -44,6 +44,8 @@ struct ModelsData
   std::shared_ptr<StorageBuffer> m_ModelsTransforms;
   std::shared_ptr<StorageBuffer> m_MeshToTransformSSBO;
   std::shared_ptr<StorageBuffer> m_BindlessTextureSSBO;
+  std::shared_ptr<StorageBuffer> m_NormalMapFlagsSSBO;
+  std::shared_ptr<StorageBuffer> m_SpecularMapFlagsSSBO;
   std::shared_ptr<StorageBuffer> m_MeshToTextureRangeSSBO;
   std::shared_ptr<StorageBuffer> m_FinalBoneMatricesSSBO;
   std::shared_ptr<StorageBuffer> m_ModelIsAnimatedSSBO; 
@@ -531,6 +533,42 @@ void ModelManager::UploadToGPU()
   s_Data.m_MeshToTransformSSBO = StorageBuffer::Create(meshToTransformIndex.size() * sizeof(int), 6);
   s_Data.m_MeshToTransformSSBO->SetData(meshToTransformIndex.size() * sizeof(int), meshToTransformIndex.data());
 
+  std::vector<GLuint64> textureHandles;
+  std::vector<MeshTextureRange> meshTextureRanges;
+  std::vector<int32_t> normalMapFlags;
+  std::vector<int32_t> specularMapFlags;
+
+  for (const auto& modelName : s_Data.m_ModelsNames)
+  {
+    auto& model = s_Data.m_Models[modelName];
+    const auto& meshes = model->GetMeshes();
+
+    for (size_t meshIndex = 0; meshIndex < meshes.size(); ++meshIndex)
+    {
+      const auto& mesh = meshes[meshIndex];
+
+      mesh.hasNormalMap ? normalMapFlags.push_back(1) : normalMapFlags.push_back(0);  
+      mesh.hasSpecularMap ? specularMapFlags.push_back(1) : specularMapFlags.push_back(0);  
+
+      MeshTextureRange range;
+      range.StartIndex = static_cast<uint32_t>(textureHandles.size());
+      range.Count = static_cast<uint32_t>(mesh.m_TexturesBindlessHandles.size());
+
+      for (GLuint64 handle : mesh.m_TexturesBindlessHandles) 
+      {
+       textureHandles.push_back(handle);
+      }
+
+      meshTextureRanges.push_back(range);
+    }
+  }
+
+  s_Data.m_BindlessTextureSSBO = StorageBuffer::Create(textureHandles.size() * sizeof(GLuint64), 7);
+  s_Data.m_BindlessTextureSSBO->SetData(textureHandles.size() * sizeof(GLuint64), textureHandles.data());
+
+  s_Data.m_MeshToTextureRangeSSBO = StorageBuffer::Create(meshTextureRanges.size() * sizeof(MeshTextureRange), 8);
+  s_Data.m_MeshToTextureRangeSSBO->SetData(meshTextureRanges.size() * sizeof(MeshTextureRange), meshTextureRanges.data());
+  
   std::vector<glm::mat4> identityBones(s_Data.m_Models.size() * MAX_BONES, glm::mat4(1.0f));
 
   s_Data.m_FinalBoneMatricesSSBO = StorageBuffer::Create(identityBones.size() * sizeof(glm::mat4), 9);
@@ -544,39 +582,25 @@ void ModelManager::UploadToGPU()
       isAnimatedFlags.push_back(model->IsAnimated() ? 1 : 0);
   }
 
-  s_Data.m_ModelIsAnimatedSSBO = StorageBuffer::Create(isAnimatedFlags.size() * sizeof(int), 10); // binding = 10
+  s_Data.m_ModelIsAnimatedSSBO = StorageBuffer::Create(isAnimatedFlags.size() * sizeof(int), 10); 
   s_Data.m_ModelIsAnimatedSSBO->SetData(isAnimatedFlags.size() * sizeof(int), isAnimatedFlags.data());
 
-  std::vector<GLuint64> textureHandles;
-  std::vector<MeshTextureRange> meshTextureRanges;
+  s_Data.m_NormalMapFlagsSSBO = StorageBuffer::Create(normalMapFlags.size() * sizeof(int), 11); 
+  s_Data.m_NormalMapFlagsSSBO->SetData(normalMapFlags.size() * sizeof(int), normalMapFlags.data());
 
-  for (const auto& modelName : s_Data.m_ModelsNames)
+  s_Data.m_SpecularMapFlagsSSBO = StorageBuffer::Create(specularMapFlags.size() * sizeof(int), 12); 
+  s_Data.m_SpecularMapFlagsSSBO->SetData(normalMapFlags.size() * sizeof(int), normalMapFlags.data());
+
+  for (const auto& modelName : s_Data.m_Models)
   {
-      auto& model = s_Data.m_Models[modelName];
-      const auto& meshes = model->GetMeshes();
-
-      for (size_t meshIndex = 0; meshIndex < meshes.size(); ++meshIndex)
+    for(auto& bruh : modelName.second->m_Meshes)
+    {
+      for(auto& hehe : bruh.m_Textures)
       {
-          const auto& mesh = meshes[meshIndex];
-
-          MeshTextureRange range;
-          range.StartIndex = static_cast<uint32_t>(textureHandles.size());
-          range.Count = static_cast<uint32_t>(mesh.m_TexturesBindlessHandles.size());
-
-          for (GLuint64 handle : mesh.m_TexturesBindlessHandles) 
-          {
-           textureHandles.push_back(handle);
-          }
-
-          meshTextureRanges.push_back(range);
+        GABGL_WARN("TYPE OF TEXTURE: {0}",hehe->GetType());
       }
+    }
   }
-
-  s_Data.m_BindlessTextureSSBO = StorageBuffer::Create(textureHandles.size() * sizeof(GLuint64), 7);
-  s_Data.m_BindlessTextureSSBO->SetData(textureHandles.size() * sizeof(GLuint64), textureHandles.data());
-
-  s_Data.m_MeshToTextureRangeSSBO = StorageBuffer::Create(meshTextureRanges.size() * sizeof(MeshTextureRange), 8);
-  s_Data.m_MeshToTextureRangeSSBO->SetData(meshTextureRanges.size() * sizeof(MeshTextureRange), meshTextureRanges.data());
 
   s_Data.allVertices.clear();
   s_Data.allIndices.clear();
@@ -802,45 +826,60 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
   std::vector<Vertex> vertices;
   vertices.reserve(mesh->mNumVertices);
 
-  for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
-      Vertex vertex;
-      if(m_isAnimated) SetDefaultBoneData(vertex);
-      vertex.Position = {mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z};
-      vertex.Normal = mesh->HasNormals() ? glm::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z) : glm::vec3(0.0f);
-      if (mesh->mTextureCoords[0]) {
-          vertex.TexCoords = {mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y};
-          vertex.Tangent = {mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z};
-          vertex.Bitangent = {mesh->mBitangents[i].x, mesh->mBitangents[i].y, mesh->mBitangents[i].z};
-      } else {
-          vertex.TexCoords = glm::vec2(0.0f);
-      }
-      vertices.emplace_back(std::move(vertex));
+  for (unsigned int i = 0; i < mesh->mNumVertices; ++i)
+  {
+    Vertex vertex;
+    if(m_isAnimated) SetDefaultBoneData(vertex);
+    vertex.Position = {mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z};
+    vertex.Normal = mesh->HasNormals() ? glm::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z) : glm::vec3(0.0f);
+    if (mesh->mTextureCoords[0]) {
+        vertex.TexCoords = {mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y};
+        vertex.Tangent = {mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z};
+        vertex.Bitangent = {mesh->mBitangents[i].x, mesh->mBitangents[i].y, mesh->mBitangents[i].z};
+    } else {
+        vertex.TexCoords = glm::vec2(0.0f);
+    }
+    vertices.emplace_back(std::move(vertex));
   }
 
   std::vector<GLuint> indices;
-  for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {
-      const aiFace& face = mesh->mFaces[i];
-      indices.insert(indices.end(), face.mIndices, face.mIndices + face.mNumIndices);
+  for (unsigned int i = 0; i < mesh->mNumFaces; ++i)
+  {
+    const aiFace& face = mesh->mFaces[i];
+    indices.insert(indices.end(), face.mIndices, face.mIndices + face.mNumIndices);
   }
 
   std::vector<std::shared_ptr<Texture>> textures;
-  if (mesh->mMaterialIndex >= 0) {
-      aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+  bool hasNormalMap = false;
+  bool hasSpecular = false;
 
-      loadMaterialTextures(material, aiTextureType_DIFFUSE, "texture_diffuse", textures);
-      loadMaterialTextures(material, aiTextureType_SPECULAR, "texture_specular", textures);
-      loadMaterialTextures(material, aiTextureType_NORMALS, "texture_normal", textures);
-      loadMaterialTextures(material, aiTextureType_AMBIENT, "texture_height", textures);
+  if (mesh->mMaterialIndex >= 0)
+  {
+    aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+
+    loadMaterialTextures(material, aiTextureType_DIFFUSE, "texture_diffuse", textures);
+    hasNormalMap |= loadMaterialTextures(material, aiTextureType_NORMALS, "texture_normal", textures);
+    hasNormalMap |= loadMaterialTextures(material, aiTextureType_HEIGHT, "texture_normal", textures); // OBJ fallback
+    hasSpecular |= loadMaterialTextures(material, aiTextureType_SPECULAR, "texture_specular", textures);
+
+    // Optional
+    // loadMaterialTextures(material, aiTextureType_BASE_COLOR, "texture_albedo", textures);
   }
 
-  if(m_isAnimated) ExtractBoneWeightForVertices(vertices, mesh);
+  if (m_isAnimated) ExtractBoneWeightForVertices(vertices, mesh);
   OptimizeMesh(vertices, indices);
 
-  return Mesh(vertices, indices, textures);
+  Mesh result(vertices, indices, textures);
+  result.hasNormalMap = hasNormalMap;
+  result.hasSpecularMap = hasSpecular;
+
+  return result;
 }
 
-void Model::loadMaterialTextures(aiMaterial* mat, aiTextureType type, const std::string& typeName, std::vector<std::shared_ptr<Texture>>& textures)
+bool Model::loadMaterialTextures(aiMaterial* mat, aiTextureType type, const std::string& typeName, std::vector<std::shared_ptr<Texture>>& textures)
 {
+  bool loadedAny = false;
+
   for (unsigned int i = 0; i < mat->GetTextureCount(type); ++i) {
       aiString str;
       mat->GetTexture(type, i, &str);
@@ -848,28 +887,30 @@ void Model::loadMaterialTextures(aiMaterial* mat, aiTextureType type, const std:
 
       if (m_TexturesLoaded.find(texturePath) != m_TexturesLoaded.end()) {
           textures.emplace_back(m_TexturesLoaded[texturePath]);
+          loadedAny = true;
           continue;
       }
 
+      std::shared_ptr<Texture> texture;
+
       if (texturePath[0] == '*') {
-        const aiTexture* aitexture = m_Scene->GetEmbeddedTexture(str.C_Str());
-        if (aitexture) {
-            std::shared_ptr<Texture> texture = Texture::CreateRAWEMBEDDED(aitexture,texturePath);
-            texture->SetType(typeName);
-
-            textures.emplace_back(texture);
-            m_TexturesLoaded[texturePath] = texture;
-        }
+          const aiTexture* aitexture = m_Scene->GetEmbeddedTexture(str.C_Str());
+          if (aitexture) {
+              texture = Texture::CreateRAWEMBEDDED(aitexture, texturePath);
+          }
+      } else {
+          texture = Texture::CreateRAW(texturePath, m_Directory);
       }
-      else
-      {
-        std::shared_ptr<Texture> texture = Texture::CreateRAW(texturePath, m_Directory);
-        texture->SetType(typeName);
 
-        textures.emplace_back(texture);
-        m_TexturesLoaded[texturePath] = texture;
+      if (texture) {
+          texture->SetType(typeName);
+          textures.emplace_back(texture);
+          m_TexturesLoaded[texturePath] = texture;
+          loadedAny = true;
       }
   }
+
+  return loadedAny;
 }
 
 void Model::OptimizeMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m_Indices)

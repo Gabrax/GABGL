@@ -9,8 +9,8 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.000000
 d 1.000000
 illum 1
-map_Kd Wall2.jpg
-map_Bump brck49Lb.jpg
+map_Kd surface2.jpg
+map_Bump -bm 1.200001 surface2_normal.png
 
 newmtl lambert3SG.001
 Ns 0.000000
@@ -20,8 +20,8 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.000000
 d 1.000000
 illum 1
-map_Kd a3v.jpg
-map_Bump -bm 0.100000 germany010b.jpg
+map_Kd surface1.jpg
+map_Bump -bm 1.300000 surface1_normal.png
 
 newmtl lambert4SG.001
 Ns 0.000000
@@ -31,8 +31,8 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.000000
 d 1.000000
 illum 1
-map_Kd wall2color.jpg
-map_Bump -bm 0.100000 CNCR04LB.JPG
+map_Kd surface3.jpg
+map_Bump -bm 1.600000 surface3_normal.png
 
 newmtl lambert5SG.001
 Ns 0.000000
@@ -42,8 +42,8 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.000000
 d 1.000000
 illum 1
-map_Kd entr002M.jpg
-map_Bump -bm 0.100000 entr002Mb.jpg
+map_Kd doors.jpg
+map_Bump -bm 1.300000 doors_normal.png
 
 newmtl lambert7SG.001
 Ns 0.000000
@@ -54,7 +54,7 @@ Ni 1.000000
 d 1.000000
 illum 1
 map_Kd wndw038M.jpg
-map_Bump -bm 0.100000 wndw038M.jpg
+map_Bump -bm 1.000000 surface4_normal.png
 
 newmtl lambert8SG.001
 Ns 0.000000
@@ -64,5 +64,5 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.000000
 d 1.000000
 illum 1
-map_Kd entr137M.jpg
-map_Bump -bm 0.100000 entr137M.jpg
+map_Kd surface5.jpg
+map_Bump -bm 0.900000 surface5_normal.png
