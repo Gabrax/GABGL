@@ -26,6 +26,8 @@ out VS_OUT
   vec3 FragPos;
   vec3 Normal;
   vec2 TexCoords;
+  vec3 TBN_FragPos;
+  mat3 TBN;
   flat uint DrawID;
 } vs_out;
 
@@ -59,6 +61,12 @@ void main()
       totalPosition += localPosition * weights[i];
     }
 
+    vec3 T = normalize(mat3(modelMat) * tangent);
+    vec3 B = normalize(mat3(modelMat) * bitangent);
+    vec3 N = normalize(mat3(modelMat) * aNormal);
+    vs_out.TBN = mat3(T, B, N);
+    vs_out.TBN_FragPos = vs_out.TBN * vs_out.FragPos;
+
     vec4 worldPos = modelMat * totalPosition;  
     vs_out.FragPos = worldPos.xyz;
     vs_out.Normal = mat3(transpose(inverse(modelMat))) * aNormal;
@@ -68,6 +76,12 @@ void main()
   }
   else
   {
+    vec3 T = normalize(mat3(modelMat) * tangent);
+    vec3 B = normalize(mat3(modelMat) * bitangent);
+    vec3 N = normalize(mat3(modelMat) * aNormal);
+    vs_out.TBN = mat3(T, B, N);
+    vs_out.TBN_FragPos = vs_out.TBN * vs_out.FragPos;
+
     vec4 worldPos = modelMat * vec4(aPos, 1.0);
     vs_out.FragPos = worldPos.xyz;
     vs_out.Normal = mat3(transpose(inverse(modelMat))) * aNormal;
@@ -104,6 +118,8 @@ in VS_OUT
   vec3 FragPos;
   vec3 Normal;
   vec2 TexCoords;
+  vec3 TBN_FragPos;
+  mat3 TBN;
   flat uint DrawID;
 } fs_in;
 
@@ -123,7 +139,7 @@ void main()
   {
     vec3 tangentNormal = texture(material.normalMap, fs_in.TexCoords).rgb;
     tangentNormal = tangentNormal * 2.0 - 1.0; // Remap from [0,1] to [-1,1]
-    normal = normalize(tangentNormal); 
+    normal = normalize(fs_in.TBN * tangentNormal);
   }
   else
   {

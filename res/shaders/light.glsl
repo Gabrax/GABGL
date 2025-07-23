@@ -7,8 +7,8 @@ out vec2 TexCoords;
 
 void main()
 {
-    TexCoords = aTexCoords;
-    gl_Position = vec4(aPos, 1.0);
+  TexCoords = aTexCoords;
+  gl_Position = vec4(aPos, 1.0);
 }
 
 #type FRAGMENT
@@ -27,23 +27,25 @@ layout(binding = 4) uniform sampler2D u_DirectShadow;
 layout(binding = 5) uniform sampler3D u_OffsetTexture;
 layout(binding = 6) uniform samplerCubeArray u_OmniShadow;
 
-layout(std140, binding = 0) uniform Camera {
+layout(std140, binding = 0) uniform Camera
+{
   mat4 ViewProjection;
   mat4 OrtoProjection;
   mat4 NonRotViewProjection;
   vec3 CameraPos;
 };
 
-layout(std140, binding = 1) uniform DirectShadowData {
+layout(std140, binding = 2) uniform DirectShadowData
+{
   vec2 windowSize;
   vec2 offsetSize_filterSize;
   vec2 randomRadius;
 };
 
-layout(std430, binding = 0) buffer LightPositions    { vec4 positions[30]; };
-layout(std430, binding = 1) buffer LightRotations    { vec4 rotations[30]; };
-layout(std430, binding = 2) buffer LightsQuantity    { int numLights; };
-layout(std430, binding = 3) buffer LightColors       { vec4 colors[30]; };
+layout(std430, binding = 0) buffer LightPositions    { vec4 positions[]; };
+layout(std430, binding = 1) buffer LightRotations    { vec4 rotations[]; };
+layout(std430, binding = 2) buffer LightsQuantity    { int numLights;    };
+layout(std430, binding = 3) buffer LightColors       { vec4 colors[];    };
 layout(std430, binding = 4) buffer LightTypes        { int lightTypes[]; };
 
 uniform mat4 u_DirectShadowViewProj;
@@ -68,7 +70,7 @@ vec3 toneMappingACES(vec3 color) {
   return clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0, 1.0);
 }
 
-float CalcShadowFactorWithRandomSampling(vec4 fragPosLightSpace, vec3 lightDir, vec3 normal) {
+float calculateDirectShadow(vec4 fragPosLightSpace, vec3 lightDir, vec3 normal) {
   ivec3 OffsetCoord;
   vec2 f = mod(gl_FragCoord.xy, offsetSize_filterSize.xx);
   OffsetCoord.yz = ivec2(f);
@@ -116,7 +118,7 @@ float calculatePointShadow(vec3 fragPos, vec3 lightPos, vec3 normal, int lightIn
 
 vec3 calculateDirectionalLight(vec3 lightDir, vec3 normal, vec3 viewDir, vec3 surfaceColor, vec4 fragPosLightSpace, vec3 ambientCol, vec3 specularCol, vec3 lightColor, float shininess) {
   lightDir = normalize(-lightDir);
-  float shadow = CalcShadowFactorWithRandomSampling(fragPosLightSpace, lightDir, normal);
+  float shadow = calculateDirectShadow(fragPosLightSpace, lightDir, normal);
   float diff = max(dot(normal, lightDir), 0.0);
 
   vec3 reflectDir = reflect(-lightDir, normal);
@@ -142,32 +144,35 @@ vec3 calculatePointLight(vec3 lightPos, vec3 fragPos, vec3 normal, vec3 viewDir,
 
   vec3 ambient = ambientCol * surfaceColor * attenuation;
   vec3 diffuse = lightColor * diff * surfaceColor * shadow * attenuation;
-  vec3 specular = specularCol * spec * shadow;
+  vec3 specular = specularCol * spec * shadow * attenuation;
 
   return ambient + diffuse + specular;
 }
 
 vec3 calculateSpotlight(vec3 lightPos, vec3 lightDir, vec3 fragPos, vec3 normal, vec3 viewDir, vec3 surfaceColor, vec3 ambientCol, vec3 specularCol, vec3 lightColor, float shininess) {
-  lightDir = normalize(lightPos - fragPos);
-  float diff = max(dot(normal, lightDir), 0.0);
+  vec3 lightToFrag = normalize(fragPos - lightPos);
+  vec3 normLightDir = normalize(lightDir); // Light direction points "outward"
 
-  vec3 reflectDir = reflect(-lightDir, normal);
-  float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
-
-  float distance = length(lightPos - fragPos);
-  float attenuation = 1.0 / (1.0 + 0.09 * distance + 0.032 * (distance * distance));
-
-  float theta = dot(lightDir, normalize(-lightDir));
+  float theta = dot(lightToFrag, normLightDir);
   float cutOff = cos(radians(12.5));
   float outerCutOff = cos(radians(17.5));
   float epsilon = cutOff - outerCutOff;
   float intensity = clamp((theta - outerCutOff) / epsilon, 0.0, 1.0);
 
-  vec3 ambient = ambientCol * surfaceColor * attenuation * intensity;
-  vec3 diffuse = lightColor * diff * surfaceColor * attenuation * intensity;
-  vec3 specular = specularCol * spec * attenuation * intensity;
+  float diff = max(dot(normal, -lightToFrag), 0.0);
 
-  return ambient + diffuse + specular;
+  vec3 reflectDir = reflect(lightToFrag, normal);
+  float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
+
+  float distance = length(lightPos - fragPos);
+  float attenuation = 1.0 / (1.0 + 0.09 * distance + 0.032 * distance * distance);
+
+  vec3 ambient  = ambientCol  * surfaceColor;
+  vec3 diffuse  = lightColor  * diff * surfaceColor;
+  vec3 specular = specularCol * spec;
+
+  vec3 result = (ambient + diffuse + specular) * attenuation * intensity;
+  return result;
 }
 
 void main()

@@ -15,7 +15,7 @@
 #include <map>
 
 #include "Texture.h"
-#include "DeltaTime.h"
+#include "DeltaTime.hpp"
 #include "PhysX.h"
 #include "Transform.hpp"
 

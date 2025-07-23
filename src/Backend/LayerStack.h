@@ -1,6 +1,6 @@
 #pragma once
 
-#include "DeltaTime.h"
+#include "DeltaTime.hpp"
 #include "../input/Event.h"
 
 struct Layer

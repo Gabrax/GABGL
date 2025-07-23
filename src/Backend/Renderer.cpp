@@ -51,17 +51,6 @@ struct QuadVertex
 	int EntityID;
 };
 
-struct CircleVertex
-{
-	glm::vec3 WorldPosition;
-	glm::vec3 LocalPosition;
-	glm::vec4 Color;
-	float Thickness;
-	float Fade;
-
-	int EntityID;
-};
-
 struct LineVertex
 {
 	glm::vec3 Position;
@@ -112,12 +101,6 @@ struct RendererData
 	QuadVertex* QuadVertexBufferPtr = nullptr;
 	glm::vec4 QuadVertexPositions[4];
 
-	std::shared_ptr<VertexArray> CircleVertexArray;
-	std::shared_ptr<VertexBuffer> CircleVertexBuffer;
-	uint32_t CircleIndexCount = 0;
-	CircleVertex* CircleVertexBufferBase = nullptr;
-	CircleVertex* CircleVertexBufferPtr = nullptr;
-
 	std::shared_ptr<VertexArray> LineVertexArray;
 	std::shared_ptr<VertexBuffer> LineVertexBuffer;
 	uint32_t LineVertexCount = 0;
@@ -164,6 +147,7 @@ struct RendererData
 
   CameraData m_CameraBuffer;
   std::shared_ptr<UniformBuffer> m_CameraUniformBuffer;
+  std::shared_ptr<UniformBuffer> m_ResolutionUniformBuffer;
 
   std::unordered_map<std::string, std::shared_ptr<Texture>> skyboxes;
 
@@ -261,23 +245,6 @@ void Renderer::Init()
 	s_Data.QuadVertexArray->SetIndexBuffer(quadIB);
 	delete[] quadIndices;
 
-	s_Data.CircleVertexArray = VertexArray::Create();
-	s_Data.CircleVertexBuffer = VertexBuffer::Create(s_Data.MaxVertices * sizeof(CircleVertex));
-	s_Data.CircleVertexBuffer->SetLayout({
-		{ ShaderDataType::Float3, "a_WorldPosition" },
-		{ ShaderDataType::Float3, "a_LocalPosition" },
-		{ ShaderDataType::Float4, "a_Color"         },
-		{ ShaderDataType::Float,  "a_Thickness"     },
-		{ ShaderDataType::Float,  "a_Fade"          },
-		{ ShaderDataType::Int,    "a_EntityID"      }
-		/*{ ShaderDataType::Float,  "a_TilingFactor"  },
-		{ ShaderDataType::Float2, "a_TexCoord"		},
-		{ ShaderDataType::Float,  "a_TexIndex"		}*/
-		});
-	s_Data.CircleVertexArray->AddVertexBuffer(s_Data.CircleVertexBuffer);
-	s_Data.CircleVertexArray->SetIndexBuffer(quadIB); // Use quad IB
-	s_Data.CircleVertexBufferBase = new CircleVertex[s_Data.MaxVertices];
-
 	s_Data.LineVertexArray = VertexArray::Create();
 	s_Data.LineVertexBuffer = VertexBuffer::Create(s_Data.MaxVertices * sizeof(LineVertex));
 	s_Data.LineVertexBuffer->SetLayout({
@@ -308,33 +275,37 @@ void Renderer::Init()
   LoadShaders();
 
   s_Data.m_WindowRef = &Engine::GetInstance().GetMainWindow();
+  glm::vec2 resolution = { s_Data.m_WindowRef->GetWidth(), s_Data.m_WindowRef->GetHeight() };
 
   FramebufferSpecification fbSpec;
 	fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::DEPTH24STENCIL8 };
-	fbSpec.Width = s_Data.m_WindowRef->GetWidth();
-	fbSpec.Height = s_Data.m_WindowRef->GetHeight();
+	fbSpec.Width = resolution.x;
+	fbSpec.Height = resolution.y;
 	s_Data.m_ResultBuffer = FrameBuffer::Create(fbSpec);
 
   FramebufferSpecification fbSpec2;
 	fbSpec2.Attachments = { FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::RGBA16F };
-	fbSpec2.Width = s_Data.m_WindowRef->GetWidth();
-	fbSpec2.Height = s_Data.m_WindowRef->GetHeight();
+	fbSpec2.Width = resolution.x;
+	fbSpec2.Height = resolution.y;
 	s_Data.m_LightBuffer = FrameBuffer::Create(fbSpec2);
 
   FramebufferSpecification fbSpec3;
 	fbSpec3.Attachments = { FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::DEPTH };
-	fbSpec3.Width = s_Data.m_WindowRef->GetWidth();
-	fbSpec3.Height = s_Data.m_WindowRef->GetHeight();
+	fbSpec3.Width = resolution.x;
+	fbSpec3.Height = resolution.y;
 	s_Data.m_SkyboxBuffer = FrameBuffer::Create(fbSpec3);
 
-  s_Data.m_GeometryBuffer = GeometryBuffer::Create(s_Data.m_WindowRef->GetWidth(), s_Data.m_WindowRef->GetHeight());
+  s_Data.m_GeometryBuffer = GeometryBuffer::Create(resolution.x, resolution.y);
   s_Data.m_BloomBuffer = BloomBuffer::Create(s_Data.s_Shaders.DownSampleShader, s_Data.s_Shaders.UpSampleShader, s_Data.s_Shaders.BloomResultShader);
   s_Data.m_OmniDirectShadowBuffer = OmniDirectShadowBuffer::Create(512, 512);
   s_Data.m_DirectShadowBuffer = DirectShadowBuffer::Create(2048, 2048, 16, 8, 3);
 
   s_Data.m_CameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 0);
-  s_Data.m_Camera = Camera(45.0f, (float)s_Data.m_WindowRef->GetWidth() / (float)s_Data.m_WindowRef->GetHeight(), 0.01f, 1000.0f);
-  s_Data.m_Camera.SetViewportSize((float)s_Data.m_WindowRef->GetWidth(), (float)s_Data.m_WindowRef->GetHeight());
+  s_Data.m_Camera = Camera(45.0f, (float)resolution.x / (float)resolution.y, 0.01f, 1000.0f);
+  s_Data.m_Camera.SetViewportSize((float)resolution.x, (float)resolution.y);
+
+  s_Data.m_ResolutionUniformBuffer = UniformBuffer::Create(sizeof(glm::vec2), 1);
+  s_Data.m_ResolutionUniformBuffer->SetData(&resolution, sizeof(glm::vec2));
 
   s_Data.m_SceneState = RendererData::SceneState::Play;
   s_Data.m_Camera.SetMode(CameraMode::FPS);
@@ -423,7 +394,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
       for (auto face = 0; face < directions.size(); ++face)
       {
         s_Data.m_OmniDirectShadowBuffer->BindCubemapFaceForWriting(lightIndex, face);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glClear(GL_DEPTH_BUFFER_BIT);
 
         glm::mat4 view = glm::lookAt(light,light + directions[face].Target,directions[face].Up);
         s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("u_LightViewProjection", s_Data.m_OmniDirectShadowBuffer->GetShadowProj() * view);
@@ -531,21 +502,12 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
     s_Data.m_BloomBuffer->BlitColorTo(s_Data.m_SkyboxBuffer);
   }
   {
-    GABGL_PROFILE_SCOPE("SKYBOX && UI PASS");
+    GABGL_PROFILE_SCOPE("SKYBOX PASS");
 
     s_Data.m_SkyboxBuffer->Bind();
-    glDepthFunc(GL_LEQUAL);   
-    glDepthMask(GL_FALSE);    
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
     Renderer::DrawSkybox("night");
 
-    BeginScene(s_Data.m_Camera);
-    Renderer::DrawText(FontManager::GetFont("dpcomic"), "FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f, 50.0f), 0.5f, glm::vec4(1.0f));
-    EndScene();
-
-    glDepthFunc(GL_LESS);
-    glDepthMask(GL_TRUE);
     s_Data.m_SkyboxBuffer->UnBind();
     s_Data.m_SkyboxBuffer->BlitColor(s_Data.m_ResultBuffer);
   }
@@ -557,53 +519,44 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
     PhysX::Simulate(dt);
     AudioManager::UpdateAllMusic();
   }
+  {
+    GABGL_PROFILE_SCOPE("SCENE RESULT PASS");
 
-  s_Data.m_ResultBuffer->Bind();
-  s_Data.m_ResultBuffer->ClearAttachment(1, -1);
-  s_Data.m_ResultBuffer->UnBind();
+    s_Data.m_ResultBuffer->Bind();
+    s_Data.m_ResultBuffer->ClearAttachment(1, -1);
+    s_Data.m_ResultBuffer->UnBind();
 
-  glDisable(GL_CULL_FACE);
-  glDisable(GL_DEPTH_TEST);
-  glClearColor(0, 0, 0, 0);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    uint32_t finalTexture = s_Data.m_ResultBuffer->GetColorAttachmentRendererID();
 
-  if (Input::IsKeyPressed(Key::X))
-  {
-      ModelManager::GetModel("harry")->StartBlendToAnimation(1, 0.8f);
-      ModelManager::MoveController("harry", Movement::FORWARD,5.0f,dt);
+    switch (s_Data.m_SceneState)
+    {
+     case RendererData::SceneState::Edit:
+     {
+       Renderer::DrawEditorFrameBuffer(finalTexture);
+       break;
+     }
+     case RendererData::SceneState::Play:
+     {
+       Renderer::DrawFramebuffer(finalTexture);
+       break;
+     }
+    }
   }
-  else
   {
-      ModelManager::GetModel("harry")->StartBlendToAnimation(0, 0.8f); 
-  }
-  if (Input::IsKeyPressed(Key::C))
-  {
-      ModelManager::MoveController("harry", Movement::BACKWARD,5.0f,dt);
-  }
-  if (Input::IsKeyPressed(Key::Z))
-  {
-      ModelManager::MoveController("harry", Movement::LEFT,5.0f,dt);
-  }
-  if (Input::IsKeyPressed(Key::V))
-  {
-      ModelManager::MoveController("harry", Movement::RIGHT,5.0f,dt);
+    GABGL_PROFILE_SCOPE("UI PASS");
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, s_Data.m_WindowRef->GetWidth(), s_Data.m_WindowRef->GetHeight());
+    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    BeginScene(s_Data.m_Camera);
+    Renderer::DrawText(FontManager::GetFont("dpcomic"), "FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f, 50.0f), 0.5f, glm::vec4(1.0f));
+    EndScene();
   }
 
-  uint32_t finalTexture = s_Data.m_ResultBuffer->GetColorAttachmentRendererID();
-
-  switch (s_Data.m_SceneState)
-  {
-   case RendererData::SceneState::Edit:
-   {
-     Renderer::DrawEditorFrameBuffer(finalTexture);
-     break;
-   }
-   case RendererData::SceneState::Play:
-   {
-     Renderer::DrawFramebuffer(finalTexture);
-     break;
-   }
-  }
+  geometry();
 }
 
 void Renderer::DrawLoadingScreen()
@@ -634,7 +587,10 @@ void Renderer::SetFullscreen(const std::string& sound, bool windowed)
   s_Data.m_WindowRef->SetFullscreen(windowed);
 
   uint32_t width = (uint32_t)s_Data.m_WindowRef->GetWidth(); 
-  uint32_t height = (uint32_t)s_Data.m_WindowRef->GetHeight(); 
+  uint32_t height = (uint32_t)s_Data.m_WindowRef->GetHeight();
+
+  glm::vec2 newResolution = { width, height };
+  s_Data.m_ResolutionUniformBuffer->SetData(&newResolution, sizeof(glm::vec2));
 
   s_Data.m_GeometryBuffer->Resize(width, height);
   s_Data.m_LightBuffer->Resize(width, height);
@@ -675,14 +631,6 @@ void Renderer::Flush()
     s_Data.s_Shaders.QuadShader->SetBool("u_Is3D", s_Data.Is3D);
 		Renderer::DrawIndexed(s_Data.QuadVertexArray, s_Data.QuadIndexCount);
 	}
-	if (s_Data.CircleIndexCount)
-	{
-		uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.CircleVertexBufferPtr - (uint8_t*)s_Data.CircleVertexBufferBase);
-		s_Data.CircleVertexBuffer->SetData(s_Data.CircleVertexBufferBase, dataSize);
-
-		s_Data.s_Shaders.CircleShader->Bind();
-		Renderer::DrawIndexed(s_Data.CircleVertexArray, s_Data.CircleIndexCount);
-	}
 	if (s_Data.LineVertexCount)
 	{
 		uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.LineVertexBufferPtr - (uint8_t*)s_Data.LineVertexBufferBase);
@@ -699,9 +647,6 @@ void Renderer::StartBatch()
 	s_Data.QuadIndexCount = 0;
 	s_Data.QuadVertexBufferPtr = s_Data.QuadVertexBufferBase;
 	s_Data.TextureSlotIndex = 1;
-
-	s_Data.CircleIndexCount = 0;
-	s_Data.CircleVertexBufferPtr = s_Data.CircleVertexBufferBase;
 
 	s_Data.LineVertexCount = 0;
 	s_Data.LineVertexBufferPtr = s_Data.LineVertexBufferBase;
@@ -1031,26 +976,6 @@ void Renderer::DrawCubeContour(const glm::vec3& position, const glm::vec3& size,
   DrawLine(v3, v7, color, entityID);
 }
 
-void Renderer::DrawCircle(const glm::mat4& transform, const glm::vec4& color, float thickness /*= 1.0f*/, float fade /*= 0.005f*/, int entityID /*= -1*/)
-{
-	// TODO: implement for circles
-	// if (s_Data.QuadIndexCount >= Renderer2DData::MaxIndices)
-	// 	NextBatch();
-
-	for (size_t i = 0; i < 4; i++)
-	{
-		s_Data.CircleVertexBufferPtr->WorldPosition = transform * s_Data.QuadVertexPositions[i];
-		s_Data.CircleVertexBufferPtr->LocalPosition = s_Data.QuadVertexPositions[i] * 2.0f;
-		s_Data.CircleVertexBufferPtr->Color = color;
-		s_Data.CircleVertexBufferPtr->Thickness = thickness;
-		s_Data.CircleVertexBufferPtr->Fade = fade;
-		s_Data.CircleVertexBufferPtr->EntityID = entityID;
-		s_Data.CircleVertexBufferPtr++;
-	}
-
-	s_Data.CircleIndexCount += 6;
-}
-
 void Renderer::DrawFullscreenQuad()
 {
   static GLuint quadVAO = 0, quadVBO = 0;
@@ -1082,13 +1007,11 @@ void Renderer::DrawFullscreenQuad()
 
   glBindVertexArray(quadVAO);
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-  glBindVertexArray(0);}
+  glBindVertexArray(0);
+}
 
 void Renderer::DrawFramebuffer(uint32_t textureID)
 {
-  s_Data.s_Shaders.FramebufferShader->Bind();
-  s_Data.s_Shaders.FramebufferShader->SetInt("u_Texture", 0);
-
   static GLuint quadVAO = 0, quadVBO = 0;
   if (quadVAO == 0)
   {
@@ -1119,11 +1042,15 @@ void Renderer::DrawFramebuffer(uint32_t textureID)
     glVertexArrayAttribBinding(quadVAO, 1, 0);
   }
 
+  s_Data.s_Shaders.FramebufferShader->Bind();
+  s_Data.s_Shaders.FramebufferShader->SetInt("u_Texture", 0);
+
   glBindTextureUnit(0, textureID);
 
   glBindVertexArray(quadVAO);
   glDrawArrays(GL_TRIANGLES, 0, 6);
   glBindVertexArray(0);
+  s_Data.s_Shaders.FramebufferShader->UnBind();
 }
 
 void Renderer::BakeSkyboxTextures(const std::string& name, const std::shared_ptr<Texture>& cubemap)
@@ -1213,6 +1140,8 @@ void Renderer::DrawSkybox(const std::string& name)
   }
 
   glDepthFunc(GL_LEQUAL);
+  glDepthMask(GL_FALSE);    
+  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
   s_Data.s_Shaders.skyboxShader->Bind();
 
@@ -1232,6 +1161,7 @@ void Renderer::DrawSkybox(const std::string& name)
   glBindVertexArray(0);
 
   glDepthFunc(GL_LESS);
+  glDepthMask(GL_TRUE);
 }
 
 void Renderer::DrawText(const Font* font, const std::string& text, const glm::vec3& position, const glm::vec3& rotation, float size, const glm::vec4& color)
@@ -1248,9 +1178,9 @@ void Renderer::DrawText(const Font* font, const std::string& text, const glm::ve
 
 void Renderer::DrawText(const Font* font, const std::string& text, const glm::vec3& position, const glm::vec3& rotation, float size, const glm::vec4& color, int entityID)
 {
-  if (!font || font->m_Characters.empty())
+  if (!font || font->m_Characters.empty() || text.empty())
   {
-      GABGL_ERROR("Font is nullptr or has no characters");
+      GABGL_ERROR("Font is nullptr, empty, or text is empty");
       return;
   }
 
@@ -1258,82 +1188,81 @@ void Renderer::DrawText(const Font* font, const std::string& text, const glm::ve
   float maxBearingY = 0.0f;
   float maxBelowBaseline = 0.0f;
 
+  // First pass: calculate dimensions
   for (char c : text)
   {
-      auto it = font->m_Characters.find(c);
-      if (it == font->m_Characters.end())
-          continue;
+    auto it = font->m_Characters.find(c);
+    if (it == font->m_Characters.end()) continue;
 
-      const auto& ch = it->second;
-      textWidth += (ch.Advance >> 6) * size;
+    const auto& ch = it->second;
+    textWidth += (ch.Advance >> 6) * size;
 
-      float bearingY = ch.Bearing.y * size;
-      float belowBaseline = (ch.Size.y - ch.Bearing.y) * size;
+    float bearingY = ch.Bearing.y * size;
+    float belowBaseline = (ch.Size.y - ch.Bearing.y) * size;
 
-      if (bearingY > maxBearingY) maxBearingY = bearingY;
-      if (belowBaseline > maxBelowBaseline) maxBelowBaseline = belowBaseline;
+    maxBearingY = std::max(maxBearingY, bearingY);
+    maxBelowBaseline = std::max(maxBelowBaseline, belowBaseline);
   }
 
   float totalHeight = maxBearingY + maxBelowBaseline;
-
-  // Center the text origin
   float originX = -textWidth * 0.5f;
   float originY = -totalHeight * 0.5f;
 
   glm::vec3 cursor = glm::vec3(originX, originY, 0.0f);
 
-  for (char c : text)
-  {
-      auto it = font->m_Characters.find(c);
-      if (it == font->m_Characters.end())
-          continue;
-
-      const Character& ch = it->second;
-
-      if (s_Data.QuadIndexCount >= RendererData::MaxIndices)
-          NextBatch();
-
-      float xpos = cursor.x + ch.Bearing.x * size;
-      float ypos = cursor.y + (maxBearingY - ch.Bearing.y * size);
-
-      float w = ch.Size.x * size;
-      float h = ch.Size.y * size;
-
-      glm::mat4 transform = glm::translate(glm::mat4(1.0f), position) *
+  // Precompute global transform
+  glm::mat4 baseTransform = glm::translate(glm::mat4(1.0f), position) *
                             glm::rotate(glm::mat4(1.0f), rotation.x, {1, 0, 0}) *
                             glm::rotate(glm::mat4(1.0f), rotation.y, {0, 1, 0}) *
-                            glm::rotate(glm::mat4(1.0f), rotation.z, {0, 0, 1}) *
-                            glm::translate(glm::mat4(1.0f), glm::vec3(xpos, ypos, 0.0f)) *
-                            glm::scale(glm::mat4(1.0f), glm::vec3(w, h, 1.0f));
+                            glm::rotate(glm::mat4(1.0f), rotation.z, {0, 0, 1});
 
-      float textureIndex = 0.0f;
-      for (uint32_t i = 1; i < s_Data.TextureSlotIndex; i++) {
-          if (s_Data.TextureSlots[i]->GetRendererID() == ch.TextureID) {
-              textureIndex = (float)i;
-              break;
-          }
-      }
+  std::unordered_map<uint32_t, float> textureSlotCache;
 
-      if (textureIndex == 0.0f) {
-          if (s_Data.TextureSlotIndex >= RendererData::MaxTextureSlots) NextBatch();
+  for (char c : text)
+  {
+    auto it = font->m_Characters.find(c);
+    if (it == font->m_Characters.end()) continue;
 
-          textureIndex = (float)s_Data.TextureSlotIndex;
-          s_Data.TextureSlots[s_Data.TextureSlotIndex++] = Texture::WrapExisting(ch.TextureID);
-      }
+    const Character& ch = it->second;
 
-      for (int i = 0; i < 4; i++) {
-          s_Data.QuadVertexBufferPtr->Position = transform * glm::vec4(s_Data.quadPositions[i], 1.0f);
-          s_Data.QuadVertexBufferPtr->Color = color;
-          s_Data.QuadVertexBufferPtr->TexCoord = s_Data.texCoords[i];
-          s_Data.QuadVertexBufferPtr->TexIndex = textureIndex;
-          s_Data.QuadVertexBufferPtr->TilingFactor = 1.0f;
-          s_Data.QuadVertexBufferPtr->EntityID = entityID;
-          s_Data.QuadVertexBufferPtr++;
-      }
+    if (s_Data.QuadIndexCount >= RendererData::MaxIndices)
+        NextBatch();
 
-      s_Data.QuadIndexCount += 6;
+    float xpos = cursor.x + ch.Bearing.x * size;
+    float ypos = cursor.y + (maxBearingY - ch.Bearing.y * size);
+    float w = ch.Size.x * size;
+    float h = ch.Size.y * size;
 
-      cursor.x += (ch.Advance >> 6) * size;
+    glm::mat4 localTransform = glm::translate(glm::mat4(1.0f), glm::vec3(xpos, ypos, 0.0f)) *
+                               glm::scale(glm::mat4(1.0f), glm::vec3(w, h, 1.0f));
+
+    glm::mat4 transform = baseTransform * localTransform;
+
+    float textureIndex = 0.0f;
+    auto found = textureSlotCache.find(ch.TextureID);
+    if (found != textureSlotCache.end()) {
+        textureIndex = found->second;
+    } else {
+        if (s_Data.TextureSlotIndex >= RendererData::MaxTextureSlots)
+            NextBatch();
+
+        textureIndex = static_cast<float>(s_Data.TextureSlotIndex);
+        s_Data.TextureSlots[s_Data.TextureSlotIndex++] = Texture::WrapExisting(ch.TextureID);
+        textureSlotCache[ch.TextureID] = textureIndex;
+    }
+
+    for (int i = 0; i < 4; i++) {
+        s_Data.QuadVertexBufferPtr->Position = transform * glm::vec4(s_Data.quadPositions[i], 1.0f);
+        s_Data.QuadVertexBufferPtr->Color = color;
+        s_Data.QuadVertexBufferPtr->TexCoord = s_Data.texCoords[i];
+        s_Data.QuadVertexBufferPtr->TexIndex = textureIndex;
+        s_Data.QuadVertexBufferPtr->TilingFactor = 1.0f;
+        s_Data.QuadVertexBufferPtr->EntityID = entityID;
+        s_Data.QuadVertexBufferPtr++;
+    }
+
+    s_Data.QuadIndexCount += 6;
+    cursor.x += (ch.Advance >> 6) * size;
   }
 }
 

@@ -933,7 +933,7 @@ void BloomBuffer::BlitColorFrom(const std::shared_ptr<FrameBuffer>& src, uint32_
       0, 0, srcSpec.Width, srcSpec.Height,
       0, 0, dstSpec.Width, dstSpec.Height,
       GL_COLOR_BUFFER_BIT,
-      GL_NEAREST
+      GL_LINEAR
   );
 
   glReadBuffer(GL_COLOR_ATTACHMENT0);
@@ -952,7 +952,7 @@ void BloomBuffer::BlitColorTo(const std::shared_ptr<FrameBuffer>& dst)
       0, 0, srcSpec.Width, srcSpec.Height,
       0, 0, dstSpec.Width, dstSpec.Height,
       GL_COLOR_BUFFER_BIT,
-      GL_NEAREST
+      GL_LINEAR
   );
 }
 
@@ -1026,7 +1026,7 @@ DirectShadowBuffer::DirectShadowBuffer(float shadowWidth, float shadowHeight, fl
   uboData.offsetSize_filterSize = glm::vec2(offsetSize, filterSize);
   uboData.randomRadius = glm::vec2(randomRadius, 0.0f);
 
-  buffer = UniformBuffer::Create(sizeof(UBOData), 1);
+  buffer = UniformBuffer::Create(sizeof(UBOData), 2);
   buffer->SetData(&uboData, sizeof(UBOData));
 }
 

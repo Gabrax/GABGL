@@ -9,7 +9,6 @@ struct LightData
 {
   glm::vec3 position;
   glm::vec3 rotation;
-  glm::vec3 scale;
   glm::vec4 color;
   LightType type;
 };
@@ -37,7 +36,7 @@ void LightManager::Init()
   ResizeLightBuffers(s_Data.maxLights);
 }
 
-void LightManager::AddLight(const LightType& type, const glm::vec4& color, const glm::vec3& position, const glm::vec3& rotation, const glm::vec3& scale)
+void LightManager::AddLight(const LightType& type, const glm::vec3& color, const glm::vec3& position, const glm::vec3& rotation)
 {
   if (type == LightType::DIRECT && s_Data.numDirectLights == 1)
   {
@@ -46,7 +45,9 @@ void LightManager::AddLight(const LightType& type, const glm::vec4& color, const
   }
   if (s_Data.numLights >= s_Data.maxLights) ResizeLightBuffers(s_Data.maxLights * 2);
 
-  std::shared_ptr<LightData> lightData = std::make_shared<LightData>(position, rotation, scale, color, type);
+  glm::vec4 newColor = glm::vec4(color.x,color.y,color.z,1.0);
+
+  std::shared_ptr<LightData> lightData = std::make_shared<LightData>(position, rotation, newColor, type);
   s_Data.lights.push_back(lightData);
 
   if (type == LightType::POINT) s_Data.numPointLights++;
@@ -56,12 +57,8 @@ void LightManager::AddLight(const LightType& type, const glm::vec4& color, const
   UpdateSSBOLightData();
 }
 
-void LightManager::EditLight(int32_t index, const std::optional<glm::vec4>& newColor, 
-               const std::optional<glm::vec3>& newPosition,
-               const std::optional<glm::vec3>& newRotation,    
-               const std::optional<glm::vec3>& newScale)
+void LightManager::EditLight(int32_t index, const std::optional<glm::vec3>& newColor, const std::optional<glm::vec3>& newPosition, const std::optional<glm::vec3>& newRotation)
 {
-
   if (index < 0 || index >= s_Data.lights.size()) {
       GABGL_ERROR("Invalid light index: " + std::to_string(index));
       return;
@@ -69,10 +66,11 @@ void LightManager::EditLight(int32_t index, const std::optional<glm::vec4>& newC
 
   std::shared_ptr<LightData>& lightData = s_Data.lights[index];
 
-  if (newColor) lightData->color = *newColor;
+  glm::vec4 color = glm::vec4(newColor->x,newColor->y,newColor->z,1.0);
+
   if (newPosition) lightData->position = *newPosition;
   if (newRotation) lightData->rotation = *newRotation;
-  if (newScale) lightData->scale = *newScale;
+  if (newColor) lightData->color = color;
 
   UpdateSSBOLightData();
 }
@@ -81,9 +79,9 @@ void LightManager::RemoveLight(int32_t index)
 {
   if (index >= 0 && index < s_Data.lights.size())
   {
-      s_Data.lights.erase(s_Data.lights.begin() + index);
-      s_Data.numLights--;
-      UpdateSSBOLightData();
+    s_Data.lights.erase(s_Data.lights.begin() + index);
+    s_Data.numLights--;
+    UpdateSSBOLightData();
   }
 }
 
