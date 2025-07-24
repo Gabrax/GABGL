@@ -5,6 +5,7 @@
 #include "Buffer.h"
 #include "DeltaTime.hpp"
 #include "FontManager.h"
+#include "ModelManager.h"
 
 struct Renderer
 {
@@ -42,7 +43,8 @@ struct Renderer
 	static void SetLineWidth(float width);
 	static void DrawLine(const glm::vec3& p0, const glm::vec3& p1, const glm::vec4& color, int entityID = -1);
 
-  static void AddDrawCommand(uint32_t verticesSize, uint32_t indicesSize);
+  static void AddDrawCommand(const std::string& modelName, uint32_t verticesSize, uint32_t indicesSize);
+  static void RebuildDrawCommandsForModel(const std::shared_ptr<Model>& model, bool render);
   static void InitDrawCommandBuffer();
 
   static void DrawFullscreenQuad();

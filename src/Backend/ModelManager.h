@@ -170,6 +170,9 @@ struct Model
   bool m_ControllerSlopeLimit;
   bool m_ControllerIsGrounded = false;
 
+  std::string m_Name;
+  bool m_IsRendered = true;
+
   std::unordered_map<std::string, std::shared_ptr<Texture>> m_TexturesLoaded; 
   std::vector<Mesh> m_Meshes;
   std::vector<Bone> m_Bones;
@@ -244,13 +247,13 @@ struct ModelManager
   static void BakeModelInstancedBuffers(Mesh& mesh, const std::vector<Transform>& instances);
   static void UploadToGPU();
   static std::shared_ptr<Model> GetModel(const std::string& name);
-  static void UpdateAnimations(const DeltaTime& dt);
   static std::vector<glm::mat4> GetTransforms();
   static GLsizei GetModelsQuantity();
   static GLuint GetModelsVAO();
+  static void SetRender(const std::string& name ,bool render);
   static void SetInitialModelTransform(const std::string& name, const glm::mat4& transform);
   static void SetInitialControllerTransform(const std::string& name, const Transform& transform, float radius, float height, bool slopeLimit);
-  static void UpdateConvexModels(const DeltaTime& dt);
+  static void UpdateTransforms(const DeltaTime& dt);
   static void MoveController(const std::string& name, const Movement& movement, float speed, const DeltaTime& dt);
 };
 

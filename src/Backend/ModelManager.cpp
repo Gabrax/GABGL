@@ -321,7 +321,7 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
     s_Data.allVertices.insert(s_Data.allVertices.end(), mesh.m_Vertices.begin(), mesh.m_Vertices.end());
     s_Data.allIndices.insert(s_Data.allIndices.end(), mesh.m_Indices.begin(), mesh.m_Indices.end());
 
-    Renderer::AddDrawCommand(static_cast<uint32_t>(mesh.m_Vertices.size()), static_cast<uint32_t>(mesh.m_Indices.size()));
+    Renderer::AddDrawCommand(name, static_cast<uint32_t>(mesh.m_Vertices.size()), static_cast<uint32_t>(mesh.m_Indices.size()));
 
     for(auto& tex : mesh.m_Textures) tex->ClearRawData();
 
@@ -329,6 +329,7 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
     else if(model->GetPhysXMeshType() == MeshType::CONVEXMESH) model->CreatePhysXDynamicMesh(mesh.m_Vertices);
   }
 
+  model->m_Name = name;
   s_Data.m_Models[name] = std::move(model);
   s_Data.m_ModelsNames.emplace_back(name);
 
@@ -440,11 +441,11 @@ void ModelManager::SetInitialModelTransform(const std::string& name, const glm::
   }
 }
 
-void ModelManager::UpdateConvexModels(const DeltaTime& dt)
+void ModelManager::UpdateTransforms(const DeltaTime& dt)
 {
   for (const auto& [key, model] : s_Data.m_Models)
   {
-    if(model->IsAnimated())
+    if(model->IsAnimated() && model->m_IsRendered)
     { 
       auto& transforms = model->GetFinalBoneMatrices();
 
@@ -466,8 +467,7 @@ void ModelManager::UpdateConvexModels(const DeltaTime& dt)
 
     const std::string& convexName = key;
     constexpr const char* suffix = "_convex";
-    if (convexName.size() < 7 || convexName.compare(convexName.size() - 7, 7, suffix) != 0)
-      continue;
+    if (convexName.size() < 7 || convexName.compare(convexName.size() - 7, 7, suffix) != 0) continue;
 
     std::string baseName = convexName.substr(0, convexName.size() - 7);
 
@@ -478,19 +478,31 @@ void ModelManager::UpdateConvexModels(const DeltaTime& dt)
       continue;
     }
 
-    glm::mat4 convexTransform = PhysX::PxMat44ToGlmMat4(model->GetDynamicActor()->getGlobalPose());
+    if(baseModelIt->second->m_IsRendered)
+    {
+      glm::mat4 convexTransform = PhysX::PxMat44ToGlmMat4(model->GetDynamicActor()->getGlobalPose());
 
-    auto nameIt = std::find(s_Data.m_ModelsNames.begin(), s_Data.m_ModelsNames.end(), baseName);
-    if (nameIt != s_Data.m_ModelsNames.end())
-    {
-      int ssboIndex = static_cast<int>(std::distance(s_Data.m_ModelsNames.begin(), nameIt));
-      s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(convexTransform));
-    }
-    else
-    {
-      GABGL_WARN("Base model '{}' not found in name list for SSBO!", baseName);
+      auto nameIt = std::find(s_Data.m_ModelsNames.begin(), s_Data.m_ModelsNames.end(), baseName);
+      if (nameIt != s_Data.m_ModelsNames.end())
+      {
+        int ssboIndex = static_cast<int>(std::distance(s_Data.m_ModelsNames.begin(), nameIt));
+        s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(convexTransform));
+      }
+      else
+      {
+        GABGL_WARN("Base model '{}' not found in name list for SSBO!", baseName);
+      }
     }
   }
+}
+
+void ModelManager::SetRender(const std::string& name, bool render)
+{
+  auto it = s_Data.m_Models.find(name);
+
+  it->second->m_IsRendered = render;
+
+  Renderer::RebuildDrawCommandsForModel(it->second,render);
 }
 
 GLsizei ModelManager::GetModelsQuantity()
@@ -589,7 +601,7 @@ void ModelManager::UploadToGPU()
   s_Data.m_NormalMapFlagsSSBO->SetData(normalMapFlags.size() * sizeof(int), normalMapFlags.data());
 
   s_Data.m_SpecularMapFlagsSSBO = StorageBuffer::Create(specularMapFlags.size() * sizeof(int), 12); 
-  s_Data.m_SpecularMapFlagsSSBO->SetData(normalMapFlags.size() * sizeof(int), normalMapFlags.data());
+  s_Data.m_SpecularMapFlagsSSBO->SetData(specularMapFlags.size() * sizeof(int), specularMapFlags.data());
 
   for (const auto& modelName : s_Data.m_Models)
   {
@@ -723,14 +735,6 @@ std::shared_ptr<Model> ModelManager::GetModel(const std::string& name)
   if (it != s_Data.m_Models.end())
       return it->second;
   return nullptr;
-}
-
-void ModelManager::UpdateAnimations(const DeltaTime& dt)
-{
-  for(auto i : s_Data.m_Models)
-  {
-    if(i.second->IsAnimated()) i.second->UpdateAnimation(dt);
-  }
 }
 
 std::vector<glm::mat4> ModelManager::GetTransforms()

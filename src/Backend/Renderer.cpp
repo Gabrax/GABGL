@@ -160,6 +160,7 @@ struct RendererData
   std::shared_ptr<GeometryBuffer> m_GeometryBuffer;
 
   std::vector<DrawElementsIndirectCommand> m_DrawCommands;
+  std::unordered_map<std::string, std::vector<size_t>> m_ModelDrawCommandIndices;
   uint32_t m_DrawIndexOffset = 0;
   uint32_t m_DrawVertexOffset = 0;
   uint32_t m_cmdBufer;
@@ -515,7 +516,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
     GABGL_PROFILE_SCOPE("MISC UPDATE PASS");
 
     s_Data.m_Camera.OnUpdate(dt);
-    ModelManager::UpdateConvexModels(dt);
+    ModelManager::UpdateTransforms(dt);
     PhysX::Simulate(dt);
     AudioManager::UpdateAllMusic();
   }
@@ -1266,7 +1267,7 @@ void Renderer::DrawText(const Font* font, const std::string& text, const glm::ve
   }
 }
 
-void Renderer::AddDrawCommand(uint32_t verticesSize, uint32_t indicesSize)
+void Renderer::AddDrawCommand(const std::string& modelName, uint32_t verticesSize, uint32_t indicesSize)
 {
   DrawElementsIndirectCommand cmd =
   {
@@ -1277,18 +1278,47 @@ void Renderer::AddDrawCommand(uint32_t verticesSize, uint32_t indicesSize)
     .baseInstance = 0, 
   };
 
+  s_Data.m_ModelDrawCommandIndices[modelName].push_back(s_Data.m_DrawCommands.size()); // store index
   s_Data.m_DrawCommands.push_back(cmd);
 
   s_Data.m_DrawIndexOffset += indicesSize;
   s_Data.m_DrawVertexOffset += verticesSize;
 }
 
+void Renderer::RebuildDrawCommandsForModel(const std::shared_ptr<Model>& model, bool render)
+{
+  auto& meshes = model->GetMeshes();
+
+  const auto& indices = s_Data.m_ModelDrawCommandIndices[model->m_Name];
+
+  size_t vertexOffset = 0; 
+  size_t indexOffset = 0;
+
+  for (size_t i = 0; i < meshes.size(); ++i)
+  {
+    const auto& mesh = meshes[i];
+    size_t cmdIndex = indices[i];
+
+    DrawElementsIndirectCommand& cmd = s_Data.m_DrawCommands[cmdIndex];
+
+    cmd.count = static_cast<GLuint>(mesh.m_Indices.size());
+    cmd.instanceCount = render ? 1 : 0;
+    cmd.firstIndex = static_cast<GLuint>(indexOffset);
+    cmd.baseVertex = static_cast<GLint>(vertexOffset);
+    cmd.baseInstance = 0;
+
+    vertexOffset += mesh.m_Vertices.size();
+    indexOffset += mesh.m_Indices.size();
+  }
+
+  glNamedBufferSubData(s_Data.m_cmdBufer, 0, s_Data.m_DrawCommands.size() * sizeof(DrawElementsIndirectCommand), s_Data.m_DrawCommands.data());
+}
+
 void Renderer::InitDrawCommandBuffer()
 {
   glCreateBuffers(1, &s_Data.m_cmdBufer);
-  glNamedBufferStorage(s_Data.m_cmdBufer,sizeof(s_Data.m_DrawCommands[0]) * s_Data.m_DrawCommands.size(),(const void*)s_Data.m_DrawCommands.data(), 0);
+  glNamedBufferStorage(s_Data.m_cmdBufer,sizeof(s_Data.m_DrawCommands[0]) * s_Data.m_DrawCommands.size(),(const void*)s_Data.m_DrawCommands.data(), GL_DYNAMIC_STORAGE_BIT);
 }
-
 
 void Renderer::DrawIndexed(const std::shared_ptr<VertexArray>& vertexArray, uint32_t indexCount)
 {
