@@ -182,6 +182,8 @@ struct AssetsData
     { "res/models/pistol_convex.glb", 1.0f, false, MeshType::CONVEXMESH },
     { "res/models/shotgun.glb", 1.0f, false, MeshType::NONE },
     { "res/models/shotgun_convex.glb", 1.0f, false, MeshType::CONVEXMESH },
+    { "res/models/sphere.glb", 1.0f, false, MeshType::NONE },
+    { "res/models/outer_terrain.glb", 1.0f, false, MeshType::NONE },
   };
 
   std::vector<std::tuple<const char*, float, bool, MeshType>> animated_models =

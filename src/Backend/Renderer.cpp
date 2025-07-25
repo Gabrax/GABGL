@@ -302,7 +302,7 @@ void Renderer::Init()
   s_Data.m_DirectShadowBuffer = DirectShadowBuffer::Create(2048, 2048, 16, 8, 3);
 
   s_Data.m_CameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 0);
-  s_Data.m_Camera = Camera(45.0f, (float)resolution.x / (float)resolution.y, 0.01f, 1000.0f);
+  s_Data.m_Camera = Camera(45.0f, (float)resolution.x / (float)resolution.y, 0.01f, 2000.0f);
   s_Data.m_Camera.SetViewportSize((float)resolution.x, (float)resolution.y);
 
   s_Data.m_ResolutionUniformBuffer = UniformBuffer::Create(sizeof(glm::vec2), 1);

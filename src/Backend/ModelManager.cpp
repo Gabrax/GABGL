@@ -457,12 +457,12 @@ void ModelManager::UpdateTransforms(const DeltaTime& dt)
         size_t size = transforms.size() * sizeof(glm::mat4);
 
         s_Data.m_FinalBoneMatricesSSBO->SetSubData(offset, size, transforms.data());
+        model->UpdateAnimation(dt);
       }
       else
       {
         GABGL_WARN("Animated model '{}' not found in name list for bone SSBO!", key);
       }
-      model->UpdateAnimation(dt);
     }
 
     const std::string& convexName = key;

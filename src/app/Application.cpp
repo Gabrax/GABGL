@@ -14,8 +14,14 @@ Application::Application()
   AudioManager::PlayMusic("night",true);
   LightManager::AddLight(LightType::POINT, glm::vec3(1.0f,1.0f,0.0), glm::vec3(5.0f), glm::vec3(1.0f));
   /*LightManager::AddLight(LightType::SPOT, glm::vec3(1.0f,1.0f,1.0), glm::vec3(15.0f,15.0f,15.0f), glm::vec3(0.0,-1.0,0.0)); */
-  /*LightManager::AddLight(LightType::DIRECT, glm::vec3(1.0f), glm::vec3(0.0f), glm::vec3(-2.0f, -4.0f, -1.0f));*/
+  LightManager::AddLight(LightType::DIRECT, glm::vec3(0.3, 0.32, 0.4), glm::vec3(0.0f), glm::vec3(-2.0f, -4.0f, -1.0f));
 
+  Transform transform;
+  transform.SetPosition(glm::vec3(2.0f));
+  ModelManager::SetInitialModelTransform("sphere", transform.GetTransform());
+  Transform terraintransform;
+  terraintransform.SetPosition(glm::vec3(-200.0f,-200.0f,50.0f));
+  ModelManager::SetInitialModelTransform("outer_terrain", terraintransform.GetTransform());
   Transform housetransform;
   housetransform.SetPosition(glm::vec3(0.0f));
   ModelManager::SetInitialModelTransform("objHouse", housetransform.GetTransform());

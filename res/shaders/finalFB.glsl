@@ -36,5 +36,6 @@ void main()
 
   vec2 uv = snapped / u_Resolution;
 
+  // FragColor = texture(u_Texture, v_TexCoord);
   FragColor = texture(u_Texture, uv);
 }
