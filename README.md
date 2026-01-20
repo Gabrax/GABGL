@@ -1,37 +1,43 @@
-<p align="center">
-    <img src="https://github.com/user-attachments/assets/35a03295-7d87-471c-8f86-cd28b3f4d5ea" alt="GABGLlogo" width="200"/>
+> [!WARNING]
+> Dependencies: CMake, C++ 20 <br>
+> 'res' folder needs to be in the same directory as executable
+
+<div align="center">
+  
+## Game preview
+
+</div>
+
+<div align="center">
+
+https://github.com/user-attachments/assets/dfeda195-f8d6-4073-aff7-d7bfe55fce39
+
+</div>
+
+<div align="center">
+  
+## Dependencies
+
+</div>
+
+<div align="center">
+
+<p>
+<a href="https://github.com/glfw/glfw">glfw</a> •
+<a href="https://github.com/Dav1dde/glad">glad</a> •
+<a href="https://github.com/g-truc/glm">glm</a> •
+<a href="https://github.com/ocornut/imgui">imgui</a> •
+<a href="https://github.com/CedricGuillemet/ImGuizmo">ImGuizmo</a> •
+<a href="https://github.com/libsndfile/libsndfile">libsndfile</a> •
+<a href="https://github.com/kcat/openal-soft">OpenAL-Soft</a> •
+<a href="https://github.com/nothings/stb/blob/master/stb_image.h">stb_image</a> •
+<a href="https://github.com/freetype/freetype">freetype</a> •
+<a href="https://github.com/assimp/assimp">assimp</a> •
+<a href="https://github.com/zeux/meshoptimizer">meshoptimizer</a> •
+<a href="https://github.com/nlohmann/json">nlohmann_json</a> •
+<a href="https://github.com/syoyo/tinyexr">tinyEXR</a> •
+<a href="https://github.com/NVIDIA-Omniverse/PhysX">PhysX</a> •
+<a href="https://github.com/gabime/spdlog">spdlog</a> •
 </p>
 
-## Getting started
-> [!WARNING]
-> Dependencies: CMake, C++20 <br>
-
-For general build script info run ```sh build.sh --help```
-
-- Windows <br><br>
-Use VS2022 PS/CMD
-```bash
-sh build.sh -Ccl -Drelease
-```
-- Linux & MacOS
-```bash
-sh build.sh -Cclang -Drelease
-```
-
-## 👨‍💻 Tech stack
-- [GLFW](https://github.com/glfw/glfw)
-- [GLAD](https://github.com/Dav1dde/glad)
-- [GLM](https://github.com/g-truc/glm)
-- [ImGUI](https://github.com/ocornut/imgui)
-- [ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo)
-- [libsndfile](https://github.com/libsndfile/libsndfile)
-- [OpenAL](https://github.com/kcat/openal-soft.git)
-- [stb_image](https://github.com/nothings/stb/blob/master/stb_image.h)
-- [FreeType](https://github.com/freetype/freetype)
-- [Assimp](https://github.com/assimp/assimp)
-- [MeshOptimizer](https://github.com/zeux/meshoptimizer)
-- [tinyCSG](https://github.com/laleksic/tiny_csg)
-- [tinyEXR](https://github.com/syoyo/tinyexr)
-- [JSON](https://github.com/nlohmann/json)
-- [PhysX](https://github.com/NVIDIA-Omniverse/PhysX)
-- [spdlog](https://github.com/gabime/spdlog)
+</div>
