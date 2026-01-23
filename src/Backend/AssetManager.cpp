@@ -223,7 +223,7 @@ void AssetManager::Init()
 
   s_Data.m_FutureTextures.push_back(
       std::async(std::launch::async, [skybox = s_Data.skybox]() {
-          return Texture::CreateRAWCUBEMAP(skybox);
+          return Texture::CreateCUBEMAP(skybox);
       })
   );
 }

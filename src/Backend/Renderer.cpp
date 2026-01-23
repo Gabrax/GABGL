@@ -129,7 +129,7 @@ struct RendererData
 
   struct Shaders
 	{
-		std::shared_ptr<Shader> QuadShader;
+    std::shared_ptr<Shader> QuadShader;
 		std::shared_ptr<Shader> CircleShader;
 		std::shared_ptr<Shader> LineShader;
 		std::shared_ptr<Shader> FramebufferShader;
@@ -180,19 +180,20 @@ struct RendererData
 
 void Renderer::LoadShaders()
 {
-	s_Data.s_Shaders.QuadShader = Shader::Create("res/shaders/batch_quad.glsl");
-	s_Data.s_Shaders.CircleShader = Shader::Create("res/shaders/batch_circle.glsl");
-	s_Data.s_Shaders.LineShader = Shader::Create("res/shaders/batch_line.glsl");
-	s_Data.s_Shaders.FramebufferShader = Shader::Create("res/shaders/finalFB.glsl");
-  s_Data.s_Shaders.skyboxShader = Shader::Create("res/shaders/skybox.glsl");
-  s_Data.s_Shaders.DepthPrePassShader = Shader::Create("res/shaders/geometry_z_prepass.glsl");
-  s_Data.s_Shaders.GeometryShader = Shader::Create("res/shaders/geometry.glsl");
-  s_Data.s_Shaders.LightShader = Shader::Create("res/shaders/light.glsl");
-  s_Data.s_Shaders.DownSampleShader = Shader::Create("res/shaders/bloom_downsample.glsl");
-  s_Data.s_Shaders.UpSampleShader = Shader::Create("res/shaders/bloom_upsample.glsl");
-  s_Data.s_Shaders.BloomResultShader = Shader::Create("res/shaders/bloom_final.glsl");
-  s_Data.s_Shaders.OmniDirectShadowShader = Shader::Create("res/shaders/omni_shadowFB.glsl");
-  s_Data.s_Shaders.DirectShadowShader = Shader::Create("res/shaders/direct_shadowFB.glsl");
+  Shader::Create(s_Data.s_Shaders.QuadShader, "res/shaders/batch_quad.glsl");
+	Shader::Create(s_Data.s_Shaders.QuadShader, "res/shaders/batch_quad.glsl");
+	Shader::Create(s_Data.s_Shaders.CircleShader, "res/shaders/batch_circle.glsl");
+	Shader::Create(s_Data.s_Shaders.LineShader, "res/shaders/batch_line.glsl");
+	Shader::Create(s_Data.s_Shaders.FramebufferShader, "res/shaders/finalFB.glsl");
+  Shader::Create(s_Data.s_Shaders.skyboxShader, "res/shaders/skybox.glsl");
+  Shader::Create(s_Data.s_Shaders.DepthPrePassShader, "res/shaders/geometry_z_prepass.glsl");
+  Shader::Create(s_Data.s_Shaders.GeometryShader, "res/shaders/geometry.glsl");
+  Shader::Create(s_Data.s_Shaders.LightShader, "res/shaders/light.glsl");
+  Shader::Create(s_Data.s_Shaders.DownSampleShader, "res/shaders/bloom_downsample.glsl");
+  Shader::Create(s_Data.s_Shaders.UpSampleShader, "res/shaders/bloom_upsample.glsl");
+  Shader::Create(s_Data.s_Shaders.BloomResultShader, "res/shaders/bloom_final.glsl");
+  Shader::Create(s_Data.s_Shaders.OmniDirectShadowShader, "res/shaders/omni_shadowFB.glsl");
+  Shader::Create(s_Data.s_Shaders.DirectShadowShader, "res/shaders/direct_shadowFB.glsl");
 }
 
 void Renderer::Init()

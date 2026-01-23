@@ -245,6 +245,17 @@ GLuint Shader::GetID() const
 {
   return this->m_ID;
 }
+bool Shader::CheckIfModified(std::shared_ptr<Shader>& shader, const char* fullshader)
+{  
+  auto ftime = std::filesystem::last_write_time(fullshader);
+
+  auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+      ftime - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now()
+  );
+  std::time_t cftime = std::chrono::system_clock::to_time_t(sctp);
+
+  return (cftime != shader->m_lastTimeModified) ? true : false;
+}
 void Shader::SetBool(const std::string& name, bool value) const
 {
   glUniform1i(glGetUniformLocation(this->m_ID, name.c_str()), (int)value);
@@ -294,13 +305,49 @@ void Shader::SetMat4(const std::string& name, const glm::mat4& mat) const
   glUniformMatrix4fv(glGetUniformLocation(this->m_ID, name.c_str()), 1, GL_FALSE, &mat[0][0]);
 }
 
-std::shared_ptr<Shader> Shader::Create(const char* fullshader)
+void Shader::Create(std::shared_ptr<Shader>& shader, const char* fullshader)
 { 
-  return std::make_shared<Shader>(fullshader);
+  auto ftime = std::filesystem::last_write_time(fullshader);
+
+  auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+      ftime - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now()
+  );
+  std::time_t cftime = std::chrono::system_clock::to_time_t(sctp);
+
+  if(shader && !shader->m_firstTimeCompile && cftime == shader->m_lastTimeModified) return;
+   
+  shader = std::make_shared<Shader>(fullshader);
+  shader->m_lastTimeModified = cftime;
+  shader->m_firstTimeCompile = false;
 }
 
-std::shared_ptr<Shader> Shader::Create(const char* vertexPath, const char* fragmentPath, const char* geometryPath)
-{ 
-  return std::make_shared<Shader>(vertexPath,fragmentPath,geometryPath);
+void Shader::Create(std::shared_ptr<Shader>& shader, const char* vertexPath, const char* fragmentPath, const char* geometryPath)
+{
+  auto vtime = std::filesystem::last_write_time(vertexPath);
+  auto ftime = std::filesystem::last_write_time(fragmentPath);
+
+  std::filesystem::file_time_type gtime{};
+  if (geometryPath && std::filesystem::exists(geometryPath))
+  {
+    gtime = std::filesystem::last_write_time(geometryPath);
+  } 
+  else
+  {
+    gtime = std::filesystem::file_time_type::min();
+  }
+
+  auto latest = std::max({ vtime, ftime, gtime });
+
+  auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+      latest - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now()
+  );
+
+  std::time_t cftime = std::chrono::system_clock::to_time_t(sctp);
+
+  if(shader && !shader->m_firstTimeCompile && cftime == shader->m_lastTimeModified) return;
+
+  shader = std::make_shared<Shader>(vertexPath,fragmentPath,geometryPath);
+  shader->m_lastTimeModified = cftime;
+  shader->m_firstTimeCompile = false;
 }
 

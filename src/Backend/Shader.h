@@ -4,6 +4,9 @@
 
 #include <string>
 #include <memory>
+#include <filesystem>
+#include <chrono>
+#include <ctime>
 
 struct Shader
 {
@@ -16,6 +19,8 @@ struct Shader
   void Bind() const;
   void UnBind() const;
   GLuint GetID() const;
+
+  static bool CheckIfModified(std::shared_ptr<Shader>& shader, const char* fullshader);
 
   void SetBool(const std::string& name, bool value) const;
   void SetInt(const std::string& name, int value) const;
@@ -30,10 +35,12 @@ struct Shader
   void SetMat3(const std::string& name, const glm::mat3& mat) const;
   void SetMat4(const std::string& name, const glm::mat4& mat) const;
   
-  static std::shared_ptr<Shader> Create(const char* fullshader);
-  static std::shared_ptr<Shader> Create(const char* vertexPath, const char* fragmentPath, const char* geometryPath = nullptr);
+  static void Create(std::shared_ptr<Shader>& shader, const char* fullshader);
+  static void Create(std::shared_ptr<Shader>& shader, const char* vertexPath, const char* fragmentPath, const char* geometryPath = nullptr);
 
 private:
 
   GLuint m_ID;
+  std::time_t m_lastTimeModified = 0;
+  bool m_firstTimeCompile = true;
 };

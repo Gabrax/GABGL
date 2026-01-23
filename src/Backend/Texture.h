@@ -28,9 +28,9 @@ struct Texture
 {
   Texture() = default;
 	Texture(const TextureSpecification& specification);
-  Texture(const std::string& path, bool isGL);
-  Texture(const std::string& filename, const std::string& directory, bool isGL);
-  Texture(const aiTexture* paiTexture, const std::string& path, bool isGL);
+  Texture(const std::string& path);
+  Texture(const std::string& filename, const std::string& directory);
+  Texture(const aiTexture* paiTexture, const std::string& path);
   Texture(const std::vector<std::string>& faces);
 	~Texture();
 
@@ -60,11 +60,8 @@ struct Texture
 
 	static std::shared_ptr<Texture> Create(const TextureSpecification& specification);
 	static std::shared_ptr<Texture> Create(const std::string& path);
-	static std::shared_ptr<Texture> CreateRAW(const std::string& path);
-  static std::shared_ptr<Texture> CreateRAW(const std::string& path, const std::string& directory);
-  static std::shared_ptr<Texture> CreateRAWEMBEDDED(const aiTexture* paiTexture, const std::string& directory);
+  static std::shared_ptr<Texture> Create(const std::string& path, const std::string& directory);
   static std::shared_ptr<Texture> CreateEMBEDDED(const aiTexture* paiTexture, const std::string& directory);
-  static std::shared_ptr<Texture> CreateRAWCUBEMAP(const std::vector<std::string>& faces);
   static std::shared_ptr<Texture> CreateCUBEMAP(const std::vector<std::string>& faces);
   static std::shared_ptr<Texture> WrapExisting(uint32_t rendererID);
 

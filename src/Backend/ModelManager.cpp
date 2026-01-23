@@ -900,10 +900,10 @@ bool Model::loadMaterialTextures(aiMaterial* mat, aiTextureType type, const std:
       if (texturePath[0] == '*') {
           const aiTexture* aitexture = m_Scene->GetEmbeddedTexture(str.C_Str());
           if (aitexture) {
-              texture = Texture::CreateRAWEMBEDDED(aitexture, texturePath);
+              texture = Texture::CreateEMBEDDED(aitexture, texturePath);
           }
       } else {
-          texture = Texture::CreateRAW(texturePath, m_Directory);
+          texture = Texture::Create(texturePath, m_Directory);
       }
 
       if (texture) {
