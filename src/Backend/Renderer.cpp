@@ -180,7 +180,6 @@ struct RendererData
 
 void Renderer::LoadShaders()
 {
-  Shader::Create(s_Data.s_Shaders.QuadShader, "res/shaders/batch_quad.glsl");
 	Shader::Create(s_Data.s_Shaders.QuadShader, "res/shaders/batch_quad.glsl");
 	Shader::Create(s_Data.s_Shaders.CircleShader, "res/shaders/batch_circle.glsl");
 	Shader::Create(s_Data.s_Shaders.LineShader, "res/shaders/batch_line.glsl");
@@ -354,6 +353,9 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
   glEnable(GL_CULL_FACE);
   glCullFace(GL_FRONT);
   glFrontFace(GL_CW);
+
+  AudioManager::SetListenerLocation(s_Data.m_Camera.GetPosition());
+  AudioManager::SetListenerOrientation(s_Data.m_Camera.GetForwardDirection(), s_Data.m_Camera.GetUpDirection());
 
   if(!LightManager::DirectLightEmpty())
   {

@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <mutex>
 #include "../backend/BackendLogger.h"
+#include "al.h"
 
 static void ALC_CheckAndThrow(ALCdevice* device)
 {
@@ -107,7 +108,6 @@ void AudioManager::Init()
 	AL_CheckAndThrow();
 
 	s_Data.p_SoundEffectBuffers.clear();
-
 }
 
 void AudioManager::Terminate()
@@ -149,9 +149,9 @@ float AudioManager::GetListenerVolume()
 
 void AudioManager::SetAttunation(int key)
 {
-	if (key < 0xD001 || key > 0xD006)
-		throw("bad attunation key");
+	if (key < 0xD001 || key > 0xD006) throw("bad attunation key");
 
+  /*alListeneri(AL_DISTANCE_MODEL, key);*/
 	alDistanceModel(key);
 	AL_CheckAndThrow();
 }
@@ -164,15 +164,14 @@ void AudioManager::SetListenerLocation(const glm::vec3& position)
 
 void AudioManager::SetListenerOrientation(const glm::vec3& forward, const glm::vec3& up)
 {
-	std::vector<float> ori;
-	ori.push_back(forward.x);
-	ori.push_back(forward.y);
-	ori.push_back(forward.z);
-	ori.push_back(up.x);
-	ori.push_back(up.y);
-	ori.push_back(up.z);
-	alListenerfv(AL_ORIENTATION, ori.data());
-	AL_CheckAndThrow();
+  glm::vec3 f = glm::normalize(forward);
+  glm::vec3 u = glm::normalize(up);
+
+  f = glm::normalize(f - glm::dot(f, u) * u);
+
+  float ori[6] = { f.x, f.y, f.z, u.x, u.y, u.z };
+  alListenerfv(AL_ORIENTATION, ori);
+  AL_CheckAndThrow();
 }
 
 void AudioManager::SetListenerVolume(const float& val)
@@ -476,10 +475,8 @@ MusicSource::MusicSource(const char* filename)
 		throw("could not open provided music file -- check path");
 	}
 
-	if (p_Sfinfo.channels == 1)
-		p_Format = AL_FORMAT_MONO16;
-	else if (p_Sfinfo.channels == 2)
-		p_Format = AL_FORMAT_STEREO16;
+	if (p_Sfinfo.channels == 1) p_Format = AL_FORMAT_MONO16;
+	else if (p_Sfinfo.channels == 2) p_Format = AL_FORMAT_STEREO16;
 	else if (p_Sfinfo.channels == 3)
 	{
 		if (sf_command(p_SndFile, SFC_WAVEX_GET_AMBISONIC, NULL, 0) == SF_AMBISONIC_B_FORMAT)
@@ -539,28 +536,53 @@ void MusicSource::Play(const float& volume)
 
 void MusicSource::Play(const glm::vec3& position, const float& volume)
 {
-  ALsizei i;
+  ALint i;
 
-  alGetError();
+  alSourceStop(p_Source);
 
+  ALint queued = 0;
+  alGetSourcei(p_Source, AL_BUFFERS_QUEUED, &queued);
+  while (queued-- > 0)
+  {
+    ALuint buf;
+    alSourceUnqueueBuffers(p_Source, 1, &buf);
+  }
+
+  alSourcei(p_Source, AL_SOURCE_RELATIVE, AL_FALSE);
   alSource3f(p_Source, AL_POSITION, position.x, position.y, position.z);
-  alSourceRewind(p_Source);
-  alSourcei(p_Source, AL_BUFFER, 0);
-  alSourcef(p_Source, AL_GAIN, volume);  // Set volume
+
+  alSourcef(p_Source, AL_REFERENCE_DISTANCE, 5.0f);
+  alSourcef(p_Source, AL_MAX_DISTANCE, 80.0f);
+  alSourcef(p_Source, AL_ROLLOFF_FACTOR, 1.0f);
+  alSourcef(p_Source, AL_GAIN, volume);
 
   for (i = 0; i < NUM_BUFFERS; i++)
   {
-      sf_count_t slen = sf_readf_short(p_SndFile, p_Membuf, BUFFER_SAMPLES);
-      if (slen < 1) break;
+    sf_count_t frames = sf_readf_short(p_SndFile, p_Membuf, BUFFER_SAMPLES);
+    if (frames < 1) break;
 
-      slen *= p_Sfinfo.channels * (sf_count_t)sizeof(short);
-      alBufferData(p_Buffers[i], p_Format, p_Membuf, (ALsizei)slen, p_Sfinfo.samplerate);
+    ALenum format;
+    if (p_Sfinfo.channels == 1)
+        format = AL_FORMAT_MONO16;
+    else if (p_Sfinfo.channels == 2)
+        format = AL_FORMAT_STEREO16;
+    else
+        throw("Unsupported channel count");
+
+    alBufferData(
+        p_Buffers[i],
+        format,
+        p_Membuf,
+        static_cast<ALsizei>(frames * sizeof(short) * p_Sfinfo.channels),
+        p_Sfinfo.samplerate
+    );
   }
-  if (alGetError() != AL_NO_ERROR) throw("Error buffering for playback");
 
   alSourceQueueBuffers(p_Source, i, p_Buffers);
   alSourcePlay(p_Source);
-  if (alGetError() != AL_NO_ERROR) throw("Error starting playback");
+
+  if (alGetError() != AL_NO_ERROR)
+      throw("Error starting playback");
 }
 
 void MusicSource::Pause()
@@ -676,16 +698,19 @@ void AudioManager::PlayMusic(const std::string& name, bool loop, const float& vo
   auto it = s_Data.players.find(name);
   if (it != s_Data.players.end())
   {
-      it->second->Play(volume);
-      if(loop) it->second->SetLoop(loop);
+    it->second->Play(volume);
+    if(loop) it->second->SetLoop(loop);
   }
 }
 
-void AudioManager::PlayMusic(const std::string& name, const glm::vec3& position, const float& volume)
+void AudioManager::PlayMusic(const std::string& name, const glm::vec3& position, bool loop, const float& volume)
 {
   auto it = s_Data.players.find(name);
   if (it != s_Data.players.end())
-      it->second->Play(position,volume);
+  {
+    it->second->Play(position,volume);
+    if(loop) it->second->SetLoop(loop);
+  }
 }
 
 void AudioManager::PauseMusic(const std::string& name)

@@ -36,7 +36,7 @@ struct AudioManager
   // MUSIC
   static void LoadMusic(const char* filename);
   static void PlayMusic(const std::string& name, bool loop = false, const float& volume = 1.0f);
-  static void PlayMusic(const std::string& name, const glm::vec3& position, const float& volume = 1.0f);
+  static void PlayMusic(const std::string& name, const glm::vec3& position, bool loop = false, const float& volume = 1.0f);
   static void PauseMusic(const std::string& name);
   static void StopMusic(const std::string& name);
   static void SetMusicLoop(const std::string& name, bool loop);

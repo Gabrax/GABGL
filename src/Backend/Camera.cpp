@@ -239,7 +239,8 @@ void Camera::UpdateCameraVectors()
 
 glm::vec3 Camera::GetUpDirection() const
 {
-	return glm::rotate(GetOrientation(), glm::vec3(0.0f, 1.0f, 0.0f));
+	/*return glm::rotate(GetOrientation(), glm::vec3(0.0f, 1.0f, 0.0f));*/
+  return m_Up;
 }
 
 glm::vec3 Camera::GetRightDirection() const
@@ -249,7 +250,8 @@ glm::vec3 Camera::GetRightDirection() const
 
 glm::vec3 Camera::GetForwardDirection() const
 {
-	return glm::rotate(GetOrientation(), glm::vec3(0.0f, 0.0f, -1.0f));
+	/*return glm::rotate(GetOrientation(), glm::vec3(0.0f, 0.0f, -1.0f));*/
+  return m_Front;
 }
 
 glm::vec3 Camera::CalculatePosition() const

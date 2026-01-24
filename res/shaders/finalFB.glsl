@@ -26,16 +26,16 @@ layout(std140, binding = 2) uniform Resolution
 
 void main()
 {
-  vec2 u_Resolution = resolution;
-  int u_PixelSize = 5;
+  // vec2 u_Resolution = resolution;
+  // int u_PixelSize = 5;
+  //
+  // vec2 pixelCoords = v_TexCoord * u_Resolution;
+  //
+  // float px = float(u_PixelSize);
+  // vec2 snapped = floor(pixelCoords / px) * px + px * 0.5;
+  //
+  // vec2 uv = snapped / u_Resolution;
 
-  vec2 pixelCoords = v_TexCoord * u_Resolution;
-
-  float px = float(u_PixelSize);
-  vec2 snapped = floor(pixelCoords / px) * px + px * 0.5;
-
-  vec2 uv = snapped / u_Resolution;
-
-  // FragColor = texture(u_Texture, v_TexCoord);
-  FragColor = texture(u_Texture, uv);
+  // FragColor = texture(u_Texture, uv);
+  FragColor = texture(u_Texture, v_TexCoord);
 }

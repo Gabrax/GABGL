@@ -157,6 +157,7 @@ struct AssetsData
   {
     "res/audio/menu.wav",
     "res/audio/night.wav",
+    "res/audio/night_mono.wav",
   };
 
   std::vector<std::string> skybox =
@@ -171,6 +172,8 @@ struct AssetsData
 
   std::vector<std::tuple<const char*, float, bool, MeshType>> static_models =
   {
+    { "res/models/radio/radio.obj", 0.7f, false, MeshType::NONE },
+    { "res/models/street_lamp/street_lamp.obj", 0.7f, false, MeshType::NONE },
     { "res/map/objHouse.obj", 0.7f, false, MeshType::TRIANGLEMESH },
     { "res/models/aidkit.glb", 1.0f, false, MeshType::NONE },
     { "res/models/aidkit_convex.glb", 1.0f, false, MeshType::CONVEXMESH },
