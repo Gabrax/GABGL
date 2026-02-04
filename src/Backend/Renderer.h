@@ -12,12 +12,12 @@ struct Renderer
 	static void Init();
 	static void Shutdown();
 
-  static void DrawScene(DeltaTime& dt, const std::function<void()>& geometry, const std::function<void()>& lights);
+  static void DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic);
   static void DrawLoadingScreen();
 	static void BeginScene(const Camera& camera);
 	static void EndScene();
 
-	static void DrawQuad(glm::vec3& position, const glm::vec3& size, const glm::vec3& rotation, const glm::vec4& color);
+	static void DrawQuad(const glm::vec3& position, const glm::vec3& size, const glm::vec3& rotation, const glm::vec4& color);
 	static void DrawQuad(const glm::vec3& position, const glm::vec3& size, const glm::vec3& rotation, const std::shared_ptr<Texture>& texture, const glm::vec4& tintColor = glm::vec4(1.0f));
   static void DrawQuad(const glm::vec2& position, const glm::vec2& size, float rotation, const glm::vec4& color);
 	static void DrawQuad(const glm::vec2& position, const glm::vec2& size, float rotation, const std::shared_ptr<Texture>& texture, const glm::vec4& tintColor = glm::vec4(1.0f));
@@ -38,6 +38,9 @@ struct Renderer
 
   static void BakeSkyboxTextures(const std::string& name,const std::shared_ptr<Texture>& texture);
   static void DrawSkybox(const std::string& name);
+
+  static void EmitParticles();
+  static void UpdateParticles(DeltaTime& dt);
 
 	static float GetLineWidth();
 	static void SetLineWidth(float width);

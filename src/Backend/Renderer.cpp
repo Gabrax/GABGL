@@ -5,6 +5,7 @@
 #include "Camera.h"
 #include "LightManager.h"
 #include "ModelManager.h"
+#include "PxParticleSystemFlag.h"
 #include "Renderer.h"
 #include "Shader.h"
 #include "Texture.h"
@@ -20,12 +21,16 @@
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
 #include "ImGuizmo.h"
+#include "glm/ext/scalar_constants.hpp"
+#include "glm/gtx/dual_quaternion.hpp"
+#include "glm/trigonometric.hpp"
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/fwd.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
 #include "json.hpp"
 #include "../input/UserInput.h"
+#include "RandomGen.hpp"
 
 void MessageCallback(unsigned source,unsigned type,unsigned id,unsigned severity,int length,const char* message,const void* userParam)
 {
@@ -57,6 +62,22 @@ struct LineVertex
 	glm::vec4 Color;
 
 	int EntityID;
+};
+
+struct Particle
+{
+  glm::vec3 Position;
+  glm::vec3 Velocity;
+  glm::vec4 ColorStart, ColorEnd;
+  float Rotation = 0.0f;
+  float SizeBegin, SizeEnd;
+
+  float ConeAngle;
+
+  float LifeTime = 1.0f;
+  float LifeRemaining = 0.0f;
+
+  bool Active = false;
 };
 
 struct CameraData
@@ -164,6 +185,10 @@ struct RendererData
   uint32_t m_DrawIndexOffset = 0;
   uint32_t m_DrawVertexOffset = 0;
   uint32_t m_cmdBufer;
+
+  Particle m_Particle;
+  std::vector<Particle> m_ParticlePool;  
+  uint32_t m_PoolIndex = 999;
 
   Window* m_WindowRef = nullptr;
   Camera m_Camera;
@@ -312,6 +337,19 @@ void Renderer::Init()
   s_Data.m_Camera.SetMode(CameraMode::FPS);
   s_Data.m_WindowRef->SetCursorVisible(false);
 
+  s_Data.m_ParticlePool.resize(1000);
+  s_Data.m_Particle.Position = glm::vec3(0.0f);
+  s_Data.m_Particle.Rotation = 5.0f;
+  s_Data.m_Particle.Velocity = glm::vec3(0.0f,5.0f,0.0f);
+  s_Data.m_Particle.ColorStart = glm::vec4(1.0f);
+  s_Data.m_Particle.ColorEnd = glm::vec4(0.0f);
+  s_Data.m_Particle.LifeTime = 5.0f;
+  s_Data.m_Particle.LifeRemaining = s_Data.m_Particle.LifeTime;
+  s_Data.m_Particle.SizeBegin = 1.0f;
+  s_Data.m_Particle.SizeEnd = 0.0f;
+  s_Data.m_Particle.ConeAngle = glm::radians(30.0f);
+
+
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
@@ -345,7 +383,7 @@ void Renderer::Shutdown()
 	ImGui::DestroyContext();
 }
 
-void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, const std::function<void()>& lights)
+void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic)
 {
   glDisable(GL_DITHER);
   glDisable(GL_BLEND);
@@ -353,6 +391,10 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
   glEnable(GL_CULL_FACE);
   glCullFace(GL_FRONT);
   glFrontFace(GL_CW);
+
+  scene_logic();
+
+  Renderer::EmitParticles();
 
   AudioManager::SetListenerLocation(s_Data.m_Camera.GetPosition());
   AudioManager::SetListenerOrientation(s_Data.m_Camera.GetForwardDirection(), s_Data.m_Camera.GetUpDirection());
@@ -556,11 +598,14 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& geometry, c
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     BeginScene(s_Data.m_Camera);
+
+    Renderer::Set3D(true);
+    Renderer::UpdateParticles(dt);
+    Renderer::Set3D(false);
+
     Renderer::DrawText(FontManager::GetFont("dpcomic"), "FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f, 50.0f), 0.5f, glm::vec4(1.0f));
     EndScene();
   }
-
-  geometry();
 }
 
 void Renderer::DrawLoadingScreen()
@@ -677,7 +722,7 @@ void Renderer::DrawLine(const glm::vec3& p0, const glm::vec3& p1, const glm::vec
 	s_Data.LineVertexCount += 2;
 }
 
-void Renderer::DrawQuad(glm::vec3& position, const glm::vec3& size, const glm::vec3& rotation, const glm::vec4& color)
+void Renderer::DrawQuad(const glm::vec3& position, const glm::vec3& size, const glm::vec3& rotation, const glm::vec4& color)
 {
   glm::mat4 transform = glm::translate(glm::mat4(1.0f), position)
     * glm::rotate(glm::mat4(1.0f), glm::radians(rotation.x), glm::vec3(1, 0, 0))
@@ -1168,6 +1213,116 @@ void Renderer::DrawSkybox(const std::string& name)
   glDepthMask(GL_TRUE);
 }
 
+void Renderer::UpdateParticles(DeltaTime& dt)
+{
+  const float delta = static_cast<float>(dt);
+
+  for (auto& particle : s_Data.m_ParticlePool)
+  {
+    if (!particle.Active) [[unlikely]]
+        continue;
+
+    particle.LifeRemaining -= delta;
+    if (particle.LifeRemaining <= 0.0f) [[unlikely]]
+    {
+        particle.Active = false;
+        continue;
+    }
+
+    particle.Position += particle.Velocity * delta;
+    particle.Rotation += 0.01f * delta;
+  }
+
+  for (auto& particle : s_Data.m_ParticlePool)
+  {
+    if (!particle.Active) [[unlikely]]
+        continue;
+
+    float life = particle.LifeRemaining / particle.LifeTime;
+    life = glm::clamp(life, 0.0f, 1.0f);
+
+    float t = 1.0f - life;
+
+    glm::vec4 color = glm::mix(particle.ColorStart,particle.ColorEnd,t);
+    color.a *= life;
+
+    float size = glm::mix(particle.SizeBegin,particle.SizeEnd,t);
+
+    /*DrawQuad(particle.Position,glm::vec3(size),particle.Rotation,color);*/
+    DrawCubeContour(particle.Position,glm::vec3(size),color);
+  }
+}
+
+static glm::vec3 RandomDirectionInCone(const glm::vec3& direction, float coneAngle)
+{
+  float u = RandomGen::Float();
+  float v = RandomGen::Float();
+
+  float cosTheta = glm::mix(std::cos(coneAngle), 1.0f, u);
+  float sinTheta = std::sqrt(1.0f - cosTheta * cosTheta);
+
+  float phi = 2.0f * glm::pi<float>() * v;
+
+  glm::vec3 localDir =
+  {
+      std::cos(phi) * sinTheta,
+      std::sin(phi) * sinTheta,
+      cosTheta
+  };
+
+  glm::vec3 up = std::abs(direction.z) < 0.999f
+      ? glm::vec3(0, 0, 1)
+      : glm::vec3(1, 0, 0);
+
+  glm::vec3 tangent   = glm::normalize(glm::cross(up, direction));
+  glm::vec3 bitangent = glm::cross(direction, tangent);
+
+  return
+      tangent   * localDir.x +
+      bitangent * localDir.y +
+      direction * localDir.z;
+}
+
+void Renderer::EmitParticles()
+{
+  Particle& particle = s_Data.m_ParticlePool[s_Data.m_PoolIndex];
+
+  particle.Active = true;
+  particle.Position = glm::vec3(0.0f);
+
+  particle.Rotation = RandomGen::Float() * 2.0f * glm::pi<float>();
+
+  glm::vec3 baseDir = glm::normalize(s_Data.m_Particle.Velocity);
+
+  glm::vec3 dir = RandomDirectionInCone(
+      baseDir,
+      s_Data.m_Particle.ConeAngle * 0.5f
+  );
+
+  float speed =
+      glm::length(s_Data.m_Particle.Velocity) *
+      RandomGen::RandomRange(0.8f, 1.2f);
+
+  particle.Velocity = dir * speed;
+
+  particle.ColorStart = s_Data.m_Particle.ColorStart;
+  particle.ColorEnd   = s_Data.m_Particle.ColorEnd;
+
+  particle.LifeTime      = s_Data.m_Particle.LifeTime;
+  particle.LifeRemaining = particle.LifeTime;
+
+  particle.SizeBegin =
+      s_Data.m_Particle.SizeBegin *
+      RandomGen::RandomRange(0.8f, 1.2f);
+
+  particle.SizeEnd = s_Data.m_Particle.SizeEnd;
+
+  if (s_Data.m_PoolIndex == 0)
+      s_Data.m_PoolIndex = s_Data.m_ParticlePool.size() - 1;
+  else
+      --s_Data.m_PoolIndex;
+}
+
 void Renderer::DrawText(const Font* font, const std::string& text, const glm::vec3& position, const glm::vec3& rotation, float size, const glm::vec4& color)
 {
   Renderer::Set3D(true);
@@ -1358,11 +1513,8 @@ void Renderer::BlockEvents(bool block)
 
 void Renderer::Set3D(bool is3D)
 {
-	if (s_Data.Is3D != is3D)
-	{
-		Flush();             
-		s_Data.Is3D = is3D;  
-	}
+  Flush();             
+  s_Data.Is3D = is3D;
 }
 
 void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
