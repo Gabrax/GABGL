@@ -36,11 +36,11 @@ void Engine::Run()
   ModelManager::Init();
   AssetManager::Init();
 
-  /*CustomFrameRate::SetTargetFPS(60);*/
+  CustomFrameRate::SetTargetFPS(90);
 
   while(m_Window->IsRunning())
   {
-    /*CustomFrameRate::BeginFrame();*/
+    CustomFrameRate::BeginFrame();
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -60,13 +60,12 @@ void Engine::Run()
     }
     else
     {
-
       if (!m_Window->IsMinimized()) LayerStack::OnUpdate(dt);
     }
 
     m_Window->Update();
 
-    /*CustomFrameRate::EndFrame();*/
+    CustomFrameRate::EndFrame();
   }
 }
 

@@ -17,11 +17,11 @@ Application::Application()
   /*LightManager::AddLight(LightType::SPOT, glm::vec3(1.0f,1.0f,1.0), glm::vec3(15.0f,15.0f,15.0f), glm::vec3(0.0,-1.0,0.0)); */
 
 
-  Transform radio;
-  radio.SetPosition(glm::vec3(25.0f,2.0f,15.0f));
+  /*Transform radio;*/
+  /*radio.SetPosition(glm::vec3(25.0f,2.0f,15.0f));*/
   /*radio.SetRotation(glm::vec3(-95.0,0.0,0.0));*/
-  radio.SetScale(glm::vec3(0.2f));
-  ModelManager::SetInitialModelTransform("radio", radio.GetTransform());
+  /*radio.SetScale(glm::vec3(0.2f));*/
+  /*ModelManager::SetInitialModelTransform("radio", radio.GetTransform());*/
   AudioManager::PlayMusic("night_mono",glm::vec3(25.0f,2.0f,15.0f),true);
 
   Transform lamp;
@@ -31,12 +31,12 @@ Application::Application()
 
   Transform transform;
   transform.SetPosition(glm::vec3(5.0f));
-  ModelManager::SetInitialModelTransform("sphere", transform.GetTransform());
+  /*ModelManager::SetInitialModelTransform("sphere", transform.GetTransform());*/
   LightManager::AddLight(LightType::POINT, glm::vec3(1.0f,1.0f,0.0), transform.GetPosition(), glm::vec3(1.0f));
   LightManager::AddLight(LightType::DIRECT, glm::vec3(0.3, 0.32, 0.4), glm::vec3(0.0f), glm::vec3(-2.0f, -4.0f, -1.0f));
-  Transform terraintransform;
-  terraintransform.SetPosition(glm::vec3(-200.0f,-200.0f,50.0f));
-  ModelManager::SetInitialModelTransform("outer_terrain", terraintransform.GetTransform());
+  /*Transform terraintransform;*/
+  /*terraintransform.SetPosition(glm::vec3(-200.0f,-200.0f,50.0f));*/
+  /*ModelManager::SetInitialModelTransform("outer_terrain", terraintransform.GetTransform());*/
   Transform housetransform;
   housetransform.SetPosition(glm::vec3(0.0f));
   ModelManager::SetInitialModelTransform("objHouse", housetransform.GetTransform());

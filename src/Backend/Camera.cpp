@@ -245,7 +245,8 @@ glm::vec3 Camera::GetUpDirection() const
 
 glm::vec3 Camera::GetRightDirection() const
 {
-	return glm::rotate(GetOrientation(), glm::vec3(1.0f, 0.0f, 0.0f));
+	/*return glm::rotate(GetOrientation(), glm::vec3(1.0f, 0.0f, 0.0f));*/
+  return m_Right;
 }
 
 glm::vec3 Camera::GetForwardDirection() const

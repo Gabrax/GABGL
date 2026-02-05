@@ -5,7 +5,7 @@
 
 struct CustomFrameRate
 {
-  using Clock = std::chrono::high_resolution_clock;
+  using Clock = std::chrono::steady_clock;
   using TimePoint = std::chrono::time_point<Clock>;
 
   inline static void SetTargetFPS(float fps)
@@ -32,7 +32,7 @@ struct CustomFrameRate
 
 private:
   inline static TimePoint frameStart;
-  inline static float targetFPS = 60.0f;
-  inline static float frameDelay = 1000.0f / 60.0f;
+  inline static float targetFPS;
+  inline static double frameDelay;
 };
 

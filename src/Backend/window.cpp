@@ -60,7 +60,7 @@ void Window::Init(const WindowDefaultData& props)
   SetWindowIcon("res/textures/gabglicon.png", m_Window);
   SetResizable(false);
   CenterWindowPos();
-  SetVSync(true);
+  SetVSync(false);
   Maximize(false);
 
   // Set GLFW callbacks

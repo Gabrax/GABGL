@@ -110,8 +110,6 @@ struct RendererData
 	static constexpr uint32_t MaxVertices = MaxQuads * 4;
 	static constexpr uint32_t MaxIndices = MaxQuads * 6;
 	static constexpr uint32_t MaxTextureSlots = 32; // TODO: RenderCaps
-  static constexpr uint32_t MaxModelVertexCount = 50000;
-  static constexpr uint32_t MaxModelIndices  = 75000;
 
 	std::shared_ptr<Texture> WhiteTexture;
 
@@ -121,6 +119,7 @@ struct RendererData
 	QuadVertex* QuadVertexBufferBase = nullptr;
 	QuadVertex* QuadVertexBufferPtr = nullptr;
 	glm::vec4 QuadVertexPositions[4];
+	static constexpr size_t quadVertexCount = 4;
 
 	std::shared_ptr<VertexArray> LineVertexArray;
 	std::shared_ptr<VertexBuffer> LineVertexBuffer;
@@ -137,7 +136,7 @@ struct RendererData
     { 0.0f, 1.0f, 0.0f }
   };
 
-  static constexpr glm::vec2 texCoords[4] =
+  static constexpr glm::vec2 tex3DCoords[4] =
   {
     { 0.0f, 1.0f },
     { 1.0f, 1.0f },
@@ -147,6 +146,16 @@ struct RendererData
 
 	std::array<std::shared_ptr<Texture>, MaxTextureSlots> TextureSlots;
 	uint32_t TextureSlotIndex = 1; // 0 = white texture
+
+	static constexpr glm::vec2 tex2DCoords[4] = 
+  {
+    { 0.0f, 0.0f },
+    { 1.0f, 0.0f },
+    { 1.0f, 1.0f },
+    { 0.0f, 1.0f }
+  };
+	static constexpr float tilingFactor = 1.0f;
+
 
   struct Shaders
 	{
@@ -188,7 +197,7 @@ struct RendererData
 
   Particle m_Particle;
   std::vector<Particle> m_ParticlePool;  
-  uint32_t m_PoolIndex = 999;
+  uint32_t m_PoolIndex;
 
   Window* m_WindowRef = nullptr;
   Camera m_Camera;
@@ -337,18 +346,19 @@ void Renderer::Init()
   s_Data.m_Camera.SetMode(CameraMode::FPS);
   s_Data.m_WindowRef->SetCursorVisible(false);
 
-  s_Data.m_ParticlePool.resize(1000);
+  s_Data.m_ParticlePool.resize(100);
+  s_Data.m_PoolIndex = 99;
+
   s_Data.m_Particle.Position = glm::vec3(0.0f);
   s_Data.m_Particle.Rotation = 5.0f;
   s_Data.m_Particle.Velocity = glm::vec3(0.0f,5.0f,0.0f);
-  s_Data.m_Particle.ColorStart = glm::vec4(1.0f);
-  s_Data.m_Particle.ColorEnd = glm::vec4(0.0f);
+  s_Data.m_Particle.ColorStart = glm::vec4(1.0f, 0.9f, 0.3f, 1.0f);
+  s_Data.m_Particle.ColorEnd = glm::vec4(0.6f, 0.1f, 0.0f, 0.0f);
   s_Data.m_Particle.LifeTime = 5.0f;
   s_Data.m_Particle.LifeRemaining = s_Data.m_Particle.LifeTime;
   s_Data.m_Particle.SizeBegin = 1.0f;
   s_Data.m_Particle.SizeEnd = 0.0f;
   s_Data.m_Particle.ConeAngle = glm::radians(30.0f);
-
 
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -394,11 +404,16 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
 
   scene_logic();
 
-  Renderer::EmitParticles();
+  {
+    GABGL_PROFILE_SCOPE("MISC UPDATE PASS");
 
-  AudioManager::SetListenerLocation(s_Data.m_Camera.GetPosition());
-  AudioManager::SetListenerOrientation(s_Data.m_Camera.GetForwardDirection(), s_Data.m_Camera.GetUpDirection());
-
+    s_Data.m_Camera.OnUpdate(dt);
+    AudioManager::SetListenerLocation(s_Data.m_Camera.GetPosition());
+    AudioManager::SetListenerOrientation(s_Data.m_Camera.GetForwardDirection(), s_Data.m_Camera.GetUpDirection());
+    ModelManager::UpdateTransforms(dt);
+    PhysX::Simulate(dt);
+    AudioManager::UpdateAllMusic();
+  }
   if(!LightManager::DirectLightEmpty())
   {
     GABGL_PROFILE_SCOPE("DIRECT SHADOW PASS");
@@ -548,22 +563,26 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
     s_Data.m_BloomBuffer->BlitColorTo(s_Data.m_SkyboxBuffer);
   }
   {
-    GABGL_PROFILE_SCOPE("SKYBOX PASS");
+    GABGL_PROFILE_SCOPE("FORWARD PASS");
 
     s_Data.m_SkyboxBuffer->Bind();
 
     Renderer::DrawSkybox("night");
+    
+    BeginScene(s_Data.m_Camera);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    Renderer::Set3D(true);
+    Renderer::EmitParticles();
+    Renderer::UpdateParticles(dt);
+    Renderer::Set3D(false);
+
+    glDisable(GL_BLEND);
+    EndScene();
 
     s_Data.m_SkyboxBuffer->UnBind();
     s_Data.m_SkyboxBuffer->BlitColor(s_Data.m_ResultBuffer);
-  }
-  {
-    GABGL_PROFILE_SCOPE("MISC UPDATE PASS");
-
-    s_Data.m_Camera.OnUpdate(dt);
-    ModelManager::UpdateTransforms(dt);
-    PhysX::Simulate(dt);
-    AudioManager::UpdateAllMusic();
   }
   {
     GABGL_PROFILE_SCOPE("SCENE RESULT PASS");
@@ -598,11 +617,6 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     BeginScene(s_Data.m_Camera);
-
-    Renderer::Set3D(true);
-    Renderer::UpdateParticles(dt);
-    Renderer::Set3D(false);
-
     Renderer::DrawText(FontManager::GetFont("dpcomic"), "FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f, 50.0f), 0.5f, glm::vec4(1.0f));
     EndScene();
   }
@@ -744,22 +758,37 @@ void Renderer::DrawQuad(const glm::vec2& position, const glm::vec2& size, float 
 
 void Renderer::DrawQuad(const glm::mat4& transform, const glm::vec4& color, int entityID)
 {
-	constexpr size_t quadVertexCount = 4;
 	const float textureIndex = 0.0f; // White Texture
-	constexpr glm::vec2 textureCoords[] = { { 0.0f, 0.0f }, { 1.0f, 0.0f }, { 1.0f, 1.0f }, { 0.0f, 1.0f } };
-	const float tilingFactor = 1.0f;
 
 	if (s_Data.QuadIndexCount >= RendererData::MaxIndices) NextBatch();
 
-	for (size_t i = 0; i < quadVertexCount; i++)
+  glm::vec3 position = glm::vec3(transform[3]);
+
+  float sizeX = glm::length(glm::vec3(transform[0]));
+  float sizeY = glm::length(glm::vec3(transform[1]));
+
+  glm::vec3 cameraRight = s_Data.m_Camera.GetRightDirection();
+  glm::vec3 cameraUp = s_Data.m_Camera.GetUpDirection();
+
+	for (size_t i = 0; i < s_Data.quadVertexCount; i++)
 	{
-		s_Data.QuadVertexBufferPtr->Position = transform * s_Data.QuadVertexPositions[i];
-		s_Data.QuadVertexBufferPtr->Color = color;
-		s_Data.QuadVertexBufferPtr->TexCoord = textureCoords[i];
-		s_Data.QuadVertexBufferPtr->TexIndex = textureIndex;
-		s_Data.QuadVertexBufferPtr->TilingFactor = tilingFactor;
-		s_Data.QuadVertexBufferPtr->EntityID = entityID;
-		s_Data.QuadVertexBufferPtr++;
+    if(s_Data.Is3D)
+    {
+      glm::vec3 worldPos =
+          position +
+          cameraRight * (s_Data.QuadVertexPositions[i].x * sizeX) +
+          cameraUp    * (s_Data.QuadVertexPositions[i].y * sizeY);
+
+      s_Data.QuadVertexBufferPtr->Position = worldPos;
+    }
+    else s_Data.QuadVertexBufferPtr->Position = transform * s_Data.QuadVertexPositions[i];
+
+    s_Data.QuadVertexBufferPtr->Color = color;
+    s_Data.QuadVertexBufferPtr->TexCoord = s_Data.tex3DCoords[i];
+    s_Data.QuadVertexBufferPtr->TexIndex = textureIndex;
+    s_Data.QuadVertexBufferPtr->TilingFactor = s_Data.tilingFactor;
+    s_Data.QuadVertexBufferPtr->EntityID = entityID;
+    s_Data.QuadVertexBufferPtr++;
 	}
 
 	s_Data.QuadIndexCount += 6;
@@ -787,9 +816,6 @@ void Renderer::DrawQuad(const glm::vec2& position, const glm::vec2& size, float 
 
 void Renderer::DrawQuad(const glm::mat4& transform, const std::shared_ptr<Texture>& texture, const glm::vec4& tintColor, float tilingFactor, int entityID)
 {
-	constexpr size_t quadVertexCount = 4;
-	constexpr glm::vec2 textureCoords[] = { { 0.0f, 0.0f }, { 1.0f, 0.0f }, { 1.0f, 1.0f }, { 0.0f, 1.0f } };
-
 	if (s_Data.QuadIndexCount >= RendererData::MaxIndices) NextBatch();
 
 	float textureIndex = 0.0f;
@@ -811,13 +837,13 @@ void Renderer::DrawQuad(const glm::mat4& transform, const std::shared_ptr<Textur
 		s_Data.TextureSlotIndex++;
 	}
 
-	for (size_t i = 0; i < quadVertexCount; i++)
+	for (size_t i = 0; i < s_Data.quadVertexCount; i++)
 	{
 		s_Data.QuadVertexBufferPtr->Position = transform * s_Data.QuadVertexPositions[i];
 		s_Data.QuadVertexBufferPtr->Color = tintColor;
-		s_Data.QuadVertexBufferPtr->TexCoord = textureCoords[i];
+		s_Data.QuadVertexBufferPtr->TexCoord = s_Data.tex2DCoords[i];
 		s_Data.QuadVertexBufferPtr->TexIndex = textureIndex;
-		s_Data.QuadVertexBufferPtr->TilingFactor = tilingFactor;
+		s_Data.QuadVertexBufferPtr->TilingFactor = s_Data.tilingFactor;
 		s_Data.QuadVertexBufferPtr->EntityID = entityID;
 		s_Data.QuadVertexBufferPtr++;
 	}
@@ -880,43 +906,37 @@ void Renderer::DrawCube(const glm::vec3& position, const glm::vec3& size, const 
 	// FRONT (+Z)
 	DrawQuad(
 		glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, 0.0f, +halfZ)) *
-		glm::scale(glm::mat4(1.0f), glm::vec3(xy, 1.0f)),
-		texture,tintColor);
+		glm::scale(glm::mat4(1.0f), glm::vec3(xy, 1.0f)),texture,tintColor);
 
 	// BACK (-Z)
 	DrawQuad(
 		glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, 0.0f, -halfZ)) *
 		glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), { 0, 1, 0 }) *
-		glm::scale(glm::mat4(1.0f), glm::vec3(xy, 1.0f)),
-		texture,tintColor);
+		glm::scale(glm::mat4(1.0f), glm::vec3(xy, 1.0f)),texture,tintColor);
 
 	// LEFT (-X)
 	DrawQuad(
 		glm::translate(glm::mat4(1.0f), position + glm::vec3(-halfX, 0.0f, 0.0f)) *
 		glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), { 0, 1, 0 }) *
-		glm::scale(glm::mat4(1.0f), glm::vec3(yz, 1.0f)),
-		texture,tintColor);
+		glm::scale(glm::mat4(1.0f), glm::vec3(yz, 1.0f)),texture,tintColor);
 
 	// RIGHT (+X)
 	DrawQuad(
 		glm::translate(glm::mat4(1.0f), position + glm::vec3(+halfX, 0.0f, 0.0f)) *
 		glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), { 0, 1, 0 }) *
-		glm::scale(glm::mat4(1.0f), glm::vec3(yz, 1.0f)),
-		texture,tintColor);
+		glm::scale(glm::mat4(1.0f), glm::vec3(yz, 1.0f)),texture,tintColor);
 
 	// TOP (+Y)
 	DrawQuad(
 		glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, +halfY, 0.0f)) *
 		glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), { 1, 0, 0 }) *
-		glm::scale(glm::mat4(1.0f), glm::vec3(xz, 1.0f)),
-		texture,tintColor);
+		glm::scale(glm::mat4(1.0f), glm::vec3(xz, 1.0f)),texture,tintColor);
 
 	// BOTTOM (-Y)
 	DrawQuad(
 		glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, -halfY, 0.0f)) *
 		glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), { 1, 0, 0 }) *
-		glm::scale(glm::mat4(1.0f), glm::vec3(xz, 1.0f)),
-		texture,tintColor);
+		glm::scale(glm::mat4(1.0f), glm::vec3(xz, 1.0f)),texture,tintColor);
 
   glFrontFace(prevFrontFace);
   glDisable(GL_CULL_FACE);
@@ -946,44 +966,38 @@ void Renderer::DrawCube(const glm::vec3& position, const glm::vec3& size, const 
 	// FRONT (+Z)
 	DrawQuad(
 		glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, 0.0f, +halfZ)) *
-		glm::scale(glm::mat4(1.0f), glm::vec3(xy, 1.0f)),
-		color);
+		glm::scale(glm::mat4(1.0f), glm::vec3(xy, 1.0f)), color);
 
 	// BACK (-Z)
 	DrawQuad(
 		glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, 0.0f, -halfZ)) *
 		glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), { 0, 1, 0 }) *
-		glm::scale(glm::mat4(1.0f), glm::vec3(xy, 1.0f)),
-		color);
+		glm::scale(glm::mat4(1.0f), glm::vec3(xy, 1.0f)), color);
 
 	// LEFT (-X)
 	DrawQuad(
 		glm::translate(glm::mat4(1.0f), position + glm::vec3(-halfX, 0.0f, 0.0f)) *
 		glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), { 0, 1, 0 }) *
-		glm::scale(glm::mat4(1.0f), glm::vec3(yz, 1.0f)),
-		color);
+		glm::scale(glm::mat4(1.0f), glm::vec3(yz, 1.0f)), color);
 
 	// RIGHT (+X)
 	DrawQuad(
 		glm::translate(glm::mat4(1.0f), position + glm::vec3(+halfX, 0.0f, 0.0f)) *
 		glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), { 0, 1, 0 }) *
-		glm::scale(glm::mat4(1.0f), glm::vec3(yz, 1.0f)),
-		color);
+		glm::scale(glm::mat4(1.0f), glm::vec3(yz, 1.0f)), color);
 
 	// TOP (+Y)
 	DrawQuad(
 		glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, +halfY, 0.0f)) *
 		glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), { 1, 0, 0 }) *
-		glm::scale(glm::mat4(1.0f), glm::vec3(xz, 1.0f)),
-		color);
+		glm::scale(glm::mat4(1.0f), glm::vec3(xz, 1.0f)), color);
 
 	// BOTTOM (-Y)
 	DrawQuad(
 		glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, -halfY, 0.0f)) *
 		glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), { 1, 0, 0 }) *
-		glm::scale(glm::mat4(1.0f), glm::vec3(xz, 1.0f)),
-		color);
-  // Restore the previous front face winding
+		glm::scale(glm::mat4(1.0f), glm::vec3(xz, 1.0f)), color);
+
   glFrontFace(prevFrontFace);
   glDisable(GL_CULL_FACE);
 
@@ -992,10 +1006,9 @@ void Renderer::DrawCube(const glm::vec3& position, const glm::vec3& size, const 
 
 void Renderer::DrawCubeContour(const glm::vec3& position, const glm::vec3& size, const glm::vec4& color, int entityID)
 {
-  // Half size for easier calculations
   glm::vec3 half = size * 0.5f;
 
-  // Define 8 cube vertices relative to center position
+  // 8 cube vertices relative to center position
   glm::vec3 v0 = position + glm::vec3(-half.x, -half.y, -half.z); // left bottom back
   glm::vec3 v1 = position + glm::vec3( half.x, -half.y, -half.z); // right bottom back
   glm::vec3 v2 = position + glm::vec3( half.x,  half.y, -half.z); // right top back
@@ -1031,7 +1044,7 @@ void Renderer::DrawFullscreenQuad()
   if (quadVAO == 0)
   {
     float quadVertices[] = {
-        // positions        // texture Coords
+        // positions        // tex Coords
         -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
         -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
          1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
@@ -1158,7 +1171,6 @@ void Renderer::DrawSkybox(const std::string& name)
   {
     float skyboxVertices[] =
     {
-        // positions
         -1.0f,  1.0f, -1.0f,  -1.0f, -1.0f, -1.0f,   1.0f, -1.0f, -1.0f,
          1.0f, -1.0f, -1.0f,   1.0f,  1.0f, -1.0f,  -1.0f,  1.0f, -1.0f,
 
@@ -1248,8 +1260,7 @@ void Renderer::UpdateParticles(DeltaTime& dt)
 
     float size = glm::mix(particle.SizeBegin,particle.SizeEnd,t);
 
-    /*DrawQuad(particle.Position,glm::vec3(size),particle.Rotation,color);*/
-    DrawCubeContour(particle.Position,glm::vec3(size),color);
+    DrawQuad(particle.Position,glm::vec3(size),glm::vec3(particle.Rotation),color);
   }
 }
 
@@ -1294,14 +1305,9 @@ void Renderer::EmitParticles()
 
   glm::vec3 baseDir = glm::normalize(s_Data.m_Particle.Velocity);
 
-  glm::vec3 dir = RandomDirectionInCone(
-      baseDir,
-      s_Data.m_Particle.ConeAngle * 0.5f
-  );
+  glm::vec3 dir = RandomDirectionInCone(baseDir, s_Data.m_Particle.ConeAngle * 0.5f);
 
-  float speed =
-      glm::length(s_Data.m_Particle.Velocity) *
-      RandomGen::RandomRange(0.8f, 1.2f);
+  float speed = glm::length(s_Data.m_Particle.Velocity) * RandomGen::RandomRange(0.8f, 1.2f);
 
   particle.Velocity = dir * speed;
 
@@ -1311,10 +1317,7 @@ void Renderer::EmitParticles()
   particle.LifeTime      = s_Data.m_Particle.LifeTime;
   particle.LifeRemaining = particle.LifeTime;
 
-  particle.SizeBegin =
-      s_Data.m_Particle.SizeBegin *
-      RandomGen::RandomRange(0.8f, 1.2f);
-
+  particle.SizeBegin = s_Data.m_Particle.SizeBegin * RandomGen::RandomRange(0.8f, 1.2f);
   particle.SizeEnd = s_Data.m_Particle.SizeEnd;
 
   if (s_Data.m_PoolIndex == 0)
@@ -1413,7 +1416,7 @@ void Renderer::DrawText(const Font* font, const std::string& text, const glm::ve
     for (int i = 0; i < 4; i++) {
         s_Data.QuadVertexBufferPtr->Position = transform * glm::vec4(s_Data.quadPositions[i], 1.0f);
         s_Data.QuadVertexBufferPtr->Color = color;
-        s_Data.QuadVertexBufferPtr->TexCoord = s_Data.texCoords[i];
+        s_Data.QuadVertexBufferPtr->TexCoord = s_Data.tex3DCoords[i];
         s_Data.QuadVertexBufferPtr->TexIndex = textureIndex;
         s_Data.QuadVertexBufferPtr->TilingFactor = 1.0f;
         s_Data.QuadVertexBufferPtr->EntityID = entityID;
