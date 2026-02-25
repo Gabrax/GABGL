@@ -11,6 +11,7 @@
 #include "backend/PhysX.h"
 #include "backend/FontManager.h"
 #include "backend/CustomFrameRate.hpp"
+#include "backend/Config.h"
 
 Engine* Engine::s_Instance = nullptr;
 
@@ -26,7 +27,9 @@ void Engine::Run()
 {
   Logger::Init();
 
-  m_Window = Window::Create({ "GABGL", 1000, 600 });
+  Config config;
+
+  m_Window = Window::Create({ "GABGL", config.GetWindowWidth(), config.GetWindowHeight() });
 
   AudioManager::Init();
   LightManager::Init();

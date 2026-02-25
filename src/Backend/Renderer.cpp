@@ -156,7 +156,6 @@ struct RendererData
   };
 	static constexpr float tilingFactor = 1.0f;
 
-
   struct Shaders
 	{
     std::shared_ptr<Shader> QuadShader;
@@ -569,17 +568,17 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
 
     Renderer::DrawSkybox("night");
     
-    BeginScene(s_Data.m_Camera);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    Renderer::Set3D(true);
-    Renderer::EmitParticles();
-    Renderer::UpdateParticles(dt);
-    Renderer::Set3D(false);
-
-    glDisable(GL_BLEND);
-    EndScene();
+    /*BeginScene(s_Data.m_Camera);*/
+    /*glEnable(GL_BLEND);*/
+    /*glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);*/
+    /**/
+    /*Renderer::Set3D(true);*/
+    /*Renderer::EmitParticles();*/
+    /*Renderer::UpdateParticles(dt);*/
+    /*Renderer::Set3D(false);*/
+    /**/
+    /*glDisable(GL_BLEND);*/
+    /*EndScene();*/
 
     s_Data.m_SkyboxBuffer->UnBind();
     s_Data.m_SkyboxBuffer->BlitColor(s_Data.m_ResultBuffer);

@@ -5,7 +5,7 @@
 #include <optional>
 #include <vector>
 
-enum class LightType : int32_t
+enum class LightType : uint32_t
 {
   DIRECT = 0,
   POINT = 1,

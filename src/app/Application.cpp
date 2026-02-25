@@ -1,12 +1,7 @@
 #include "Application.h"
 
 #include "../backend/Renderer.h"
-#include "../input/KeyCodes.h"
-#include "../input/UserInput.h"
-#include "glm/fwd.hpp"
-#include "../backend/AudioManager.h"
-#include "../backend/LightManager.h"
-#include "../backend/ModelManager.h"
+#include "Scene.hpp"
 
 Application::Application() 
 {
@@ -16,18 +11,11 @@ Application::Application()
 
   /*LightManager::AddLight(LightType::SPOT, glm::vec3(1.0f,1.0f,1.0), glm::vec3(15.0f,15.0f,15.0f), glm::vec3(0.0,-1.0,0.0)); */
 
-
-  /*Transform radio;*/
-  /*radio.SetPosition(glm::vec3(25.0f,2.0f,15.0f));*/
-  /*radio.SetRotation(glm::vec3(-95.0,0.0,0.0));*/
-  /*radio.SetScale(glm::vec3(0.2f));*/
-  /*ModelManager::SetInitialModelTransform("radio", radio.GetTransform());*/
   AudioManager::PlayMusic("night_mono",glm::vec3(25.0f,2.0f,15.0f),true);
 
-  Transform lamp;
-  lamp.SetPosition(glm::vec3(35.0f,0.0f,25.0f));
-  ModelManager::SetInitialModelTransform("street_lamp", lamp.GetTransform());
-
+  /*Transform lamp;*/
+  /*lamp.SetPosition(glm::vec3(35.0f,0.0f,25.0f));*/
+  /*ModelManager::SetInitialModelTransform("street_lamp", lamp.GetTransform());*/
 
   Transform transform;
   transform.SetPosition(glm::vec3(5.0f));
@@ -71,29 +59,9 @@ Application::Application()
 void Application::OnUpdate(DeltaTime& dt)
 {
   Renderer::DrawScene(dt, 
-    [&dt](){
-  
-      if (Input::IsKeyPressed(Key::X))
-      {
-        ModelManager::GetModel("harry")->StartBlendToAnimation(1, 0.8f);
-        ModelManager::MoveController("harry", Movement::FORWARD,5.0f,dt);
-      }
-      else
-      {
-        ModelManager::GetModel("harry")->StartBlendToAnimation(0, 0.8f); 
-      }
-      if (Input::IsKeyPressed(Key::C))
-      {
-        ModelManager::MoveController("harry", Movement::BACKWARD,5.0f,dt);
-      }
-      if (Input::IsKeyPressed(Key::Z))
-      {
-        ModelManager::MoveController("harry", Movement::LEFT,5.0f,dt);
-      }
-      if (Input::IsKeyPressed(Key::V))
-      {
-        ModelManager::MoveController("harry", Movement::RIGHT,5.0f,dt);
-      }
+    [&dt]()
+    {
+      Scene::DrawMenu(dt);
     }
   );
 }
