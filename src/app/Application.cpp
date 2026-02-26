@@ -61,7 +61,7 @@ void Application::OnUpdate(DeltaTime& dt)
   Renderer::DrawScene(dt, 
     [&dt]()
     {
-      Scene::DrawMenu(dt);
+      DrawMenu(dt);
     }
   );
 }

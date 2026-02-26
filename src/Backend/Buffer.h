@@ -422,3 +422,27 @@ private:
   glm::mat4 m_shadowProj;
   uint32_t m_depthCubemapArray;
 };
+
+struct DrawIndirectBuffer
+{
+  DrawIndirectBuffer() = default;
+
+  void AddData(const std::string& modelName, uint32_t verticesSize, uint32_t indicesSize);
+  void UploadToGPU();
+
+private:
+  struct DrawElementsIndirectCommand
+  {
+    GLuint count;         // Number of indices
+    GLuint instanceCount; // This is for instancing
+    GLuint firstIndex;    // Offset into the index buffer
+    GLint baseVertex;    // Base vertex for this draw
+    GLuint baseInstance;  // Use this to index per-object data
+  };
+
+  std::vector<DrawElementsIndirectCommand> m_DrawCommands;
+  std::unordered_map<std::string, std::vector<size_t>> m_ModelDrawCommandIndices;
+  uint32_t m_DrawIndexOffset = 0;
+  uint32_t m_DrawVertexOffset = 0;
+  uint32_t m_cmdBufer;
+};

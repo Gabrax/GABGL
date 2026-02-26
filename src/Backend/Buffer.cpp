@@ -1134,3 +1134,26 @@ std::shared_ptr<OmniDirectShadowBuffer> OmniDirectShadowBuffer::Create(uint32_t 
   return std::make_shared<OmniDirectShadowBuffer>(shadowWidth, shadowHeight);
 }
 
+void DrawIndirectBuffer::AddData(const std::string& modelName, uint32_t verticesSize, uint32_t indicesSize)
+{
+  DrawElementsIndirectCommand cmd =
+  {
+    .count = static_cast<GLuint>(indicesSize),
+    .instanceCount = 1,
+    .firstIndex = static_cast<GLuint>(m_DrawIndexOffset),
+    .baseVertex = static_cast<GLint>(m_DrawVertexOffset),
+    .baseInstance = 0, 
+  };
+
+  m_ModelDrawCommandIndices[modelName].push_back(m_DrawCommands.size()); // store index
+  m_DrawCommands.push_back(cmd);
+
+  m_DrawIndexOffset += indicesSize;
+  m_DrawVertexOffset += verticesSize;
+}
+
+void DrawIndirectBuffer::UploadToGPU()
+{
+  glCreateBuffers(1, &m_cmdBufer);
+  glNamedBufferStorage(m_cmdBufer,sizeof(m_DrawCommands[0]) * m_DrawCommands.size(),(const void*)m_DrawCommands.data(), GL_DYNAMIC_STORAGE_BIT);
+}

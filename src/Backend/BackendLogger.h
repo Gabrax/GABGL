@@ -3,6 +3,7 @@
 #include <memory>
 #define GLM_ENABLE_EXPERIMENTAL
 #include "glm/gtx/string_cast.hpp"
+#include "glad/glad.h"
 
 // This ignores all warnings raised inside External headers
 #pragma warning(push, 0)
@@ -60,49 +61,136 @@ inline OStream& operator<<(OStream& os, glm::qua<T, Q> quaternion)
 
 #include <chrono>
 #include <vector>
+#include <array>
+
+constexpr uint32_t GABGL_MAX_QUERIES_PER_FRAME = 256;
+constexpr uint32_t GABGL_QUERY_LATENCY = 3; // triple buffering
 
 struct ProfileResult
 {
-	const char* Name;
-	float Time;
+  const char* Name;
+  float CPUTime;
+  float GPUTime;
 };
 
-template<typename Func>
+struct GPUQueryData
+{
+  const char* Name;
+  float CPUTime;
+  GLuint QueryID;
+};
+
+static inline uint32_t s_CurrentFrame = 0;
+static inline uint32_t s_QueryIndex = 0;
+
+static inline std::array<
+    std::array<GLuint, GABGL_MAX_QUERIES_PER_FRAME>,
+    GABGL_QUERY_LATENCY
+> s_QueryPool;
+
+static inline std::array<
+    std::vector<GPUQueryData>,
+    GABGL_QUERY_LATENCY
+> s_FrameQueries;
+
+static inline std::vector<ProfileResult> s_Results;
+
 struct Profiler
 {
-	inline Profiler(const char* name, Func&& func) : m_Name(name), m_Stop(false), m_Func(func)
-	{
-		m_Start = std::chrono::high_resolution_clock::now();
-	}
+  Profiler(const char* name) : m_Name(name)
+  {
+    m_Start = std::chrono::high_resolution_clock::now();
 
-	inline ~Profiler()
-	{
-		if (!m_Stop) Stop();
-	}
+    m_Query = this->AcquireQuery();
+    if (m_Query) glBeginQuery(GL_TIME_ELAPSED, m_Query);
+  }
 
-	inline void Stop()
-	{
-		auto endPoint = std::chrono::high_resolution_clock::now();
+  ~Profiler()
+  {
+    if (!m_Query) return;
 
-		long long start = std::chrono::time_point_cast<std::chrono::milliseconds>(m_Start).time_since_epoch().count();
-		long long end = std::chrono::time_point_cast<std::chrono::milliseconds>(endPoint).time_since_epoch().count();
+    glEndQuery(GL_TIME_ELAPSED);
 
-		m_Stop = true;
-		float duration = (end - start) * 0.001f;
-		m_Func({ m_Name, duration });
-	}
+    auto end = std::chrono::high_resolution_clock::now();
+
+    float cpuTime = std::chrono::duration<float, std::milli>(end - m_Start).count();
+
+    this->Submit(m_Name, cpuTime, m_Query);
+  }
+
+  static void Init()
+  {
+    for (uint32_t i = 0; i < GABGL_QUERY_LATENCY; i++)
+    {
+        glGenQueries(GABGL_MAX_QUERIES_PER_FRAME, s_QueryPool[i].data());
+    }
+  }
+
+  static void Shutdown()
+  {
+    for (uint32_t i = 0; i < GABGL_QUERY_LATENCY; i++)
+    {
+        glDeleteQueries(GABGL_MAX_QUERIES_PER_FRAME, s_QueryPool[i].data());
+    }
+  }
+
+  static void BeginFrame()
+  {
+    s_Results.clear();
+
+    s_CurrentFrame = (s_CurrentFrame + 1) % GABGL_QUERY_LATENCY;
+    s_QueryIndex = 0;
+
+    ResolveFrame((s_CurrentFrame + 1) % GABGL_QUERY_LATENCY);
+  }
+
+  static GLuint AcquireQuery()
+  {
+    if (s_QueryIndex >= GABGL_MAX_QUERIES_PER_FRAME)
+        return 0;
+
+    return s_QueryPool[s_CurrentFrame][s_QueryIndex++];
+  }
+
+  static void Submit(const char* name, float cpuTime, GLuint query)
+  {
+    s_FrameQueries[s_CurrentFrame].push_back({
+        name, cpuTime, query
+    });
+  }
+
+  static const std::vector<ProfileResult>& GetResults()
+  {
+    return s_Results;
+  }
+
+  static void ResolveFrame(uint32_t frameIndex)
+  {
+    auto& frameQueries = s_FrameQueries[frameIndex];
+
+    for (auto& q : frameQueries)
+    {
+      GLuint64 timeElapsed = 0;
+      glGetQueryObjectui64v(q.QueryID, GL_QUERY_RESULT, &timeElapsed);
+
+      float gpuTime = timeElapsed / 1'000'000.0f;
+
+      s_Results.push_back({q.Name, q.CPUTime, gpuTime});
+    }
+
+    frameQueries.clear();
+  }
 
 private:
-	Func m_Func;
-	bool m_Stop;
-	const char* m_Name;
-	std::chrono::time_point<std::chrono::high_resolution_clock> m_Start;
+  const char* m_Name;
+  GLuint m_Query = 0;
+  std::chrono::high_resolution_clock::time_point m_Start;
 };
 
-inline std::vector<ProfileResult> s_ProfileResults;
+#define GABGL_RESOLVE_GPU_QUERIES() Profiler::BeginFrame()
 
 #ifdef DEBUG
-	#define GABGL_PROFILE_SCOPE(name) Profiler profiler##__LINE__(name, [&](ProfileResult pr){ s_ProfileResults.push_back(pr);})
+	#define GABGL_PROFILE_SCOPE(name) Profiler profiler##__LINE__(name)
 #else
 	#define GABGL_PROFILE_SCOPE(name)
 #endif

@@ -381,6 +381,8 @@ void Renderer::Init()
 	ImGui_ImplOpenGL3_Init("#version 410");
 	SetLineWidth(4.0f);
   s_Data.m_GizmoType = ImGuizmo::OPERATION::TRANSLATE;
+
+  Profiler::Init();
 }
 
 void Renderer::Shutdown()
@@ -394,6 +396,8 @@ void Renderer::Shutdown()
 
 void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic)
 {
+  GABGL_RESOLVE_GPU_QUERIES();
+
   glDisable(GL_DITHER);
   glDisable(GL_BLEND);
   glEnable(GL_DEPTH_TEST);
@@ -1583,11 +1587,20 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 
 	if (ImGui::Button("Reload Shaders")) LoadShaders();
 
-  for (const auto& result : s_ProfileResults)
+  for (const auto& result : Profiler::GetResults())
   {
-      ImGui::Text("%s: %.3f ms", result.Name, result.Time);
+    bool gpuBound = result.GPUTime > result.CPUTime;
+
+    ImVec4 color = gpuBound
+        ? ImVec4(1, 0.4f, 0.4f, 1)  // red
+        : ImVec4(0.4f, 1, 0.4f, 1); // green
+
+    ImGui::TextColored(color,
+        "%s: CPU %.3f ms | GPU %.3f ms",
+        result.Name,
+        result.CPUTime,
+        result.GPUTime);
   }
-  s_ProfileResults.clear();
 
 	ImGui::End();
 
