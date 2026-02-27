@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.5)
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 include(FetchContent)
 
 # Set this to false if you don’t use clangd
@@ -25,7 +29,6 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL 
         -Wno-unused-function
         -Wno-unused-parameter
         -ferror-limit=0
-        -std=c++20
     )
 endif()
 
@@ -55,14 +58,6 @@ FetchContent_Declare(
     GIT_TAG master
 )
 
-# spdlog
-FetchContent_Declare(
-    spdlog
-    GIT_REPOSITORY https://github.com/gabime/spdlog.git
-    GIT_TAG v1.11.0 
-)
-set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "Build spdlog as static library" FORCE)
-
 # libsndfile
 FetchContent_Declare(
     libsndfile
@@ -85,7 +80,7 @@ FetchContent_Declare(
     GIT_TAG VER-2-13-2 
 )
 
-FetchContent_MakeAvailable(assimp meshoptimizer imguizmo spdlog libsndfile openal-soft freetype)
+FetchContent_MakeAvailable(assimp meshoptimizer imguizmo libsndfile openal-soft freetype)
 
 add_subdirectory(vendor/glfw-3.3.2)
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
@@ -128,4 +123,4 @@ set(IMGUI_INI_FILE "${CMAKE_BINARY_DIR}/imgui.ini")
 set(RES_FOLDER "${CMAKE_BINARY_DIR}/../res")
 file(MAKE_DIRECTORY ${RES_FOLDER})
 
-target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image imgui assimp meshoptimizer JSONparser PhysX spdlog::spdlog SndFile::sndfile OpenAL::OpenAL freetype)
+target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image imgui assimp meshoptimizer JSONparser PhysX SndFile::sndfile OpenAL::OpenAL freetype)

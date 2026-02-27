@@ -35,8 +35,7 @@ https://github.com/user-attachments/assets/dfeda195-f8d6-4073-aff7-d7bfe55fce39
 <a href="https://github.com/zeux/meshoptimizer">meshoptimizer</a> •
 <a href="https://github.com/nlohmann/json">nlohmann_json</a> •
 <a href="https://github.com/syoyo/tinyexr">tinyEXR</a> •
-<a href="https://github.com/NVIDIA-Omniverse/PhysX">PhysX</a> •
-<a href="https://github.com/gabime/spdlog">spdlog</a> •
+<a href="https://github.com/NVIDIA-Omniverse/PhysX">PhysX</a>
 </p>
 
 </div>

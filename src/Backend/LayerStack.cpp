@@ -1,10 +1,6 @@
 #include "LayerStack.h"
 
 #include "../input/Event.h"
-#include <string>
-#include <vector>
-
-#include <iostream>
 
 static std::vector<Layer*> m_Layers;
 static uint32_t m_LayerInsertIndex = 0;
@@ -46,13 +42,11 @@ void LayerStack::PopOverlay(Layer* overlay)
 
 void LayerStack::OnUpdate(DeltaTime& dt)
 {
-  for (Layer* layer : m_Layers)
-      layer->OnUpdate(dt);
+  for (Layer* layer : m_Layers) layer->OnUpdate(dt);
 }
 
 void LayerStack::OnImGuiRender()
 {
-  for (Layer* layer : m_Layers)
-      layer->OnImGuiRender();
+  for (Layer* layer : m_Layers) layer->OnImGuiRender();
 }
 

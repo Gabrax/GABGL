@@ -1,6 +1,6 @@
 #include "engine.h"
 
-#include "backend/BackendLogger.h"
+#include "backend/Logger.h"
 #include "backend/AudioManager.h"
 #include "backend/LayerStack.h"
 #include "backend/LightManager.h"

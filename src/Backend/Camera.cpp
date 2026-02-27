@@ -1,6 +1,6 @@
 #include "Camera.h"
 
-#include "../backend/BackendLogger.h"
+#include "../backend/Logger.h"
 #include "../input/UserInput.h"
 #include "../input/KeyEvent.h"
 

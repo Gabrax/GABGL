@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <filesystem>
 #include <mutex>
-#include "../backend/BackendLogger.h"
+#include "../backend/Logger.h"
 #include "al.h"
 
 static void ALC_CheckAndThrow(ALCdevice* device)
@@ -95,7 +95,7 @@ void AudioManager::Init()
 	if (!name || alcGetError(s_Data.p_ALCDevice) != AL_NO_ERROR)
 		name = alcGetString(s_Data.p_ALCDevice, ALC_DEVICE_SPECIFIER);
 	/*printf("Opened \"%s\"\n", name);*/
-  GABGL_INFO((const char*)name);
+  GABGL_INFO("{}",(const char*)name);
 
   constexpr int SOURCE_POOL_SIZE = 16;
 
@@ -374,7 +374,7 @@ void AudioManager::LoadSound(const char* filename)
   {
       std::lock_guard<std::mutex> lock(s_Data.s_AudioMutex);
       if (s_Data.p_SoundEffectBuffers.contains(name)) {
-          GABGL_ERROR("Sound '" + name + "' already loaded");
+          GABGL_ERROR("Sound '{}' already loaded", name);
           return;
       }
   }

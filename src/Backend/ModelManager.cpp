@@ -1,5 +1,5 @@
 #include "ModelManager.h"
-#include "BackendLogger.h"
+#include "Logger.h"
 #include "glad/glad.h"
 #include "meshoptimizer.h"
 #include <filesystem>
@@ -8,6 +8,7 @@
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include "Renderer.h"
+#include "Timer.hpp"
 
 static glm::mat4 AssimpMatToGLMMat(const aiMatrix4x4& from)
 {
@@ -797,7 +798,7 @@ Model::Model(const char* path, float optimizerStrength, bool isAnimated, bool is
 
       animData.bones = m_Bones;
 
-      GABGL_INFO("Model: " + std::filesystem::path(path).stem().string() + " Animation at index: " + std::to_string(i) + " " + animData.name);
+      GABGL_INFO("Model: {},  Animation at index: {}, {}", std::filesystem::path(path).stem().string(), std::to_string(i), animData.name);
 
       m_ProcessedAnimations.emplace_back(animData);
     }
@@ -1158,7 +1159,7 @@ void Model::SetAnimationByName(const std::string& animationName)
       int animationIndex = std::distance(m_ProcessedAnimations.begin(), it);
       SetAnimationbyIndex(animationIndex); 
   } else {
-      GABGL_ERROR("Animation not found: " + animationName);
+      GABGL_ERROR("Animation not found: {}",animationName);
   }
 }
 
@@ -1349,7 +1350,7 @@ void Model::ReadHierarchyData(AssimpNodeData& dest, const aiNode* src)
   {
       if (src->mChildren[i] == nullptr) 
       {
-          GABGL_ERROR("Null child node found at index " + std::to_string(i));
+          GABGL_ERROR("Null child node found at index {}",i);
           continue;  // Skip if child node is null
       }
 

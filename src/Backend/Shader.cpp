@@ -1,5 +1,12 @@
 #include "Shader.h"
-#include "BackendLogger.h"
+#include "Logger.h"
+#include "Timer.hpp"
+
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <unordered_map>
+#include <iostream>
 
 static inline void checkCompileErrors(GLuint shader, std::string type)
 {

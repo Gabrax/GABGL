@@ -3,6 +3,8 @@
 #include "DeltaTime.hpp"
 #include "../input/Event.h"
 
+#define BIND_EVENT(fn) [this](auto&&... args) -> decltype(auto) { return this->fn(std::forward<decltype(args)>(args)...); }
+
 struct Layer
 {
   virtual ~Layer() = default;

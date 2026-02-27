@@ -2,7 +2,7 @@
 #include "window.h"
 #include "../input/EngineEvent.h"
 #include "../input/KeyEvent.h"
-#include "BackendLogger.h"
+#include "Logger.h"
 #include <stb_image.h>
 #include "Renderer.h"
 #include "LayerStack.h"

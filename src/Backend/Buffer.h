@@ -1,12 +1,13 @@
 #pragma once
 #include <cstdint>
-#include "BackendLogger.h"
+#include "Logger.h"
 #include <string>
 #include <vector>
 #include <glad/glad.h>
 #include "Shader.h"
 #include <span>
 #include <array>
+#include <unordered_map>
 
 enum class ShaderDataType
 {
@@ -426,6 +427,7 @@ private:
 struct DrawIndirectBuffer
 {
   DrawIndirectBuffer() = default;
+  ~DrawIndirectBuffer() = default;
 
   void AddData(const std::string& modelName, uint32_t verticesSize, uint32_t indicesSize);
   void UploadToGPU();

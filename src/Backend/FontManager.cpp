@@ -5,6 +5,7 @@
 #include <glad/glad.h>
 #include <filesystem>
 #include <string>
+#include "Timer.hpp"
 
 struct FontData
 {

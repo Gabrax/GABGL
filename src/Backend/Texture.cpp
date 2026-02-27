@@ -1,5 +1,6 @@
 #include "Texture.h"
-#include "BackendLogger.h"
+#include "Logger.h"
+#include "Timer.hpp"
 #include <stb_image.h>
 
 namespace Utils {
@@ -199,7 +200,7 @@ Texture::Texture(const std::vector<std::string>& faces)
       unsigned char* data = stbi_load(faces[i].c_str(), &w, &h, &c, 0);
       if (!data)
       {
-          GABGL_ERROR("Failed to load cubemap face: " + faces[i]);
+          GABGL_ERROR("Failed to load cubemap face: {}", faces[i]);
           continue;
       }
       if (i == 0)
@@ -211,7 +212,7 @@ Texture::Texture(const std::vector<std::string>& faces)
       else if (w != m_Width || h != m_Height || c != channels)
       {
           stbi_image_free(data);
-          GABGL_ERROR("Cubemap face size or channels mismatch: " + faces[i]);
+          GABGL_ERROR("Cubemap face size or channels mismatch: {}", faces[i]);
           continue;
       }
 

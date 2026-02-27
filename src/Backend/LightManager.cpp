@@ -3,7 +3,7 @@
 #include "Buffer.h"
 #include <vector>
 #include <memory>
-#include "BackendLogger.h"
+#include "Logger.h"
 
 struct LightData 
 {
@@ -60,7 +60,7 @@ void LightManager::AddLight(const LightType& type, const glm::vec3& color, const
 void LightManager::EditLight(int32_t index, const std::optional<glm::vec3>& newColor, const std::optional<glm::vec3>& newPosition, const std::optional<glm::vec3>& newRotation)
 {
   if (index < 0 || index >= s_Data.lights.size()) {
-      GABGL_ERROR("Invalid light index: " + std::to_string(index));
+      GABGL_ERROR("Invalid light index: {}",index);
       return;
   }
 

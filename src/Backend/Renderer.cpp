@@ -1,11 +1,10 @@
 #include "Renderer.h"
 
-#include "BackendLogger.h"
+#include "Logger.h"
 #include "Buffer.h"
 #include "Camera.h"
 #include "LightManager.h"
 #include "ModelManager.h"
-#include "PxParticleSystemFlag.h"
 #include "Renderer.h"
 #include "Shader.h"
 #include "Texture.h"
@@ -31,15 +30,17 @@
 #include "json.hpp"
 #include "../input/UserInput.h"
 #include "RandomGen.hpp"
+#include "Profiler.h"
+#include "Timer.hpp"
 
 void MessageCallback(unsigned source,unsigned type,unsigned id,unsigned severity,int length,const char* message,const void* userParam)
 {
 	switch (severity)
 	{
-		case GL_DEBUG_SEVERITY_HIGH:         GABGL_CRITICAL(message); return;
-		case GL_DEBUG_SEVERITY_MEDIUM:       GABGL_ERROR(message); return;
-		case GL_DEBUG_SEVERITY_LOW:          GABGL_WARN(message); return;
-		case GL_DEBUG_SEVERITY_NOTIFICATION: GABGL_TRACE(message); return;
+		case GL_DEBUG_SEVERITY_HIGH:         GABGL_CRITICAL("{}",message); return;
+		case GL_DEBUG_SEVERITY_MEDIUM:       GABGL_ERROR("{}",message); return;
+		case GL_DEBUG_SEVERITY_LOW:          GABGL_WARN("{}",message); return;
+		case GL_DEBUG_SEVERITY_NOTIFICATION: GABGL_TRACE("{}", message); return;
 	}
 
 	GABGL_ASSERT(false, "Unknown severity level!");
@@ -1216,7 +1217,7 @@ void Renderer::DrawSkybox(const std::string& name)
   }
   else
   {
-    GABGL_ERROR("Skybox texture not found: " + name);
+    GABGL_ERROR("Skybox texture not found: {}",name);
     return;
   }
 

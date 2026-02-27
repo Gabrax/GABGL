@@ -1,7 +1,8 @@
 #pragma once
 
 #include <unordered_map>
-#include "BackendLogger.h"
+#include "Logger.h"
+#include "glm/glm.hpp"
 
 struct Character
 {
