@@ -676,51 +676,66 @@ void ModelManager::MoveController(const std::string& name, const Movement& movem
       return;
   }
 
-  // Constants
   const float gravity = -9.81f;
   const float damping = 0.9f;
   const float jumpSpeed = 5.5f;
 
-  // Apply gravity
   model->m_ControllerVelocity.y += gravity * dt;
 
-  // Horizontal movement
-  PxVec3 direction(0.0f);
+  glm::vec3 camForward = Renderer::GetCameraInstance().GetForwardDirection();
+  camForward.y = 0.0f;
+  camForward = glm::normalize(camForward);
+
+  glm::vec3 camRight = Renderer::GetCameraInstance().GetRightDirection();
+  camRight.y = 0.0f;
+  camRight = glm::normalize(camRight);
+
+  glm::vec3 moveDir(0.0f);
   switch (movement)
   {
-      case Movement::FORWARD:  direction.z += 1.0f; break;
-      case Movement::BACKWARD: direction.z -= 1.0f; break;
-      case Movement::LEFT:     direction.x -= 1.0f; break;
-      case Movement::RIGHT:    direction.x += 1.0f; break;
-      default: break;
+    case Movement::FORWARD:  moveDir += camForward; break;
+    case Movement::BACKWARD: moveDir -= camForward; break;
+    case Movement::LEFT:     moveDir -= camRight;   break;
+    case Movement::RIGHT:    moveDir += camRight;   break;
+    default: break;
   }
 
-  if (direction.magnitudeSquared() > 0.0f)
+  if (glm::length2(moveDir) > 0.0f)
   {
-      direction = direction.getNormalized();
-      model->m_ControllerVelocity.x = direction.x * speed;
-      model->m_ControllerVelocity.z = direction.z * speed;
+    moveDir = glm::normalize(moveDir);
+
+    model->m_ControllerVelocity.x = moveDir.x * speed;
+    model->m_ControllerVelocity.z = moveDir.z * speed;
+
+    float targetYaw = std::atan2(moveDir.x, moveDir.z);
+
+    float delta = targetYaw - model->m_ControllerCurrentYaw;
+    delta = std::atan2(std::sin(delta), std::cos(delta)); // shortest path
+
+    model->m_ControllerCurrentYaw += delta * glm::clamp(dt * 10.0f, 0.0f, 1.0f);
+
+    model->m_ControllerTransform.SetRotation({ 0.0f, glm::degrees(model->m_ControllerCurrentYaw), 0.0f });
+
+    /*GABGL_INFO("{}",deltaAngle);*/
   }
   else
   {
-      // Apply damping when no input
-      model->m_ControllerVelocity.x *= damping;
-      model->m_ControllerVelocity.z *= damping;
+    model->m_ControllerVelocity.x *= damping;
+    model->m_ControllerVelocity.z *= damping;
   }
 
-  // Move controller
   PxVec3 displacement = model->m_ControllerVelocity * dt;
   PxControllerCollisionFlags flags = model->GetController()->move(displacement, 0.001f, dt, PxControllerFilters());
 
   // Ground check and vertical reset
   if (flags.isSet(PxControllerCollisionFlag::eCOLLISION_DOWN))
   {
-      model->m_ControllerVelocity.y = 0.0f;
-      model->m_ControllerIsGrounded = true;
+    model->m_ControllerVelocity.y = 0.0f;
+    model->m_ControllerIsGrounded = true;
   }
   else
   {
-      model->m_ControllerIsGrounded = false;
+    model->m_ControllerIsGrounded = false;
   }
 
   PxExtendedVec3 footPos = model->GetController()->getFootPosition();
@@ -867,7 +882,6 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
     hasNormalMap |= loadMaterialTextures(material, aiTextureType_HEIGHT, "texture_normal", textures); // OBJ fallback
     hasSpecular |= loadMaterialTextures(material, aiTextureType_SPECULAR, "texture_specular", textures);
 
-    // Optional
     // loadMaterialTextures(material, aiTextureType_BASE_COLOR, "texture_albedo", textures);
   }
 

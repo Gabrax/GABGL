@@ -19,26 +19,33 @@ private:
 
 inline static void DrawMenu(DeltaTime& dt)
 {
-  if (Input::IsKeyPressed(Key::X))
+  if (Input::IsKeyPressed(Key::W) ||
+      Input::IsKeyPressed(Key::S) ||
+      Input::IsKeyPressed(Key::A) ||
+      Input::IsKeyPressed(Key::D))
   {
     ModelManager::GetModel("harry")->StartBlendToAnimation(1, 0.8f);
-    ModelManager::MoveController("harry", Movement::FORWARD,5.0f,dt);
   }
   else
   {
     ModelManager::GetModel("harry")->StartBlendToAnimation(0, 0.8f); 
   }
-  if (Input::IsKeyPressed(Key::C))
+
+  if (Input::IsKeyPressed(Key::W))
   {
-    ModelManager::MoveController("harry", Movement::BACKWARD,5.0f,dt);
+    ModelManager::MoveController("harry", Movement::FORWARD,15.0f,dt);
   }
-  if (Input::IsKeyPressed(Key::Z))
+  if (Input::IsKeyPressed(Key::S))
   {
-    ModelManager::MoveController("harry", Movement::LEFT,5.0f,dt);
+    ModelManager::MoveController("harry", Movement::BACKWARD,15.0f,dt);
   }
-  if (Input::IsKeyPressed(Key::V))
+  if (Input::IsKeyPressed(Key::A))
   {
-    ModelManager::MoveController("harry", Movement::RIGHT,5.0f,dt);
+    ModelManager::MoveController("harry", Movement::LEFT,15.0f,dt);
+  }
+  if (Input::IsKeyPressed(Key::D))
+  {
+    ModelManager::MoveController("harry", Movement::RIGHT,15.0f,dt);
   }
 }
 

@@ -23,6 +23,7 @@ struct PhysX
   static glm::mat4 PxMat44ToGlmMat4(physx::PxMat44 pxMatrix);
   static PxMat44 GlmMat4ToPxMat44(glm::mat4 glmMatrix);
   static PxVec3 GlmVec3ToPxVec3(const glm::vec3& vec);
+  static glm::vec3 PxExtendedVec3toGlmVec3(const PxExtendedVec3& v);
 
   static PxScene* getScene();
   static PxPhysics* getPhysics();

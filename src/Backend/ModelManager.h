@@ -169,6 +169,7 @@ struct Model
   float m_ControllerHeight; 
   bool m_ControllerSlopeLimit;
   bool m_ControllerIsGrounded = false;
+  float m_ControllerCurrentYaw = 0.0f;
 
   std::string m_Name;
   bool m_IsRendered = true;

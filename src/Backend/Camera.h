@@ -19,10 +19,10 @@ struct Camera
   enum class ProjectionType { Perspective = 0, Orthographic = 1 };
 
   Camera() = default;
+  ~Camera() = default;
   Camera(const glm::vec3& position);
   Camera(float fov, float aspectRatio, float nearClip, float farClip);
   Camera(const glm::mat4& projection);
-  ~Camera() = default;
 
   void OnUpdate(DeltaTime dt);
 

@@ -229,7 +229,6 @@ void PhysX::raycastAndApplyForce(PxScene* scene, const glm::vec3& origin, const 
           PxRigidActor* actor = hit.actor;
 
           if (actor && actor->is<PxRigidDynamic>()) {
-              //std::cout << "Hit a dynamic actor, applying force!" << std::endl;
               puts("ADDING FORCE");
               PxVec3 pxForce = PxVec3(direction.x, direction.y, direction.z) * 100000;
               PxRigidDynamic* dynamicActor = static_cast<PxRigidDynamic*>(actor);
@@ -274,6 +273,15 @@ PxMat44 PhysX::GlmMat4ToPxMat44(glm::mat4 glmMatrix)
 PxVec3 PhysX::GlmVec3ToPxVec3(const glm::vec3& vec)
 {
     return PxVec3(vec.x, vec.y, vec.z);
+}
+
+glm::vec3 PhysX::PxExtendedVec3toGlmVec3(const PxExtendedVec3& v)
+{
+    return glm::vec3(
+        static_cast<float>(v.x),
+        static_cast<float>(v.y),
+        static_cast<float>(v.z)
+    );
 }
 
 PxScene* PhysX::getScene()

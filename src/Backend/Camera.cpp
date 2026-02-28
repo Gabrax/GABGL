@@ -8,6 +8,7 @@
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
+#include "ModelManager.h"
 
 Camera::Camera(const glm::vec3& position) : m_Position(position)
 {
@@ -18,9 +19,9 @@ Camera::Camera(const glm::vec3& position) : m_Position(position)
 Camera::Camera(float fov, float aspectRatio, float nearClip, float farClip)
     : m_ProjectionType(ProjectionType::Perspective),
       m_PerspectiveFOV(glm::radians(fov)),
-      m_AspectRatio(aspectRatio),
       m_PerspectiveNear(nearClip),
       m_PerspectiveFar(farClip),
+      m_AspectRatio(aspectRatio),
       m_Distance(1000.0f),
       m_Pitch(0.0f),
       m_Yaw(0.0f)
@@ -121,6 +122,11 @@ float Camera::ZoomSpeed() const
 	return speed;
 }
 
+float m_HeightOffset   = 4.0f;
+float m_ShoulderOffset = 15.6f;
+float m_FollowDistance = 4.0f;
+float m_SmoothSpeed = 5.0f;
+
 void Camera::OnUpdate(DeltaTime dt)
 {
   glm::vec2 mouse{ Input::GetMouseX(), Input::GetMouseY() };
@@ -129,43 +135,63 @@ void Camera::OnUpdate(DeltaTime dt)
 
   if (m_Mode == CameraMode::ORBITAL)
   {
-      if (Input::IsMouseButtonPressed(Mouse::ButtonRight))
-      {
-          MouseRotate(delta.x, delta.y);
-      }
+    if (Input::IsMouseButtonPressed(Mouse::ButtonRight))
+    {
+      MouseRotate(delta.x, delta.y);
+    }
 
-      float zoomDelta = 0.0f;
-      if (Input::IsKeyPressed(Key::F)) // Zoom in
-          zoomDelta = 0.5f;
-      if (Input::IsKeyPressed(Key::G)) // Zoom out
-          zoomDelta = -0.5f;
+    float zoomDelta = 0.0f;
+    if (Input::IsKeyPressed(Key::F)) zoomDelta = 0.5f;
+    if (Input::IsKeyPressed(Key::G)) zoomDelta = -0.5f;
 
-      if (zoomDelta != 0.0f)
-          MouseZoom(zoomDelta * dt * 10.0f); // scale zoom speed by dt
+    if (zoomDelta != 0.0f) MouseZoom(zoomDelta * dt * 10.0f); // scale zoom speed by dt
 
-      m_Position = CalculatePosition();
-      UpdateView();
+    m_Position = CalculatePosition();
+    UpdateView();
   }
   else 
   {
-      MouseRotate(delta.x, -delta.y);
+    MouseRotate(delta.x, -delta.y);
 
-      float velocity = m_MovementSpeed * dt;
+    /*float velocity = m_MovementSpeed * dt;*/
+    /**/
+    /*if (Input::IsKeyPressed(Key::W)) m_Position += m_Front * velocity;*/
+    /*if (Input::IsKeyPressed(Key::S)) m_Position -= m_Front * velocity;*/
+    /*if (Input::IsKeyPressed(Key::A)) m_Position -= m_Right * velocity;*/
+    /*if (Input::IsKeyPressed(Key::D)) m_Position += m_Right * velocity;*/
+    /*if (Input::IsKeyPressed(Key::Space)) m_Position += m_Up * velocity;*/
+    /*if (Input::IsKeyPressed(Key::LeftControl)) m_Position -= m_Up * velocity;*/
+    /**/
+    /*UpdateView();*/
 
-      if (Input::IsKeyPressed(Key::W))
-          m_Position += m_Front * velocity;
-      if (Input::IsKeyPressed(Key::S))
-          m_Position -= m_Front * velocity;
-      if (Input::IsKeyPressed(Key::A))
-          m_Position -= m_Right * velocity;
-      if (Input::IsKeyPressed(Key::D))
-          m_Position += m_Right * velocity;
-      if (Input::IsKeyPressed(Key::Space))
-          m_Position += m_Up * velocity;
-      if (Input::IsKeyPressed(Key::LeftControl))
-          m_Position -= m_Up * velocity;
+    auto* zombie = ModelManager::GetModel("harry")->GetController();
+    glm::vec3 targetPos = PhysX::PxExtendedVec3toGlmVec3(zombie->getPosition());
 
-      UpdateView();
+    glm::vec3 direction;
+    direction.x = cos(glm::radians(m_Yaw)) * cos(glm::radians(m_Pitch));
+    direction.y = sin(glm::radians(m_Pitch));
+    direction.z = sin(glm::radians(m_Yaw)) * cos(glm::radians(m_Pitch));
+    direction = glm::normalize(direction);
+
+    float distance = (m_Mode == CameraMode::ORBITAL) ? m_Distance : m_FollowDistance;
+
+    glm::vec3 desiredPos = targetPos - direction * distance;
+
+    glm::vec3 right = glm::normalize(glm::cross(direction, glm::vec3(0,1,0)));
+
+    desiredPos += right * m_ShoulderOffset;        // horizontal shoulder
+    desiredPos += glm::vec3(0, m_HeightOffset, 0); // vertical offset
+
+    float t = 1.0f - std::exp(-m_SmoothSpeed * (float)dt);
+    m_Position = glm::mix(m_Position, desiredPos, t);
+
+    glm::vec3 lookTarget = targetPos + glm::vec3(0, 5.0f, 0);
+
+    m_Front = glm::normalize(lookTarget - m_Position);
+    m_Right = glm::normalize(glm::cross(m_Front, glm::vec3(0,1,0)));
+    m_Up    = glm::cross(m_Right, m_Front);
+
+    UpdateView();
   }
 }
 
@@ -203,22 +229,17 @@ void Camera::MouseRotate(float xoffset, float yoffset, bool constrainPitch)
 
 void Camera::MouseZoom(float delta)
 {
-  // Apply zoom only if orbital mode active
   if (m_Mode == CameraMode::ORBITAL)
   {
-    // Adjust distance by delta scaled by zoom speed
     m_Distance -= delta * ZoomSpeed();
 
-    // Clamp distance
     if (m_Distance < 1.0f)
         m_Distance = 1.0f;
-    if (m_Distance > 1000.0f) // optional max zoom out limit
+    if (m_Distance > 1000.0f)
         m_Distance = 1000.0f;
 
-    // Keep saved orbital distance in sync
     m_Orbital_Distance = m_Distance;
 
-    // Update position based on new distance
     m_Position = CalculatePosition();
     UpdateView();
   }
@@ -232,7 +253,6 @@ void Camera::UpdateCameraVectors()
   front.z = sin(glm::radians(m_Yaw)) * cos(glm::radians(m_Pitch));
   m_Front = glm::normalize(front);
 
-  // Also re-calculate the Right and Up vector
   m_Right = glm::normalize(glm::cross(m_Front, m_WorldUp));
   m_Up = glm::normalize(glm::cross(m_Right, m_Front));
 }

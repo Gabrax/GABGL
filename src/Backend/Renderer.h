@@ -54,6 +54,8 @@ struct Renderer
   static void SetFullscreen(const std::string& sound, bool windowed);
   static void SwitchRenderState();
 
+  static Camera& GetCameraInstance();
+
 private:
 
   static void Set3D(bool is3D);

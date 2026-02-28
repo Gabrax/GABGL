@@ -16,7 +16,7 @@ struct Transform
     glm::mat4 GetTransform() const
     {
         return glm::translate(glm::mat4(1.0f), m_Position)
-            *  glm::toMat4(glm::quat(m_Rotation))
+            *  glm::toMat4(glm::quat(glm::radians(m_Rotation)))
             *  glm::scale(glm::mat4(1.0f), m_Scale);
     }
     glm::vec3 to_forward_vector() {
