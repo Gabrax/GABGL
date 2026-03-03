@@ -4,8 +4,7 @@
 #include "../input/KeyEvent.h"
 #include "Logger.h"
 #include <stb_image.h>
-#include "Renderer.h"
-#include "LayerStack.h"
+#include "SceneManager.h"
 
 static void GLFWErrorCallback(int error, const char* description)
 {
@@ -258,13 +257,10 @@ void Window::OnEvent(Event& e)
 	dispatcher.Dispatch<WindowCloseEvent>(BIND_EVENT(OnWindowClose));
 	dispatcher.Dispatch<WindowResizeEvent>(BIND_EVENT(OnWindowResize));
 
-  auto& m_LayerStack = LayerStack::GetLayers();
-	for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
-	{
-		if (e.Handled)
-			break;
-		(*it)->OnEvent(e);
-	}
+  if (!e.Handled)
+  {
+    if (auto* scene = SceneManager::GetActiveScene()) scene->OnEvent(e);
+  }
 }
 
 bool Window::OnWindowClose(WindowCloseEvent& e)

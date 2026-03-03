@@ -2,16 +2,14 @@
 
 #include "backend/Logger.h"
 #include "backend/AudioManager.h"
-#include "backend/LayerStack.h"
 #include "backend/LightManager.h"
 #include "backend/ModelManager.h"
 #include "backend/Renderer.h"
-#include "app/Application.h"
-#include "backend/AssetManager.h"
 #include "backend/PhysX.h"
 #include "backend/FontManager.h"
 #include "backend/CustomFrameRate.hpp"
 #include "backend/Config.h"
+#include "backend/SceneManager.h"
 
 Engine* Engine::s_Instance = nullptr;
 
@@ -37,39 +35,22 @@ void Engine::Run()
   PhysX::Init();
 	Renderer::Init();
   ModelManager::Init();
-  AssetManager::Init();
 
-  CustomFrameRate::SetTargetFPS(90);
+  SceneManager::LoadScene();
 
-  while(m_Window->IsRunning())
+  CustomFrameRate::SetTargetFPS(20);
+
+  while (m_Window->IsRunning())
   {
     CustomFrameRate::BeginFrame();
-
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     DeltaTime dt;
 
-    if (!AssetManager::LoadingComplete())
-    {
-      AssetManager::Update();
-
-      Renderer::DrawLoadingScreen();
-
-      if(AssetManager::LoadingComplete())
-      {
-        Application* m_App = new Application;
-        LayerStack::PushLayer(m_App);
-      }
-    }
-    else
-    {
-      if (!m_Window->IsMinimized()) LayerStack::OnUpdate(dt);
-    }
+    SceneManager::Update(dt);
 
     m_Window->Update();
-
     CustomFrameRate::EndFrame();
   }
 }
-
 

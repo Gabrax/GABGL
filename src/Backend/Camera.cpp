@@ -164,8 +164,8 @@ void Camera::OnUpdate(DeltaTime dt)
     /**/
     /*UpdateView();*/
 
-    auto* zombie = ModelManager::GetModel("harry")->GetController();
-    glm::vec3 targetPos = PhysX::PxExtendedVec3toGlmVec3(zombie->getPosition());
+    auto* player = ModelManager::GetModel("harry")->GetController();
+    glm::vec3 targetPos = PhysX::PxExtendedVec3toGlmVec3(player->getPosition());
 
     glm::vec3 direction;
     direction.x = cos(glm::radians(m_Yaw)) * cos(glm::radians(m_Pitch));
@@ -182,8 +182,9 @@ void Camera::OnUpdate(DeltaTime dt)
     desiredPos += right * m_ShoulderOffset;        // horizontal shoulder
     desiredPos += glm::vec3(0, m_HeightOffset, 0); // vertical offset
 
-    float t = 1.0f - std::exp(-m_SmoothSpeed * (float)dt);
-    m_Position = glm::mix(m_Position, desiredPos, t);
+    /*float t = 1.0f - std::exp(-m_SmoothSpeed * (float)dt);*/
+    /*m_Position = glm::mix(m_Position, desiredPos, t);*/
+    m_Position = desiredPos;
 
     glm::vec3 lookTarget = targetPos + glm::vec3(0, 5.0f, 0);
 
