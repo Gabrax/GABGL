@@ -1,170 +1,75 @@
 {
-    "Camera": {
-        "Position": {
-            "x": 27.82518196105957,
-            "y": 6.3094482421875,
-            "z": 47.41225051879883
-        },
-        "Rotation": {
-            "Pitch": -22.280237197875977,
-            "Yaw": -115.09889221191406
-        }
+  "scenes":
+  {
+    "menu":
+    {
+      "music":
+      [
+        "res/audio/menu.wav"
+      ],
+
+      "entities":
+      [
+      ]
     },
-    "Lights": [
-        {
-            "Color": {
-                "a": 1.0,
-                "b": 0.9940000176429749,
-                "g": 0.9940000176429749,
-                "r": 0.9940000176429749
-            },
-            "Position": {
-                "x": 0.8713428974151611,
-                "y": 5.2698822021484375,
-                "z": 15.60617446899414
-            },
-            "Rotation": {
-                "x": 0.0,
-                "y": -0.0,
-                "z": 0.0
-            },
-            "Scale": {
-                "x": 1.0,
-                "y": 1.0,
-                "z": 1.0
-            },
-            "Type": 0
-        },
-        {
-            "Color": {
-                "a": 1.0,
-                "b": 0.5128806829452515,
-                "g": 0.6722222566604614,
-                "r": 0.07469135522842407
-            },
-            "Position": {
-                "x": -20.96079444885254,
-                "y": 6.241182327270508,
-                "z": -7.358987808227539
-            },
-            "Rotation": {
-                "x": 0.0,
-                "y": -0.0,
-                "z": 0.0
-            },
-            "Scale": {
-                "x": 1.0,
-                "y": 1.0,
-                "z": 1.0
-            },
-            "Type": 0
-        },
-        {
-            "Color": {
-                "a": 1.0,
-                "b": 0.5611110925674438,
-                "g": 0.15274690091609955,
-                "r": 0.4794381558895111
-            },
-            "Position": {
-                "x": 25.846643447875977,
-                "y": 11.87118148803711,
-                "z": 20.312820434570313
-            },
-            "Rotation": {
-                "x": 0.0,
-                "y": -0.0,
-                "z": 0.0
-            },
-            "Scale": {
-                "x": 1.0,
-                "y": 1.0,
-                "z": 1.0
-            },
-            "Type": 2
-        },
-        {
-            "Color": {
-                "a": 1.0,
-                "b": 0.11429010331630707,
-                "g": 0.5303723812103271,
-                "r": 0.894444465637207
-            },
-            "Position": {
-                "x": 27.66033363342285,
-                "y": 6.039296627044678,
-                "z": -14.298134803771973
-            },
-            "Rotation": {
-                "x": 0.0,
-                "y": -0.0,
-                "z": 0.0
-            },
-            "Scale": {
-                "x": 1.0,
-                "y": 1.0,
-                "z": 1.0
-            },
-            "Type": 0
-        }
-    ],
-    "Models": [
-        {
-            "Path": "../res/map/objHouse.obj",
-            "Position": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
-            },
-            "Rotation": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
-            },
-            "Scale": {
-                "x": 1.0,
-                "y": 1.0,
-                "z": 1.0
-            },
-            "Type": "STATIC"
-        },
-        {
-            "Path": "../res/backpack/backpack.obj",
-            "Position": {
-                "x": 0.0,
-                "y": 2.0,
-                "z": 5.0
-            },
-            "Rotation": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
-            },
-            "Scale": {
-                "x": 1.0,
-                "y": 1.0,
-                "z": 1.0
-            },
-            "Type": "STATIC"
-        },
-        {
-            "Path": "../res/lowpoly/MaleSurvivor1.glb",
-            "Position": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 2.0
-            },
-            "Rotation": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
-            },
-            "Scale": {
-                "x": 1.0,
-                "y": 1.0,
-                "z": 1.0
-            },
-            "Type": "ANIMATED"
-        }
-    ]
+
+    "game":
+    {
+      "sounds":
+      [
+        "res/audio/select1.wav",
+        "res/audio/select2.wav"
+      ],
+
+      "music":
+      [
+        "res/audio/menu.wav",
+        "res/audio/night.wav",
+        "res/audio/night_mono.wav"
+      ],
+
+      "skybox":
+      [
+        "res/textures/NightSky_Right.png",
+        "res/textures/NightSky_Left.png",
+        "res/textures/NightSky_Top.png",
+        "res/textures/NightSky_Bottom.png",
+        "res/textures/NightSky_Front.png",
+        "res/textures/NightSky_Back.png"
+      ],
+
+      "static_models":
+      [
+        { "path":"res/map/objHouse.obj", "scale":0.7, "mesh":"trianglemesh" },
+        { "path":"res/models/aidkit.glb", "scale":1.0 },
+        { "path":"res/models/aidkit_convex.glb", "scale":1.0, "mesh":"convex" },
+        { "path":"res/models/pistolammo.glb", "scale":1.0 },
+        { "path":"res/models/pistolammo_convex.glb", "scale":1.0, "mesh":"convex" },
+        { "path":"res/models/shotgunammo.glb", "scale":1.0 },
+        { "path":"res/models/shotgunammo_convex.glb", "scale":1.0, "mesh":"convex" },
+        { "path":"res/models/pistol.glb", "scale":1.0 },
+        { "path":"res/models/pistol_convex.glb", "scale":1.0, "mesh":"convex" },
+        { "path":"res/models/shotgun.glb", "scale":1.0 },
+        { "path":"res/models/shotgun_convex.glb", "scale":1.0, "mesh":"convex" }
+      ],
+
+      "animated_models":
+      [
+        { "path":"res/models/harry.glb","scale":1.0 },
+        { "path":"res/zombie/zombie.glb","scale":0.5 }
+      ],
+
+      "entities":
+      [
+        { "model":"objHouse","position":[0,0,0] },
+        { "model":"pistol","position":[15,4,13] },
+        { "model":"pistolammo","position":[11.0,4.0,5.0] },
+        { "model":"aidkit","position":[13.0,4.0,9.0] },
+        { "model":"shotgun","position":[14.0,4.0,11.0] },
+        { "model":"shotgunammo","position":[12.0,4.0,7.0] },
+        { "model":"harry","type":"controller","position":[5,0,0] },
+        { "model":"zombie","type":"controller","position":[10,0,0] }
+      ]
+    }
+  }
 }

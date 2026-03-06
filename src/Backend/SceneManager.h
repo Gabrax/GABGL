@@ -2,42 +2,59 @@
 
 #include "../input/Event.h"
 #include "../input/KeyEvent.h"
-#include "Buffer.h"
 #include <future>
 
-#include "Renderer.h"
 #include "ModelManager.h"
+
+#include "json.hpp"
+
+using json = nlohmann::json;
 
 struct Scene
 {
-  Scene();
+  Scene(const std::string& name) : m_Name(name) {}
+
   virtual ~Scene() = default;
-  
-	void OnEvent(Event& e);
-	void OnUpdate(DeltaTime& dt);
+
+  virtual void OnUpdate(DeltaTime& dt) = 0;
+  virtual void OnSceneStart() = 0;
+  void OnEvent(Event& e);
 
   void StartLoading();
   void UpdateLoading();
   bool IsLoadingComplete() const;
 
 private:
-	bool OnKeyPressed(KeyPressedEvent& e);
-	bool OnMouseButtonPressed(MouseButtonPressedEvent& e);
 
-  std::vector<std::string> m_Models;
-  DrawIndirectBuffer m_drawBuffer;
+  bool OnKeyPressed(KeyPressedEvent& e);
+  bool OnMouseButtonPressed(MouseButtonPressedEvent& e);
+
+  void LoadSceneFromJSON(const std::string& path, const std::string& sceneName);
+  void SpawnEntities();
 
   struct SceneAssets
   {
-    std::vector<const char*> sounds;
-    std::vector<const char*> music;
-    std::vector<std::tuple<const char*, float, bool, MeshType>> static_models;
-    std::vector<std::tuple<const char*, float, bool, MeshType>> animated_models;
+    std::vector<std::string> sounds;
+    std::vector<std::string> music;
+
+    struct ModelDesc
+    {
+        std::string path;
+        float scale;
+        bool flag;
+        MeshType meshType;
+    };
+
+    std::vector<ModelDesc> static_models;
+    std::vector<ModelDesc> animated_models;
+
     std::vector<std::string> skybox;
 
     std::vector<std::future<std::shared_ptr<Model>>> futureStatic;
     std::vector<std::future<std::shared_ptr<Model>>> futureAnim;
     std::vector<std::future<std::shared_ptr<Texture>>> futureTextures;
+
+    json entities;
 
     bool loadingStarted = false;
     bool uploadStarted = false;
@@ -46,13 +63,12 @@ private:
 
   SceneAssets m_Assets;
 
-  void SetupAssets();
-  void OnSceneStart();
+  std::string m_Name;
 };
 
 struct SceneManager
 {
-  static void LoadScene();
+  static void LoadScene(const std::string& scene);
   static void Update(DeltaTime& dt);
   static bool IsLoading();
 

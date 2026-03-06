@@ -7,9 +7,11 @@
 #include "backend/Renderer.h"
 #include "backend/PhysX.h"
 #include "backend/FontManager.h"
-#include "backend/CustomFrameRate.hpp"
-#include "backend/Config.h"
+#include "backend/Settings.h"
 #include "backend/SceneManager.h"
+
+#include <thread>
+#include <chrono>
 
 Engine* Engine::s_Instance = nullptr;
 
@@ -24,10 +26,9 @@ Engine::~Engine() = default;
 void Engine::Run()
 {
   Logger::Init();
+  Settings::Init();
 
-  Config config;
-
-  m_Window = Window::Create({ "GABGL", config.GetWindowWidth(), config.GetWindowHeight() });
+  m_Window = Window::Create({ "GABGL", Settings::GetWindowWidth(), Settings::GetWindowHeight() });
 
   AudioManager::Init();
   LightManager::Init();
@@ -36,21 +37,19 @@ void Engine::Run()
 	Renderer::Init();
   ModelManager::Init();
 
-  SceneManager::LoadScene();
-
-  CustomFrameRate::SetTargetFPS(20);
+  SceneManager::LoadScene("game");
 
   while (m_Window->IsRunning())
   {
-    CustomFrameRate::BeginFrame();
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     DeltaTime dt;
 
     SceneManager::Update(dt);
 
+    std::this_thread::sleep_for(std::chrono::milliseconds(Settings::GetFPS()));
+
     m_Window->Update();
-    CustomFrameRate::EndFrame();
   }
 }
 

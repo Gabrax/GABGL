@@ -108,6 +108,9 @@ void AudioManager::Init()
 	AL_CheckAndThrow();
 
 	s_Data.p_SoundEffectBuffers.clear();
+
+  AudioManager::SetAttunation(AL_LINEAR_DISTANCE_CLAMPED);
+  AudioManager::SetListenerVolume(0.05f);
 }
 
 void AudioManager::Terminate()
