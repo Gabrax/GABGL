@@ -8,7 +8,6 @@
 #include "Renderer.h"
 #include "Shader.h"
 #include "Texture.h"
-#include "../engine.h"
 #include "AudioManager.h"
 #include <cstdint>
 #include <limits>
@@ -21,17 +20,15 @@
 #include <glad/glad.h>
 #include "ImGuizmo.h"
 #include "glm/ext/scalar_constants.hpp"
-#include "glm/gtx/dual_quaternion.hpp"
 #include "glm/trigonometric.hpp"
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/fwd.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
-#include "json.hpp"
-#include "../input/UserInput.h"
 #include "RandomGen.hpp"
 #include "Profiler.h"
 #include "Timer.hpp"
+#include "Window.h"
 
 void MessageCallback(unsigned source,unsigned type,unsigned id,unsigned severity,int length,const char* message,const void* userParam)
 {
@@ -199,9 +196,6 @@ struct RendererData
   std::vector<Particle> m_ParticlePool;  
   uint32_t m_PoolIndex;
 
-  Window* m_WindowRef = nullptr;
-  Camera m_Camera;
-
   enum class SceneState
 	{
 		Edit = 0, Play = 1
@@ -309,8 +303,7 @@ void Renderer::Init()
 
   LoadShaders();
 
-  s_Data.m_WindowRef = &Engine::GetInstance().GetMainWindow();
-  glm::vec2 resolution = { s_Data.m_WindowRef->GetWidth(), s_Data.m_WindowRef->GetHeight() };
+  glm::vec2 resolution = { Window::GetWidth(), Window::GetHeight() };
 
   FramebufferSpecification fbSpec;
 	fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::DEPTH24STENCIL8 };
@@ -336,15 +329,15 @@ void Renderer::Init()
   s_Data.m_DirectShadowBuffer = DirectShadowBuffer::Create(2048, 2048, 16, 8, 3);
 
   s_Data.m_CameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 0);
-  s_Data.m_Camera = Camera(45.0f, (float)resolution.x / (float)resolution.y, 0.01f, 2000.0f);
-  s_Data.m_Camera.SetViewportSize((float)resolution.x, (float)resolution.y);
+  Camera::Init(45.0f, (float)resolution.x / (float)resolution.y, 0.01f, 2000.0f);
+  Camera::SetViewportSize((float)resolution.x, (float)resolution.y);
 
   s_Data.m_ResolutionUniformBuffer = UniformBuffer::Create(sizeof(glm::vec2), 1);
   s_Data.m_ResolutionUniformBuffer->SetData(&resolution, sizeof(glm::vec2));
 
   s_Data.m_SceneState = RendererData::SceneState::Play;
-  s_Data.m_Camera.SetMode(CameraMode::FPS);
-  s_Data.m_WindowRef->SetCursorVisible(false);
+  Camera::SetMode(CameraMode::PLAYER);
+  Window::SetCursorVisible(false);
 
   s_Data.m_ParticlePool.resize(100);
   s_Data.m_PoolIndex = 99;
@@ -376,7 +369,7 @@ void Renderer::Init()
 		style.Colors[ImGuiCol_WindowBg].w = 1.0f;
 	}
 
-	GLFWwindow* window = reinterpret_cast<GLFWwindow*>(s_Data.m_WindowRef->GetWindowPtr());
+	GLFWwindow* window = reinterpret_cast<GLFWwindow*>(Window::GetWindowPtr());
 
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 410");
@@ -411,9 +404,9 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
   {
     GABGL_PROFILE_SCOPE("MISC UPDATE PASS");
 
-    s_Data.m_Camera.OnUpdate(dt);
-    AudioManager::SetListenerLocation(s_Data.m_Camera.GetPosition());
-    AudioManager::SetListenerOrientation(s_Data.m_Camera.GetForwardDirection(), s_Data.m_Camera.GetUpDirection());
+    Camera::OnUpdate(dt);
+    AudioManager::SetListenerLocation(Camera::GetPosition());
+    AudioManager::SetListenerOrientation(Camera::GetForwardDirection(), Camera::GetUpDirection());
     ModelManager::UpdateTransforms(dt);
     PhysX::Simulate(dt);
     AudioManager::UpdateAllMusic();
@@ -488,7 +481,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
     s_Data.s_Shaders.DepthPrePassShader->Bind();
     s_Data.s_Shaders.DepthPrePassShader->SetBool("isInstanced", false);
 
-    BeginScene(s_Data.m_Camera);
+    BeginScene();
     glBindVertexArray(ModelManager::GetModelsVAO());
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s_Data.m_cmdBufer);
     glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, nullptr, s_Data.m_DrawCommands.size(), 0);
@@ -512,7 +505,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
     s_Data.s_Shaders.GeometryShader->Bind();
     s_Data.s_Shaders.GeometryShader->SetBool("isInstanced", false);
 
-    BeginScene(s_Data.m_Camera);
+    BeginScene();
     glBindVertexArray(ModelManager::GetModelsVAO());
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s_Data.m_cmdBufer);
     glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, NULL, s_Data.m_DrawCommands.size(), 0);
@@ -615,12 +608,12 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
     GABGL_PROFILE_SCOPE("UI PASS");
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, s_Data.m_WindowRef->GetWidth(), s_Data.m_WindowRef->GetHeight());
+    glViewport(0, 0, Window::GetWidth(), Window::GetHeight());
     glDisable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    BeginScene(s_Data.m_Camera);
+    BeginScene();
     Renderer::DrawText(FontManager::GetFont("dpcomic"), "FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f, 50.0f), 0.5f, glm::vec4(1.0f));
     EndScene();
   }
@@ -628,8 +621,8 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
 
 void Renderer::DrawLoadingScreen()
 {
-  BeginScene(s_Data.m_Camera);
-  Renderer::DrawText(FontManager::GetFont("dpcomic"),"LOADING", glm::vec2(s_Data.m_WindowRef->GetWidth() / 2,s_Data.m_WindowRef->GetHeight() / 2), 1.0f, glm::vec4(1.0f));
+  BeginScene();
+  Renderer::DrawText(FontManager::GetFont("dpcomic"),"LOADING", glm::vec2(Window::GetWidth() / 2,Window::GetHeight() / 2), 1.0f, glm::vec4(1.0f));
   EndScene();
 }
 
@@ -637,24 +630,24 @@ void Renderer::SwitchRenderState()
 {
   if (s_Data.m_SceneState == RendererData::SceneState::Edit)
   {
-    s_Data.m_Camera.SetMode(CameraMode::FPS);
-    s_Data.m_WindowRef->SetCursorVisible(false);
+    Camera::SetMode(CameraMode::PLAYER);
+    Window::SetCursorVisible(false);
     s_Data.m_SceneState = RendererData::SceneState::Play;
   }
   else if (s_Data.m_SceneState == RendererData::SceneState::Play)
   {
-    s_Data.m_Camera.SetMode(CameraMode::ORBITAL);
-    s_Data.m_WindowRef->SetCursorVisible(true);
+    Camera::SetMode(CameraMode::ORBITAL);
+    Window::SetCursorVisible(true);
     s_Data.m_SceneState = RendererData::SceneState::Edit;
   }
 }
 
 void Renderer::SetFullscreen(const std::string& sound, bool windowed)
 {
-  s_Data.m_WindowRef->SetFullscreen(windowed);
+  Window::SetFullscreen(windowed);
 
-  uint32_t width = (uint32_t)s_Data.m_WindowRef->GetWidth(); 
-  uint32_t height = (uint32_t)s_Data.m_WindowRef->GetHeight();
+  uint32_t width = (uint32_t)Window::GetWidth(); 
+  uint32_t height = (uint32_t)Window::GetHeight();
 
   glm::vec2 newResolution = { width, height };
   s_Data.m_ResolutionUniformBuffer->SetData(&newResolution, sizeof(glm::vec2));
@@ -664,16 +657,16 @@ void Renderer::SetFullscreen(const std::string& sound, bool windowed)
   /*s_Data.m_BloomFramebuffer->Resize(width,height);*/
   s_Data.m_SkyboxBuffer->Resize(width,height);
   s_Data.m_ResultBuffer->Resize(width, height);
-  s_Data.m_Camera.SetViewportSize(width, height);
+  Camera::SetViewportSize(width, height);
   AudioManager::PlaySound(sound);
 }
 
-void Renderer::BeginScene(const Camera& camera)
+void Renderer::BeginScene()
 {
-	s_Data.m_CameraBuffer.ViewProjection = camera.GetViewProjection();
-	s_Data.m_CameraBuffer.OrtoProjection = camera.GetOrtoProjection();
-  s_Data.m_CameraBuffer.NonRotViewProjection = camera.GetNonRotationViewProjection();
-  s_Data.m_CameraBuffer.CameraPos = camera.GetPosition();
+	s_Data.m_CameraBuffer.ViewProjection = Camera::GetViewProjection();
+	s_Data.m_CameraBuffer.OrtoProjection = Camera::GetOrtoProjection();
+  s_Data.m_CameraBuffer.NonRotViewProjection = Camera::GetNonRotationViewProjection();
+  s_Data.m_CameraBuffer.CameraPos = Camera::GetPosition();
 	s_Data.m_CameraUniformBuffer->SetData(&s_Data.m_CameraBuffer, sizeof(CameraData));
 
 	StartBatch();
@@ -771,8 +764,8 @@ void Renderer::DrawQuad(const glm::mat4& transform, const glm::vec4& color, int 
   float sizeX = glm::length(glm::vec3(transform[0]));
   float sizeY = glm::length(glm::vec3(transform[1]));
 
-  glm::vec3 cameraRight = s_Data.m_Camera.GetRightDirection();
-  glm::vec3 cameraUp = s_Data.m_Camera.GetUpDirection();
+  glm::vec3 cameraRight = Camera::GetRightDirection();
+  glm::vec3 cameraUp = Camera::GetUpDirection();
 
 	for (size_t i = 0; i < s_Data.quadVertexCount; i++)
 	{
@@ -1627,7 +1620,7 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 	ImGui::PopStyleVar();
 
 	ImGui::End();
-	io.DisplaySize = ImVec2((float)s_Data.m_WindowRef->GetWidth(), (float)s_Data.m_WindowRef->GetHeight());
+	io.DisplaySize = ImVec2((float)Window::GetWidth(), (float)Window::GetHeight());
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -1639,11 +1632,6 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 		ImGui::RenderPlatformWindowsDefault();
 		glfwMakeContextCurrent(backup_current_context);
 	}
-}
-
-Camera& Renderer::GetCameraInstance()
-{
-  return s_Data.m_Camera;
 }
 
 bool Renderer::DecomposeTransform(const glm::mat4& transform, glm::vec3& translation, glm::vec3& rotation, glm::vec3& scale)

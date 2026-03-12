@@ -10,38 +10,74 @@
 #include <glm/gtx/quaternion.hpp>
 #include "ModelManager.h"
 
-Camera::Camera(const glm::vec3& position) : m_Position(position)
-{
-    RecalculateProjection();
-    UpdateView();
-};
 
-Camera::Camera(float fov, float aspectRatio, float nearClip, float farClip)
-    : m_ProjectionType(ProjectionType::Perspective),
-      m_PerspectiveFOV(glm::radians(fov)),
-      m_PerspectiveNear(nearClip),
-      m_PerspectiveFar(farClip),
-      m_AspectRatio(aspectRatio),
-      m_Distance(1000.0f),
-      m_Pitch(0.0f),
-      m_Yaw(0.0f)
+static CameraMode m_Mode = CameraMode::PLAYER;
+static ProjectionType m_ProjectionType = ProjectionType::Perspective;
+
+// Perspective parameters
+static float m_PerspectiveFOV = glm::radians(45.0f);
+static float m_PerspectiveNear = 0.001f;
+static float m_PerspectiveFar = 2000.0f;
+
+// Orthographic parameters
+static float m_OrthographicSize = 10.0f;
+static float m_OrthographicNear = -1.0f;
+static float m_OrthographicFar = 1.0f;
+
+static float m_AspectRatio = 16.0f / 9.0f;
+
+static glm::mat4 m_Projection = glm::mat4(1.0f);
+static glm::mat4 m_ViewMatrix;
+
+static glm::vec3 m_Position = { 0.0f, 5.0f, 5.0f };
+static glm::vec3 m_FocalPoint = { 0.0f, 0.0f, 0.0f };
+
+static glm::vec2 m_InitialMousePosition = { 0.0f, 0.0f };
+
+static glm::vec3 m_FPS_Position = { 0.0f, 5.0f, 5.0f };
+static float m_FPS_Yaw = 0.0f;
+static float m_FPS_Pitch = 0.0f;
+
+static glm::vec3 m_Orbital_FocalPoint = { 0.0f, 0.0f, 0.0f };
+static float m_Orbital_Distance = 100.0f;
+static float m_Orbital_Yaw = 0.0f;
+static float m_Orbital_Pitch = 0.0f;
+
+static float m_MovementSpeed = 5.0f;
+static float m_MouseSensitivity = 1.0f;
+static glm::vec3 m_Front = glm::vec3(0.0f, 0.0f, -1.0f);
+static glm::vec3 m_Up = glm::vec3(0.0f, 1.0f, 0.0f);
+static glm::vec3 m_WorldUp = glm::vec3(0.0f, 1.0f, 0.0f);
+static glm::vec3 m_Right = glm::vec3(1.0f, 0.0f, 0.0f);
+
+static float m_Distance = 0.0f;
+static float m_Pitch = 0.0f;
+static float m_Yaw = 0.0f;
+
+static float m_ViewportWidth = 0;
+static float m_ViewportHeight = 0;
+
+void Camera::Init(float fov, float aspectRatio, float nearClip, float farClip)
 {
-    RecalculateProjection();
-    UpdateView();
+  m_ProjectionType = ProjectionType::Perspective;
+  m_PerspectiveFOV = glm::radians(fov);
+  m_PerspectiveNear = nearClip;
+  m_PerspectiveFar = farClip;
+  m_AspectRatio = aspectRatio;
+  m_Distance = 1000.0f;
+  m_Pitch = 0.0f;
+  m_Yaw = 0.0f;
+
+  RecalculateProjection();
+  UpdateView();
 }
-
-Camera::Camera(const glm::mat4& projection) : m_Projection(projection)
-{
-    RecalculateProjection();
-    UpdateView();
-};
 
 void Camera::SetMode(CameraMode mode)
 {
   if (mode == m_Mode) return;
 
   // Save current mode's state before switching
-  if (m_Mode == CameraMode::FPS)
+  if (m_Mode == CameraMode::PLAYER)
   {
     m_FPS_Position = m_Position;
     m_FPS_Yaw = m_Yaw;
@@ -56,7 +92,7 @@ void Camera::SetMode(CameraMode mode)
   }
 
   // Load new mode's state
-  if (mode == CameraMode::FPS)
+  if (mode == CameraMode::PLAYER)
   {
     m_Position = m_FPS_Position;
     m_Yaw = m_FPS_Yaw;
@@ -97,7 +133,7 @@ void Camera::UpdateView()
   }
 }
 
-std::pair<float, float> Camera::PanSpeed() const
+std::pair<float, float> Camera::PanSpeed()
 {
 	float x = std::min(m_ViewportWidth / 1000.0f, 2.4f); // max = 2.4f
 	float xFactor = 0.0366f * (x * x) - 0.1778f * x + 0.3021f;
@@ -108,12 +144,12 @@ std::pair<float, float> Camera::PanSpeed() const
 	return { xFactor, yFactor };
 }
 
-float Camera::RotationSpeed() const
+float Camera::RotationSpeed()
 {
 	return 0.8f;
 }
 
-float Camera::ZoomSpeed() const
+float Camera::ZoomSpeed()
 {
 	float distance = m_Distance * 0.2f;
 	distance = std::max(distance, 0.0f);
@@ -149,7 +185,7 @@ void Camera::OnUpdate(DeltaTime dt)
     m_Position = CalculatePosition();
     UpdateView();
   }
-  else 
+  else if(m_Mode == CameraMode::PLAYER) 
   {
     MouseRotate(delta.x, -delta.y);
 
@@ -192,6 +228,10 @@ void Camera::OnUpdate(DeltaTime dt)
     m_Right = glm::normalize(glm::cross(m_Front, glm::vec3(0,1,0)));
     m_Up    = glm::cross(m_Right, m_Front);
 
+    UpdateView();
+  }
+  else if(m_Mode == CameraMode::PLAIN)
+  {
     UpdateView();
   }
 }
@@ -258,25 +298,25 @@ void Camera::UpdateCameraVectors()
   m_Up = glm::normalize(glm::cross(m_Right, m_Front));
 }
 
-glm::vec3 Camera::GetUpDirection() const
+glm::vec3 Camera::GetUpDirection()
 {
 	/*return glm::rotate(GetOrientation(), glm::vec3(0.0f, 1.0f, 0.0f));*/
   return m_Up;
 }
 
-glm::vec3 Camera::GetRightDirection() const
+glm::vec3 Camera::GetRightDirection()
 {
 	/*return glm::rotate(GetOrientation(), glm::vec3(1.0f, 0.0f, 0.0f));*/
   return m_Right;
 }
 
-glm::vec3 Camera::GetForwardDirection() const
+glm::vec3 Camera::GetForwardDirection()
 {
 	/*return glm::rotate(GetOrientation(), glm::vec3(0.0f, 0.0f, -1.0f));*/
   return m_Front;
 }
 
-glm::vec3 Camera::CalculatePosition() const
+glm::vec3 Camera::CalculatePosition()
 {
   glm::vec3 direction;
   direction.x = cos(glm::radians(m_Pitch)) * cos(glm::radians(m_Yaw));
@@ -286,7 +326,7 @@ glm::vec3 Camera::CalculatePosition() const
   return m_FocalPoint + direction * m_Distance;
 }
 
-glm::quat Camera::GetOrientation() const
+glm::quat Camera::GetOrientation()
 {
 	return glm::quat(glm::vec3(-m_Pitch, -m_Yaw, 0.0f));
 }
@@ -331,16 +371,66 @@ void Camera::RecalculateProjection()
 {
   if (m_ProjectionType == ProjectionType::Perspective)
   {
-      // m_PerspectiveFOV is already in radians
-      m_Projection = glm::perspective(m_PerspectiveFOV, m_AspectRatio, m_PerspectiveNear, m_PerspectiveFar);
+    // m_PerspectiveFOV is already in radians
+    m_Projection = glm::perspective(m_PerspectiveFOV, m_AspectRatio, m_PerspectiveNear, m_PerspectiveFar);
   }
   else
   {
-      float orthoLeft = -m_OrthographicSize * m_AspectRatio * 0.5f;
-      float orthoRight = m_OrthographicSize * m_AspectRatio * 0.5f;
-      float orthoBottom = -m_OrthographicSize * 0.5f;
-      float orthoTop = m_OrthographicSize * 0.5f;
+    float orthoLeft = -m_OrthographicSize * m_AspectRatio * 0.5f;
+    float orthoRight = m_OrthographicSize * m_AspectRatio * 0.5f;
+    float orthoBottom = -m_OrthographicSize * 0.5f;
+    float orthoTop = m_OrthographicSize * 0.5f;
 
-      m_Projection = glm::ortho(orthoLeft, orthoRight, orthoBottom, orthoTop, m_OrthographicNear, m_OrthographicFar);
+    m_Projection = glm::ortho(orthoLeft, orthoRight, orthoBottom, orthoTop, m_OrthographicNear, m_OrthographicFar);
   }
+}
+
+const glm::vec3& Camera::GetPosition()
+{
+  return m_Position;
+}
+
+float Camera::GetDistance()
+{ 
+  return m_Distance;
+}
+
+void Camera::SetDistance(float distance)
+{ 
+  m_Distance = distance;
+}
+
+const glm::mat4& Camera::GetViewMatrix()
+{ 
+  return m_ViewMatrix;
+}
+
+const glm::mat4& Camera::GetProjection()
+{ 
+  return m_Projection;
+}
+
+glm::mat4 Camera::GetViewProjection()
+{ 
+  return m_Projection * m_ViewMatrix;
+}
+
+glm::mat4 Camera::GetNonRotationViewProjection()
+{ 
+  return m_Projection * glm::mat4(glm::mat3(m_ViewMatrix));
+}
+
+glm::mat4 Camera::GetOrtoProjection()
+{ 
+  return glm::ortho(0.0f, static_cast<float>(m_ViewportWidth), 0.0f, static_cast<float>(m_ViewportHeight));
+}
+
+float Camera::GetPitch()
+{ 
+  return m_Pitch;
+}
+
+float Camera::GetYaw()
+{ 
+  return m_Yaw;
 }

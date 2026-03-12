@@ -11,6 +11,13 @@ struct GameScene : Scene
 {
   GameScene() : Scene("game") {}
 
+  void OnSceneStart() override
+  {
+    AudioManager::PlayMusic("night_mono",glm::vec3(25,2,15),true);
+
+    LightManager::AddLight(LightType::DIRECT,glm::vec3(0.3,0.32,0.4),glm::vec3(0),glm::vec3(-2,-4,-1));
+  }
+
   void OnUpdate(DeltaTime& dt) override
   {
     Renderer::DrawScene(dt,[&]()
@@ -33,30 +40,21 @@ struct GameScene : Scene
       if(Input::IsKeyPressed(Key::D)) ModelManager::MoveController("harry",Movement::RIGHT,10.0f,dt);
     });
   }
-
-  void OnSceneStart() override
-  {
-    AudioManager::PlayMusic("night_mono",glm::vec3(25,2,15),true);
-
-    LightManager::AddLight(LightType::DIRECT,glm::vec3(0.3,0.32,0.4),glm::vec3(0),glm::vec3(-2,-4,-1));
-  }
 };
 
 struct MenuScene : Scene
 {
   MenuScene() : Scene("menu") {}
 
+  void OnSceneStart() override
+  {
+    AudioManager::PlayMusic("menu",true);
+  }
+
   void OnUpdate(DeltaTime& dt) override
   {
     Renderer::DrawScene(dt,[&]()
     {
-      Renderer::DrawCube(glm::vec3(0),glm::vec3(1),glm::vec4(1));
-
     });
-  }
-
-  void OnSceneStart() override
-  {
-      AudioManager::PlayMusic("menu",true);
   }
 };

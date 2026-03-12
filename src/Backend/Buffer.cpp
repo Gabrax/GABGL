@@ -6,7 +6,7 @@
 #include <random>
 #include <numbers>
 #include <glad/glad.h>
-#include "../engine.h"
+#include "Window.h"
 
 VertexBuffer::VertexBuffer(uint32_t size)
 {
@@ -729,13 +729,13 @@ static void renderQuad()
 
 BloomBuffer::BloomBuffer(const std::shared_ptr<Shader>& downsampleShader, const std::shared_ptr<Shader>& upsampleShader, const std::shared_ptr<Shader>& finalShader) : downsampleShader(downsampleShader), upsampleShader(upsampleShader), finalShader(finalShader)
 {
-  float windowWidth = Engine::GetInstance().GetMainWindow().GetWidth();
-  float windowHeight = Engine::GetInstance().GetMainWindow().GetHeight();
+  float windowWidth = Window::GetWidth();
+  float windowHeight = Window::GetHeight();
 
   FramebufferSpecification hdrSpec;
 	hdrSpec.Attachments = { FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::RGBA16F };
-	hdrSpec.Width = Engine::GetInstance().GetMainWindow().GetWidth();
-	hdrSpec.Height = Engine::GetInstance().GetMainWindow().GetHeight();
+	hdrSpec.Width = Window::GetWidth();
+	hdrSpec.Height = Window::GetHeight();
 	m_hdrFB = FrameBuffer::Create(hdrSpec); 
 
   FramebufferSpecification blurSpec;

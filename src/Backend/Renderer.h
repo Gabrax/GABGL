@@ -14,7 +14,7 @@ struct Renderer
 
   static void DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic);
   static void DrawLoadingScreen();
-	static void BeginScene(const Camera& camera);
+	static void BeginScene();
 	static void EndScene();
 
 	static void DrawQuad(const glm::vec3& position, const glm::vec3& size, const glm::vec3& rotation, const glm::vec4& color);
@@ -53,8 +53,6 @@ struct Renderer
   static void DrawFullscreenQuad();
   static void SetFullscreen(const std::string& sound, bool windowed);
   static void SwitchRenderState();
-
-  static Camera& GetCameraInstance();
 
 private:
 

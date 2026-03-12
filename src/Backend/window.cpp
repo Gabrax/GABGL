@@ -6,26 +6,38 @@
 #include <stb_image.h>
 #include "SceneManager.h"
 
+GLFWwindow* m_Window;
+GLFWmonitor* m_Monitor;
+const GLFWvidmode* m_Mode;
+
+int32_t currWidth, currHeight;
+bool m_WindowClosed = false;
+
+struct WindowSpecificData
+{
+  std::string title;
+  uint32_t Width, Height;
+  bool VSync;
+
+  Window::EventCallbackFn EventCallback;
+} m_Data;
+
+bool m_isMinimized = false;
+bool m_isRunning = true;
+bool m_closed = false;
+
 static void GLFWErrorCallback(int error, const char* description)
 {
 	GABGL_ERROR("GLFW Error ({0}): {1}", error, description);
 }
 
-Window::Window(const WindowDefaultData& props)
+void Window::Init(const std::string& windowTitle, uint32_t windowWidth, uint32_t windowHeight)
 {
-  Init(props);
-  SetEventCallback(BIND_EVENT(OnEvent));
-}
+  m_Data.title = windowTitle;
+  m_Data.Width = windowWidth;
+  m_Data.Height = windowHeight;
 
-Window::~Window(){}
-
-void Window::Init(const WindowDefaultData& props)
-{
-  m_Data.title = props.title;
-  m_Data.Width = props.Width;
-  m_Data.Height = props.Height;
-
-  GABGL_INFO("Creating window {0} ({1},{2})", props.title, props.Width, props.Height);
+  GABGL_INFO("Creating window {0} ({1},{2})", m_Data.title, m_Data.Width, m_Data.Height);
 
   int GLFWstatus = glfwInit();
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -153,6 +165,8 @@ void Window::Init(const WindowDefaultData& props)
 	  });
 
   glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+
+  SetEventCallback([](Event& e) { Window::OnEvent(e); });
 }
 
 void Window::Terminate()
@@ -164,11 +178,6 @@ void Window::Update()
 {
 	glfwPollEvents();
 	glfwSwapBuffers(m_Window);
-}
-
-std::unique_ptr<Window> Window::Create(const WindowDefaultData& props)
-{
-  return std::make_unique<Window>(props);
 }
 
 void Window::SetWindowIcon(const char* iconpath, GLFWwindow* window)
@@ -190,7 +199,7 @@ void Window::SetVSync(bool enabled)
   m_Data.VSync = enabled;
 }
 
-bool Window::IsVSync() const 
+bool Window::IsVSync() 
 {
   return m_Data.VSync;
 }
@@ -254,8 +263,17 @@ void Window::SetCursorVisible(bool enable)
 void Window::OnEvent(Event& e)
 {
 	EventDispatcher dispatcher(e);
-	dispatcher.Dispatch<WindowCloseEvent>(BIND_EVENT(OnWindowClose));
-	dispatcher.Dispatch<WindowResizeEvent>(BIND_EVENT(OnWindowResize));
+	dispatcher.Dispatch<WindowCloseEvent>(
+		[](WindowCloseEvent& ev)
+		{
+			return Window::OnWindowClose(ev);
+		});
+
+	dispatcher.Dispatch<WindowResizeEvent>(
+		[](WindowResizeEvent& ev)
+		{
+			return Window::OnWindowResize(ev);
+		});
 
   if (!e.Handled)
   {
@@ -283,3 +301,13 @@ bool Window::OnWindowResize(WindowResizeEvent& e)
 
 	return false;
 }
+
+uint32_t Window::GetWidth(){ return m_Data.Width; }
+uint32_t Window::GetHeight(){ return m_Data.Height; }
+GLFWwindow* Window::GetWindowPtr(){ return m_Window; }
+void Window::SetEventCallback(const Window::EventCallbackFn& callback) { m_Data.EventCallback = callback; }
+bool Window::isClosed() { return m_WindowClosed; }
+bool Window::IsRunning() { return m_isRunning; }
+bool Window::IsMinimized() { return m_isMinimized; }
+
+

@@ -3,13 +3,41 @@
   {
     "menu":
     {
+      "sounds":
+      [
+        "res/audio/select1.wav",
+        "res/audio/select2.wav"
+      ],
+
       "music":
       [
-        "res/audio/menu.wav"
+        "res/audio/menu.wav",
+        "res/audio/night.wav",
+        "res/audio/night_mono.wav"
+      ],
+
+      "skybox":
+      [
+        "res/textures/NightSky_Right.png",
+        "res/textures/NightSky_Left.png",
+        "res/textures/NightSky_Top.png",
+        "res/textures/NightSky_Bottom.png",
+        "res/textures/NightSky_Front.png",
+        "res/textures/NightSky_Back.png"
+      ],
+
+      "static_models":
+      [
+      ],
+
+      "animated_models":
+      [
+        { "path":"res/models/harry.glb","scale":1.0 }
       ],
 
       "entities":
       [
+        { "model":"harry","type":"controller","position":[5,0,0] }
       ]
     },
 

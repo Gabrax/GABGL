@@ -682,11 +682,11 @@ void ModelManager::MoveController(const std::string& name, const Movement& movem
 
   model->m_ControllerVelocity.y += gravity * dt;
 
-  glm::vec3 camForward = Renderer::GetCameraInstance().GetForwardDirection();
+  glm::vec3 camForward = Camera::GetForwardDirection();
   camForward.y = 0.0f;
   camForward = glm::normalize(camForward);
 
-  glm::vec3 camRight = Renderer::GetCameraInstance().GetRightDirection();
+  glm::vec3 camRight = Camera::GetRightDirection();
   camRight.y = 0.0f;
   camRight = glm::normalize(camRight);
 
@@ -715,8 +715,6 @@ void ModelManager::MoveController(const std::string& name, const Movement& movem
     model->m_ControllerCurrentYaw += delta * glm::clamp(dt * 10.0f, 0.0f, 1.0f);
 
     model->m_ControllerTransform.SetRotation({ 0.0f, glm::degrees(model->m_ControllerCurrentYaw), 0.0f });
-
-    /*GABGL_INFO("{}",deltaAngle);*/
   }
   else
   {
