@@ -5,25 +5,25 @@
     {
       "sounds":
       [
-        "res/audio/select1.wav",
-        "res/audio/select2.wav"
+        "../res/audio/select1.wav",
+        "../res/audio/select2.wav"
       ],
 
       "music":
       [
-        "res/audio/menu.wav",
-        "res/audio/night.wav",
-        "res/audio/night_mono.wav"
+        "../res/audio/menu.wav",
+        "../res/audio/night.wav",
+        "../res/audio/night_mono.wav"
       ],
 
       "skybox":
       [
-        "res/textures/NightSky_Right.png",
-        "res/textures/NightSky_Left.png",
-        "res/textures/NightSky_Top.png",
-        "res/textures/NightSky_Bottom.png",
-        "res/textures/NightSky_Front.png",
-        "res/textures/NightSky_Back.png"
+        "../res/textures/NightSky_Right.png",
+        "../res/textures/NightSky_Left.png",
+        "../res/textures/NightSky_Top.png",
+        "../res/textures/NightSky_Bottom.png",
+        "../res/textures/NightSky_Front.png",
+        "../res/textures/NightSky_Back.png"
       ],
 
       "static_models":
@@ -32,7 +32,7 @@
 
       "animated_models":
       [
-        { "path":"res/models/harry.glb","scale":1.0 }
+        { "path":"../res/models/harry.glb","scale":1.0 }
       ],
 
       "entities":
@@ -45,46 +45,46 @@
     {
       "sounds":
       [
-        "res/audio/select1.wav",
-        "res/audio/select2.wav"
+        "../res/audio/select1.wav",
+        "../res/audio/select2.wav"
       ],
 
       "music":
       [
-        "res/audio/menu.wav",
-        "res/audio/night.wav",
-        "res/audio/night_mono.wav"
+        "../res/audio/menu.wav",
+        "../res/audio/night.wav",
+        "../res/audio/night_mono.wav"
       ],
 
       "skybox":
       [
-        "res/textures/NightSky_Right.png",
-        "res/textures/NightSky_Left.png",
-        "res/textures/NightSky_Top.png",
-        "res/textures/NightSky_Bottom.png",
-        "res/textures/NightSky_Front.png",
-        "res/textures/NightSky_Back.png"
+        "../res/textures/NightSky_Right.png",
+        "../res/textures/NightSky_Left.png",
+        "../res/textures/NightSky_Top.png",
+        "../res/textures/NightSky_Bottom.png",
+        "../res/textures/NightSky_Front.png",
+        "../res/textures/NightSky_Back.png"
       ],
 
       "static_models":
       [
-        { "path":"res/map/objHouse.obj", "scale":0.7, "mesh":"trianglemesh" },
-        { "path":"res/models/aidkit.glb", "scale":1.0 },
-        { "path":"res/models/aidkit_convex.glb", "scale":1.0, "mesh":"convex" },
-        { "path":"res/models/pistolammo.glb", "scale":1.0 },
-        { "path":"res/models/pistolammo_convex.glb", "scale":1.0, "mesh":"convex" },
-        { "path":"res/models/shotgunammo.glb", "scale":1.0 },
-        { "path":"res/models/shotgunammo_convex.glb", "scale":1.0, "mesh":"convex" },
-        { "path":"res/models/pistol.glb", "scale":1.0 },
-        { "path":"res/models/pistol_convex.glb", "scale":1.0, "mesh":"convex" },
-        { "path":"res/models/shotgun.glb", "scale":1.0 },
-        { "path":"res/models/shotgun_convex.glb", "scale":1.0, "mesh":"convex" }
+        { "path":"../res/map/objHouse.obj", "scale":0.7, "mesh":"trianglemesh" },
+        { "path":"../res/models/aidkit.glb", "scale":1.0 },
+        { "path":"../res/models/aidkit_convex.glb", "scale":1.0, "mesh":"convex" },
+        { "path":"../res/models/pistolammo.glb", "scale":1.0 },
+        { "path":"../res/models/pistolammo_convex.glb", "scale":1.0, "mesh":"convex" },
+        { "path":"../res/models/shotgunammo.glb", "scale":1.0 },
+        { "path":"../res/models/shotgunammo_convex.glb", "scale":1.0, "mesh":"convex" },
+        { "path":"../res/models/pistol.glb", "scale":1.0 },
+        { "path":"../res/models/pistol_convex.glb", "scale":1.0, "mesh":"convex" },
+        { "path":"../res/models/shotgun.glb", "scale":1.0 },
+        { "path":"../res/models/shotgun_convex.glb", "scale":1.0, "mesh":"convex" }
       ],
 
       "animated_models":
       [
-        { "path":"res/models/harry.glb","scale":1.0 },
-        { "path":"res/zombie/zombie.glb","scale":0.5 }
+        { "path":"../res/models/harry.glb","scale":1.0 },
+        { "path":"../res/zombie/zombie.glb","scale":0.5 }
       ],
 
       "entities":

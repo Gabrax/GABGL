@@ -29,11 +29,11 @@ struct Transform
     }
 
     inline void SetPosition(const glm::vec3& position) { m_Position = position; }
-    inline glm::vec3 GetPosition() { return m_Position; }
+    inline glm::vec3 GetPosition() const { return m_Position; }
     inline void SetRotation(const glm::vec3& rotation) { m_Rotation = rotation; }
-    inline glm::vec3 GetRotation() { return m_Rotation; }
+    inline glm::vec3 GetRotation() const { return m_Rotation; }
     inline void SetScale(const glm::vec3& scale) { m_Scale = scale; }
-    inline glm::vec3 GetScale() { return m_Scale; }
+    inline glm::vec3 GetScale() const { return m_Scale; }
 
 private:
 

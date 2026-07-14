@@ -48,7 +48,9 @@ struct Renderer
 
   static void AddDrawCommand(const std::string& modelName, uint32_t verticesSize, uint32_t indicesSize);
   static void RebuildDrawCommandsForModel(const std::shared_ptr<Model>& model, bool render);
+  static void UpdateDrawCommandInstances(const std::shared_ptr<Model>& model);
   static void InitDrawCommandBuffer();
+  static void ResetModelDrawCommands();
 
   static void DrawFullscreenQuad();
   static void SetFullscreen(const std::string& sound, bool windowed);

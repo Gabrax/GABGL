@@ -19,7 +19,7 @@ void FontManager::Init()
 {
   GABGL_ASSERT(!FT_Init_FreeType(&s_Data.ft), "Could not init FreeType");
   
-  LoadFont("res/fonts/dpcomic.ttf");
+  LoadFont("../res/fonts/dpcomic.ttf");
 }
 
 void FontManager::Shutdown()

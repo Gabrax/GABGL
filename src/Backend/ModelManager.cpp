@@ -9,6 +9,8 @@
 #include <glm/gtc/type_ptr.hpp>
 #include "Renderer.h"
 #include "Timer.hpp"
+#include <limits>
+#include <unordered_set>
 
 static glm::mat4 AssimpMatToGLMMat(const aiMatrix4x4& from)
 {
@@ -50,6 +52,7 @@ struct ModelsData
   std::shared_ptr<StorageBuffer> m_MeshToTextureRangeSSBO;
   std::shared_ptr<StorageBuffer> m_FinalBoneMatricesSSBO;
   std::shared_ptr<StorageBuffer> m_ModelIsAnimatedSSBO; 
+  std::shared_ptr<StorageBuffer> m_InstanceTransformsSSBO;
 
   GLuint sharedVBO, sharedEBO, sharedVAO;
 
@@ -57,6 +60,22 @@ struct ModelsData
   std::vector<uint32_t> allIndices;
 
 } s_Data; 
+
+static void RefreshInstanceTransforms()
+{
+  std::vector<glm::mat4> transforms;
+
+  for (const auto& modelName : s_Data.m_ModelsNames)
+  {
+    const auto& model = s_Data.m_Models.at(modelName);
+    model->m_InstanceBase = static_cast<uint32_t>(transforms.size());
+    transforms.insert(transforms.end(), model->m_InstanceTransforms.begin(), model->m_InstanceTransforms.end());
+    Renderer::UpdateDrawCommandInstances(model);
+  }
+
+  if (s_Data.m_InstanceTransformsSSBO)
+    s_Data.m_InstanceTransformsSSBO->SetData(transforms.size() * sizeof(glm::mat4), transforms.data());
+}
 
 void ModelManager::Init()
 {
@@ -367,7 +386,37 @@ void ModelManager::SetInitialControllerTransform(const std::string& name, const 
   }
 
   int ssboIndex = static_cast<int>(std::distance(s_Data.m_ModelsNames.begin(), vecIt));
-  s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4),sizeof(glm::mat4),glm::value_ptr(model->m_ControllerTransform.GetTransform()));
+  const glm::mat4 controllerTransform = model->m_ControllerTransform.GetTransform();
+  if (s_Data.m_ModelsTransforms)
+    s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(controllerTransform));
+  SetModelInstanceTransform(name, 0, controllerTransform);
+}
+
+void ModelManager::SetControllerTransform(const std::string& name, const Transform& transform)
+{
+  auto it = s_Data.m_Models.find(name);
+  if (it == s_Data.m_Models.end() || it->second->GetPhysXMeshType() != MeshType::CONTROLLER)
+  {
+    GABGL_WARN("Controller model '{}' not found in ModelManager!", name);
+    return;
+  }
+
+  const auto& model = it->second;
+  model->m_ControllerTransform = transform;
+  if (model->m_ActorController)
+  {
+    const glm::vec3 position = transform.GetPosition();
+    model->m_ActorController->setPosition(PxExtendedVec3(position.x, position.y, position.z));
+  }
+
+  const glm::mat4 matrix = transform.GetTransform();
+  const auto nameIt = std::find(s_Data.m_ModelsNames.begin(), s_Data.m_ModelsNames.end(), name);
+  if (s_Data.m_ModelsTransforms && nameIt != s_Data.m_ModelsNames.end())
+  {
+    const size_t modelIndex = static_cast<size_t>(std::distance(s_Data.m_ModelsNames.begin(), nameIt));
+    s_Data.m_ModelsTransforms->SetSubData(modelIndex * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(matrix));
+  }
+  SetModelInstanceTransform(name, 0, matrix);
 }
 
 void ModelManager::SetInitialModelTransform(const std::string& name, const glm::mat4& transform)
@@ -387,6 +436,7 @@ void ModelManager::SetInitialModelTransform(const std::string& name, const glm::
     return;
   }
 
+  glm::mat4 resolvedTransform = transform;
   std::string convexName = name + "_convex";
 
   auto convexIt = s_Data.m_Models.find(convexName);
@@ -406,6 +456,7 @@ void ModelManager::SetInitialModelTransform(const std::string& name, const glm::
     }
 
     glm::mat4 convexTransform = PhysX::PxMat44ToGlmMat4(convexIt->second->GetDynamicActor()->getGlobalPose());
+    resolvedTransform = convexTransform;
 
     pxTransform = PxTransform(PhysX::GlmMat4ToPxTransform(convexTransform));
 
@@ -420,7 +471,8 @@ void ModelManager::SetInitialModelTransform(const std::string& name, const glm::
     if (vec2It != s_Data.m_ModelsNames.end())
     {
       int ssboIndex = static_cast<int>(std::distance(s_Data.m_ModelsNames.begin(), vec2It));
-      s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(convexTransform));
+      if (s_Data.m_ModelsTransforms)
+        s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(convexTransform));
     }
     else
     {
@@ -438,8 +490,129 @@ void ModelManager::SetInitialModelTransform(const std::string& name, const glm::
     }
 
     int ssboIndex = static_cast<int>(std::distance(s_Data.m_ModelsNames.begin(), vecIt));
-    s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(transform));
+    if (s_Data.m_ModelsTransforms)
+      s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(transform));
   }
+
+  SetModelInstanceTransform(name, 0, resolvedTransform);
+}
+
+uint32_t ModelManager::AddModelInstance(const std::string& name, const glm::mat4& transform)
+{
+  auto it = s_Data.m_Models.find(name);
+  if (it == s_Data.m_Models.end())
+  {
+    GABGL_WARN("Model '{}' not found in ModelManager!", name);
+    return std::numeric_limits<uint32_t>::max();
+  }
+
+  auto& instances = it->second->m_InstanceTransforms;
+  const uint32_t instanceIndex = static_cast<uint32_t>(instances.size());
+  instances.push_back(transform);
+  RefreshInstanceTransforms();
+  return instanceIndex;
+}
+
+void ModelManager::SetModelInstances(const std::string& name, const std::vector<Transform>& instances)
+{
+  auto it = s_Data.m_Models.find(name);
+  if (it == s_Data.m_Models.end())
+  {
+    GABGL_WARN("Model '{}' not found in ModelManager!", name);
+    return;
+  }
+
+  auto& modelInstances = it->second->m_InstanceTransforms;
+  modelInstances.clear();
+  modelInstances.reserve(instances.size());
+  for (const auto& instance : instances)
+    modelInstances.push_back(instance.GetTransform());
+
+  RefreshInstanceTransforms();
+}
+
+void ModelManager::SetModelInstanceTransform(const std::string& name, uint32_t instanceIndex, const glm::mat4& transform)
+{
+  auto it = s_Data.m_Models.find(name);
+  if (it == s_Data.m_Models.end())
+  {
+    GABGL_WARN("Model '{}' not found in ModelManager!", name);
+    return;
+  }
+
+  auto& model = it->second;
+  auto& instances = model->m_InstanceTransforms;
+  const bool countChanged = instanceIndex >= instances.size();
+  if (countChanged)
+    instances.resize(static_cast<size_t>(instanceIndex) + 1, glm::mat4(1.0f));
+  instances[instanceIndex] = transform;
+
+  if (countChanged)
+  {
+    RefreshInstanceTransforms();
+  }
+  else if (s_Data.m_InstanceTransformsSSBO)
+  {
+    const size_t offset = (static_cast<size_t>(model->m_InstanceBase) + instanceIndex) * sizeof(glm::mat4);
+    s_Data.m_InstanceTransformsSSBO->SetSubData(offset, sizeof(glm::mat4), glm::value_ptr(transform));
+  }
+}
+
+void ModelManager::Reset()
+{
+  std::unordered_set<GLuint64> residentHandles;
+
+  for (auto& [name, model] : s_Data.m_Models)
+  {
+    if (model->m_ActorController)
+    {
+      model->m_ActorController->release();
+      model->m_ActorController = nullptr;
+    }
+    if (model->m_StaticMeshActor)
+    {
+      model->m_StaticMeshActor->release();
+      model->m_StaticMeshActor = nullptr;
+    }
+    if (model->m_DynamicMeshActor)
+    {
+      model->m_DynamicMeshActor->release();
+      model->m_DynamicMeshActor = nullptr;
+    }
+
+    for (const auto& mesh : model->m_Meshes)
+      residentHandles.insert(mesh.m_TexturesBindlessHandles.begin(), mesh.m_TexturesBindlessHandles.end());
+  }
+
+  for (const GLuint64 handle : residentHandles)
+  {
+    if (handle != 0)
+      glMakeTextureHandleNonResidentARB(handle);
+  }
+
+  s_Data.m_Models.clear();
+  s_Data.m_ModelsNames.clear();
+  s_Data.allVertices.clear();
+  s_Data.allIndices.clear();
+
+  s_Data.m_ModelsTransforms.reset();
+  s_Data.m_MeshToTransformSSBO.reset();
+  s_Data.m_BindlessTextureSSBO.reset();
+  s_Data.m_NormalMapFlagsSSBO.reset();
+  s_Data.m_SpecularMapFlagsSSBO.reset();
+  s_Data.m_MeshToTextureRangeSSBO.reset();
+  s_Data.m_FinalBoneMatricesSSBO.reset();
+  s_Data.m_ModelIsAnimatedSSBO.reset();
+  s_Data.m_InstanceTransformsSSBO.reset();
+
+  if (s_Data.sharedVBO) glDeleteBuffers(1, &s_Data.sharedVBO);
+  if (s_Data.sharedEBO) glDeleteBuffers(1, &s_Data.sharedEBO);
+  if (s_Data.sharedVAO) glDeleteVertexArrays(1, &s_Data.sharedVAO);
+  s_Data.sharedVBO = 0;
+  s_Data.sharedEBO = 0;
+  s_Data.sharedVAO = 0;
+
+  Init();
 }
 
 void ModelManager::UpdateTransforms(const DeltaTime& dt)
@@ -487,7 +660,9 @@ void ModelManager::UpdateTransforms(const DeltaTime& dt)
       if (nameIt != s_Data.m_ModelsNames.end())
       {
         int ssboIndex = static_cast<int>(std::distance(s_Data.m_ModelsNames.begin(), nameIt));
-        s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(convexTransform));
+        if (s_Data.m_ModelsTransforms)
+          s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(convexTransform));
+        SetModelInstanceTransform(baseName, 0, convexTransform);
       }
       else
       {
@@ -500,6 +675,11 @@ void ModelManager::UpdateTransforms(const DeltaTime& dt)
 void ModelManager::SetRender(const std::string& name, bool render)
 {
   auto it = s_Data.m_Models.find(name);
+  if (it == s_Data.m_Models.end())
+  {
+    GABGL_WARN("Model '{}' not found in ModelManager!", name);
+    return;
+  }
 
   it->second->m_IsRendered = render;
 
@@ -525,6 +705,16 @@ void ModelManager::UploadToGPU()
 
   auto transform = GetTransforms();
   s_Data.m_ModelsTransforms->SetData(transform.size() * sizeof(glm::mat4), transform.data());
+
+  for (const auto& modelName : s_Data.m_ModelsNames)
+  {
+    auto& model = s_Data.m_Models.at(modelName);
+    if (model->m_InstanceTransforms.empty())
+      model->m_InstanceTransforms.emplace_back(1.0f);
+  }
+
+  s_Data.m_InstanceTransformsSSBO = StorageBuffer::Create(sizeof(glm::mat4), 13);
+  RefreshInstanceTransforms();
 
   std::vector<int> meshToTransformIndex;
 
@@ -619,43 +809,6 @@ void ModelManager::UploadToGPU()
   s_Data.allIndices.clear();
 }
 
-void ModelManager::BakeModelInstancedBuffers(Mesh& mesh, const std::vector<Transform>& transforms)
-{
-  if (transforms.empty()) return;
-
-  std::vector<glm::mat4> instanceMatrices;
-  instanceMatrices.reserve(transforms.size());
-
-  for (const auto& t : transforms) instanceMatrices.push_back(t.GetTransform());
-
-  if (mesh.instanceVBO == 0) glCreateBuffers(1, &mesh.instanceVBO);
-
-  static size_t lastSize = 0;
-  size_t newSize = instanceMatrices.size() * sizeof(glm::mat4);
-  if (lastSize != newSize) {
-      glNamedBufferStorage(mesh.instanceVBO, newSize, instanceMatrices.data(), 0); // immutable
-      lastSize = newSize;
-  } else {
-      glNamedBufferSubData(mesh.instanceVBO, 0, newSize, instanceMatrices.data());
-  }
-
-  glVertexArrayVertexBuffer(mesh.VAO, 1, mesh.instanceVBO, 0, sizeof(glm::mat4));
-
-  if (!mesh.instanceAttribsConfigured)
-  {
-    for (GLuint i = 0; i < 4; ++i)
-    {
-      GLuint loc = 7 + i; // instance matrix starts at attribute 7
-      glEnableVertexArrayAttrib(mesh.VAO, loc);
-      glVertexArrayAttribFormat(mesh.VAO, loc, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec4) * i);
-      glVertexArrayAttribBinding(mesh.VAO, loc, 1); // bind to binding index 1
-      glVertexArrayBindingDivisor(mesh.VAO, 1, 1);  // instanced per-instance
-    }
-
-    mesh.instanceAttribsConfigured = true;
-  }
-}
-
 void ModelManager::MoveController(const std::string& name, const Movement& movement, float speed, const DeltaTime& dt)
 {
   auto it = s_Data.m_Models.find(name);
@@ -740,7 +893,9 @@ void ModelManager::MoveController(const std::string& name, const Movement& movem
   model->m_ControllerTransform.SetPosition(glm::vec3(footPos.x, footPos.y, footPos.z));
 
   int ssboIndex = static_cast<int>(std::distance(s_Data.m_ModelsNames.begin(), vecIt));
-  s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4),sizeof(glm::mat4),glm::value_ptr(model->m_ControllerTransform.GetTransform()));
+  const glm::mat4 controllerTransform = model->m_ControllerTransform.GetTransform();
+  s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(controllerTransform));
+  SetModelInstanceTransform(name, 0, controllerTransform);
 }
 
 std::shared_ptr<Model> ModelManager::GetModel(const std::string& name)
@@ -749,6 +904,11 @@ std::shared_ptr<Model> ModelManager::GetModel(const std::string& name)
   if (it != s_Data.m_Models.end())
       return it->second;
   return nullptr;
+}
+
+const std::vector<std::string>& ModelManager::GetModelNames()
+{
+  return s_Data.m_ModelsNames;
 }
 
 std::vector<glm::mat4> ModelManager::GetTransforms()

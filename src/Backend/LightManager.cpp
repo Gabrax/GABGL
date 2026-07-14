@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include "Logger.h"
+#include <cstring>
 
 struct LightData 
 {
@@ -167,6 +168,15 @@ bool LightManager::DirectLightEmpty()
 bool LightManager::PointLightEmpty()
 {
   return s_Data.numPointLights == 0;
+}
+
+void LightManager::Clear()
+{
+  s_Data.lights.clear();
+  s_Data.numLights = 0;
+  s_Data.numPointLights = 0;
+  s_Data.numDirectLights = 0;
+  UpdateSSBOLightData();
 }
 
 

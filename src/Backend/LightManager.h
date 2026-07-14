@@ -26,6 +26,7 @@ struct LightManager
   static glm::vec3 GetDirectLightRotation();
   static bool DirectLightEmpty();
   static bool PointLightEmpty();
+  static void Clear();
 
 private:
   static void UpdateSSBOLightData();

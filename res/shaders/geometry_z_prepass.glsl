@@ -7,7 +7,6 @@ layout (location = 3) in vec3 tangent;
 layout (location = 4) in vec3 bitangent;
 layout (location = 5) in ivec4 boneIds; 
 layout (location = 6) in vec4 weights;
-layout (location = 7) in mat4 instanceMatrix;
 
 layout(std140, binding = 0) uniform Camera
 {
@@ -24,14 +23,13 @@ const int MAX_BONES = 100;
 const int MAX_BONE_INFLUENCE = 4;
 layout(std430, binding = 9) buffer FinalBoneMatrices { mat4 boneMatrices[]; };
 layout(std430, binding = 10) buffer ModelIsAnimated  { int modelIsAnimated[]; };
-
-uniform bool isInstanced;
+layout(std430, binding = 13) readonly buffer InstanceTransforms { mat4 instanceTransforms[]; };
 
 void main()
 {
   int transformIndex = meshToTransform[gl_DrawID];
   bool isAnimated = (modelIsAnimated[transformIndex] == 1);
-  mat4 modelMat = isInstanced ? instanceMatrix : transforms[transformIndex];
+  mat4 modelMat = instanceTransforms[gl_BaseInstance + gl_InstanceID];
 
   if (isAnimated)
   {

@@ -10,6 +10,16 @@
 
 using json = nlohmann::json;
 
+struct SceneEntity
+{
+  uint64_t id = 0;
+  std::string name;
+  std::string model;
+  std::string type = "static";
+  Transform transform;
+  uint32_t instanceIndex = 0;
+};
+
 struct Scene
 {
   Scene(const std::string& name) : m_Name(name) {}
@@ -23,6 +33,13 @@ struct Scene
   void StartLoading();
   void UpdateLoading();
   bool IsLoadingComplete() const;
+  bool SaveToJSON(const std::string& path) const;
+  uint64_t DuplicateEntity(uint64_t entityId);
+  bool UpdateEntityTransform(uint64_t entityId, const Transform& transform);
+  void SyncEditorEntityTransforms();
+  SceneEntity* FindEntity(uint64_t entityId);
+  const std::vector<SceneEntity>& GetEntities() const { return m_EditorEntities; }
+  const std::string& GetName() const { return m_Name; }
 
 private:
 
@@ -64,6 +81,8 @@ private:
   SceneAssets m_Assets;
 
   std::string m_Name;
+  std::vector<SceneEntity> m_EditorEntities;
+  uint64_t m_NextEntityId = 1;
 };
 
 struct SceneManager
@@ -71,6 +90,14 @@ struct SceneManager
   static void LoadScene(const std::string& scene);
   static void Update(DeltaTime& dt);
   static bool IsLoading();
+  static std::vector<std::string> GetAvailableSceneNames();
+  static const std::vector<SceneEntity>& GetEntities();
+  static SceneEntity* FindEntity(uint64_t entityId);
+  static uint64_t DuplicateEntity(uint64_t entityId);
+  static bool UpdateEntityTransform(uint64_t entityId, const Transform& transform);
+  static void SyncEditorEntityTransforms();
+  static bool SaveActiveScene();
+  static std::string GetActiveSceneName();
 
   static Scene* GetActiveScene();
 

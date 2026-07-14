@@ -18,7 +18,7 @@
 #include "backends/imgui_impl_opengl3.h"
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
-#include "ImGuizmo.h"
+//#include "ImGuizmo.h"
 #include "glm/ext/scalar_constants.hpp"
 #include "glm/trigonometric.hpp"
 #include <glm/gtc/type_ptr.hpp>
@@ -27,6 +27,7 @@
 #include <glm/gtx/matrix_decompose.hpp>
 #include "RandomGen.hpp"
 #include "Profiler.h"
+#include "SceneManager.h"
 #include "Timer.hpp"
 #include "Window.h"
 
@@ -98,6 +99,7 @@ struct DrawElementsIndirectCommand
 struct RendererData
 {
   int m_GizmoType;
+	uint64_t m_SelectedEntityID = 0;
 	int selectedSceneIndex = -1;
 	bool m_ViewportFocused = false, m_ViewportHovered = false;
 	glm::vec2 m_ViewportSize = { 0.0f, 0.0f };
@@ -191,6 +193,7 @@ struct RendererData
   uint32_t m_DrawIndexOffset = 0;
   uint32_t m_DrawVertexOffset = 0;
   uint32_t m_cmdBufer;
+  size_t m_cmdBufferSize = 0;
 
   Particle m_Particle;
   std::vector<Particle> m_ParticlePool;  
@@ -208,19 +211,19 @@ struct RendererData
 
 void Renderer::LoadShaders()
 {
-	Shader::Create(s_Data.s_Shaders.QuadShader, "res/shaders/batch_quad.glsl");
-	Shader::Create(s_Data.s_Shaders.CircleShader, "res/shaders/batch_circle.glsl");
-	Shader::Create(s_Data.s_Shaders.LineShader, "res/shaders/batch_line.glsl");
-	Shader::Create(s_Data.s_Shaders.FramebufferShader, "res/shaders/finalFB.glsl");
-  Shader::Create(s_Data.s_Shaders.skyboxShader, "res/shaders/skybox.glsl");
-  Shader::Create(s_Data.s_Shaders.DepthPrePassShader, "res/shaders/geometry_z_prepass.glsl");
-  Shader::Create(s_Data.s_Shaders.GeometryShader, "res/shaders/geometry.glsl");
-  Shader::Create(s_Data.s_Shaders.LightShader, "res/shaders/light.glsl");
-  Shader::Create(s_Data.s_Shaders.DownSampleShader, "res/shaders/bloom_downsample.glsl");
-  Shader::Create(s_Data.s_Shaders.UpSampleShader, "res/shaders/bloom_upsample.glsl");
-  Shader::Create(s_Data.s_Shaders.BloomResultShader, "res/shaders/bloom_final.glsl");
-  Shader::Create(s_Data.s_Shaders.OmniDirectShadowShader, "res/shaders/omni_shadowFB.glsl");
-  Shader::Create(s_Data.s_Shaders.DirectShadowShader, "res/shaders/direct_shadowFB.glsl");
+	Shader::Create(s_Data.s_Shaders.QuadShader, "../res/shaders/batch_quad.glsl");
+	Shader::Create(s_Data.s_Shaders.CircleShader, "../res/shaders/batch_circle.glsl");
+	Shader::Create(s_Data.s_Shaders.LineShader, "../res/shaders/batch_line.glsl");
+	Shader::Create(s_Data.s_Shaders.FramebufferShader, "../res/shaders/finalFB.glsl");
+  Shader::Create(s_Data.s_Shaders.skyboxShader, "../res/shaders/skybox.glsl");
+  Shader::Create(s_Data.s_Shaders.DepthPrePassShader, "../res/shaders/geometry_z_prepass.glsl");
+  Shader::Create(s_Data.s_Shaders.GeometryShader, "../res/shaders/geometry.glsl");
+  Shader::Create(s_Data.s_Shaders.LightShader, "../res/shaders/light.glsl");
+  Shader::Create(s_Data.s_Shaders.DownSampleShader, "../res/shaders/bloom_downsample.glsl");
+  Shader::Create(s_Data.s_Shaders.UpSampleShader, "../res/shaders/bloom_upsample.glsl");
+  Shader::Create(s_Data.s_Shaders.BloomResultShader, "../res/shaders/bloom_final.glsl");
+  Shader::Create(s_Data.s_Shaders.OmniDirectShadowShader, "../res/shaders/omni_shadowFB.glsl");
+  Shader::Create(s_Data.s_Shaders.DirectShadowShader, "../res/shaders/direct_shadowFB.glsl");
 }
 
 void Renderer::Init()
@@ -374,7 +377,7 @@ void Renderer::Init()
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 410");
 	SetLineWidth(4.0f);
-  s_Data.m_GizmoType = ImGuizmo::OPERATION::TRANSLATE;
+	//s_Data.m_GizmoType = ImGuizmo::OPERATION::TRANSLATE;
 
   Profiler::Init();
 }
@@ -423,8 +426,6 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
     s_Data.s_Shaders.DirectShadowShader->Bind();
     s_Data.m_DirectShadowBuffer->UpdateShadowView(LightManager::GetDirectLightRotation());
     s_Data.s_Shaders.DirectShadowShader->SetMat4("u_LightSpaceMatrix", s_Data.m_DirectShadowBuffer->GetShadowViewProj());
-    s_Data.s_Shaders.DirectShadowShader->SetBool("isInstanced", false);
-
     glBindVertexArray(ModelManager::GetModelsVAO());
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER,s_Data.m_cmdBufer);
     glMultiDrawElementsIndirect(GL_TRIANGLES,GL_UNSIGNED_INT,NULL,s_Data.m_DrawCommands.size(),0);
@@ -479,8 +480,6 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
     glClear(GL_DEPTH_BUFFER_BIT);                        
 
     s_Data.s_Shaders.DepthPrePassShader->Bind();
-    s_Data.s_Shaders.DepthPrePassShader->SetBool("isInstanced", false);
-
     BeginScene();
     glBindVertexArray(ModelManager::GetModelsVAO());
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s_Data.m_cmdBufer);
@@ -503,8 +502,6 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
     glClear(GL_COLOR_BUFFER_BIT); 
 
     s_Data.s_Shaders.GeometryShader->Bind();
-    s_Data.s_Shaders.GeometryShader->SetBool("isInstanced", false);
-
     BeginScene();
     glBindVertexArray(ModelManager::GetModelsVAO());
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s_Data.m_cmdBufer);
@@ -1445,37 +1442,62 @@ void Renderer::AddDrawCommand(const std::string& modelName, uint32_t verticesSiz
 
 void Renderer::RebuildDrawCommandsForModel(const std::shared_ptr<Model>& model, bool render)
 {
-  auto& meshes = model->GetMeshes();
+  model->m_IsRendered = render;
+  UpdateDrawCommandInstances(model);
+}
 
-  const auto& indices = s_Data.m_ModelDrawCommandIndices[model->m_Name];
+void Renderer::UpdateDrawCommandInstances(const std::shared_ptr<Model>& model)
+{
+  const auto commandIndices = s_Data.m_ModelDrawCommandIndices.find(model->m_Name);
+  if (commandIndices == s_Data.m_ModelDrawCommandIndices.end())
+    return;
 
-  size_t vertexOffset = 0; 
-  size_t indexOffset = 0;
+  const GLuint instanceCount = model->m_IsRendered
+    ? static_cast<GLuint>(model->m_InstanceTransforms.size())
+    : 0;
 
-  for (size_t i = 0; i < meshes.size(); ++i)
+  for (const size_t commandIndex : commandIndices->second)
   {
-    const auto& mesh = meshes[i];
-    size_t cmdIndex = indices[i];
-
-    DrawElementsIndirectCommand& cmd = s_Data.m_DrawCommands[cmdIndex];
-
-    cmd.count = static_cast<GLuint>(mesh.m_Indices.size());
-    cmd.instanceCount = render ? 1 : 0;
-    cmd.firstIndex = static_cast<GLuint>(indexOffset);
-    cmd.baseVertex = static_cast<GLint>(vertexOffset);
-    cmd.baseInstance = 0;
-
-    vertexOffset += mesh.m_Vertices.size();
-    indexOffset += mesh.m_Indices.size();
+    auto& command = s_Data.m_DrawCommands[commandIndex];
+    command.instanceCount = instanceCount;
+    command.baseInstance = model->m_InstanceBase;
   }
 
-  glNamedBufferSubData(s_Data.m_cmdBufer, 0, s_Data.m_DrawCommands.size() * sizeof(DrawElementsIndirectCommand), s_Data.m_DrawCommands.data());
+  const size_t requiredSize = s_Data.m_DrawCommands.size() * sizeof(DrawElementsIndirectCommand);
+  if (s_Data.m_cmdBufer != 0 && requiredSize <= s_Data.m_cmdBufferSize)
+  {
+    glNamedBufferSubData(
+      s_Data.m_cmdBufer,
+      0,
+      requiredSize,
+      s_Data.m_DrawCommands.data());
+  }
 }
 
 void Renderer::InitDrawCommandBuffer()
 {
+  if (s_Data.m_DrawCommands.empty())
+    return;
+
+  if (s_Data.m_cmdBufer != 0)
+    glDeleteBuffers(1, &s_Data.m_cmdBufer);
+
+  s_Data.m_cmdBufferSize = s_Data.m_DrawCommands.size() * sizeof(DrawElementsIndirectCommand);
   glCreateBuffers(1, &s_Data.m_cmdBufer);
-  glNamedBufferStorage(s_Data.m_cmdBufer,sizeof(s_Data.m_DrawCommands[0]) * s_Data.m_DrawCommands.size(),(const void*)s_Data.m_DrawCommands.data(), GL_DYNAMIC_STORAGE_BIT);
+  glNamedBufferStorage(s_Data.m_cmdBufer, s_Data.m_cmdBufferSize, s_Data.m_DrawCommands.data(), GL_DYNAMIC_STORAGE_BIT);
+}
+
+void Renderer::ResetModelDrawCommands()
+{
+  if (s_Data.m_cmdBufer != 0)
+    glDeleteBuffers(1, &s_Data.m_cmdBufer);
+
+  s_Data.m_cmdBufer = 0;
+  s_Data.m_cmdBufferSize = 0;
+  s_Data.m_DrawCommands.clear();
+  s_Data.m_ModelDrawCommandIndices.clear();
+  s_Data.m_DrawIndexOffset = 0;
+  s_Data.m_DrawVertexOffset = 0;
 }
 
 void Renderer::DrawIndexed(const std::shared_ptr<VertexArray>& vertexArray, uint32_t indexCount)
@@ -1522,7 +1544,7 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
-	ImGuizmo::BeginFrame();
+	//ImGuizmo::BeginFrame();
 	// Note: Switch this to true to enable dockspace
 	static bool dockspaceOpen = true;
 	static bool opt_fullscreen_persistant = true;
@@ -1574,12 +1596,96 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 
 	ImGui::Begin("Scene Hierarchy", nullptr, ImGuiWindowFlags_NoCollapse);
 
+	SceneManager::SyncEditorEntityTransforms();
+	const std::string activeSceneName = SceneManager::GetActiveSceneName();
+	const auto sceneNames = SceneManager::GetAvailableSceneNames();
+	if (ImGui::BeginCombo("Scene", activeSceneName.empty() ? "<none>" : activeSceneName.c_str()))
+	{
+		for (const auto& sceneName : sceneNames)
+		{
+			const bool selected = sceneName == activeSceneName;
+			if (ImGui::Selectable(sceneName.c_str(), selected) && !selected)
+			{
+				s_Data.m_SelectedEntityID = 0;
+				SceneManager::LoadScene(sceneName);
+			}
+			if (selected)
+				ImGui::SetItemDefaultFocus();
+		}
+		ImGui::EndCombo();
+	}
+
+	static const char* saveStatus = nullptr;
+	if (ImGui::Button("Save Scene"))
+		saveStatus = SceneManager::SaveActiveScene() ? "Scene saved" : "Save failed";
+	ImGui::SameLine();
+	if (ImGui::Button("Reload Scene") && !activeSceneName.empty())
+	{
+		s_Data.m_SelectedEntityID = 0;
+		SceneManager::LoadScene(activeSceneName);
+	}
+	if (saveStatus)
+		ImGui::TextUnformatted(saveStatus);
+
+	ImGui::Separator();
+	uint64_t duplicateRequest = 0;
+	for (const auto& entity : SceneManager::GetEntities())
+	{
+		ImGui::PushID(static_cast<int>(entity.id));
+		const bool selected = entity.id == s_Data.m_SelectedEntityID;
+		if (ImGui::Selectable(entity.name.c_str(), selected))
+			s_Data.m_SelectedEntityID = entity.id;
+
+		if (ImGui::BeginPopupContextItem("EntityContext"))
+		{
+			if (entity.type != "controller" && ImGui::MenuItem("Duplicate / Instance"))
+				duplicateRequest = entity.id;
+			if (entity.type == "controller")
+				ImGui::TextDisabled("Controllers cannot be instanced");
+			ImGui::EndPopup();
+		}
+		ImGui::PopID();
+	}
+
+	if (duplicateRequest != 0)
+	{
+		const uint64_t duplicateID = SceneManager::DuplicateEntity(duplicateRequest);
+		if (duplicateID != 0)
+			s_Data.m_SelectedEntityID = duplicateID;
+	}
+
 
 	ImGui::End();
 
 	ImGui::Begin("Components", nullptr, ImGuiWindowFlags_NoCollapse);
 
 	if (ImGui::Button("Reload Shaders")) LoadShaders();
+
+	if (SceneEntity* entity = SceneManager::FindEntity(s_Data.m_SelectedEntityID))
+	{
+		ImGui::Separator();
+		ImGui::Text("Entity: %s", entity->name.c_str());
+		ImGui::Text("Model: %s", entity->model.c_str());
+		ImGui::Text("Instance: %u", entity->instanceIndex);
+
+		glm::vec3 position = entity->transform.GetPosition();
+		glm::vec3 rotation = entity->transform.GetRotation();
+		glm::vec3 scale = entity->transform.GetScale();
+		bool transformChanged = false;
+		transformChanged |= ImGui::DragFloat3("Position", glm::value_ptr(position), 0.1f);
+		transformChanged |= ImGui::DragFloat3("Rotation", glm::value_ptr(rotation), 0.5f);
+		transformChanged |= ImGui::DragFloat3("Scale", glm::value_ptr(scale), 0.05f);
+
+		if (transformChanged)
+			SceneManager::UpdateEntityTransform(entity->id, Transform(position, rotation, scale));
+
+		if (entity->type != "controller" && ImGui::Button("Duplicate / Instance"))
+		{
+			const uint64_t duplicateID = SceneManager::DuplicateEntity(entity->id);
+			if (duplicateID != 0)
+				s_Data.m_SelectedEntityID = duplicateID;
+		}
+	}
 
   for (const auto& result : Profiler::GetResults())
   {

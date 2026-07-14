@@ -117,9 +117,6 @@ struct Mesh
   std::vector<GLuint64> m_TexturesBindlessHandles;
 
   GLuint VAO, VBO, EBO;
-  GLuint instanceVBO = 0;
-  bool instanceAttribsConfigured = false;
-  bool instanceDataDirty = true;
   bool hasNormalMap;
   bool hasSpecularMap;
 };
@@ -173,6 +170,8 @@ struct Model
 
   std::string m_Name;
   bool m_IsRendered = true;
+  uint32_t m_InstanceBase = 0;
+  std::vector<glm::mat4> m_InstanceTransforms;
 
   std::unordered_map<std::string, std::shared_ptr<Texture>> m_TexturesLoaded; 
   std::vector<Mesh> m_Meshes;
@@ -245,15 +244,20 @@ struct ModelManager
 {
   static void Init();
   static void BakeModel(const std::string& path, const std::shared_ptr<Model>& model);
-  static void BakeModelInstancedBuffers(Mesh& mesh, const std::vector<Transform>& instances);
   static void UploadToGPU();
   static std::shared_ptr<Model> GetModel(const std::string& name);
+  static const std::vector<std::string>& GetModelNames();
   static std::vector<glm::mat4> GetTransforms();
   static GLsizei GetModelsQuantity();
   static GLuint GetModelsVAO();
   static void SetRender(const std::string& name ,bool render);
   static void SetInitialModelTransform(const std::string& name, const glm::mat4& transform);
+  static uint32_t AddModelInstance(const std::string& name, const glm::mat4& transform);
+  static void SetModelInstances(const std::string& name, const std::vector<Transform>& instances);
+  static void SetModelInstanceTransform(const std::string& name, uint32_t instanceIndex, const glm::mat4& transform);
   static void SetInitialControllerTransform(const std::string& name, const Transform& transform, float radius, float height, bool slopeLimit);
+  static void SetControllerTransform(const std::string& name, const Transform& transform);
+  static void Reset();
   static void UpdateTransforms(const DeltaTime& dt);
   static void MoveController(const std::string& name, const Movement& movement, float speed, const DeltaTime& dt);
 };

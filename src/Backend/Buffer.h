@@ -188,6 +188,7 @@ struct StorageBuffer
   inline static std::shared_ptr<StorageBuffer> Create(uint32_t size, uint32_t binding) { return std::make_shared<StorageBuffer>(size, binding); }
 private:
   uint32_t m_RendererID = 0;
+  uint32_t m_Binding = 0;
   size_t bufferSize = 0;
 };
 

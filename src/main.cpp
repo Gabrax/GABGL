@@ -27,7 +27,7 @@ int main()
   LightManager::Init();
   FontManager::Init();
   PhysX::Init();
-	Renderer::Init();
+  Renderer::Init();
   ModelManager::Init();
 
   SceneManager::LoadScene("game");
