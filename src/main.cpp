@@ -30,18 +30,30 @@ int main()
   Renderer::Init();
   ModelManager::Init();
 
-  SceneManager::LoadScene("game");
+  AudioManager::SetMusicVolume(Settings::GetMusicVolume());
+  AudioManager::SetSFXVolume(Settings::GetSFXVolume());
+  Renderer::ApplyDisplaySettings();
+
+  SceneManager::LoadScene("menu");
 
   while (Window::IsRunning())
   {
+    const auto frameStart = std::chrono::steady_clock::now();
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     DeltaTime dt;
 
     SceneManager::Update(dt);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(Settings::GetFPS()));
-
     Window::Update();
+
+    const uint32_t fpsLimit = Settings::GetFPSLimit();
+    if (!Settings::GetVSync() && fpsLimit > 0)
+    {
+      const auto targetFrameTime = std::chrono::duration<double>(1.0 / static_cast<double>(fpsLimit));
+      const auto elapsed = std::chrono::steady_clock::now() - frameStart;
+      if (elapsed < targetFrameTime)
+        std::this_thread::sleep_for(targetFrameTime - elapsed);
+    }
   }
 }

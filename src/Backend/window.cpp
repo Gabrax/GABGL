@@ -5,12 +5,14 @@
 #include "Logger.h"
 #include <stb_image.h>
 #include "SceneManager.h"
+#include "Settings.h"
 
 GLFWwindow* m_Window;
 GLFWmonitor* m_Monitor;
 const GLFWvidmode* m_Mode;
 
 int32_t currWidth, currHeight;
+int32_t currX = 100, currY = 100;
 bool m_WindowClosed = false;
 
 struct WindowSpecificData
@@ -178,6 +180,8 @@ void Window::Update()
 {
 	glfwPollEvents();
 	glfwSwapBuffers(m_Window);
+	if (glfwWindowShouldClose(m_Window))
+		m_isRunning = false;
 }
 
 void Window::SetWindowIcon(const char* iconpath, GLFWwindow* window)
@@ -206,6 +210,7 @@ bool Window::IsVSync()
 
 void Window::SetResolution(uint32_t width, uint32_t height) 
 { 
+  glfwSetWindowSize(m_Window, static_cast<int>(width), static_cast<int>(height));
   glViewport(0, 0, width, height);
   m_Data.Width = width;
   m_Data.Height = height;
@@ -221,16 +226,45 @@ void Window::CenterWindowPos()
 
 void Window::SetFullscreen(bool full)
 {
-  if(full)
+  SetWindowMode(full ? WindowMode::Fullscreen : WindowMode::Windowed, currWidth, currHeight);
+}
+
+void Window::SetWindowMode(WindowMode mode, uint32_t width, uint32_t height)
+{
+  if (glfwGetWindowMonitor(m_Window) == nullptr && glfwGetWindowAttrib(m_Window, GLFW_DECORATED))
   {
-    glfwSetWindowMonitor(m_Window, m_Monitor, 0, 0, m_Mode->width, m_Mode->height, m_Mode->refreshRate);
-    if(IsVSync()) SetVSync(true);
-  } 
-  else
-  {
-    glfwSetWindowMonitor(m_Window, nullptr, currWidth, currHeight, 1000, 600, 0);
-    CenterWindowPos();
+    glfwGetWindowPos(m_Window, &currX, &currY);
+    glfwGetWindowSize(m_Window, &currWidth, &currHeight);
   }
+
+  switch (mode)
+  {
+    case WindowMode::Fullscreen:
+      glfwSetWindowAttrib(m_Window, GLFW_DECORATED, GLFW_TRUE);
+      glfwSetWindowMonitor(m_Window, m_Monitor, 0, 0, static_cast<int>(width), static_cast<int>(height), m_Mode->refreshRate);
+      break;
+    case WindowMode::Borderless:
+      glfwSetWindowAttrib(m_Window, GLFW_DECORATED, GLFW_FALSE);
+      glfwSetWindowMonitor(m_Window, nullptr, 0, 0, m_Mode->width, m_Mode->height, 0);
+      break;
+    case WindowMode::Windowed:
+    default:
+      glfwSetWindowAttrib(m_Window, GLFW_DECORATED, GLFW_TRUE);
+      glfwSetWindowMonitor(m_Window, nullptr, currX, currY, static_cast<int>(width), static_cast<int>(height), 0);
+      CenterWindowPos();
+      break;
+  }
+
+  m_Data.Width = mode == WindowMode::Borderless ? static_cast<uint32_t>(m_Mode->width) : width;
+  m_Data.Height = mode == WindowMode::Borderless ? static_cast<uint32_t>(m_Mode->height) : height;
+  glViewport(0, 0, m_Data.Width, m_Data.Height);
+  SetVSync(Settings::GetVSync());
+}
+
+void Window::RequestClose()
+{
+  m_isRunning = false;
+  glfwSetWindowShouldClose(m_Window, GLFW_TRUE);
 }
 
 void Window::Maximize(bool maximize)  

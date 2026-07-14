@@ -54,6 +54,8 @@ struct Renderer
 
   static void DrawFullscreenQuad();
   static void SetFullscreen(const std::string& sound, bool windowed);
+  static void ApplyDisplaySettings();
+  static void DrawPausedFrame();
   static void SwitchRenderState();
 
 private:

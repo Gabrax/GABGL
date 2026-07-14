@@ -16,6 +16,10 @@ struct AudioManager
 	static void GetListenerOrientation(float &ori);
 	static void SetListenerVolume(const float& val);
 	static float GetListenerVolume();
+	static void SetMusicVolume(float volume);
+	static float GetMusicVolume();
+	static void SetSFXVolume(float volume);
+	static float GetSFXVolume();
 	static void SetAttunation(int key);
 
   // SOUND

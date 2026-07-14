@@ -9,6 +9,8 @@
 #include "../input/Event.h"
 #include "../input/EngineEvent.h"
 
+enum class WindowMode : uint32_t;
+
 struct Window 
 {
 	using EventCallbackFn = std::function<void(Event&)>;
@@ -26,6 +28,8 @@ struct Window
   static void Maximize(bool maximize);
   static void SetResolution(uint32_t width, uint32_t height);
 	static void SetFullscreen(bool full);
+	static void SetWindowMode(WindowMode mode, uint32_t width, uint32_t height);
+	static void RequestClose();
 	static void SetResizable(bool enable);
   static void CenterWindowPos();
   static void SetCursorVisible(bool enable);

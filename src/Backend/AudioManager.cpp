@@ -12,6 +12,7 @@
 #include <mutex>
 #include "../backend/Logger.h"
 #include "al.h"
+#include <algorithm>
 
 static void ALC_CheckAndThrow(ALCdevice* device)
 {
@@ -73,6 +74,8 @@ struct AudioSystemData
   std::unordered_map<std::string, std::unique_ptr<MusicSource>> players;
 
   std::mutex s_AudioMutex;
+  float musicVolume = 0.5f;
+  float sfxVolume = 0.7f;
 
 } s_Data;
 
@@ -110,7 +113,7 @@ void AudioManager::Init()
 	s_Data.p_SoundEffectBuffers.clear();
 
   AudioManager::SetAttunation(AL_LINEAR_DISTANCE_CLAMPED);
-  AudioManager::SetListenerVolume(0.05f);
+  AudioManager::SetListenerVolume(1.0f);
 }
 
 void AudioManager::Terminate()
@@ -188,6 +191,30 @@ void AudioManager::SetListenerVolume(const float& val)
 	AL_CheckAndThrow();
 }
 
+void AudioManager::SetMusicVolume(float volume)
+{
+  s_Data.musicVolume = std::clamp(volume, 0.0f, 1.0f);
+  for (auto& [name, player] : s_Data.players)
+    player->SetVolume(s_Data.musicVolume);
+}
+
+float AudioManager::GetMusicVolume()
+{
+  return s_Data.musicVolume;
+}
+
+void AudioManager::SetSFXVolume(float volume)
+{
+  s_Data.sfxVolume = std::clamp(volume, 0.0f, 1.0f);
+  for (const ALuint source : s_Data.m_Sources)
+    alSourcef(source, AL_GAIN, s_Data.sfxVolume);
+}
+
+float AudioManager::GetSFXVolume()
+{
+  return s_Data.sfxVolume;
+}
+
 void AudioManager::PlaySound(const std::string& name, const float& volume)
 {
   auto it = s_Data.p_SoundEffectBuffers.find(name);
@@ -201,7 +228,7 @@ void AudioManager::PlaySound(const std::string& name, const float& volume)
       alGetSourcei(source, AL_SOURCE_STATE, &state);
       if (state != AL_PLAYING) {
           alSourcei(source, AL_BUFFER, buffer);
-          alSourcef(source, AL_GAIN, volume);  // Set volume before playing
+          alSourcef(source, AL_GAIN, volume * s_Data.sfxVolume);
           alSourcePlay(source);
           AL_CheckAndThrow();
           s_Data.m_LastUsedBuffer = buffer;
@@ -226,7 +253,7 @@ void AudioManager::PlaySound(const std::string& name, const glm::vec3& position,
       alGetSourcei(source, AL_SOURCE_STATE, &state);
       if (state != AL_PLAYING) {
           alSourcei(source, AL_BUFFER, buffer);
-          alSourcef(source, AL_GAIN, volume);  // Set volume before playing
+          alSourcef(source, AL_GAIN, volume * s_Data.sfxVolume);
           alSource3f(source, AL_POSITION, position.x, position.y, position.z);
           alSourcePlay(source);
           AL_CheckAndThrow();
@@ -701,7 +728,7 @@ void AudioManager::PlayMusic(const std::string& name, bool loop, const float& vo
   auto it = s_Data.players.find(name);
   if (it != s_Data.players.end())
   {
-    it->second->Play(volume);
+    it->second->Play(volume * s_Data.musicVolume);
     if(loop) it->second->SetLoop(loop);
   }
 }
@@ -711,7 +738,7 @@ void AudioManager::PlayMusic(const std::string& name, const glm::vec3& position,
   auto it = s_Data.players.find(name);
   if (it != s_Data.players.end())
   {
-    it->second->Play(position,volume);
+    it->second->Play(position, volume * s_Data.musicVolume);
     if(loop) it->second->SetLoop(loop);
   }
 }

@@ -3,6 +3,7 @@
 #include <fstream>
 #include "json.hpp"
 #include "Logger.h"
+#include <algorithm>
 
 using json = nlohmann::json;
 
@@ -15,24 +16,14 @@ static uint32_t m_WindowHeight = 720;
 static uint32_t m_RenderWidth  = m_WindowWidth;
 static uint32_t m_RenderHeight = m_WindowHeight;
 
-enum class WindowOpt : uint32_t { FULLSCREEN, WINDOWED, BORDERLESS };
-enum class FPSOpt : uint32_t
-{
-    UNLIMITED = 0,
-    VSYNC = 1,
-    FPS_60    = 8,
-    FPS_75    = 6,
-    FPS_120   = 5,
-    FPS_144   = 4,
-    FPS_165   = 3,
-    FPS_240   = 2,
-    FPS_360   = 1
-};
 enum class ShadowOpt : uint32_t { OFF, LOW, MID, HIGH };
 enum class BloomOpt  : uint32_t { OFF, LOW, MID, HIGH };
 
-static WindowOpt m_WindowOpt = WindowOpt::WINDOWED;
-static FPSOpt m_FPSOpt = FPSOpt::FPS_60;
+static WindowMode m_WindowMode = WindowMode::Windowed;
+static uint32_t m_FPSLimit = 60;
+static bool m_VSync = false;
+static float m_MusicVolume = 0.5f;
+static float m_SFXVolume = 0.7f;
 static ShadowOpt m_ShadowOpt = ShadowOpt::MID;
 static BloomOpt  m_BloomOpt  = BloomOpt::LOW;
 
@@ -55,7 +46,11 @@ void Settings::SetDefaults()
   m_WindowHeight = 720;
   m_RenderWidth  = 1280;
   m_RenderHeight = 720;
-  m_WindowOpt = WindowOpt::WINDOWED;
+  m_WindowMode = WindowMode::Windowed;
+  m_FPSLimit = 60;
+  m_VSync = false;
+  m_MusicVolume = 0.5f;
+  m_SFXVolume = 0.7f;
   m_ShadowOpt = ShadowOpt::MID;
   m_BloomOpt  = BloomOpt::LOW;
 }
@@ -67,8 +62,14 @@ void Settings::Save()
   j["window"] = {
     {"width", m_WindowWidth},
     {"height", m_WindowHeight},
-    {"mode", (uint32_t)m_WindowOpt},
-    {"fps",(uint32_t)m_FPSOpt}
+    {"mode", static_cast<uint32_t>(m_WindowMode)},
+    {"fps_limit", m_FPSLimit},
+    {"vsync", m_VSync}
+  };
+
+  j["audio"] = {
+    {"music", m_MusicVolume},
+    {"sfx", m_SFXVolume}
   };
 
   j["render"] = {
@@ -95,16 +96,35 @@ void Settings::Load()
     json j;
     file >> j;
 
-    m_WindowWidth  = j["window"]["width"];
-    m_WindowHeight = j["window"]["height"];
-    m_WindowOpt    = (WindowOpt)j["window"]["mode"];
-    m_FPSOpt = (FPSOpt)j["window"]["fps"];
+    const auto& window = j["window"];
+    m_WindowWidth  = window.value("width", 1280u);
+    m_WindowHeight = window.value("height", 720u);
+
+    if (window.contains("fps_limit"))
+      m_FPSLimit = window.value("fps_limit", 60u);
+    else
+      m_FPSLimit = 60;
+    m_VSync = window.value("vsync", false);
+
+    const uint32_t storedMode = window.value("mode", 1u);
+    if (window.contains("fps_limit"))
+      m_WindowMode = static_cast<WindowMode>(std::min(storedMode, 2u));
+    else
+      m_WindowMode = storedMode == 0 ? WindowMode::Fullscreen
+        : storedMode == 2 ? WindowMode::Borderless
+        : WindowMode::Windowed;
     
     m_RenderWidth  = j["render"]["width"];
     m_RenderHeight = j["render"]["height"];
 
     m_ShadowOpt = (ShadowOpt)j["graphics"]["shadows"];
     m_BloomOpt  = (BloomOpt)j["graphics"]["bloom"];
+
+    if (j.contains("audio"))
+    {
+      m_MusicVolume = std::clamp(j["audio"].value("music", 0.5f), 0.0f, 1.0f);
+      m_SFXVolume = std::clamp(j["audio"].value("sfx", 0.7f), 0.0f, 1.0f);
+    }
 
     m_LastWriteTime = std::filesystem::last_write_time(CONFIG_FILE);
   }
@@ -145,7 +165,19 @@ uint32_t Settings::GetWindowHeight()
   return m_WindowHeight;
 }
 
-uint32_t Settings::GetFPS()
+void Settings::SetResolution(uint32_t width, uint32_t height)
 {
-  return static_cast<uint32_t>(m_FPSOpt);
+  m_WindowWidth = width;
+  m_WindowHeight = height;
 }
+
+WindowMode Settings::GetWindowMode() { return m_WindowMode; }
+void Settings::SetWindowMode(WindowMode mode) { m_WindowMode = mode; }
+uint32_t Settings::GetFPSLimit() { return m_FPSLimit; }
+void Settings::SetFPSLimit(uint32_t fps) { m_FPSLimit = fps; }
+bool Settings::GetVSync() { return m_VSync; }
+void Settings::SetVSync(bool enabled) { m_VSync = enabled; }
+float Settings::GetMusicVolume() { return m_MusicVolume; }
+void Settings::SetMusicVolume(float volume) { m_MusicVolume = std::clamp(volume, 0.0f, 1.0f); }
+float Settings::GetSFXVolume() { return m_SFXVolume; }
+void Settings::SetSFXVolume(float volume) { m_SFXVolume = std::clamp(volume, 0.0f, 1.0f); }

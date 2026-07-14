@@ -35,3 +35,24 @@ float Input::GetMouseY()
 {
 	return GetMousePosition().y;
 }
+
+bool Input::IsGamepadConnected()
+{
+  return glfwJoystickIsGamepad(GLFW_JOYSTICK_1) == GLFW_TRUE;
+}
+
+bool Input::IsGamepadButtonPressed(int button)
+{
+  GLFWgamepadstate state{};
+  if (!IsGamepadConnected() || glfwGetGamepadState(GLFW_JOYSTICK_1, &state) != GLFW_TRUE)
+    return false;
+  return button >= 0 && button <= GLFW_GAMEPAD_BUTTON_LAST && state.buttons[button] == GLFW_PRESS;
+}
+
+float Input::GetGamepadAxis(int axis)
+{
+  GLFWgamepadstate state{};
+  if (!IsGamepadConnected() || glfwGetGamepadState(GLFW_JOYSTICK_1, &state) != GLFW_TRUE)
+    return 0.0f;
+  return axis >= 0 && axis <= GLFW_GAMEPAD_AXIS_LAST ? state.axes[axis] : 0.0f;
+}

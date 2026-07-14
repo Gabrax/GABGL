@@ -28,6 +28,7 @@
 #include "RandomGen.hpp"
 #include "Profiler.h"
 #include "SceneManager.h"
+#include "Settings.h"
 #include "Timer.hpp"
 #include "Window.h"
 
@@ -656,6 +657,37 @@ void Renderer::SetFullscreen(const std::string& sound, bool windowed)
   s_Data.m_ResultBuffer->Resize(width, height);
   Camera::SetViewportSize(width, height);
   AudioManager::PlaySound(sound);
+}
+
+void Renderer::ApplyDisplaySettings()
+{
+  Window::SetWindowMode(
+    Settings::GetWindowMode(),
+    Settings::GetWindowWidth(),
+    Settings::GetWindowHeight());
+  Window::SetVSync(Settings::GetVSync());
+
+  const uint32_t width = Window::GetWidth();
+  const uint32_t height = Window::GetHeight();
+  const glm::vec2 resolution = {width, height};
+  s_Data.m_ResolutionUniformBuffer->SetData(&resolution, sizeof(glm::vec2));
+  s_Data.m_GeometryBuffer->Resize(width, height);
+  s_Data.m_LightBuffer->Resize(width, height);
+  s_Data.m_SkyboxBuffer->Resize(width, height);
+  s_Data.m_ResultBuffer->Resize(width, height);
+  Camera::SetViewportSize(width, height);
+}
+
+void Renderer::DrawPausedFrame()
+{
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glViewport(0, 0, Window::GetWidth(), Window::GetHeight());
+  glDisable(GL_DEPTH_TEST);
+  glDisable(GL_BLEND);
+  glClear(GL_COLOR_BUFFER_BIT);
+  DrawFramebuffer(s_Data.m_ResultBuffer->GetColorAttachmentRendererID());
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
 
 void Renderer::BeginScene()
