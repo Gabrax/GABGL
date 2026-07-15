@@ -172,6 +172,7 @@ struct RendererData
     std::shared_ptr<Shader> BloomResultShader;
     std::shared_ptr<Shader> OmniDirectShadowShader;
     std::shared_ptr<Shader> DirectShadowShader;
+    std::shared_ptr<Shader> PhysicsDebugShader;
 
 	} s_Shaders;
 
@@ -195,6 +196,8 @@ struct RendererData
   uint32_t m_DrawVertexOffset = 0;
   uint32_t m_cmdBufer;
   size_t m_cmdBufferSize = 0;
+  bool m_PhysicsDebug = false;
+  uint32_t m_AppliedShadowQuality = std::numeric_limits<uint32_t>::max();
 
   Particle m_Particle;
   std::vector<Particle> m_ParticlePool;  
@@ -225,6 +228,7 @@ void Renderer::LoadShaders()
   Shader::Create(s_Data.s_Shaders.BloomResultShader, "../res/shaders/bloom_final.glsl");
   Shader::Create(s_Data.s_Shaders.OmniDirectShadowShader, "../res/shaders/omni_shadowFB.glsl");
   Shader::Create(s_Data.s_Shaders.DirectShadowShader, "../res/shaders/direct_shadowFB.glsl");
+  Shader::Create(s_Data.s_Shaders.PhysicsDebugShader, "../res/shaders/physics_debug.glsl");
 }
 
 void Renderer::Init()
@@ -329,8 +333,7 @@ void Renderer::Init()
 
   s_Data.m_GeometryBuffer = GeometryBuffer::Create(resolution.x, resolution.y);
   s_Data.m_BloomBuffer = BloomBuffer::Create(s_Data.s_Shaders.DownSampleShader, s_Data.s_Shaders.UpSampleShader, s_Data.s_Shaders.BloomResultShader);
-  s_Data.m_OmniDirectShadowBuffer = OmniDirectShadowBuffer::Create(512, 512);
-  s_Data.m_DirectShadowBuffer = DirectShadowBuffer::Create(2048, 2048, 16, 8, 3);
+  ApplyGraphicsSettings();
 
   s_Data.m_CameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 0);
   Camera::Init(45.0f, (float)resolution.x / (float)resolution.y, 0.01f, 2000.0f);
@@ -395,6 +398,9 @@ void Renderer::Shutdown()
 void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic)
 {
   GABGL_RESOLVE_GPU_QUERIES();
+  ApplyGraphicsSettings();
+
+  const bool shadowsEnabled = Settings::GetShadowQuality() != GraphicsQuality::Off;
 
   glDisable(GL_DITHER);
   glDisable(GL_BLEND);
@@ -415,7 +421,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
     PhysX::Simulate(dt);
     AudioManager::UpdateAllMusic();
   }
-  if(!LightManager::DirectLightEmpty())
+  if(shadowsEnabled && !LightManager::DirectLightEmpty())
   {
     GABGL_PROFILE_SCOPE("DIRECT SHADOW PASS");
 
@@ -425,25 +431,25 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
     glClear(GL_DEPTH_BUFFER_BIT);
 
     s_Data.s_Shaders.DirectShadowShader->Bind();
-    s_Data.m_DirectShadowBuffer->UpdateShadowView(LightManager::GetDirectLightRotation());
+    s_Data.m_DirectShadowBuffer->UpdateShadowView(LightManager::GetDirectLightRotation(), Camera::GetPosition());
     s_Data.s_Shaders.DirectShadowShader->SetMat4("u_LightSpaceMatrix", s_Data.m_DirectShadowBuffer->GetShadowViewProj());
+    glEnable(GL_POLYGON_OFFSET_FILL);
+    glPolygonOffset(2.0f, 4.0f);
     glBindVertexArray(ModelManager::GetModelsVAO());
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER,s_Data.m_cmdBufer);
     glMultiDrawElementsIndirect(GL_TRIANGLES,GL_UNSIGNED_INT,NULL,s_Data.m_DrawCommands.size(),0);
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
     glBindVertexArray(0);
+    glDisable(GL_POLYGON_OFFSET_FILL);
 
     s_Data.s_Shaders.DirectShadowShader->UnBind();
     s_Data.m_DirectShadowBuffer->UnBind();
   }
-  if(!LightManager::PointLightEmpty())
+  if(shadowsEnabled && !LightManager::PointLightEmpty())
   {
     GABGL_PROFILE_SCOPE("OMNI SHADOW PASS");
 
     s_Data.m_OmniDirectShadowBuffer->Bind();
-    float max = std::numeric_limits<float>::max();
-  	glClearColor(max, max, max, max);
-
     s_Data.s_Shaders.OmniDirectShadowShader->Bind();
     uint32_t lightIndex = 0;
     for (const auto& light : LightManager::GetPointLightPositions())
@@ -454,7 +460,8 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
       for (auto face = 0; face < directions.size(); ++face)
       {
         s_Data.m_OmniDirectShadowBuffer->BindCubemapFaceForWriting(lightIndex, face);
-        glClear(GL_DEPTH_BUFFER_BIT);
+        glClearColor(20.0f, 20.0f, 20.0f, 20.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glm::mat4 view = glm::lookAt(light,light + directions[face].Target,directions[face].Up);
         s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("u_LightViewProjection", s_Data.m_OmniDirectShadowBuffer->GetShadowProj() * view);
@@ -539,6 +546,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
     s_Data.s_Shaders.LightShader->SetInt("u_DirectShadow", 4);
     s_Data.s_Shaders.LightShader->SetInt("u_OffsetTexture", 5);
     s_Data.s_Shaders.LightShader->SetInt("u_OmniShadow", 6);
+    s_Data.s_Shaders.LightShader->SetInt("u_ShadowsEnabled", shadowsEnabled ? 1 : 0);
     s_Data.s_Shaders.LightShader->SetMat4("u_DirectShadowViewProj", s_Data.m_DirectShadowBuffer->GetShadowViewProj());
 
     DrawFullscreenQuad();
@@ -550,11 +558,18 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
     GABGL_PROFILE_SCOPE("BLOOM PASS");
 
     s_Data.m_BloomBuffer->BlitColorFrom(s_Data.m_LightBuffer,0);
-    s_Data.m_BloomBuffer->BlitColorFrom(s_Data.m_LightBuffer,1);
-    s_Data.m_BloomBuffer->Bind();
-    s_Data.m_BloomBuffer->RenderBloomTexture(0.005f);
-    s_Data.m_BloomBuffer->CompositeBloomOver();
-    s_Data.m_BloomBuffer->UnBind();
+    const GraphicsQuality bloomQuality = Settings::GetBloomQuality();
+    if (bloomQuality != GraphicsQuality::Off)
+    {
+      const uint32_t bloomMipCount = bloomQuality == GraphicsQuality::Low ? 3u
+        : bloomQuality == GraphicsQuality::Medium ? 5u
+        : 6u;
+      s_Data.m_BloomBuffer->BlitColorFrom(s_Data.m_LightBuffer,1);
+      s_Data.m_BloomBuffer->Bind();
+      s_Data.m_BloomBuffer->RenderBloomTexture(0.005f, bloomMipCount);
+      s_Data.m_BloomBuffer->CompositeBloomOver();
+      s_Data.m_BloomBuffer->UnBind();
+    }
     s_Data.m_BloomBuffer->BlitColorTo(s_Data.m_SkyboxBuffer);
   }
   {
@@ -563,6 +578,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
     s_Data.m_SkyboxBuffer->Bind();
 
     Renderer::DrawSkybox("night");
+    Renderer::DrawPhysicsDebug();
     
     /*BeginScene(s_Data.m_Camera);*/
     /*glEnable(GL_BLEND);*/
@@ -652,7 +668,7 @@ void Renderer::SetFullscreen(const std::string& sound, bool windowed)
 
   s_Data.m_GeometryBuffer->Resize(width, height);
   s_Data.m_LightBuffer->Resize(width, height);
-  /*s_Data.m_BloomFramebuffer->Resize(width,height);*/
+  s_Data.m_BloomBuffer->Resize(width, height);
   s_Data.m_SkyboxBuffer->Resize(width,height);
   s_Data.m_ResultBuffer->Resize(width, height);
   Camera::SetViewportSize(width, height);
@@ -675,7 +691,46 @@ void Renderer::ApplyDisplaySettings()
   s_Data.m_LightBuffer->Resize(width, height);
   s_Data.m_SkyboxBuffer->Resize(width, height);
   s_Data.m_ResultBuffer->Resize(width, height);
+  s_Data.m_BloomBuffer->Resize(width, height);
   Camera::SetViewportSize(width, height);
+}
+
+void Renderer::ApplyGraphicsSettings()
+{
+  const GraphicsQuality quality = Settings::GetShadowQuality();
+  const uint32_t qualityValue = static_cast<uint32_t>(quality);
+  if (qualityValue == s_Data.m_AppliedShadowQuality &&
+      s_Data.m_DirectShadowBuffer && s_Data.m_OmniDirectShadowBuffer)
+    return;
+
+  uint32_t directResolution = 512;
+  uint32_t omniResolution = 256;
+  float filterSize = 2.0f;
+  float randomRadius = 1.5f;
+
+  if (quality == GraphicsQuality::Medium)
+  {
+    directResolution = 2048;
+    omniResolution = 512;
+    filterSize = 4.0f;
+    randomRadius = 2.0f;
+  }
+  else if (quality == GraphicsQuality::High)
+  {
+    directResolution = 4096;
+    omniResolution = 1024;
+    filterSize = 8.0f;
+    randomRadius = 3.0f;
+  }
+  else if (quality == GraphicsQuality::Low)
+  {
+    directResolution = 1024;
+  }
+
+  s_Data.m_DirectShadowBuffer = DirectShadowBuffer::Create(
+    directResolution, directResolution, 16.0f, filterSize, randomRadius);
+  s_Data.m_OmniDirectShadowBuffer = OmniDirectShadowBuffer::Create(omniResolution, omniResolution);
+  s_Data.m_AppliedShadowQuality = qualityValue;
 }
 
 void Renderer::DrawPausedFrame()
@@ -688,6 +743,53 @@ void Renderer::DrawPausedFrame()
   DrawFramebuffer(s_Data.m_ResultBuffer->GetColorAttachmentRendererID());
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+}
+
+void Renderer::DrawPhysicsDebug()
+{
+  if (!s_Data.m_PhysicsDebug || !s_Data.s_Shaders.PhysicsDebugShader)
+    return;
+
+  glEnable(GL_DEPTH_TEST);
+  glDepthFunc(GL_LEQUAL);
+  glDepthMask(GL_FALSE);
+  glDisable(GL_CULL_FACE);
+  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  glLineWidth(2.0f);
+
+  s_Data.s_Shaders.PhysicsDebugShader->Bind();
+  s_Data.s_Shaders.PhysicsDebugShader->SetVec4("u_Color", glm::vec4(0.15f, 1.0f, 0.35f, 1.0f));
+  glBindVertexArray(ModelManager::GetModelsVAO());
+
+  for (const auto& [modelName, commandIndices] : s_Data.m_ModelDrawCommandIndices)
+  {
+    const auto model = ModelManager::GetModel(modelName);
+    if (!model || model->GetPhysXMeshType() != MeshType::CONVEXMESH)
+      continue;
+
+    const GLsizei instanceCount = static_cast<GLsizei>(model->m_InstanceTransforms.size());
+    for (const size_t commandIndex : commandIndices)
+    {
+      const auto& command = s_Data.m_DrawCommands[commandIndex];
+      glDrawElementsInstancedBaseVertexBaseInstance(
+        GL_TRIANGLES,
+        static_cast<GLsizei>(command.count),
+        GL_UNSIGNED_INT,
+        reinterpret_cast<const void*>(static_cast<uintptr_t>(command.firstIndex) * sizeof(GLuint)),
+        instanceCount,
+        command.baseVertex,
+        model->m_InstanceBase);
+    }
+  }
+
+  glBindVertexArray(0);
+  s_Data.s_Shaders.PhysicsDebugShader->UnBind();
+
+  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+  glEnable(GL_CULL_FACE);
+  glDepthMask(GL_TRUE);
+  glDepthFunc(GL_LESS);
+  glLineWidth(s_Data.LineWidth);
 }
 
 void Renderer::BeginScene()
@@ -1692,6 +1794,8 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 	ImGui::Begin("Components", nullptr, ImGuiWindowFlags_NoCollapse);
 
 	if (ImGui::Button("Reload Shaders")) LoadShaders();
+	ImGui::SameLine();
+	ImGui::Checkbox("Physics Debug", &s_Data.m_PhysicsDebug);
 
 	if (SceneEntity* entity = SceneManager::FindEntity(s_Data.m_SelectedEntityID))
 	{

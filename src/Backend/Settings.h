@@ -10,6 +10,14 @@ enum class WindowMode : uint32_t
   Borderless = 2
 };
 
+enum class GraphicsQuality : uint32_t
+{
+  Off = 0,
+  Low = 1,
+  Medium = 2,
+  High = 3
+};
+
 struct Settings
 {
   static void Init();
@@ -31,6 +39,10 @@ struct Settings
   static void SetMusicVolume(float volume);
   static float GetSFXVolume();
   static void SetSFXVolume(float volume);
+  static GraphicsQuality GetShadowQuality();
+  static void SetShadowQuality(GraphicsQuality quality);
+  static GraphicsQuality GetBloomQuality();
+  static void SetBloomQuality(GraphicsQuality quality);
 
 private:
   static void Load();

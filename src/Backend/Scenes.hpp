@@ -130,16 +130,19 @@ private:
     const bool back = escape || Pressed(Input::IsGamepadButtonPressed(Gamepad::B), m_PausePreviousBack);
     const bool mouseClick = Pressed(Input::IsMouseButtonPressed(Mouse::ButtonLeft), m_PausePreviousMouse);
 
-    const int itemCount = m_PauseScreen == PauseScreen::Main ? 4 : 7;
+    const int itemCount = m_PauseScreen == PauseScreen::Main ? 4 : 9;
     if (up) m_PauseSelected = Wrap(m_PauseSelected - 1, itemCount);
     if (down) m_PauseSelected = Wrap(m_PauseSelected + 1, itemCount);
 
     const float screenWidth = static_cast<float>(Window::GetWidth());
     const float screenHeight = static_cast<float>(Window::GetHeight());
     const float rowWidth = std::min(520.0f, screenWidth * 0.52f);
-    const float rowHeight = std::clamp(screenHeight * 0.065f, 38.0f, 54.0f);
-    const float startY = screenHeight * 0.65f;
-    const float spacing = rowHeight + 8.0f;
+    const bool optionsScreen = m_PauseScreen == PauseScreen::Options;
+    const float rowHeight = optionsScreen
+      ? std::clamp(screenHeight * 0.05f, 30.0f, 42.0f)
+      : std::clamp(screenHeight * 0.065f, 38.0f, 54.0f);
+    const float startY = screenHeight * (optionsScreen ? 0.70f : 0.65f);
+    const float spacing = rowHeight + (optionsScreen ? 4.0f : 8.0f);
     const float x = (screenWidth - rowWidth) * 0.5f;
     const glm::vec2 mouse(Input::GetMouseX(), screenHeight - Input::GetMouseY());
 
@@ -184,7 +187,7 @@ private:
     if (accept || clicked >= 0)
     {
       const int activated = clicked >= 0 ? clicked : m_PauseSelected;
-      if (activated == 6)
+      if (activated == 8)
       {
         Settings::Save();
         m_PauseScreen = PauseScreen::Main;
@@ -261,6 +264,15 @@ private:
         Settings::SetVSync(direction == 0 ? !Settings::GetVSync() : direction > 0);
         Window::SetVSync(Settings::GetVSync());
         break;
+      case 6:
+        Settings::SetShadowQuality(static_cast<GraphicsQuality>(Wrap(
+          static_cast<int>(Settings::GetShadowQuality()) + direction, 4)));
+        Renderer::ApplyGraphicsSettings();
+        break;
+      case 7:
+        Settings::SetBloomQuality(static_cast<GraphicsQuality>(Wrap(
+          static_cast<int>(Settings::GetBloomQuality()) + direction, 4)));
+        break;
       default:
         return;
     }
@@ -270,6 +282,7 @@ private:
   std::string PauseOptionLabel(int index) const
   {
     static constexpr std::array<const char*, 3> modes = {"WINDOWED", "FULLSCREEN", "BORDERLESS"};
+    static constexpr std::array<const char*, 4> qualities = {"OFF", "LOW", "MEDIUM", "HIGH"};
     switch (index)
     {
       case 0: return "MUSIC VOLUME    < " + std::to_string(static_cast<int>(Settings::GetMusicVolume() * 100.0f + 0.5f)) + "% >";
@@ -278,6 +291,8 @@ private:
       case 3: return "DISPLAY MODE    < " + std::string(modes[m_PauseModeIndex]) + " >";
       case 4: return "FPS LIMIT       < " + (m_PauseFPSLimits[m_PauseFPSIndex] == 0 ? std::string("UNLIMITED") : std::to_string(m_PauseFPSLimits[m_PauseFPSIndex])) + " >";
       case 5: return "VSYNC           < " + std::string(Settings::GetVSync() ? "ON" : "OFF") + " >";
+      case 6: return "SHADOW QUALITY  < " + std::string(qualities[static_cast<int>(Settings::GetShadowQuality())]) + " >";
+      case 7: return "BLOOM QUALITY   < " + std::string(qualities[static_cast<int>(Settings::GetBloomQuality())]) + " >";
       default: return "BACK";
     }
   }
@@ -287,16 +302,19 @@ private:
     static constexpr std::array<const char*, 4> items = {"RESUME", "OPTIONS", "MAIN MENU", "EXIT"};
     const float screenWidth = static_cast<float>(Window::GetWidth());
     const float screenHeight = static_cast<float>(Window::GetHeight());
-    const float rowHeight = std::clamp(screenHeight * 0.065f, 38.0f, 54.0f);
-    const float startY = screenHeight * 0.65f;
-    const float spacing = rowHeight + 8.0f;
+    const bool optionsScreen = m_PauseScreen == PauseScreen::Options;
+    const float rowHeight = optionsScreen
+      ? std::clamp(screenHeight * 0.05f, 30.0f, 42.0f)
+      : std::clamp(screenHeight * 0.065f, 38.0f, 54.0f);
+    const float startY = screenHeight * (optionsScreen ? 0.70f : 0.65f);
+    const float spacing = rowHeight + (optionsScreen ? 4.0f : 8.0f);
     const Font* font = FontManager::GetFont("dpcomic");
 
     Renderer::BeginScene();
     Renderer::DrawText(font, m_PauseScreen == PauseScreen::Main ? "PAUSED" : "OPTIONS",
       glm::vec2(screenWidth * 0.5f, screenHeight * 0.8f), 1.1f, glm::vec4(1.0f));
 
-    const int count = m_PauseScreen == PauseScreen::Main ? 4 : 7;
+    const int count = m_PauseScreen == PauseScreen::Main ? 4 : 9;
     for (int i = 0; i < count; ++i)
     {
       const std::string label = m_PauseScreen == PauseScreen::Main ? std::string(items[i]) : PauseOptionLabel(i);
@@ -391,7 +409,7 @@ struct MenuScene : Scene
       m_PreviousBack);
     const bool mouseClick = Pressed(Input::IsMouseButtonPressed(Mouse::ButtonLeft), m_PreviousMouse);
 
-    const int itemCount = m_Screen == Screen::Main ? 4 : 7;
+    const int itemCount = m_Screen == Screen::Main ? 4 : 9;
     if (navigateUp) m_Selected = (m_Selected + itemCount - 1) % itemCount;
     if (navigateDown) m_Selected = (m_Selected + 1) % itemCount;
 
@@ -399,9 +417,12 @@ struct MenuScene : Scene
     const float height = static_cast<float>(Window::GetHeight());
     const glm::vec2 mouse(Input::GetMouseX(), height - Input::GetMouseY());
     const float buttonWidth = std::min(520.0f, width * 0.52f);
-    const float buttonHeight = std::clamp(height * 0.065f, 38.0f, 54.0f);
-    const float startY = height * 0.65f;
-    const float spacing = buttonHeight + 8.0f;
+    const bool optionsScreen = m_Screen == Screen::Options;
+    const float buttonHeight = optionsScreen
+      ? std::clamp(height * 0.05f, 30.0f, 42.0f)
+      : std::clamp(height * 0.065f, 38.0f, 54.0f);
+    const float startY = height * (optionsScreen ? 0.70f : 0.65f);
+    const float spacing = buttonHeight + (optionsScreen ? 4.0f : 8.0f);
     const float buttonX = (width - buttonWidth) * 0.5f;
 
     int mouseActivated = -1;
@@ -444,7 +465,7 @@ struct MenuScene : Scene
         if (accept || mouseActivated >= 0)
         {
           const int activated = mouseActivated >= 0 ? mouseActivated : m_Selected;
-          if (activated == 6)
+          if (activated == 8)
           {
             Settings::Save();
             m_Screen = Screen::Main;
@@ -531,6 +552,15 @@ private:
         Settings::SetVSync(direction == 0 ? !Settings::GetVSync() : direction > 0);
         Window::SetVSync(Settings::GetVSync());
         break;
+      case 6:
+        Settings::SetShadowQuality(static_cast<GraphicsQuality>(Wrap(
+          static_cast<int>(Settings::GetShadowQuality()) + direction, 4)));
+        Renderer::ApplyGraphicsSettings();
+        break;
+      case 7:
+        Settings::SetBloomQuality(static_cast<GraphicsQuality>(Wrap(
+          static_cast<int>(Settings::GetBloomQuality()) + direction, 4)));
+        break;
       default:
         return;
     }
@@ -546,7 +576,7 @@ private:
     Renderer::DrawText(font, m_Screen == Screen::Main ? "GABGL" : "OPTIONS",
       glm::vec2(screenWidth * 0.5f, screenHeight * 0.79f), 1.25f, glm::vec4(0.82f, 0.9f, 1.0f, 1.0f));
 
-    const int count = m_Screen == Screen::Main ? 4 : 7;
+    const int count = m_Screen == Screen::Main ? 4 : 9;
     for (int i = 0; i < count; ++i)
     {
       const float y = startY - i * spacing;
@@ -567,6 +597,7 @@ private:
   std::string OptionLabel(int index) const
   {
     static constexpr std::array<const char*, 3> modeNames = {"WINDOWED", "FULLSCREEN", "BORDERLESS"};
+    static constexpr std::array<const char*, 4> qualityNames = {"OFF", "LOW", "MEDIUM", "HIGH"};
     switch (index)
     {
       case 0: return "MUSIC VOLUME    < " + std::to_string(static_cast<int>(Settings::GetMusicVolume() * 100.0f + 0.5f)) + "% >";
@@ -575,6 +606,8 @@ private:
       case 3: return "DISPLAY MODE    < " + std::string(modeNames[m_ModeIndex]) + " >";
       case 4: return "FPS LIMIT       < " + (m_FPSLimits[m_FPSIndex] == 0 ? std::string("UNLIMITED") : std::to_string(m_FPSLimits[m_FPSIndex])) + " >";
       case 5: return "VSYNC           < " + std::string(Settings::GetVSync() ? "ON" : "OFF") + " >";
+      case 6: return "SHADOW QUALITY  < " + std::string(qualityNames[static_cast<int>(Settings::GetShadowQuality())]) + " >";
+      case 7: return "BLOOM QUALITY   < " + std::string(qualityNames[static_cast<int>(Settings::GetBloomQuality())]) + " >";
       default: return "BACK";
     }
   }

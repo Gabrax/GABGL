@@ -49,6 +49,7 @@ layout(std430, binding = 3) buffer LightColors       { vec4 colors[];    };
 layout(std430, binding = 4) buffer LightTypes        { int lightTypes[]; };
 
 uniform mat4 u_DirectShadowViewProj;
+uniform bool u_ShadowsEnabled;
 
 const float gamma = 1.2;
 
@@ -71,19 +72,25 @@ vec3 toneMappingACES(vec3 color) {
 }
 
 float calculateDirectShadow(vec4 fragPosLightSpace, vec3 lightDir, vec3 normal) {
+  if (!u_ShadowsEnabled || fragPosLightSpace.w <= 0.0)
+    return 1.0;
+
   ivec3 OffsetCoord;
   vec2 f = mod(gl_FragCoord.xy, offsetSize_filterSize.xx);
   OffsetCoord.yz = ivec2(f);
 
   vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
   vec3 shadowCoords = projCoords * 0.5 + 0.5;
+  if (shadowCoords.z <= 0.0 || shadowCoords.z >= 1.0 ||
+      any(lessThan(shadowCoords.xy, vec2(0.0))) || any(greaterThan(shadowCoords.xy, vec2(1.0))))
+    return 1.0;
 
   float texelSizeX = 1.0 / windowSize.x;
   float texelSizeY = 1.0 / windowSize.y;
   vec2 texelSize = vec2(texelSizeX, texelSizeY);
 
-  float diffuseFactor = dot(normal, -lightDir);
-  float bias = mix(0.001, 0.0, diffuseFactor);
+  float diffuseFactor = max(dot(normalize(normal), normalize(lightDir)), 0.0);
+  float bias = max(0.0015 * (1.0 - diffuseFactor), 0.00015);
 
   float sum = 0.0;
   int sampleCount = int(offsetSize_filterSize.y * offsetSize_filterSize.y);
@@ -106,12 +113,17 @@ float calculateDirectShadow(vec4 fragPosLightSpace, vec3 lightDir, vec3 normal) 
 }
 
 float calculatePointShadow(vec3 fragPos, vec3 lightPos, vec3 normal, int lightIndex) {
+  if (!u_ShadowsEnabled)
+    return 1.0;
+
   vec3 fragToLight = fragPos - lightPos;
   float currentDepth = length(fragToLight);
+  if (currentDepth >= 20.0)
+    return 1.0;
   vec3 direction = normalize(fragToLight);
 
   float closestDepth = texture(u_OmniShadow, vec4(direction, float(lightIndex))).r;
-  float bias = max(0.05 * (1.0 - dot(normal, direction)), 0.005);
+  float bias = max(0.03 * (1.0 - dot(normalize(normal), -direction)), 0.003);
 
   return (currentDepth - bias > closestDepth) ? 0.15 : 1.0;
 }
@@ -189,6 +201,7 @@ void main()
 
   vec3 result = vec3(0.0);
 
+  int pointShadowIndex = 0;
   for (int i = 0; i < numLights; ++i)
   {
     vec3 position = positions[i].xyz;
@@ -201,7 +214,8 @@ void main()
     if (type == 0) {
       result += calculateDirectionalLight(rotation, Normal, viewDir, Color, fragPosLightSpace, ambient, specularCol, lightColor, shininess);
     } else if (type == 1) {
-      result += calculatePointLight(position, FragPos, Normal, viewDir, Color, ambient, specularCol, i, lightColor, shininess);
+      result += calculatePointLight(position, FragPos, Normal, viewDir, Color, ambient, specularCol, pointShadowIndex, lightColor, shininess);
+      pointShadowIndex++;
     } else if (type == 2) {
       result += calculateSpotlight(position, rotation, FragPos, Normal, viewDir, Color, ambient, specularCol, lightColor, shininess);
     }

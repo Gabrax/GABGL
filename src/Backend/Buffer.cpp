@@ -5,6 +5,8 @@
 #include <glm/gtc/matrix_transform.hpp> 
 #include <random>
 #include <numbers>
+#include <algorithm>
+#include <cmath>
 #include <glad/glad.h>
 #include "Window.h"
 
@@ -546,13 +548,11 @@ void FrameBuffer::AttachExternalColorTexture(GLuint textureID, uint32_t slot)
 {
 	GABGL_ASSERT(slot < m_ColorAttachments.size(), "Invalid attachment slot");
 	glNamedFramebufferTexture(m_RendererID, GL_COLOR_ATTACHMENT0 + slot, textureID, 0);
-	m_ColorAttachments[slot] = textureID;
 }
 
 void FrameBuffer::AttachExternalDepthTexture(GLuint textureID)
 {
 	glNamedFramebufferTexture(m_RendererID, GL_DEPTH_ATTACHMENT, textureID, 0);
-	m_DepthAttachment = textureID;
 }
 
 void FrameBuffer::BlitColor(const std::shared_ptr<FrameBuffer>& dst)
@@ -797,8 +797,9 @@ BloomBuffer::BloomBuffer(const std::shared_ptr<Shader>& downsampleShader, const 
   upsampleShader->UnBind();
 }
 
-void BloomBuffer::RenderBloomTexture(float filterRadius)
+void BloomBuffer::RenderBloomTexture(float filterRadius, uint32_t mipCount)
 {
+  const int activeMipCount = std::clamp(static_cast<int>(mipCount), 1, static_cast<int>(mMipChain.size()));
   m_mipFB->Bind();
 
   auto srcTexture = m_hdrFB->GetColorAttachmentRendererID(1);
@@ -809,7 +810,7 @@ void BloomBuffer::RenderBloomTexture(float filterRadius)
 
   glBindTextureUnit(0, srcTexture);
 
-  for (int i = 0; i < (int)mMipChain.size(); i++)
+  for (int i = 0; i < activeMipCount; i++)
   {
     const bloomMip& mip = mMipChain[i];
     glViewport(0, 0, mip.size.x, mip.size.y);
@@ -833,7 +834,7 @@ void BloomBuffer::RenderBloomTexture(float filterRadius)
   glBlendFunc(GL_ONE, GL_ONE);
   glBlendEquation(GL_FUNC_ADD);
 
-  for (int i = (int)mMipChain.size() - 1; i > 0; i--)
+  for (int i = activeMipCount - 1; i > 0; i--)
   {
     const bloomMip& mip = mMipChain[i];
     const bloomMip& nextMip = mMipChain[i - 1];
@@ -853,6 +854,9 @@ void BloomBuffer::RenderBloomTexture(float filterRadius)
 
 void BloomBuffer::Resize(int newWidth, int newHeight)
 {
+  mSrcViewportSize = glm::ivec2(newWidth, newHeight);
+  mSrcViewportSizeFloat = glm::vec2(static_cast<float>(newWidth), static_cast<float>(newHeight));
+
   for (auto& mip : mMipChain)
   {
     glDeleteTextures(1, &mip.texture);
@@ -887,11 +891,13 @@ void BloomBuffer::Resize(int newWidth, int newHeight)
       mipIntSize = glm::max(mipIntSize, glm::ivec2(1));
   }
 
+  m_hdrFB->Resize(newWidth, newHeight);
+  m_pingpongFB[0]->Resize(newWidth, newHeight);
+  m_pingpongFB[1]->Resize(newWidth, newHeight);
+  m_mipFB->Resize(newWidth, newHeight);
   m_mipFB->Bind();
   m_mipFB->AttachExternalColorTexture(mMipChain[0].texture, 0);
   m_mipFB->UnBind();
-
-  m_hdrFB->Resize(newWidth, newHeight);
 }
 
 void BloomBuffer::Bind() const 
@@ -1016,8 +1022,9 @@ DirectShadowBuffer::DirectShadowBuffer(float shadowWidth, float shadowHeight, fl
   glTextureParameteri(m_offsetTexture, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   glTextureParameteri(m_offsetTexture, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
-  float near_plane = 0.01f, far_plane = 100.0f, orthoSize = 50.0f;
-  m_shadowProj = glm::ortho(-orthoSize, orthoSize, -orthoSize, orthoSize, near_plane, far_plane);
+  constexpr float nearPlane = 0.1f;
+  constexpr float farPlane = 200.0f;
+  m_shadowProj = glm::ortho(-m_OrthoSize, m_OrthoSize, -m_OrthoSize, m_OrthoSize, nearPlane, farPlane);
 
   struct UBOData {
       glm::vec2 windowSize;
@@ -1037,6 +1044,7 @@ DirectShadowBuffer::~DirectShadowBuffer()
 {
   glDeleteFramebuffers(1, &m_FBO);
   glDeleteTextures(1, &m_depthMap);
+  glDeleteTextures(1, &m_offsetTexture);
 }
 
 void DirectShadowBuffer::Bind() const
@@ -1060,13 +1068,30 @@ void DirectShadowBuffer::BindOffsetTextureForReading(GLenum textureUnit) const
   glBindTextureUnit(textureUnit - GL_TEXTURE0, m_offsetTexture);
 }
 
-void DirectShadowBuffer::UpdateShadowView(const glm::vec3& rotation)
+void DirectShadowBuffer::UpdateShadowView(const glm::vec3& rotation, const glm::vec3& focusPoint)
 {
-  glm::vec3 lightDir = glm::normalize(rotation); 
-  glm::vec3 lightTarget = glm::vec3(0.0f); 
-  glm::vec3 lightPos = lightTarget - lightDir * 30.0f; 
+  glm::vec3 lightDir = glm::length(rotation) > 0.0001f
+    ? glm::normalize(rotation)
+    : glm::normalize(glm::vec3(-1.0f, -2.0f, -1.0f));
+  const glm::vec3 fallbackUp = std::abs(glm::dot(lightDir, glm::vec3(0.0f, 1.0f, 0.0f))) > 0.98f
+    ? glm::vec3(0.0f, 0.0f, 1.0f)
+    : glm::vec3(0.0f, 1.0f, 0.0f);
+  const glm::vec3 right = glm::normalize(glm::cross(lightDir, fallbackUp));
+  const glm::vec3 lightUp = glm::normalize(glm::cross(right, lightDir));
+  const float worldUnitsPerTexel = (2.0f * m_OrthoSize) / static_cast<float>(m_shadowWidth);
 
-  m_shadowVIew = glm::lookAt(lightPos, lightTarget, glm::vec3(0, 1, 0));
+  glm::vec3 snappedFocus = focusPoint;
+  snappedFocus += right * (std::round(glm::dot(focusPoint, right) / worldUnitsPerTexel) * worldUnitsPerTexel - glm::dot(focusPoint, right));
+  snappedFocus += lightUp * (std::round(glm::dot(focusPoint, lightUp) / worldUnitsPerTexel) * worldUnitsPerTexel - glm::dot(focusPoint, lightUp));
+
+  const glm::vec3 lightPos = snappedFocus - lightDir * 80.0f;
+  m_shadowVIew = glm::lookAt(lightPos, snappedFocus, lightUp);
+}
+
+BloomBuffer::~BloomBuffer()
+{
+  for (const auto& mip : mMipChain)
+    glDeleteTextures(1, &mip.texture);
 }
 
 float DirectShadowBuffer::Jitter()
@@ -1109,6 +1134,11 @@ OmniDirectShadowBuffer::OmniDirectShadowBuffer(uint32_t shadowWidth, uint32_t sh
     CubemapDirection{ GL_TEXTURE_CUBE_MAP_POSITIVE_Z, glm::vec3(0, 0, 1), glm::vec3(0, -1, 0) },
     CubemapDirection{ GL_TEXTURE_CUBE_MAP_NEGATIVE_Z, glm::vec3(0, 0, -1), glm::vec3(0, -1, 0) }
   };
+}
+
+OmniDirectShadowBuffer::~OmniDirectShadowBuffer()
+{
+  glDeleteTextures(1, &m_depthCubemapArray);
 }
 
 void OmniDirectShadowBuffer::Bind() const 

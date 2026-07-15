@@ -335,6 +335,7 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
   }
 
   std::string name = std::filesystem::path(path).stem().string();
+  model->m_IsRendered = model->GetPhysXMeshType() != MeshType::CONVEXMESH;
 
   for (auto& mesh : model->GetMeshes())
   {
@@ -457,6 +458,7 @@ void ModelManager::SetInitialModelTransform(const std::string& name, const glm::
 
     glm::mat4 convexTransform = PhysX::PxMat44ToGlmMat4(convexIt->second->GetDynamicActor()->getGlobalPose());
     resolvedTransform = convexTransform;
+    SetModelInstanceTransform(convexName, 0, convexTransform);
 
     pxTransform = PxTransform(PhysX::GlmMat4ToPxTransform(convexTransform));
 
@@ -655,6 +657,7 @@ void ModelManager::UpdateTransforms(const DeltaTime& dt)
     if(baseModelIt->second->m_IsRendered)
     {
       glm::mat4 convexTransform = PhysX::PxMat44ToGlmMat4(model->GetDynamicActor()->getGlobalPose());
+      SetModelInstanceTransform(convexName, 0, convexTransform);
 
       auto nameIt = std::find(s_Data.m_ModelsNames.begin(), s_Data.m_ModelsNames.end(), baseName);
       if (nameIt != s_Data.m_ModelsNames.end())

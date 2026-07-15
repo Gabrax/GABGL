@@ -125,6 +125,10 @@ void Scene::SpawnEntities()
   for(auto& e : m_Assets.entities)
   {
     const std::string modelName = e["model"];
+    const auto sceneModel = ModelManager::GetModel(modelName);
+    if (!sceneModel || sceneModel->GetPhysXMeshType() == MeshType::CONVEXMESH)
+      continue;
+
     const std::string type = e.value("type", "static");
     uint32_t ordinal = 0;
 
@@ -194,7 +198,7 @@ void Scene::SpawnEntities()
   for (const auto& modelName : ModelManager::GetModelNames())
   {
     const auto model = ModelManager::GetModel(modelName);
-    if (!model || !model->m_InstanceTransforms.empty())
+    if (!model || model->GetPhysXMeshType() == MeshType::CONVEXMESH || !model->m_InstanceTransforms.empty())
       continue;
 
     Transform transform;

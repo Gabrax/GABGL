@@ -323,9 +323,9 @@ private:
 struct BloomBuffer
 {
 	BloomBuffer(const std::shared_ptr<Shader>& downsampleShader, const std::shared_ptr<Shader>& upsampleShader, const std::shared_ptr<Shader>& finalShader); 
-	~BloomBuffer() = default;
+	~BloomBuffer();
 
-	void RenderBloomTexture(float filterRadius);
+	void RenderBloomTexture(float filterRadius, uint32_t mipCount);
   void Bind() const;
   void UnBind() const;
   void Resize(int32_t newWidth, int32_t newHeight);
@@ -371,7 +371,7 @@ struct DirectShadowBuffer
   void BindShadowTextureForReading(GLenum textureUnit) const;
   void BindOffsetTextureForReading(GLenum textureUnit) const;
 
-  void UpdateShadowView(const glm::vec3& rotation);
+  void UpdateShadowView(const glm::vec3& rotation, const glm::vec3& focusPoint);
 
   inline const glm::mat4 GetShadowViewProj() const { return m_shadowProj * m_shadowVIew; }
 
@@ -391,6 +391,7 @@ private:
 
   glm::mat4 m_shadowProj;
   glm::mat4 m_shadowVIew = glm::mat4(1.0f);
+  float m_OrthoSize = 50.0f;
 };
 
 struct CubemapDirection
@@ -403,7 +404,7 @@ struct CubemapDirection
 struct OmniDirectShadowBuffer
 {
   OmniDirectShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeight);
-  ~OmniDirectShadowBuffer() = default;
+  ~OmniDirectShadowBuffer();
 
   void Bind() const;
   void UnBind() const;

@@ -55,6 +55,7 @@ struct Renderer
   static void DrawFullscreenQuad();
   static void SetFullscreen(const std::string& sound, bool windowed);
   static void ApplyDisplaySettings();
+  static void ApplyGraphicsSettings();
   static void DrawPausedFrame();
   static void SwitchRenderState();
 
@@ -67,6 +68,7 @@ private:
 	static void Flush();
 	static void NextBatch();
 	static void LoadShaders();
+  static void DrawPhysicsDebug();
 
   static void DrawFramebuffer(uint32_t textureID);
 	static void DrawEditorFrameBuffer(uint32_t framebufferTexture);

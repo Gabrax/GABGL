@@ -16,16 +16,13 @@ static uint32_t m_WindowHeight = 720;
 static uint32_t m_RenderWidth  = m_WindowWidth;
 static uint32_t m_RenderHeight = m_WindowHeight;
 
-enum class ShadowOpt : uint32_t { OFF, LOW, MID, HIGH };
-enum class BloomOpt  : uint32_t { OFF, LOW, MID, HIGH };
-
 static WindowMode m_WindowMode = WindowMode::Windowed;
 static uint32_t m_FPSLimit = 60;
 static bool m_VSync = false;
 static float m_MusicVolume = 0.5f;
 static float m_SFXVolume = 0.7f;
-static ShadowOpt m_ShadowOpt = ShadowOpt::MID;
-static BloomOpt  m_BloomOpt  = BloomOpt::LOW;
+static GraphicsQuality m_ShadowQuality = GraphicsQuality::Medium;
+static GraphicsQuality m_BloomQuality = GraphicsQuality::Low;
 
 void Settings::Init()
 {
@@ -51,8 +48,8 @@ void Settings::SetDefaults()
   m_VSync = false;
   m_MusicVolume = 0.5f;
   m_SFXVolume = 0.7f;
-  m_ShadowOpt = ShadowOpt::MID;
-  m_BloomOpt  = BloomOpt::LOW;
+  m_ShadowQuality = GraphicsQuality::Medium;
+  m_BloomQuality = GraphicsQuality::Low;
 }
 
 void Settings::Save()
@@ -78,8 +75,8 @@ void Settings::Save()
   };
 
   j["graphics"] = {
-    {"shadows", (uint32_t)m_ShadowOpt},
-    {"bloom", (uint32_t)m_BloomOpt}
+    {"shadows", static_cast<uint32_t>(m_ShadowQuality)},
+    {"bloom", static_cast<uint32_t>(m_BloomQuality)}
   };
 
   std::ofstream file(CONFIG_FILE);
@@ -117,8 +114,11 @@ void Settings::Load()
     m_RenderWidth  = j["render"]["width"];
     m_RenderHeight = j["render"]["height"];
 
-    m_ShadowOpt = (ShadowOpt)j["graphics"]["shadows"];
-    m_BloomOpt  = (BloomOpt)j["graphics"]["bloom"];
+    const auto& graphics = j.contains("graphics") ? j["graphics"] : json::object();
+    m_ShadowQuality = static_cast<GraphicsQuality>(
+      std::min(graphics.value("shadows", static_cast<uint32_t>(GraphicsQuality::Medium)), 3u));
+    m_BloomQuality = static_cast<GraphicsQuality>(
+      std::min(graphics.value("bloom", static_cast<uint32_t>(GraphicsQuality::Low)), 3u));
 
     if (j.contains("audio"))
     {
@@ -181,3 +181,7 @@ float Settings::GetMusicVolume() { return m_MusicVolume; }
 void Settings::SetMusicVolume(float volume) { m_MusicVolume = std::clamp(volume, 0.0f, 1.0f); }
 float Settings::GetSFXVolume() { return m_SFXVolume; }
 void Settings::SetSFXVolume(float volume) { m_SFXVolume = std::clamp(volume, 0.0f, 1.0f); }
+GraphicsQuality Settings::GetShadowQuality() { return m_ShadowQuality; }
+void Settings::SetShadowQuality(GraphicsQuality quality) { m_ShadowQuality = quality; }
+GraphicsQuality Settings::GetBloomQuality() { return m_BloomQuality; }
+void Settings::SetBloomQuality(GraphicsQuality quality) { m_BloomQuality = quality; }
