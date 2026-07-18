@@ -31,7 +31,6 @@ struct GameScene : Scene
     if (fps != m_PauseFPSLimits.end())
       m_PauseFPSIndex = static_cast<int>(std::distance(m_PauseFPSLimits.begin(), fps));
 
-    LightManager::AddLight(LightType::DIRECT,glm::vec3(0.3,0.32,0.4),glm::vec3(0),glm::vec3(-2,-4,-1));
   }
 
   void OnUpdate(DeltaTime& dt) override

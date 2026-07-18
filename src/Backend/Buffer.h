@@ -180,8 +180,9 @@ struct StorageBuffer
   StorageBuffer(uint32_t size, uint32_t binding);
   virtual ~StorageBuffer();
   void Allocate(size_t size);
-  void SetData(size_t size, void* data);
+  void SetData(size_t size, const void* data);
   void SetSubData(GLintptr offset, GLsizeiptr size, const void* data);
+  void Bind() const;
   void CleanUp();
   void* MapBuffer();
   void UnmapBuffer();
@@ -272,6 +273,8 @@ struct FrameBuffer
 	int ReadPixel(uint32_t attachmentIndex, int x, int y);
 
 	void ClearAttachment(uint32_t attachmentIndex, int value);
+  void SetDrawBuffer(uint32_t attachmentIndex) const;
+  void SetDrawBuffers() const;
   void AttachExternalColorTexture(GLuint textureID, uint32_t slot = 0);
   void AttachExternalDepthTexture(GLuint textureID);
 
@@ -329,16 +332,13 @@ struct BloomBuffer
   void Bind() const;
   void UnBind() const;
   void Resize(int32_t newWidth, int32_t newHeight);
-  void CompositeBloomOver();
-  void BlitColorFrom(const std::shared_ptr<FrameBuffer>& src, uint32_t attachmentIndex);
-  void BlitColorTo(const std::shared_ptr<FrameBuffer>& dst);
+  void CompositeTo(const std::shared_ptr<FrameBuffer>& dst, bool bloomEnabled);
 
 	static std::shared_ptr<BloomBuffer> Create(const std::shared_ptr<Shader>& downsampleShader, const std::shared_ptr<Shader>& upsampleShader, const std::shared_ptr<Shader>& finalShader);
 
 private:
 
   std::shared_ptr<FrameBuffer> m_hdrFB;
-  std::shared_ptr<FrameBuffer> m_pingpongFB[2];
   std::shared_ptr<FrameBuffer> m_mipFB;
 
   const std::shared_ptr<Shader>& downsampleShader; 

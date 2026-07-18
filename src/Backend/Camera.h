@@ -5,6 +5,7 @@
 #include "glm/ext/matrix_clip_space.hpp"
 
 #include <glm/glm.hpp>
+#include <string>
 
 enum class CameraMode
 {
@@ -28,6 +29,7 @@ struct Camera
   static void SetViewportSize(uint32_t width, uint32_t height);
 
   static void SetMode(CameraMode mode);
+  static void SetFollowTarget(const std::string& modelName);
 
   static const glm::mat4& GetViewMatrix();
   static const glm::mat4& GetProjection();
@@ -46,7 +48,7 @@ struct Camera
   static float GetPitch();
   static float GetYaw();
 
-  static void SetPerspective(float verticalFOV, float nearClip, float farClip);
+  static void SetPerspective(float verticalFOVDegrees, float nearClip, float farClip);
   static void SetOrthographic(float size, float nearClip, float farClip);
 
 private:

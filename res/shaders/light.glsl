@@ -50,6 +50,7 @@ layout(std430, binding = 4) buffer LightTypes        { int lightTypes[]; };
 
 uniform mat4 u_DirectShadowViewProj;
 uniform bool u_ShadowsEnabled;
+uniform int u_PointShadowMask;
 
 const float gamma = 1.2;
 
@@ -113,7 +114,7 @@ float calculateDirectShadow(vec4 fragPosLightSpace, vec3 lightDir, vec3 normal) 
 }
 
 float calculatePointShadow(vec3 fragPos, vec3 lightPos, vec3 normal, int lightIndex) {
-  if (!u_ShadowsEnabled)
+  if (!u_ShadowsEnabled || lightIndex >= 20 || (u_PointShadowMask & (1 << lightIndex)) == 0)
     return 1.0;
 
   vec3 fragToLight = fragPos - lightPos;
@@ -221,11 +222,8 @@ void main()
     }
   }
 
-  result = toneMappingACES(result);
-  result = gammaCorrection(result);
-
   float brightness = dot(result, vec3(0.2126, 0.7152, 0.0722));
-  BrightColor = brightness > 0.7 ? vec4(result, 1.0) : vec4(0.0, 0.0, 0.0, 1.0);
+  BrightColor = brightness > 1.0 ? vec4(result, 1.0) : vec4(0.0, 0.0, 0.0, 1.0);
   FragColor = vec4(result, 1.0);
 }
 

@@ -53,6 +53,7 @@ struct ModelsData
   std::shared_ptr<StorageBuffer> m_FinalBoneMatricesSSBO;
   std::shared_ptr<StorageBuffer> m_ModelIsAnimatedSSBO; 
   std::shared_ptr<StorageBuffer> m_InstanceTransformsSSBO;
+  std::shared_ptr<StorageBuffer> m_VisibleInstanceTransformsSSBO;
 
   GLuint sharedVBO, sharedEBO, sharedVAO;
 
@@ -606,6 +607,7 @@ void ModelManager::Reset()
   s_Data.m_FinalBoneMatricesSSBO.reset();
   s_Data.m_ModelIsAnimatedSSBO.reset();
   s_Data.m_InstanceTransformsSSBO.reset();
+  s_Data.m_VisibleInstanceTransformsSSBO.reset();
 
   if (s_Data.sharedVBO) glDeleteBuffers(1, &s_Data.sharedVBO);
   if (s_Data.sharedEBO) glDeleteBuffers(1, &s_Data.sharedEBO);
@@ -699,6 +701,29 @@ GLuint ModelManager::GetModelsVAO()
   return s_Data.sharedVAO;
 }
 
+void ModelManager::UploadVisibleInstanceTransforms(const std::vector<glm::mat4>& transforms)
+{
+  if (!s_Data.m_VisibleInstanceTransformsSSBO)
+    return;
+
+  if (!transforms.empty())
+    s_Data.m_VisibleInstanceTransformsSSBO->SetData(transforms.size() * sizeof(glm::mat4),
+      transforms.data());
+  s_Data.m_VisibleInstanceTransformsSSBO->Bind();
+}
+
+void ModelManager::BindAllInstanceTransforms()
+{
+  if (s_Data.m_InstanceTransformsSSBO)
+    s_Data.m_InstanceTransformsSSBO->Bind();
+}
+
+void ModelManager::BindVisibleInstanceTransforms()
+{
+  if (s_Data.m_VisibleInstanceTransformsSSBO)
+    s_Data.m_VisibleInstanceTransformsSSBO->Bind();
+}
+
 void ModelManager::UploadToGPU()
 {
   glNamedBufferStorage(s_Data.sharedVBO, s_Data.allVertices.size() * sizeof(Vertex), s_Data.allVertices.data(), 0);
@@ -717,7 +742,9 @@ void ModelManager::UploadToGPU()
   }
 
   s_Data.m_InstanceTransformsSSBO = StorageBuffer::Create(sizeof(glm::mat4), 13);
+  s_Data.m_VisibleInstanceTransformsSSBO = StorageBuffer::Create(sizeof(glm::mat4), 13);
   RefreshInstanceTransforms();
+  s_Data.m_InstanceTransformsSSBO->Bind();
 
   std::vector<int> meshToTransformIndex;
 
@@ -957,6 +984,31 @@ Model::Model(const char* path, float optimizerStrength, bool isAnimated, bool is
   std::string dirStr = std::filesystem::path(path).parent_path().string();
   m_Directory = dirStr.c_str();  
   processNode(m_Scene->mRootNode, m_Scene);
+
+  glm::vec3 boundsMin(std::numeric_limits<float>::max());
+  glm::vec3 boundsMax(std::numeric_limits<float>::lowest());
+  bool hasVertices = false;
+  for (const auto& mesh : m_Meshes)
+  {
+    for (const auto& vertex : mesh.m_Vertices)
+    {
+      boundsMin = glm::min(boundsMin, vertex.Position);
+      boundsMax = glm::max(boundsMax, vertex.Position);
+      hasVertices = true;
+    }
+  }
+  if (hasVertices)
+  {
+    m_BoundsCenter = (boundsMin + boundsMax) * 0.5f;
+    for (const auto& mesh : m_Meshes)
+      for (const auto& vertex : mesh.m_Vertices)
+        m_BoundsRadius = std::max(m_BoundsRadius, glm::distance(m_BoundsCenter, vertex.Position));
+
+    // Bind-pose vertices do not contain the full animation envelope. Keep the
+    // sphere conservative so animated limbs are not clipped at a frustum edge.
+    if (m_isAnimated)
+      m_BoundsRadius *= 1.5f;
+  }
 
   if(isAnimated)
   {

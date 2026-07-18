@@ -158,6 +158,8 @@ struct Model
   inline const PxRigidDynamic* GetDynamicActor() { return m_DynamicMeshActor; }
   inline PxController* GetController() { return m_ActorController; }
   inline Transform& GetControllerTransform() { return m_ControllerTransform; }
+  inline const glm::vec3& GetBoundsCenter() const { return m_BoundsCenter; }
+  inline float GetBoundsRadius() const { return m_BoundsRadius; }
 
   Transform m_ControllerTransform;
   PxVec3 m_ControllerPosition;
@@ -172,6 +174,8 @@ struct Model
   bool m_IsRendered = true;
   uint32_t m_InstanceBase = 0;
   std::vector<glm::mat4> m_InstanceTransforms;
+  glm::vec3 m_BoundsCenter = glm::vec3(0.0f);
+  float m_BoundsRadius = 0.0f;
 
   std::unordered_map<std::string, std::shared_ptr<Texture>> m_TexturesLoaded; 
   std::vector<Mesh> m_Meshes;
@@ -250,6 +254,9 @@ struct ModelManager
   static std::vector<glm::mat4> GetTransforms();
   static GLsizei GetModelsQuantity();
   static GLuint GetModelsVAO();
+  static void UploadVisibleInstanceTransforms(const std::vector<glm::mat4>& transforms);
+  static void BindAllInstanceTransforms();
+  static void BindVisibleInstanceTransforms();
   static void SetRender(const std::string& name ,bool render);
   static void SetInitialModelTransform(const std::string& name, const glm::mat4& transform);
   static uint32_t AddModelInstance(const std::string& name, const glm::mat4& transform);

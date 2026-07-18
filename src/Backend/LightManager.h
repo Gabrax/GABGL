@@ -22,7 +22,7 @@ struct LightManager
   static void RemoveLight(int32_t index);
   static int32_t GetLightsQuantity();
   static int32_t GetPointLightsQuantity();
-  static std::vector<glm::vec3> GetPointLightPositions();
+  static const std::vector<glm::vec3>& GetPointLightPositions();
   static glm::vec3 GetDirectLightRotation();
   static bool DirectLightEmpty();
   static bool PointLightEmpty();

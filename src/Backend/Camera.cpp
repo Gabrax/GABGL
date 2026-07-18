@@ -35,7 +35,7 @@ static glm::vec3 m_FocalPoint = { 0.0f, 0.0f, 0.0f };
 static glm::vec2 m_InitialMousePosition = { 0.0f, 0.0f };
 
 static glm::vec3 m_FPS_Position = { 0.0f, 5.0f, 5.0f };
-static float m_FPS_Yaw = 0.0f;
+static float m_FPS_Yaw = -90.0f;
 static float m_FPS_Pitch = 0.0f;
 
 static glm::vec3 m_Orbital_FocalPoint = { 0.0f, 0.0f, 0.0f };
@@ -49,10 +49,11 @@ static glm::vec3 m_Front = glm::vec3(0.0f, 0.0f, -1.0f);
 static glm::vec3 m_Up = glm::vec3(0.0f, 1.0f, 0.0f);
 static glm::vec3 m_WorldUp = glm::vec3(0.0f, 1.0f, 0.0f);
 static glm::vec3 m_Right = glm::vec3(1.0f, 0.0f, 0.0f);
+static std::string m_FollowTarget = "harry";
 
 static float m_Distance = 0.0f;
 static float m_Pitch = 0.0f;
-static float m_Yaw = 0.0f;
+static float m_Yaw = -90.0f;
 
 static float m_ViewportWidth = 0;
 static float m_ViewportHeight = 0;
@@ -60,14 +61,18 @@ static float m_ViewportHeight = 0;
 void Camera::Init(float fov, float aspectRatio, float nearClip, float farClip)
 {
   m_ProjectionType = ProjectionType::Perspective;
-  m_PerspectiveFOV = glm::radians(fov);
-  m_PerspectiveNear = nearClip;
-  m_PerspectiveFar = farClip;
-  m_AspectRatio = aspectRatio;
+  m_PerspectiveFOV = glm::radians(glm::clamp(fov, 1.0f, 179.0f));
+  m_PerspectiveNear = std::max(nearClip, 0.0001f);
+  m_PerspectiveFar = std::max(farClip, m_PerspectiveNear + 0.0001f);
+  m_AspectRatio = aspectRatio > 0.0f ? aspectRatio : 16.0f / 9.0f;
   m_Distance = 1000.0f;
   m_Pitch = 0.0f;
-  m_Yaw = 0.0f;
+  m_Yaw = -90.0f;
+  m_FPS_Yaw = m_Yaw;
+  m_FPS_Pitch = m_Pitch;
+  m_InitialMousePosition = {Input::GetMouseX(), Input::GetMouseY()};
 
+  UpdateCameraVectors();
   RecalculateProjection();
   UpdateView();
 }
@@ -113,12 +118,16 @@ void Camera::SetMode(CameraMode mode)
   UpdateView();
 }
 
+void Camera::SetFollowTarget(const std::string& modelName)
+{
+  m_FollowTarget = modelName;
+}
+
 void Camera::UpdateProjection()
 {
-    // Deprecated, you can call RecalculateProjection() instead
-  m_AspectRatio = m_ViewportWidth / m_ViewportHeight;
-
-  m_Projection = glm::perspective(m_PerspectiveFOV, m_AspectRatio, m_PerspectiveNear, m_PerspectiveFar);
+  if (m_ViewportWidth > 0.0f && m_ViewportHeight > 0.0f)
+    m_AspectRatio = m_ViewportWidth / m_ViewportHeight;
+  RecalculateProjection();
 }
 
 void Camera::UpdateView()
@@ -200,7 +209,13 @@ void Camera::OnUpdate(DeltaTime dt)
     /**/
     /*UpdateView();*/
 
-    auto* player = ModelManager::GetModel("harry")->GetController();
+    const auto playerModel = ModelManager::GetModel(m_FollowTarget);
+    auto* player = playerModel ? playerModel->GetController() : nullptr;
+    if (!player)
+    {
+      UpdateView();
+      return;
+    }
     glm::vec3 targetPos = PhysX::PxExtendedVec3toGlmVec3(player->getPosition());
 
     glm::vec3 direction;
@@ -328,15 +343,16 @@ glm::vec3 Camera::CalculatePosition()
 
 glm::quat Camera::GetOrientation()
 {
-	return glm::quat(glm::vec3(-m_Pitch, -m_Yaw, 0.0f));
+	const glm::mat3 orientation(m_Right, m_Up, -m_Front);
+	return glm::normalize(glm::quat_cast(orientation));
 }
 
-void Camera::SetPerspective(float verticalFOV, float nearClip, float farClip)
+void Camera::SetPerspective(float verticalFOVDegrees, float nearClip, float farClip)
 {
 	m_ProjectionType = ProjectionType::Perspective;
-	m_PerspectiveFOV = verticalFOV;
-	m_PerspectiveNear = nearClip;
-	m_PerspectiveFar = farClip;
+	m_PerspectiveFOV = glm::radians(glm::clamp(verticalFOVDegrees, 1.0f, 179.0f));
+	m_PerspectiveNear = std::max(nearClip, 0.0001f);
+	m_PerspectiveFar = std::max(farClip, m_PerspectiveNear + 0.0001f);
 	RecalculateProjection();
 }
 
@@ -351,7 +367,8 @@ void Camera::SetOrthographic(float size, float nearClip, float farClip)
 
 void Camera::SetViewportSize(uint32_t width, uint32_t height)
 {
-  GABGL_ASSERT(width > 0 && height > 0, "SIZE BELOW ZERO");
+  if (width == 0 || height == 0)
+    return;
   m_ViewportWidth = static_cast<float>(width);
   m_ViewportHeight = static_cast<float>(height);
   m_AspectRatio = m_ViewportWidth / m_ViewportHeight;
@@ -360,7 +377,8 @@ void Camera::SetViewportSize(uint32_t width, uint32_t height)
 
 void Camera::SetViewportSize(float width, float height)
 {
-  GABGL_ASSERT(width > 0 && height > 0, "SIZE BELOW ZERO");
+  if (width <= 0.0f || height <= 0.0f)
+    return;
   m_ViewportWidth = width;
   m_ViewportHeight = height;
   m_AspectRatio = m_ViewportWidth / m_ViewportHeight;
@@ -397,7 +415,13 @@ float Camera::GetDistance()
 
 void Camera::SetDistance(float distance)
 { 
-  m_Distance = distance;
+  m_Distance = glm::clamp(distance, 1.0f, 1000.0f);
+  if (m_Mode == CameraMode::ORBITAL)
+  {
+    m_Orbital_Distance = m_Distance;
+    m_Position = CalculatePosition();
+    UpdateView();
+  }
 }
 
 const glm::mat4& Camera::GetViewMatrix()

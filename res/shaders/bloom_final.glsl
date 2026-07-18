@@ -22,6 +22,7 @@ uniform sampler2D scene;
 uniform sampler2D bloomBlur;
 uniform float exposure = 0.5f;
 uniform float bloomStrength = 1.5f;
+uniform bool u_BloomEnabled;
 
 // ACES Tone Mapping
 vec3 toneMappingACES(vec3 color)
@@ -50,7 +51,7 @@ vec3 gammaCorrection(vec3 value)
 void main()
 {
   vec3 hdrColor = texture(scene, TexCoords).rgb;
-  vec3 bloomColor = texture(bloomBlur, TexCoords).rgb;
+  vec3 bloomColor = u_BloomEnabled ? texture(bloomBlur, TexCoords).rgb : vec3(0.0);
 
   vec3 result = hdrColor + bloomColor * bloomStrength;
   result = toneMappingACES(result * exposure);

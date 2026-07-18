@@ -39,9 +39,6 @@ struct Renderer
   static void BakeSkyboxTextures(const std::string& name,const std::shared_ptr<Texture>& texture);
   static void DrawSkybox(const std::string& name);
 
-  static void EmitParticles();
-  static void UpdateParticles(DeltaTime& dt);
-
 	static float GetLineWidth();
 	static void SetLineWidth(float width);
 	static void DrawLine(const glm::vec3& p0, const glm::vec3& p1, const glm::vec4& color, int entityID = -1);
@@ -69,6 +66,7 @@ private:
 	static void NextBatch();
 	static void LoadShaders();
   static void DrawPhysicsDebug();
+  static void UpdateModelFrustumCulling();
 
   static void DrawFramebuffer(uint32_t textureID);
 	static void DrawEditorFrameBuffer(uint32_t framebufferTexture);

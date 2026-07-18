@@ -3,6 +3,7 @@
 
 #include "Renderer.h"
 #include "AudioManager.h"
+#include "Camera.h"
 #include "LightManager.h"
 #include "Logger.h"
 #include <algorithm>
@@ -18,6 +19,32 @@
 namespace
 {
   constexpr const char* SceneFilePath = "../res/scenes/scene.json";
+
+  const char* LightTypeName(LightType type)
+  {
+    switch (type)
+    {
+      case LightType::DIRECT: return "direct";
+      case LightType::SPOT: return "spot";
+      default: return "point";
+    }
+  }
+
+  LightType ParseLightType(const std::string& type)
+  {
+    if (type == "direct" || type == "directional") return LightType::DIRECT;
+    if (type == "spot") return LightType::SPOT;
+    return LightType::POINT;
+  }
+
+  bool ReadVec3(const json& value, glm::vec3& result)
+  {
+    if (!value.is_array() || value.size() != 3 ||
+        !value[0].is_number() || !value[1].is_number() || !value[2].is_number())
+      return false;
+    result = glm::vec3(value[0].get<float>(), value[1].get<float>(), value[2].get<float>());
+    return true;
+  }
 
   struct GenericScene : Scene
   {
@@ -219,11 +246,110 @@ void Scene::SpawnEntities()
   }
 }
 
+void Scene::SpawnLights()
+{
+  m_EditorLights.clear();
+  m_NextLightId = 1;
+
+  if (!m_Assets.lights.is_array())
+    return;
+
+  for (const auto& description : m_Assets.lights)
+  {
+    if (!description.is_object())
+      continue;
+
+    SceneLight light;
+    light.type = ParseLightType(description.value("type", "point"));
+    if (light.type == LightType::DIRECT &&
+        std::any_of(m_EditorLights.begin(), m_EditorLights.end(),
+          [](const SceneLight& existing) { return existing.type == LightType::DIRECT; }))
+    {
+      GABGL_WARN("Scene '{}' contains more than one directional light; ignoring the duplicate", m_Name);
+      continue;
+    }
+
+    const glm::vec3 defaultRotation = light.type == LightType::DIRECT
+      ? glm::vec3(-1.0f, -2.0f, -1.0f)
+      : glm::vec3(0.0f, -1.0f, 0.0f);
+    light.rotation = defaultRotation;
+    if (description.contains("color") && !ReadVec3(description["color"], light.color))
+      GABGL_WARN("Invalid color for a light in scene '{}'; using white", m_Name);
+    if (description.contains("position") && !ReadVec3(description["position"], light.position))
+      GABGL_WARN("Invalid position for a light in scene '{}'; using origin", m_Name);
+    if (description.contains("rotation") && !ReadVec3(description["rotation"], light.rotation))
+      GABGL_WARN("Invalid rotation for a light in scene '{}'; using the default", m_Name);
+
+    light.id = m_NextLightId++;
+    light.name = description.value("name", std::string(LightTypeName(light.type)) + " light " + std::to_string(light.id));
+    LightManager::AddLight(light.type, light.color, light.position, light.rotation);
+    m_EditorLights.push_back(std::move(light));
+  }
+}
+
 SceneEntity* Scene::FindEntity(uint64_t entityId)
 {
   const auto it = std::find_if(m_EditorEntities.begin(), m_EditorEntities.end(),
     [entityId](const SceneEntity& entity) { return entity.id == entityId; });
   return it == m_EditorEntities.end() ? nullptr : &(*it);
+}
+
+SceneLight* Scene::FindLight(uint64_t lightId)
+{
+  const auto it = std::find_if(m_EditorLights.begin(), m_EditorLights.end(),
+    [lightId](const SceneLight& light) { return light.id == lightId; });
+  return it == m_EditorLights.end() ? nullptr : &(*it);
+}
+
+uint64_t Scene::AddLight(LightType type)
+{
+  if (type == LightType::DIRECT &&
+      std::any_of(m_EditorLights.begin(), m_EditorLights.end(),
+        [](const SceneLight& light) { return light.type == LightType::DIRECT; }))
+    return 0;
+
+  SceneLight light;
+  light.id = m_NextLightId++;
+  light.type = type;
+  light.name = std::string(LightTypeName(type)) + " light " + std::to_string(light.id);
+  light.position = Camera::GetPosition();
+  light.rotation = type == LightType::DIRECT
+    ? glm::vec3(-1.0f, -2.0f, -1.0f)
+    : Camera::GetForwardDirection();
+
+  LightManager::AddLight(light.type, light.color, light.position, light.rotation);
+  m_EditorLights.push_back(std::move(light));
+  return m_EditorLights.back().id;
+}
+
+bool Scene::UpdateLight(uint64_t lightId, const std::string& name, const glm::vec3& color,
+  const glm::vec3& position, const glm::vec3& rotation)
+{
+  const auto it = std::find_if(m_EditorLights.begin(), m_EditorLights.end(),
+    [lightId](const SceneLight& light) { return light.id == lightId; });
+  if (it == m_EditorLights.end())
+    return false;
+
+  it->name = name;
+  it->color = glm::max(color, glm::vec3(0.0f));
+  it->position = position;
+  it->rotation = rotation;
+  const int32_t managerIndex = static_cast<int32_t>(std::distance(m_EditorLights.begin(), it));
+  LightManager::EditLight(managerIndex, it->color, it->position, it->rotation);
+  return true;
+}
+
+bool Scene::RemoveLight(uint64_t lightId)
+{
+  const auto it = std::find_if(m_EditorLights.begin(), m_EditorLights.end(),
+    [lightId](const SceneLight& light) { return light.id == lightId; });
+  if (it == m_EditorLights.end())
+    return false;
+
+  const int32_t managerIndex = static_cast<int32_t>(std::distance(m_EditorLights.begin(), it));
+  LightManager::RemoveLight(managerIndex);
+  m_EditorLights.erase(it);
+  return true;
 }
 
 uint64_t Scene::DuplicateEntity(uint64_t entityId)
@@ -326,6 +452,19 @@ bool Scene::SaveToJSON(const std::string& path) const
 
   data["scenes"][m_Name]["entities"] = std::move(entities);
 
+  json lights = json::array();
+  for (const auto& light : m_EditorLights)
+  {
+    lights.push_back({
+      {"name", light.name},
+      {"type", LightTypeName(light.type)},
+      {"color", {light.color.x, light.color.y, light.color.z}},
+      {"position", {light.position.x, light.position.y, light.position.z}},
+      {"rotation", {light.rotation.x, light.rotation.y, light.rotation.z}}
+    });
+  }
+  data["scenes"][m_Name]["lights"] = std::move(lights);
+
   std::ofstream output(path, std::ios::trunc);
   if (!output)
   {
@@ -379,6 +518,7 @@ void Scene::UpdateLoading()
     Renderer::BakeSkyboxTextures("night",skyboxTex);
 
     SpawnEntities();
+    SpawnLights();
 
     ModelManager::UploadToGPU();
     Renderer::InitDrawCommandBuffer();
@@ -454,6 +594,9 @@ void Scene::LoadSceneFromJSON(const std::string& path, const std::string& sceneN
 
     if(scene.contains("entities"))
         m_Assets.entities = scene["entities"];
+
+    if(scene.contains("lights"))
+        m_Assets.lights = scene["lights"];
 }
 
 std::unique_ptr<Scene> SceneManager::s_ActiveScene = nullptr;
@@ -540,9 +683,20 @@ const std::vector<SceneEntity>& SceneManager::GetEntities()
   return s_ActiveScene ? s_ActiveScene->GetEntities() : empty;
 }
 
+const std::vector<SceneLight>& SceneManager::GetLights()
+{
+  static const std::vector<SceneLight> empty;
+  return s_ActiveScene ? s_ActiveScene->GetLights() : empty;
+}
+
 SceneEntity* SceneManager::FindEntity(uint64_t entityId)
 {
   return s_ActiveScene ? s_ActiveScene->FindEntity(entityId) : nullptr;
+}
+
+SceneLight* SceneManager::FindLight(uint64_t lightId)
+{
+  return s_ActiveScene ? s_ActiveScene->FindLight(lightId) : nullptr;
 }
 
 uint64_t SceneManager::DuplicateEntity(uint64_t entityId)
@@ -553,6 +707,22 @@ uint64_t SceneManager::DuplicateEntity(uint64_t entityId)
 bool SceneManager::UpdateEntityTransform(uint64_t entityId, const Transform& transform)
 {
   return s_ActiveScene && s_ActiveScene->UpdateEntityTransform(entityId, transform);
+}
+
+uint64_t SceneManager::AddLight(LightType type)
+{
+  return s_ActiveScene ? s_ActiveScene->AddLight(type) : 0;
+}
+
+bool SceneManager::UpdateLight(uint64_t lightId, const std::string& name, const glm::vec3& color,
+  const glm::vec3& position, const glm::vec3& rotation)
+{
+  return s_ActiveScene && s_ActiveScene->UpdateLight(lightId, name, color, position, rotation);
+}
+
+bool SceneManager::RemoveLight(uint64_t lightId)
+{
+  return s_ActiveScene && s_ActiveScene->RemoveLight(lightId);
 }
 
 void SceneManager::SyncEditorEntityTransforms()

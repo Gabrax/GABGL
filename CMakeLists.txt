@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(FetchContent)
+set(FETCHCONTENT_UPDATES_DISCONNECTED ON CACHE BOOL "Do not update already populated dependencies during configure" FORCE)
 
 # Set this to false if you don’t use clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

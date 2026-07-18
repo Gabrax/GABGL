@@ -227,7 +227,7 @@ void StorageBuffer::Allocate(size_t size)
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, m_Binding, m_RendererID);
 }
 
-void StorageBuffer::SetData(size_t size, void* data)
+void StorageBuffer::SetData(size_t size, const void* data)
 {
   if (size == 0) return;
 
@@ -550,6 +550,27 @@ void FrameBuffer::AttachExternalColorTexture(GLuint textureID, uint32_t slot)
 	glNamedFramebufferTexture(m_RendererID, GL_COLOR_ATTACHMENT0 + slot, textureID, 0);
 }
 
+void StorageBuffer::Bind() const
+{
+  if (m_RendererID != 0)
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, m_Binding, m_RendererID);
+}
+
+void FrameBuffer::SetDrawBuffer(uint32_t attachmentIndex) const
+{
+  GABGL_ASSERT(attachmentIndex < m_ColorAttachments.size(), "Invalid color attachment index");
+  glNamedFramebufferDrawBuffer(m_RendererID, GL_COLOR_ATTACHMENT0 + attachmentIndex);
+}
+
+void FrameBuffer::SetDrawBuffers() const
+{
+  GABGL_ASSERT(m_ColorAttachments.size() <= 4, "Too many color attachments");
+  const GLenum buffers[4] = {
+    GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3
+  };
+  glNamedFramebufferDrawBuffers(m_RendererID, static_cast<GLsizei>(m_ColorAttachments.size()), buffers);
+}
+
 void FrameBuffer::AttachExternalDepthTexture(GLuint textureID)
 {
 	glNamedFramebufferTexture(m_RendererID, GL_DEPTH_ATTACHMENT, textureID, 0);
@@ -741,13 +762,6 @@ BloomBuffer::BloomBuffer(const std::shared_ptr<Shader>& downsampleShader, const 
 	hdrSpec.Height = Window::GetHeight();
 	m_hdrFB = FrameBuffer::Create(hdrSpec); 
 
-  FramebufferSpecification blurSpec;
-  blurSpec.Attachments = { FramebufferTextureFormat::RGBA16F };
-  blurSpec.Width = windowWidth;
-  blurSpec.Height = windowHeight;
-  m_pingpongFB[0] = FrameBuffer::Create(blurSpec);
-  m_pingpongFB[1] = FrameBuffer::Create(blurSpec);
-
   FramebufferSpecification mipFBOspec;
   mipFBOspec.Attachments = { FramebufferTextureFormat::R11F_G11F_B10F};
   mipFBOspec.Width = windowWidth;
@@ -892,8 +906,6 @@ void BloomBuffer::Resize(int newWidth, int newHeight)
   }
 
   m_hdrFB->Resize(newWidth, newHeight);
-  m_pingpongFB[0]->Resize(newWidth, newHeight);
-  m_pingpongFB[1]->Resize(newWidth, newHeight);
   m_mipFB->Resize(newWidth, newHeight);
   m_mipFB->Bind();
   m_mipFB->AttachExternalColorTexture(mMipChain[0].texture, 0);
@@ -910,59 +922,30 @@ void BloomBuffer::UnBind() const
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void BloomBuffer::CompositeBloomOver()
+void BloomBuffer::CompositeTo(const std::shared_ptr<FrameBuffer>& dst, bool bloomEnabled)
 {
-  m_hdrFB->Bind();
-  glDrawBuffer(GL_COLOR_ATTACHMENT0);
+  dst->Bind();
+  dst->SetDrawBuffer(0);
+  glDisable(GL_DEPTH_TEST);
+  glDepthMask(GL_FALSE);
+  glDisable(GL_BLEND);
+
   finalShader->Bind();
 
   glBindTextureUnit(0, m_hdrFB->GetColorAttachmentRendererID(0));
   finalShader->SetInt("scene", 0);
 
-  glBindTextureUnit(1, mMipChain[0].texture);
+  if (bloomEnabled)
+    glBindTextureUnit(1, mMipChain[0].texture);
   finalShader->SetInt("bloomBlur", 1);
+  finalShader->SetBool("u_BloomEnabled", bloomEnabled);
 
   renderQuad();
 
   finalShader->UnBind();
-}
-
-void BloomBuffer::BlitColorFrom(const std::shared_ptr<FrameBuffer>& src, uint32_t attachmentIndex)
-{
-  glBindFramebuffer(GL_READ_FRAMEBUFFER, src->GetID());
-  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_hdrFB->GetID());
-
-  glReadBuffer(GL_COLOR_ATTACHMENT0 + attachmentIndex);
-  glDrawBuffer(GL_COLOR_ATTACHMENT0 + attachmentIndex); 
-
-  const auto& srcSpec = src->GetSpecification();
-  const auto& dstSpec = m_hdrFB->GetSpecification();
-
-  glBlitFramebuffer(
-      0, 0, srcSpec.Width, srcSpec.Height,
-      0, 0, dstSpec.Width, dstSpec.Height,
-      GL_COLOR_BUFFER_BIT,
-      GL_LINEAR
-  );
-
-  glReadBuffer(GL_COLOR_ATTACHMENT0);
-  glDrawBuffer(GL_COLOR_ATTACHMENT0);
-}
-
-void BloomBuffer::BlitColorTo(const std::shared_ptr<FrameBuffer>& dst)
-{
-  const auto& srcSpec = m_hdrFB->GetSpecification();
-  const auto& dstSpec = dst->GetSpecification();
-
-  glNamedFramebufferReadBuffer(m_hdrFB->GetID(), GL_COLOR_ATTACHMENT0);
-
-  glBlitNamedFramebuffer(
-      m_hdrFB->GetID(), dst->GetID(),
-      0, 0, srcSpec.Width, srcSpec.Height,
-      0, 0, dstSpec.Width, dstSpec.Height,
-      GL_COLOR_BUFFER_BIT,
-      GL_LINEAR
-  );
+  glDepthMask(GL_TRUE);
+  glEnable(GL_DEPTH_TEST);
+  dst->SetDrawBuffers();
 }
 
 std::shared_ptr<BloomBuffer> BloomBuffer::Create(const std::shared_ptr<Shader>& downsampleShader, const std::shared_ptr<Shader>& upsampleShader, const std::shared_ptr<Shader>& finalShader)

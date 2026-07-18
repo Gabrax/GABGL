@@ -23,6 +23,7 @@ struct LightManagerData
   std::shared_ptr<StorageBuffer> LightTypeStorageBuffer;
 
   std::vector<std::shared_ptr<LightData>> lights;
+  std::vector<glm::vec3> pointLightPositions;
 
   int32_t numLights = 0;
   int32_t numPointLights = 0;
@@ -67,11 +68,9 @@ void LightManager::EditLight(int32_t index, const std::optional<glm::vec3>& newC
 
   std::shared_ptr<LightData>& lightData = s_Data.lights[index];
 
-  glm::vec4 color = glm::vec4(newColor->x,newColor->y,newColor->z,1.0);
-
   if (newPosition) lightData->position = *newPosition;
   if (newRotation) lightData->rotation = *newRotation;
-  if (newColor) lightData->color = color;
+  if (newColor) lightData->color = glm::vec4(*newColor, 1.0f);
 
   UpdateSSBOLightData();
 }
@@ -80,8 +79,11 @@ void LightManager::RemoveLight(int32_t index)
 {
   if (index >= 0 && index < s_Data.lights.size())
   {
+    const LightType removedType = s_Data.lights[index]->type;
     s_Data.lights.erase(s_Data.lights.begin() + index);
     s_Data.numLights--;
+    if (removedType == LightType::POINT) s_Data.numPointLights--;
+    if (removedType == LightType::DIRECT) s_Data.numDirectLights--;
     UpdateSSBOLightData();
   }
 }
@@ -100,6 +102,14 @@ void LightManager::ResizeLightBuffers(uint32_t newMax)
 
 void LightManager::UpdateSSBOLightData()
 {
+  s_Data.pointLightPositions.clear();
+  s_Data.pointLightPositions.reserve(static_cast<size_t>(s_Data.numPointLights));
+  for (const auto& light : s_Data.lights)
+  {
+    if (light->type == LightType::POINT)
+      s_Data.pointLightPositions.push_back(light->position);
+  }
+
   s_Data.LightQuantityStorageBuffer->SetData(sizeof(int32_t), &s_Data.numLights);
   
   size_t alignedVec4Size = 16; // vec3 aligned to vec4 size (12 bytes data + 4 bytes padding)
@@ -128,15 +138,9 @@ void LightManager::UpdateSSBOLightData()
   glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
-std::vector<glm::vec3> LightManager::GetPointLightPositions()
+const std::vector<glm::vec3>& LightManager::GetPointLightPositions()
 {
-  std::vector<glm::vec3> positions;
-  for (const auto& light : s_Data.lights)
-  {
-      if (light->type == LightType::POINT)
-          positions.push_back(light->position);
-  }
-  return positions;
+  return s_Data.pointLightPositions;
 }
 
 glm::vec3 LightManager::GetDirectLightRotation()

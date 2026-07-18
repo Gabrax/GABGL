@@ -87,6 +87,17 @@
         { "path":"../res/zombie/zombie.glb","scale":0.5 }
       ],
 
+      "lights":
+      [
+        {
+          "name":"Moon Light",
+          "type":"direct",
+          "color":[0.3,0.32,0.4],
+          "position":[0,0,0],
+          "rotation":[-2,-4,-1]
+        }
+      ],
+
       "entities":
       [
         { "model":"objHouse","position":[0,0,0] },
