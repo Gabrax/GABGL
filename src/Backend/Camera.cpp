@@ -123,6 +123,11 @@ void Camera::SetFollowTarget(const std::string& modelName)
   m_FollowTarget = modelName;
 }
 
+void Camera::ResetMouseDelta()
+{
+  m_InitialMousePosition = {Input::GetMouseX(), Input::GetMouseY()};
+}
+
 void Camera::UpdateProjection()
 {
   if (m_ViewportWidth > 0.0f && m_ViewportHeight > 0.0f)

@@ -1,114 +1,318 @@
 {
-  "scenes":
-  {
-    "menu":
-    {
-      "sounds":
-      [
-        "../res/audio/select1.wav",
-        "../res/audio/select2.wav"
-      ],
-
-      "music":
-      [
-        "../res/audio/menu.wav",
-        "../res/audio/night.wav",
-        "../res/audio/night_mono.wav"
-      ],
-
-      "skybox":
-      [
-        "../res/textures/NightSky_Right.png",
-        "../res/textures/NightSky_Left.png",
-        "../res/textures/NightSky_Top.png",
-        "../res/textures/NightSky_Bottom.png",
-        "../res/textures/NightSky_Front.png",
-        "../res/textures/NightSky_Back.png"
-      ],
-
-      "static_models":
-      [
-      ],
-
-      "animated_models":
-      [
-        { "path":"../res/models/harry.glb","scale":1.0 }
-      ],
-
-      "entities":
-      [
-        { "model":"harry","type":"controller","position":[5,0,0] }
-      ]
-    },
-
-    "game":
-    {
-      "sounds":
-      [
-        "../res/audio/select1.wav",
-        "../res/audio/select2.wav"
-      ],
-
-      "music":
-      [
-        "../res/audio/menu.wav",
-        "../res/audio/night.wav",
-        "../res/audio/night_mono.wav"
-      ],
-
-      "skybox":
-      [
-        "../res/textures/NightSky_Right.png",
-        "../res/textures/NightSky_Left.png",
-        "../res/textures/NightSky_Top.png",
-        "../res/textures/NightSky_Bottom.png",
-        "../res/textures/NightSky_Front.png",
-        "../res/textures/NightSky_Back.png"
-      ],
-
-      "static_models":
-      [
-        { "path":"../res/map/objHouse.obj", "scale":0.7, "mesh":"trianglemesh" },
-        { "path":"../res/models/aidkit.glb", "scale":1.0 },
-        { "path":"../res/models/aidkit_convex.glb", "scale":1.0, "mesh":"convex" },
-        { "path":"../res/models/pistolammo.glb", "scale":1.0 },
-        { "path":"../res/models/pistolammo_convex.glb", "scale":1.0, "mesh":"convex" },
-        { "path":"../res/models/shotgunammo.glb", "scale":1.0 },
-        { "path":"../res/models/shotgunammo_convex.glb", "scale":1.0, "mesh":"convex" },
-        { "path":"../res/models/pistol.glb", "scale":1.0 },
-        { "path":"../res/models/pistol_convex.glb", "scale":1.0, "mesh":"convex" },
-        { "path":"../res/models/shotgun.glb", "scale":1.0 },
-        { "path":"../res/models/shotgun_convex.glb", "scale":1.0, "mesh":"convex" }
-      ],
-
-      "animated_models":
-      [
-        { "path":"../res/models/harry.glb","scale":1.0 },
-        { "path":"../res/zombie/zombie.glb","scale":0.5 }
-      ],
-
-      "lights":
-      [
+  "scenes": {
+    "game": {
+      "animated_models": [
         {
-          "name":"Moon Light",
-          "type":"direct",
-          "color":[0.3,0.32,0.4],
-          "position":[0,0,0],
-          "rotation":[-2,-4,-1]
+          "path": "../res/models/harry.glb",
+          "scale": 1.0
+        },
+        {
+          "path": "../res/zombie/zombie.glb",
+          "scale": 0.5
         }
       ],
-
-      "entities":
-      [
-        { "model":"objHouse","position":[0,0,0] },
-        { "model":"pistol","position":[15,4,13] },
-        { "model":"pistolammo","position":[11.0,4.0,5.0] },
-        { "model":"aidkit","position":[13.0,4.0,9.0] },
-        { "model":"shotgun","position":[14.0,4.0,11.0] },
-        { "model":"shotgunammo","position":[12.0,4.0,7.0] },
-        { "model":"harry","type":"controller","position":[5,0,0] },
-        { "model":"zombie","type":"controller","position":[10,0,0] }
+      "entities": [
+        {
+          "model": "objHouse",
+          "name": "objHouse",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            -0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "model": "pistol",
+          "name": "pistol",
+          "position": [
+            15.579203605651855,
+            0.4421263635158539,
+            12.96890640258789
+          ],
+          "rotation": [
+            -4.585504531860352,
+            -0.16273267567157745,
+            -89.99332427978516
+          ],
+          "scale": [
+            1.000000238418579,
+            1.000000238418579,
+            1.0
+          ]
+        },
+        {
+          "model": "pistolammo",
+          "name": "pistolammo",
+          "position": [
+            11.009870529174805,
+            0.4398002326488495,
+            5.000321865081787
+          ],
+          "rotation": [
+            -4.790868115378544e-05,
+            0.010022897273302078,
+            0.001751813106238842
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "model": "aidkit",
+          "name": "aidkit",
+          "position": [
+            13.0426025390625,
+            0.5630518794059753,
+            10.284937858581543
+          ],
+          "rotation": [
+            178.8800811767578,
+            2.050292491912842,
+            -0.00870109535753727
+          ],
+          "scale": [
+            1.0,
+            0.9999998211860657,
+            0.9999998211860657
+          ]
+        },
+        {
+          "model": "shotgun",
+          "name": "shotgun",
+          "position": [
+            13.995615005493164,
+            2.3392839431762695,
+            11.232558250427246
+          ],
+          "rotation": [
+            24.399150848388672,
+            -0.008651737123727798,
+            0.05013778805732727
+          ],
+          "scale": [
+            0.9999999403953552,
+            0.9999999403953552,
+            1.0
+          ]
+        },
+        {
+          "model": "shotgunammo",
+          "name": "shotgunammo",
+          "position": [
+            12.000006675720215,
+            2.7347893714904785,
+            6.999997138977051
+          ],
+          "rotation": [
+            -0.00012682205124292523,
+            -0.00017693647532723844,
+            -0.0014829731080681086
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "model": "harry",
+          "name": "harry",
+          "position": [
+            5.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            -0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "type": "controller"
+        },
+        {
+          "model": "zombie",
+          "name": "zombie",
+          "position": [
+            10.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            -0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "type": "controller"
+        }
+      ],
+      "lights": [
+        {
+          "color": [
+            0.30000001192092896,
+            0.3199999928474426,
+            0.4000000059604645
+          ],
+          "name": "Moon Light",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            -2.0,
+            -4.0,
+            -1.0
+          ],
+          "type": "direct"
+        },
+        {
+          "color": [
+            0.9754902124404907,
+            0.7572144269943237,
+            0.047818172723054886
+          ],
+          "name": "point light 2",
+          "position": [
+            2.5,
+            4.300000190734863,
+            17.100000381469727
+          ],
+          "rotation": [
+            0.03891688212752342,
+            0.7847765684127808,
+            0.6185557246208191
+          ],
+          "type": "point"
+        }
+      ],
+      "music": [
+        "../res/audio/menu.wav",
+        "../res/audio/night.wav",
+        "../res/audio/night_mono.wav"
+      ],
+      "skybox": [
+        "../res/textures/NightSky_Right.png",
+        "../res/textures/NightSky_Left.png",
+        "../res/textures/NightSky_Top.png",
+        "../res/textures/NightSky_Bottom.png",
+        "../res/textures/NightSky_Front.png",
+        "../res/textures/NightSky_Back.png"
+      ],
+      "sounds": [
+        "../res/audio/select1.wav",
+        "../res/audio/select2.wav"
+      ],
+      "static_models": [
+        {
+          "mesh": "trianglemesh",
+          "path": "../res/map/objHouse.obj",
+          "scale": 0.7
+        },
+        {
+          "path": "../res/models/aidkit.glb",
+          "scale": 1.0
+        },
+        {
+          "mesh": "convex",
+          "path": "../res/models/aidkit_convex.glb",
+          "scale": 1.0
+        },
+        {
+          "path": "../res/models/pistolammo.glb",
+          "scale": 1.0
+        },
+        {
+          "mesh": "convex",
+          "path": "../res/models/pistolammo_convex.glb",
+          "scale": 1.0
+        },
+        {
+          "path": "../res/models/shotgunammo.glb",
+          "scale": 1.0
+        },
+        {
+          "mesh": "convex",
+          "path": "../res/models/shotgunammo_convex.glb",
+          "scale": 1.0
+        },
+        {
+          "path": "../res/models/pistol.glb",
+          "scale": 1.0
+        },
+        {
+          "mesh": "convex",
+          "path": "../res/models/pistol_convex.glb",
+          "scale": 1.0
+        },
+        {
+          "path": "../res/models/shotgun.glb",
+          "scale": 1.0
+        },
+        {
+          "mesh": "convex",
+          "path": "../res/models/shotgun_convex.glb",
+          "scale": 1.0
+        }
       ]
+    },
+    "menu": {
+      "animated_models": [
+        {
+          "path": "../res/models/harry.glb",
+          "scale": 1.0
+        }
+      ],
+      "entities": [
+        {
+          "model": "harry",
+          "position": [
+            5,
+            0,
+            0
+          ],
+          "type": "controller"
+        }
+      ],
+      "music": [
+        "../res/audio/menu.wav",
+        "../res/audio/night.wav",
+        "../res/audio/night_mono.wav"
+      ],
+      "skybox": [
+        "../res/textures/NightSky_Right.png",
+        "../res/textures/NightSky_Left.png",
+        "../res/textures/NightSky_Top.png",
+        "../res/textures/NightSky_Bottom.png",
+        "../res/textures/NightSky_Front.png",
+        "../res/textures/NightSky_Back.png"
+      ],
+      "sounds": [
+        "../res/audio/select1.wav",
+        "../res/audio/select2.wav"
+      ],
+      "static_models": []
     }
   }
 }

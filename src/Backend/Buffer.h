@@ -391,7 +391,7 @@ private:
 
   glm::mat4 m_shadowProj;
   glm::mat4 m_shadowVIew = glm::mat4(1.0f);
-  float m_OrthoSize = 50.0f;
+  float m_OrthoSize = 90.0f;
 };
 
 struct CubemapDirection

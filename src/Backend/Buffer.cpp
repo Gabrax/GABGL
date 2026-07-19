@@ -1006,7 +1006,7 @@ DirectShadowBuffer::DirectShadowBuffer(float shadowWidth, float shadowHeight, fl
   glTextureParameteri(m_offsetTexture, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
   constexpr float nearPlane = 0.1f;
-  constexpr float farPlane = 200.0f;
+  constexpr float farPlane = 400.0f;
   m_shadowProj = glm::ortho(-m_OrthoSize, m_OrthoSize, -m_OrthoSize, m_OrthoSize, nearPlane, farPlane);
 
   struct UBOData {
@@ -1067,7 +1067,7 @@ void DirectShadowBuffer::UpdateShadowView(const glm::vec3& rotation, const glm::
   snappedFocus += right * (std::round(glm::dot(focusPoint, right) / worldUnitsPerTexel) * worldUnitsPerTexel - glm::dot(focusPoint, right));
   snappedFocus += lightUp * (std::round(glm::dot(focusPoint, lightUp) / worldUnitsPerTexel) * worldUnitsPerTexel - glm::dot(focusPoint, lightUp));
 
-  const glm::vec3 lightPos = snappedFocus - lightDir * 80.0f;
+  const glm::vec3 lightPos = snappedFocus - lightDir * 180.0f;
   m_shadowVIew = glm::lookAt(lightPos, snappedFocus, lightUp);
 }
 

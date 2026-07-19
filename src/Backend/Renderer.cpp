@@ -187,6 +187,8 @@ struct RendererData
   uint32_t m_VisibleInstanceCount = 0;
   uint32_t m_RenderableInstanceCount = 0;
   bool m_PhysicsDebug = false;
+  bool m_LightDebug = false;
+  bool m_CullingDebug = false;
   uint32_t m_AppliedShadowQuality = std::numeric_limits<uint32_t>::max();
   int m_PointShadowMask = 0;
   static constexpr uint32_t MaxShadowedPointLights = 4;
@@ -232,6 +234,43 @@ struct Frustum
 private:
   std::array<glm::vec4, 6> m_Planes;
 };
+
+struct WorldBoundingSphere
+{
+  glm::vec3 center;
+  float radius;
+};
+
+static WorldBoundingSphere TransformBoundingSphere(const Model& model, const glm::mat4& transform)
+{
+  const glm::vec3 center = glm::vec3(transform * glm::vec4(model.GetBoundsCenter(), 1.0f));
+  const float maxScale = std::max({
+    glm::length(glm::vec3(transform[0])),
+    glm::length(glm::vec3(transform[1])),
+    glm::length(glm::vec3(transform[2]))
+  });
+  return {center, std::max(model.GetBoundsRadius(), 0.001f) * maxScale};
+}
+
+static void DrawWireSphere(const glm::vec3& center, float radius, const glm::vec4& color, int segments = 24)
+{
+  if (radius <= 0.0f || segments < 3)
+    return;
+
+  for (int i = 0; i < segments; ++i)
+  {
+    const float angle0 = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(segments);
+    const float angle1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(segments);
+    const float c0 = std::cos(angle0), s0 = std::sin(angle0);
+    const float c1 = std::cos(angle1), s1 = std::sin(angle1);
+    Renderer::DrawLine(center + glm::vec3(c0, s0, 0.0f) * radius,
+      center + glm::vec3(c1, s1, 0.0f) * radius, color);
+    Renderer::DrawLine(center + glm::vec3(c0, 0.0f, s0) * radius,
+      center + glm::vec3(c1, 0.0f, s1) * radius, color);
+    Renderer::DrawLine(center + glm::vec3(0.0f, c0, s0) * radius,
+      center + glm::vec3(0.0f, c1, s1) * radius, color);
+  }
+}
 
 static bool SphereIntersectsFrustum(const glm::mat4& viewProjection, const glm::vec3& center, float radius)
 {
@@ -409,7 +448,7 @@ void Renderer::Shutdown()
 	ImGui::DestroyContext();
 }
 
-void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic)
+void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic, bool advanceSimulation)
 {
   GABGL_RESOLVE_GPU_QUERIES();
   ApplyGraphicsSettings();
@@ -423,16 +462,19 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
   glCullFace(GL_FRONT);
   glFrontFace(GL_CW);
 
-  scene_logic();
+  if (advanceSimulation)
+    scene_logic();
 
+  if (advanceSimulation)
   {
     GABGL_PROFILE_SCOPE("MISC UPDATE PASS");
 
+    ModelManager::UpdateControllers(dt);
+    PhysX::Simulate(dt);
+    ModelManager::UpdateTransforms(dt);
     Camera::OnUpdate(dt);
     AudioManager::SetListenerLocation(Camera::GetPosition());
     AudioManager::SetListenerOrientation(Camera::GetForwardDirection(), Camera::GetUpDirection());
-    ModelManager::UpdateTransforms(dt);
-    PhysX::Simulate(dt);
     AudioManager::UpdateAllMusic();
   }
   ModelManager::BindAllInstanceTransforms();
@@ -446,7 +488,8 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
     glClear(GL_DEPTH_BUFFER_BIT);
 
     s_Data.s_Shaders.DirectShadowShader->Bind();
-    s_Data.m_DirectShadowBuffer->UpdateShadowView(LightManager::GetDirectLightRotation(), Camera::GetPosition());
+    const glm::vec3 shadowFocus = Camera::GetPosition() + Camera::GetForwardDirection() * 45.0f;
+    s_Data.m_DirectShadowBuffer->UpdateShadowView(LightManager::GetDirectLightRotation(), shadowFocus);
     s_Data.s_Shaders.DirectShadowShader->SetMat4("u_LightSpaceMatrix", s_Data.m_DirectShadowBuffer->GetShadowViewProj());
     glEnable(GL_POLYGON_OFFSET_FILL);
     glPolygonOffset(2.0f, 4.0f);
@@ -614,6 +657,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
 
     Renderer::DrawSkybox("night");
     Renderer::DrawPhysicsDebug();
+    Renderer::DrawDebugVisualizations();
     ParticleRenderer::UpdateAndRender(dt);
 
     s_Data.m_ResultBuffer->SetDrawBuffers();
@@ -647,9 +691,12 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    BeginScene();
-    Renderer::DrawText(FontManager::GetFont("dpcomic"), "FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f, 50.0f), 0.5f, glm::vec4(1.0f));
-    EndScene();
+    if (advanceSimulation)
+    {
+      BeginScene();
+      Renderer::DrawText(FontManager::GetFont("dpcomic"), "FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f, 50.0f), 0.5f, glm::vec4(1.0f));
+      EndScene();
+    }
   }
 }
 
@@ -749,18 +796,6 @@ void Renderer::ApplyGraphicsSettings()
   s_Data.m_AppliedShadowQuality = qualityValue;
 }
 
-void Renderer::DrawPausedFrame()
-{
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  glViewport(0, 0, Window::GetWidth(), Window::GetHeight());
-  glDisable(GL_DEPTH_TEST);
-  glDisable(GL_BLEND);
-  glClear(GL_COLOR_BUFFER_BIT);
-  DrawFramebuffer(s_Data.m_ResultBuffer->GetColorAttachmentRendererID());
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-}
-
 void Renderer::DrawPhysicsDebug()
 {
   if (!s_Data.m_PhysicsDebug || !s_Data.s_Shaders.PhysicsDebugShader)
@@ -807,6 +842,98 @@ void Renderer::DrawPhysicsDebug()
   glDepthMask(GL_TRUE);
   glDepthFunc(GL_LESS);
   glLineWidth(s_Data.LineWidth);
+}
+
+void Renderer::DrawDebugVisualizations()
+{
+  if (!s_Data.m_LightDebug && !s_Data.m_CullingDebug)
+    return;
+
+  glEnable(GL_DEPTH_TEST);
+  glDepthFunc(GL_LEQUAL);
+  glDepthMask(GL_FALSE);
+  glDisable(GL_CULL_FACE);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+  BeginScene();
+
+  if (s_Data.m_CullingDebug)
+  {
+    const Frustum frustum(Camera::GetViewProjection());
+    for (const std::string& modelName : ModelManager::GetModelNames())
+    {
+      const auto model = ModelManager::GetModel(modelName);
+      if (!model || !model->m_IsRendered)
+        continue;
+
+      for (const glm::mat4& transform : model->m_InstanceTransforms)
+      {
+        const WorldBoundingSphere sphere = TransformBoundingSphere(*model, transform);
+        const bool visible = frustum.IntersectsSphere(sphere.center, sphere.radius);
+        DrawWireSphere(sphere.center, sphere.radius,
+          visible ? glm::vec4(0.15f, 1.0f, 0.3f, 0.8f) : glm::vec4(1.0f, 0.2f, 0.15f, 0.8f));
+      }
+    }
+  }
+
+  if (s_Data.m_LightDebug)
+  {
+    for (const SceneLight& light : SceneManager::GetLights())
+    {
+      const glm::vec4 color(light.color, 0.9f);
+      if (light.type == LightType::DIRECT)
+      {
+        const glm::vec3 origin = Camera::GetPosition() + Camera::GetForwardDirection() * 8.0f;
+        const glm::vec3 direction = glm::length(light.rotation) > 0.0001f
+          ? glm::normalize(light.rotation)
+          : glm::vec3(0.0f, -1.0f, 0.0f);
+        DrawWireSphere(origin, 0.5f, color);
+        DrawLine(origin, origin + direction * 12.0f, color);
+      }
+      else if (light.type == LightType::POINT)
+      {
+        DrawWireSphere(light.position, 0.5f, color);
+        DrawWireSphere(light.position, RendererData::PointShadowRadius, glm::vec4(light.color, 0.2f), 32);
+        DrawLine(light.position - glm::vec3(1.0f, 0.0f, 0.0f), light.position + glm::vec3(1.0f, 0.0f, 0.0f), color);
+        DrawLine(light.position - glm::vec3(0.0f, 1.0f, 0.0f), light.position + glm::vec3(0.0f, 1.0f, 0.0f), color);
+        DrawLine(light.position - glm::vec3(0.0f, 0.0f, 1.0f), light.position + glm::vec3(0.0f, 0.0f, 1.0f), color);
+      }
+      else
+      {
+        const glm::vec3 direction = glm::length(light.rotation) > 0.0001f
+          ? glm::normalize(light.rotation)
+          : glm::vec3(0.0f, -1.0f, 0.0f);
+        const glm::vec3 fallbackUp = std::abs(glm::dot(direction, glm::vec3(0.0f, 1.0f, 0.0f))) > 0.98f
+          ? glm::vec3(1.0f, 0.0f, 0.0f)
+          : glm::vec3(0.0f, 1.0f, 0.0f);
+        const glm::vec3 right = glm::normalize(glm::cross(direction, fallbackUp));
+        const glm::vec3 up = glm::normalize(glm::cross(right, direction));
+        const glm::vec3 end = light.position + direction * 8.0f;
+        constexpr float coneRadius = 3.0f;
+        constexpr int segments = 20;
+        for (int i = 0; i < segments; ++i)
+        {
+          const float angle0 = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(segments);
+          const float angle1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(segments);
+          const glm::vec3 p0 = end + (right * std::cos(angle0) + up * std::sin(angle0)) * coneRadius;
+          const glm::vec3 p1 = end + (right * std::cos(angle1) + up * std::sin(angle1)) * coneRadius;
+          DrawLine(p0, p1, color);
+          if (i % 5 == 0)
+            DrawLine(light.position, p0, color);
+        }
+        DrawWireSphere(light.position, 0.4f, color);
+        DrawLine(light.position, end, color);
+      }
+    }
+  }
+
+  EndScene();
+
+  glDepthMask(GL_TRUE);
+  glDepthFunc(GL_LESS);
+  glEnable(GL_CULL_FACE);
+  glDisable(GL_BLEND);
 }
 
 void Renderer::BeginScene()
@@ -868,6 +995,9 @@ void Renderer::NextBatch()
 
 void Renderer::DrawLine(const glm::vec3& p0, const glm::vec3& p1, const glm::vec4& color, int entityID)
 {
+	if (s_Data.LineVertexCount + 2 > RendererData::MaxVertices)
+		NextBatch();
+
 	s_Data.LineVertexBufferPtr->Position = p0;
 	s_Data.LineVertexBufferPtr->Color = color;
 	s_Data.LineVertexBufferPtr->EntityID = entityID;
@@ -1422,8 +1552,6 @@ void Renderer::DrawText(const Font* font, const std::string& text, const glm::ve
                             glm::rotate(glm::mat4(1.0f), rotation.y, {0, 1, 0}) *
                             glm::rotate(glm::mat4(1.0f), rotation.z, {0, 0, 1});
 
-  std::unordered_map<uint32_t, float> textureSlotCache;
-
   for (char c : text)
   {
     auto it = font->m_Characters.find(c);
@@ -1445,16 +1573,21 @@ void Renderer::DrawText(const Font* font, const std::string& text, const glm::ve
     glm::mat4 transform = baseTransform * localTransform;
 
     float textureIndex = 0.0f;
-    auto found = textureSlotCache.find(ch.TextureID);
-    if (found != textureSlotCache.end()) {
-        textureIndex = found->second;
-    } else {
-        if (s_Data.TextureSlotIndex >= RendererData::MaxTextureSlots)
-            NextBatch();
+    for (uint32_t slot = 1; slot < s_Data.TextureSlotIndex; ++slot)
+    {
+      if (s_Data.TextureSlots[slot] && s_Data.TextureSlots[slot]->GetRendererID() == ch.TextureID)
+      {
+        textureIndex = static_cast<float>(slot);
+        break;
+      }
+    }
+    if (textureIndex == 0.0f)
+    {
+      if (s_Data.TextureSlotIndex >= RendererData::MaxTextureSlots)
+        NextBatch();
 
-        textureIndex = static_cast<float>(s_Data.TextureSlotIndex);
-        s_Data.TextureSlots[s_Data.TextureSlotIndex++] = Texture::WrapExisting(ch.TextureID);
-        textureSlotCache[ch.TextureID] = textureIndex;
+      textureIndex = static_cast<float>(s_Data.TextureSlotIndex);
+      s_Data.TextureSlots[s_Data.TextureSlotIndex++] = Texture::WrapExisting(ch.TextureID);
     }
 
     for (int i = 0; i < 4; i++) {
@@ -1520,17 +1653,10 @@ void Renderer::UpdateModelFrustumCulling()
     if (model->m_IsRendered)
     {
       s_Data.m_RenderableInstanceCount += static_cast<uint32_t>(model->m_InstanceTransforms.size());
-      const float localRadius = std::max(model->GetBoundsRadius(), 0.001f);
       for (const glm::mat4& transform : model->m_InstanceTransforms)
       {
-        const glm::vec3 worldCenter = glm::vec3(transform * glm::vec4(model->GetBoundsCenter(), 1.0f));
-        const float maxScale = std::max({
-          glm::length(glm::vec3(transform[0])),
-          glm::length(glm::vec3(transform[1])),
-          glm::length(glm::vec3(transform[2]))
-        });
-        const float worldRadius = localRadius * maxScale;
-        if (!frustum.IntersectsSphere(worldCenter, worldRadius))
+        const WorldBoundingSphere sphere = TransformBoundingSphere(*model, transform);
+        if (!frustum.IntersectsSphere(sphere.center, sphere.radius))
           continue;
 
         visibleTransforms.push_back(transform);
@@ -1843,6 +1969,9 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 	if (ImGui::Button("Reload Shaders")) LoadShaders();
 	ImGui::SameLine();
 	ImGui::Checkbox("Physics Debug", &s_Data.m_PhysicsDebug);
+	ImGui::Checkbox("Light Debug", &s_Data.m_LightDebug);
+	ImGui::SameLine();
+	ImGui::Checkbox("Culling Bounds", &s_Data.m_CullingDebug);
 	ImGui::TextDisabled("Frustum culling: %u / %u model instances visible",
 		s_Data.m_VisibleInstanceCount, s_Data.m_RenderableInstanceCount);
 

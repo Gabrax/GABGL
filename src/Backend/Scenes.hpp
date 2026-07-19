@@ -49,11 +49,14 @@ struct GameScene : Scene
 
     if (m_Paused)
     {
-      Renderer::DrawPausedFrame();
       UpdatePauseMenu(escape && !justPaused);
       if (m_Paused)
+      {
+        DeltaTime frozenTime(0.0f);
+        Renderer::DrawScene(frozenTime, []() {}, false);
         DrawPauseMenu();
-      return;
+        return;
+      }
     }
 
     Renderer::DrawScene(dt,[&]()
@@ -98,6 +101,7 @@ private:
     m_PauseScreen = PauseScreen::Main;
     m_PauseSelected = 0;
     Window::SetCursorVisible(paused);
+    Camera::ResetMouseDelta();
     if (paused)
       AudioManager::PauseMusic("night_mono");
     else

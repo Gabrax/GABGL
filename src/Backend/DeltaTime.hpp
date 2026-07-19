@@ -4,6 +4,8 @@
 
 struct DeltaTime
 {
+  explicit DeltaTime(float fixedSeconds) : m_Time(fixedSeconds) {}
+
   DeltaTime()
   {
     float currentTime = static_cast<float>(glfwGetTime()); 

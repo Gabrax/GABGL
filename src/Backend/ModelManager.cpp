@@ -842,90 +842,122 @@ void ModelManager::UploadToGPU()
 void ModelManager::MoveController(const std::string& name, const Movement& movement, float speed, const DeltaTime& dt)
 {
   auto it = s_Data.m_Models.find(name);
-  if (it == s_Data.m_Models.end()) GABGL_ERROR("Model doesnt exist!");
-
-  auto vecIt = std::find(s_Data.m_ModelsNames.begin(), s_Data.m_ModelsNames.end(), name);
-  if (vecIt == s_Data.m_ModelsNames.end())
+  if (it == s_Data.m_Models.end())
   {
-      GABGL_WARN("Model '{}' not found in name list for SSBO!", name);
-      return;
+    GABGL_ERROR("Model '{}' doesnt exist!", name);
+    return;
   }
 
   const auto& model = it->second;
 
-  if (model->GetPhysXMeshType() != MeshType::CONTROLLER)
+  if (model->GetPhysXMeshType() != MeshType::CONTROLLER || !model->GetController())
   {
-      GABGL_ERROR("This function is for Controller model!");
-      return;
+    GABGL_ERROR("Model '{}' is not a valid PhysX controller!", name);
+    return;
   }
-
-  const float gravity = -9.81f;
-  const float damping = 0.9f;
-  const float jumpSpeed = 5.5f;
-
-  model->m_ControllerVelocity.y += gravity * dt;
 
   glm::vec3 camForward = Camera::GetForwardDirection();
   camForward.y = 0.0f;
-  camForward = glm::normalize(camForward);
+  if (glm::length2(camForward) > std::numeric_limits<float>::epsilon())
+    camForward = glm::normalize(camForward);
+  else
+    camForward = glm::vec3(0.0f, 0.0f, -1.0f);
 
   glm::vec3 camRight = Camera::GetRightDirection();
   camRight.y = 0.0f;
-  camRight = glm::normalize(camRight);
+  if (glm::length2(camRight) > std::numeric_limits<float>::epsilon())
+    camRight = glm::normalize(camRight);
+  else
+    camRight = glm::vec3(1.0f, 0.0f, 0.0f);
 
-  glm::vec3 moveDir(0.0f);
   switch (movement)
   {
-    case Movement::FORWARD:  moveDir += camForward; break;
-    case Movement::BACKWARD: moveDir -= camForward; break;
-    case Movement::LEFT:     moveDir -= camRight;   break;
-    case Movement::RIGHT:    moveDir += camRight;   break;
+    case Movement::FORWARD:  model->m_ControllerMoveDirection += camForward; break;
+    case Movement::BACKWARD: model->m_ControllerMoveDirection -= camForward; break;
+    case Movement::LEFT:     model->m_ControllerMoveDirection -= camRight;   break;
+    case Movement::RIGHT:    model->m_ControllerMoveDirection += camRight;   break;
     default: break;
   }
 
-  if (glm::length2(moveDir) > 0.0f)
+  model->m_ControllerMoveSpeed = std::max(model->m_ControllerMoveSpeed, speed);
+  (void)dt;
+}
+
+void ModelManager::UpdateControllers(const DeltaTime& dt)
+{
+  constexpr float gravity = -9.81f;
+  constexpr float terminalVelocity = -55.0f;
+  constexpr float horizontalDamping = 10.0f;
+  constexpr float rotationResponse = 10.0f;
+
+  const float deltaTime = std::clamp(dt.GetSeconds(), 0.0f, 0.1f);
+  if (deltaTime <= 0.0f)
+    return;
+
+  for (size_t modelIndex = 0; modelIndex < s_Data.m_ModelsNames.size(); ++modelIndex)
   {
-    moveDir = glm::normalize(moveDir);
+    const std::string& name = s_Data.m_ModelsNames[modelIndex];
+    auto modelIt = s_Data.m_Models.find(name);
+    if (modelIt == s_Data.m_Models.end())
+      continue;
 
-    model->m_ControllerVelocity.x = moveDir.x * speed;
-    model->m_ControllerVelocity.z = moveDir.z * speed;
+    const auto& model = modelIt->second;
+    PxController* controller = model->GetController();
+    if (model->GetPhysXMeshType() != MeshType::CONTROLLER || !controller)
+      continue;
 
-    float targetYaw = std::atan2(moveDir.x, moveDir.z);
+    model->m_ControllerVelocity.y = std::max(
+      model->m_ControllerVelocity.y + gravity * deltaTime,
+      terminalVelocity);
 
-    float delta = targetYaw - model->m_ControllerCurrentYaw;
-    delta = std::atan2(std::sin(delta), std::cos(delta)); // shortest path
+    glm::vec3 moveDirection = model->m_ControllerMoveDirection;
+    if (glm::length2(moveDirection) > std::numeric_limits<float>::epsilon())
+    {
+      moveDirection = glm::normalize(moveDirection);
 
-    model->m_ControllerCurrentYaw += delta * glm::clamp(dt * 10.0f, 0.0f, 1.0f);
+      model->m_ControllerVelocity.x = moveDirection.x * model->m_ControllerMoveSpeed;
+      model->m_ControllerVelocity.z = moveDirection.z * model->m_ControllerMoveSpeed;
 
-    model->m_ControllerTransform.SetRotation({ 0.0f, glm::degrees(model->m_ControllerCurrentYaw), 0.0f });
+      const float targetYaw = std::atan2(moveDirection.x, moveDirection.z);
+      float yawDelta = targetYaw - model->m_ControllerCurrentYaw;
+      yawDelta = std::atan2(std::sin(yawDelta), std::cos(yawDelta));
+
+      model->m_ControllerCurrentYaw += yawDelta * glm::clamp(deltaTime * rotationResponse, 0.0f, 1.0f);
+      model->m_ControllerTransform.SetRotation(
+        { 0.0f, glm::degrees(model->m_ControllerCurrentYaw), 0.0f });
+    }
+    else
+    {
+      const float damping = std::exp(-horizontalDamping * deltaTime);
+      model->m_ControllerVelocity.x *= damping;
+      model->m_ControllerVelocity.z *= damping;
+    }
+
+    const PxVec3 displacement = model->m_ControllerVelocity * deltaTime;
+    const PxControllerCollisionFlags flags = controller->move(
+      displacement, 0.001f, deltaTime, PxControllerFilters());
+
+    if (flags.isSet(PxControllerCollisionFlag::eCOLLISION_DOWN) && model->m_ControllerVelocity.y < 0.0f)
+      model->m_ControllerVelocity.y = 0.0f;
+    if (flags.isSet(PxControllerCollisionFlag::eCOLLISION_UP) && model->m_ControllerVelocity.y > 0.0f)
+      model->m_ControllerVelocity.y = 0.0f;
+    model->m_ControllerIsGrounded = flags.isSet(PxControllerCollisionFlag::eCOLLISION_DOWN);
+
+    const PxExtendedVec3 footPosition = controller->getFootPosition();
+    model->m_ControllerTransform.SetPosition(glm::vec3(
+      static_cast<float>(footPosition.x),
+      static_cast<float>(footPosition.y),
+      static_cast<float>(footPosition.z)));
+
+    const glm::mat4 controllerTransform = model->m_ControllerTransform.GetTransform();
+    if (s_Data.m_ModelsTransforms)
+      s_Data.m_ModelsTransforms->SetSubData(
+        modelIndex * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(controllerTransform));
+    SetModelInstanceTransform(name, 0, controllerTransform);
+
+    model->m_ControllerMoveDirection = glm::vec3(0.0f);
+    model->m_ControllerMoveSpeed = 0.0f;
   }
-  else
-  {
-    model->m_ControllerVelocity.x *= damping;
-    model->m_ControllerVelocity.z *= damping;
-  }
-
-  PxVec3 displacement = model->m_ControllerVelocity * dt;
-  PxControllerCollisionFlags flags = model->GetController()->move(displacement, 0.001f, dt, PxControllerFilters());
-
-  // Ground check and vertical reset
-  if (flags.isSet(PxControllerCollisionFlag::eCOLLISION_DOWN))
-  {
-    model->m_ControllerVelocity.y = 0.0f;
-    model->m_ControllerIsGrounded = true;
-  }
-  else
-  {
-    model->m_ControllerIsGrounded = false;
-  }
-
-  PxExtendedVec3 footPos = model->GetController()->getFootPosition();
-  model->m_ControllerTransform.SetPosition(glm::vec3(footPos.x, footPos.y, footPos.z));
-
-  int ssboIndex = static_cast<int>(std::distance(s_Data.m_ModelsNames.begin(), vecIt));
-  const glm::mat4 controllerTransform = model->m_ControllerTransform.GetTransform();
-  s_Data.m_ModelsTransforms->SetSubData(ssboIndex * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(controllerTransform));
-  SetModelInstanceTransform(name, 0, controllerTransform);
 }
 
 std::shared_ptr<Model> ModelManager::GetModel(const std::string& name)

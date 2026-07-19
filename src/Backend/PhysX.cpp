@@ -3,6 +3,7 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
 #include <algorithm>
+#include <cmath>
 
 struct UserErrorCallback : public PxErrorCallback
 {
@@ -70,10 +71,28 @@ void PhysX::Init()
 
 void PhysX::Simulate(DeltaTime& dt)
 {
-  /*float delta = std::clamp(dt.GetSeconds(), 0.0f, 60.0f);*/
+  if (!s_PhysXData.gScene)
+    return;
 
-  s_PhysXData.gScene->simulate(1.0f/60.0f);
-  s_PhysXData.gScene->fetchResults(true);
+  constexpr float fixedTimeStep = 1.0f / 60.0f;
+  constexpr float maxFrameTime = 0.25f;
+  constexpr int maxSubsteps = 8;
+  static float accumulator = 0.0f;
+
+  accumulator += std::clamp(dt.GetSeconds(), 0.0f, maxFrameTime);
+
+  int substeps = 0;
+  while (accumulator >= fixedTimeStep && substeps < maxSubsteps)
+  {
+    s_PhysXData.gScene->simulate(fixedTimeStep);
+    s_PhysXData.gScene->fetchResults(true);
+    accumulator -= fixedTimeStep;
+    ++substeps;
+  }
+
+  // Do not try to catch up forever after a breakpoint or a very slow frame.
+  if (substeps == maxSubsteps && accumulator >= fixedTimeStep)
+    accumulator = std::fmod(accumulator, fixedTimeStep);
 }
 
 inline void SetupCommonCookingParams(PxCookingParams& params, bool skipMeshCleanup, bool skipEdgeData)

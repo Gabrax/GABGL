@@ -12,7 +12,7 @@ struct Renderer
 	static void Init();
 	static void Shutdown();
 
-  static void DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic);
+  static void DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic, bool advanceSimulation = true);
   static void DrawLoadingScreen();
 	static void BeginScene();
 	static void EndScene();
@@ -53,7 +53,6 @@ struct Renderer
   static void SetFullscreen(const std::string& sound, bool windowed);
   static void ApplyDisplaySettings();
   static void ApplyGraphicsSettings();
-  static void DrawPausedFrame();
   static void SwitchRenderState();
 
 private:
@@ -66,6 +65,7 @@ private:
 	static void NextBatch();
 	static void LoadShaders();
   static void DrawPhysicsDebug();
+  static void DrawDebugVisualizations();
   static void UpdateModelFrustumCulling();
 
   static void DrawFramebuffer(uint32_t textureID);

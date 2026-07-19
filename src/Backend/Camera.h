@@ -30,6 +30,7 @@ struct Camera
 
   static void SetMode(CameraMode mode);
   static void SetFollowTarget(const std::string& modelName);
+  static void ResetMouseDelta();
 
   static const glm::mat4& GetViewMatrix();
   static const glm::mat4& GetProjection();

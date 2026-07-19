@@ -169,6 +169,8 @@ struct Model
   bool m_ControllerSlopeLimit;
   bool m_ControllerIsGrounded = false;
   float m_ControllerCurrentYaw = 0.0f;
+  glm::vec3 m_ControllerMoveDirection = glm::vec3(0.0f);
+  float m_ControllerMoveSpeed = 0.0f;
 
   std::string m_Name;
   bool m_IsRendered = true;
@@ -265,6 +267,7 @@ struct ModelManager
   static void SetInitialControllerTransform(const std::string& name, const Transform& transform, float radius, float height, bool slopeLimit);
   static void SetControllerTransform(const std::string& name, const Transform& transform);
   static void Reset();
+  static void UpdateControllers(const DeltaTime& dt);
   static void UpdateTransforms(const DeltaTime& dt);
   static void MoveController(const std::string& name, const Movement& movement, float speed, const DeltaTime& dt);
 };
