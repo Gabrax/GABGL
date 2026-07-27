@@ -42,51 +42,46 @@ void main()
   int transformIndex = meshToTransform[vs_out.DrawID];
   bool isAnimated = (modelIsAnimated[transformIndex] == 1);
   mat4 modelMat = instanceTransforms[gl_BaseInstance + gl_InstanceID];
+  mat4 skinMatrix = mat4(1.0);
 
   if (isAnimated)
   {
     int boneBaseIndex = transformIndex * MAX_BONES;
-    vec4 totalPosition = vec4(0.0f);
+    mat4 accumulatedSkin = mat4(0.0);
+    float accumulatedWeight = 0.0;
+
     for (int i = 0; i < MAX_BONE_INFLUENCE; i++)
     {
-      if (boneIds[i] == -1) continue;
-      if (boneIds[i] >= MAX_BONES)
-      {
-          totalPosition = vec4(aPos, 1.0f);
-          break;
-      }
-      vec4 localPosition = boneMatrices[boneBaseIndex + boneIds[i]] * vec4(aPos, 1.0f);
-      totalPosition += localPosition * weights[i];
+      if (boneIds[i] < 0 || boneIds[i] >= MAX_BONES || weights[i] <= 0.0)
+        continue;
+
+      accumulatedSkin += boneMatrices[boneBaseIndex + boneIds[i]] * weights[i];
+      accumulatedWeight += weights[i];
     }
 
-    vec3 T = normalize(mat3(modelMat) * tangent);
-    vec3 B = normalize(mat3(modelMat) * bitangent);
-    vec3 N = normalize(mat3(modelMat) * aNormal);
-    vs_out.TBN = mat3(T, B, N);
-    vs_out.TBN_FragPos = vs_out.TBN * vs_out.FragPos;
-
-    vec4 worldPos = modelMat * totalPosition;  
-    vs_out.FragPos = worldPos.xyz;
-    vs_out.Normal = mat3(transpose(inverse(modelMat))) * aNormal;
-
-    gl_Position = ViewProjection * worldPos;
-    vs_out.TexCoords = aTexCoords;
+    if (accumulatedWeight > 0.00001)
+      skinMatrix = accumulatedSkin / accumulatedWeight;
   }
-  else
-  {
-    vec3 T = normalize(mat3(modelMat) * tangent);
-    vec3 B = normalize(mat3(modelMat) * bitangent);
-    vec3 N = normalize(mat3(modelMat) * aNormal);
-    vs_out.TBN = mat3(T, B, N);
-    vs_out.TBN_FragPos = vs_out.TBN * vs_out.FragPos;
 
-    vec4 worldPos = modelMat * vec4(aPos, 1.0);
-    vs_out.FragPos = worldPos.xyz;
-    vs_out.Normal = mat3(transpose(inverse(modelMat))) * aNormal;
+  mat4 localToWorld = modelMat * skinMatrix;
+  vec4 worldPos = localToWorld * vec4(aPos, 1.0);
+  mat3 linearTransform = mat3(localToWorld);
+  mat3 normalTransform = transpose(inverse(linearTransform));
 
-    gl_Position = ViewProjection * worldPos;
-    vs_out.TexCoords = aTexCoords;
-  }
+  vec3 N = normalize(normalTransform * aNormal);
+  vec3 transformedTangent = linearTransform * tangent;
+  vec3 T = length(transformedTangent) > 0.00001
+    ? normalize(transformedTangent - N * dot(N, transformedTangent))
+    : normalize(abs(N.y) < 0.999 ? cross(vec3(0.0, 1.0, 0.0), N) : cross(vec3(1.0, 0.0, 0.0), N));
+  float handedness = dot(cross(aNormal, tangent), bitangent) < 0.0 ? -1.0 : 1.0;
+  vec3 B = normalize(cross(N, T)) * handedness;
+
+  vs_out.FragPos = worldPos.xyz;
+  vs_out.Normal = N;
+  vs_out.TBN = mat3(T, B, N);
+  vs_out.TBN_FragPos = transpose(vs_out.TBN) * vs_out.FragPos;
+  vs_out.TexCoords = aTexCoords;
+  gl_Position = ViewProjection * worldPos;
 }
 
 #type FRAGMENT

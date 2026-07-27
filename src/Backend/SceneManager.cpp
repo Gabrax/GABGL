@@ -73,16 +73,6 @@ bool Scene::OnKeyPressed(KeyPressedEvent& e)
 
 	switch (e.GetKeyCode())
 	{
-		case Key::R:
-		{
-      Renderer::SetFullscreen("select1", true);
-			break;
-		}
-		case Key::T:
-		{
-      Renderer::SetFullscreen("select2", false);
-			break;
-		}
     case Key::Tab:
     {
       Renderer::SwitchRenderState();
@@ -117,26 +107,26 @@ void Scene::StartLoading()
 
   for(auto& m : m_Assets.music) AudioManager::LoadMusic(m.c_str());
 
-  for(auto& model : m_Assets.static_models)
+  for(auto&[path, scale, flag, meshType] : m_Assets.static_models)
   {
     m_Assets.futureStatic.push_back(
         std::async(std::launch::async,
             Model::CreateSTATIC,
-            model.path.c_str(),
-            model.scale,
-            model.flag,
-            model.meshType));
+            path.c_str(),
+            scale,
+            flag,
+            meshType));
   }
 
-  for(auto& model : m_Assets.animated_models)
+  for(auto&[path, scale, flag, meshType] : m_Assets.animated_models)
   {
     m_Assets.futureAnim.push_back(
         std::async(std::launch::async,
             Model::CreateANIMATED,
-            model.path.c_str(),
-            model.scale,
-            model.flag,
-            model.meshType));
+            path.c_str(),
+            scale,
+            flag,
+            meshType));
   }
 
   m_Assets.futureTextures.push_back(

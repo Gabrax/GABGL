@@ -32,17 +32,16 @@ void main()
   {
     int boneBaseIndex = transformIndex * MAX_BONES;
     vec4 totalPosition = vec4(0.0f);
+    float totalWeight = 0.0f;
     for (int i = 0; i < MAX_BONE_INFLUENCE; i++)
     {
-      if (boneIds[i] == -1) continue;
-      if (boneIds[i] >= MAX_BONES)
-      {
-          totalPosition = vec4(aPos, 1.0f);
-          break;
-      }
+      if (boneIds[i] < 0 || boneIds[i] >= MAX_BONES || weights[i] <= 0.0)
+        continue;
       vec4 localPosition = boneMatrices[boneBaseIndex + boneIds[i]] * vec4(aPos, 1.0f);
       totalPosition += localPosition * weights[i];
+      totalWeight += weights[i];
     }
+    totalPosition = totalWeight > 0.00001 ? totalPosition / totalWeight : vec4(aPos, 1.0);
 
     WorldPos = (modelMat * totalPosition).xyz;
     gl_Position = u_LightViewProjection * modelMat * totalPosition;

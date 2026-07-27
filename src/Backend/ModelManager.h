@@ -41,12 +41,8 @@ struct Bone
 {
   Bone(const std::string& name, int ID, const aiNodeAnim* channel);
 
-  void Update(float animationTime);
+  glm::mat4 GetInterpolatedTransform(float animationTime, const glm::mat4& fallbackTransform) const;
 
-  glm::mat4 GetInterpolatedTransform(float animationTime) const;
-
-  inline void SetTransform(const glm::mat4& transform) { m_LocalTransform = transform; }
-  inline glm::mat4 GetLocalTransform() const { return m_LocalTransform; }
   inline std::string GetBoneName() const { return m_Name; }
   inline int GetBoneID() const { return m_ID; }
 
@@ -69,28 +65,27 @@ private:
 
   std::string m_Name;
   int m_ID;
-  glm::mat4 m_LocalTransform;
 };
 
 struct BoneInfo
 {
-  int id;
-  glm::mat4 offset;
+  int id = -1;
+  glm::mat4 offset = glm::mat4(1.0f);
 };
 
 struct AssimpNodeData
 {
-  glm::mat4 transformation;
+  glm::mat4 transformation = glm::mat4(1.0f);
   std::string name;
-  int childrenCount;
+  int childrenCount = 0;
   std::vector<AssimpNodeData> children;
 };
 
 struct AnimationData
 {
   std::string name;
-  float duration;
-  float ticksPerSecond;
+  float duration = 1.0f;
+  float ticksPerSecond = 25.0f;
   std::vector<Bone> bones;  // Preprocessed bone data for the animation.
   AssimpNodeData hierarchy; // Precomputed node hierarchy for the animation.
 };
@@ -182,28 +177,27 @@ struct Model
   std::unordered_map<std::string, std::shared_ptr<Texture>> m_TexturesLoaded; 
   std::vector<Mesh> m_Meshes;
   std::vector<Bone> m_Bones;
-  std::vector<const aiAnimation*> m_Animations;
   std::vector<AnimationData> m_ProcessedAnimations;
   std::map<std::string, BoneInfo> m_BoneInfoMap;
   std::vector<glm::mat4> m_FinalBoneMatrices;
-  std::vector<glm::mat4> m_FinalBoneMatricesCurrent;
-  std::vector<glm::mat4> m_FinalBoneMatricesNext;
 
-  AssimpNodeData m_RootNodeNext;
   std::vector<Bone> m_BonesNext;
   float m_TicksPerSecondNext = 0.0f;
   float m_DurationNext = 0.0f;
 
   AssimpNodeData m_RootNode;
+  glm::mat4 m_GlobalInverseTransform = glm::mat4(1.0f);
   int m_BoneCounter = 0;
   std::string m_Directory;
   float m_BlendTime = 0.0f;
   float m_BlendDuration = 0.5f; // Blend duration in seconds
   bool m_IsBlending = false;
+  bool m_BlendFromSnapshot = false;
+  std::unordered_map<std::string, glm::mat4> m_BlendSourcePose;
   int m_NextAnimationIndex = -1;
-  int m_CurrentAnimationIndex;
-  float m_Duration;
-  int m_TicksPerSecond;
+  int m_CurrentAnimationIndex = -1;
+  float m_Duration = 1.0f;
+  float m_TicksPerSecond = 25.0f;
   float m_CurrentTime = 0.0f;
   float m_NextTime = 0.0f;
   float m_DeltaTime = 0.0f;
@@ -226,13 +220,16 @@ private:
   void ExtractBoneWeightForVertices(std::vector<Vertex>& vertices, aiMesh* mesh);
   void SetDefaultBoneData(Vertex& vertex);
   void SetBoneData(Vertex& vertex, int boneID, float weight);
+  void NormalizeBoneWeights(Vertex& vertex);
   void CalculateBoneTransform(const AssimpNodeData* node, const glm::mat4& parentTransform);
-  void CalculateBoneTransform(const AssimpNodeData* node, const glm::mat4& parentTransform, std::vector<glm::mat4>& outMatrices, std::vector<Bone>& bones, float time);
-  void CalculateBlendedBoneTransform(const AssimpNodeData* node,const AssimpNodeData* nodeNext,float timeCurrent,float timeNext,const glm::mat4& parentTransform,float blendFactor);
+  void CalculateBlendedBoneTransform(const AssimpNodeData* node, float timeCurrent, float timeNext,
+    const glm::mat4& parentTransform, float blendFactor);
+  void CaptureBlendedLocalPose(const AssimpNodeData* node, float blendFactor,
+    std::unordered_map<std::string, glm::mat4>& outPose) const;
+  glm::mat4 SampleLocalTransform(const AssimpNodeData& node, const std::vector<Bone>& bones,
+    float animationTime) const;
 
-  Bone* FindBone(const std::string& name);
-  Bone* FindBoneInList(const std::string& name, std::vector<Bone>& bones);
-  bool ValidateBoneConsistency();
+  const Bone* FindBoneInList(const std::string& name, const std::vector<Bone>& bones) const;
   void ResizeFinalBoneMatrices();
   void ReadHierarchyData(AssimpNodeData& dest, const aiNode* src);
   void ReadMissingBones(const aiAnimation* animation);

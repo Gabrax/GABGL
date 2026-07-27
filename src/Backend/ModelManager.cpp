@@ -9,7 +9,9 @@
 #include <glm/gtc/type_ptr.hpp>
 #include "Renderer.h"
 #include "Timer.hpp"
+#include <cmath>
 #include <limits>
+#include <ranges>
 #include <unordered_set>
 
 static glm::mat4 AssimpMatToGLMMat(const aiMatrix4x4& from)
@@ -25,12 +27,56 @@ static glm::mat4 AssimpMatToGLMMat(const aiMatrix4x4& from)
 
 static glm::vec3 AssimpVecToGLMVec(const aiVector3D& vec) 
 { 
-  return glm::vec3(vec.x, vec.y, vec.z); 
+  return {vec.x, vec.y, vec.z};
 }
 
 static glm::quat AssimpQuatToGLMQuat(const aiQuaternion& pOrientation)
 {
-  return glm::quat(pOrientation.w, pOrientation.x, pOrientation.y, pOrientation.z);
+  return {pOrientation.w, pOrientation.x, pOrientation.y, pOrientation.z};
+}
+
+static float WrapAnimationTime(float time, float duration)
+{
+  if (!std::isfinite(time) || !std::isfinite(duration) || duration <= std::numeric_limits<float>::epsilon())
+    return 0.0f;
+
+  const float wrapped = std::fmod(time, duration);
+  return wrapped < 0.0f ? wrapped + duration : wrapped;
+}
+
+static glm::mat4 BlendLocalTransforms(const glm::mat4& from, const glm::mat4& to, float factor)
+{
+  glm::vec3 fromScale(1.0f);
+  glm::quat fromRotation(1.0f, 0.0f, 0.0f, 0.0f);
+  glm::vec3 fromTranslation(0.0f);
+  glm::vec3 fromSkew(0.0f);
+  glm::vec4 fromPerspective(0.0f);
+
+  glm::vec3 toScale(1.0f);
+  glm::quat toRotation(1.0f, 0.0f, 0.0f, 0.0f);
+  glm::vec3 toTranslation(0.0f);
+  glm::vec3 toSkew(0.0f);
+
+  if (glm::vec4 toPerspective(0.0f); !glm::decompose(from, fromScale, fromRotation, fromTranslation, fromSkew, fromPerspective) ||
+                                     !glm::decompose(to, toScale, toRotation, toTranslation, toSkew, toPerspective))
+  {
+    const float t = glm::clamp(factor, 0.0f, 1.0f);
+    return from * (1.0f - t) + to * t;
+  }
+
+  fromRotation = glm::normalize(fromRotation);
+  toRotation = glm::normalize(toRotation);
+  if (glm::dot(fromRotation, toRotation) < 0.0f)
+    toRotation = -toRotation;
+
+  const float t = glm::clamp(factor, 0.0f, 1.0f);
+  const glm::vec3 scale = glm::mix(fromScale, toScale, t);
+  const glm::quat rotation = glm::normalize(glm::slerp(fromRotation, toRotation, t));
+  const glm::vec3 translation = glm::mix(fromTranslation, toTranslation, t);
+
+  return glm::translate(glm::mat4(1.0f), translation) *
+         glm::toMat4(rotation) *
+         glm::scale(glm::mat4(1.0f), scale);
 }
 
 struct MeshTextureRange
@@ -130,12 +176,10 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
 
   // Check if model has exactly one texture total shared by all meshes
   bool singleTextureModel = false;
-  GLuint64 sharedTextureHandle = 0;
 
-  if (model->GetMeshes().size() > 0)
+  if (!model->GetMeshes().empty())
   {
-    auto& firstMesh = model->GetMeshes()[0];
-    if (firstMesh.m_Textures.size() == 1)
+    if (auto& firstMesh = model->GetMeshes()[0]; firstMesh.m_Textures.size() == 1)
     {
       auto sharedTexture = firstMesh.m_Textures[0];
       singleTextureModel = true;
@@ -154,22 +198,21 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
 
   if (singleTextureModel)
   {
+    GLuint64 sharedTextureHandle = 0;
     // Bake the texture only for the first mesh
     auto& firstMesh = model->GetMeshes()[0];
     firstMesh.m_TexturesBindlessHandles.clear();
 
-    auto& texture = firstMesh.m_Textures[0];
-    if (texture)
+    if (auto& texture = firstMesh.m_Textures[0])
     {
-      int width, height;
+      int width = 0, height = 0;
       GLenum format;
       const void* srcData;
-      GLsizei dataSize;
+      GLsizei dataSize = 0;
 
       if (texture->IsUnCompressed())
       {
-        auto* embeddedTex = texture->GetEmbeddedTexture();
-        if (embeddedTex && embeddedTex->pcData)
+        if (auto* embeddedTex = texture->GetEmbeddedTexture(); embeddedTex && embeddedTex->pcData)
         {
           width = embeddedTex->mWidth;
           height = embeddedTex->mHeight;
@@ -201,8 +244,7 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
         auto& pbo = pboBuffers[currentPBO];
         pbo->WaitForCompletion();
 
-        void* ptr = pbo->Map();
-        if (ptr)
+        if (void* ptr = pbo->Map())
         {
           memcpy(ptr, srcData, dataSize);
           pbo->Unmap(); // Also inserts a sync
@@ -298,8 +340,7 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
 
         pbo->WaitForCompletion();
 
-        void* ptr = pbo->Map();
-        if (ptr)
+        if (void* ptr = pbo->Map())
         {
             memcpy(ptr, srcData, dataSize);
             pbo->Unmap(); // Also inserts a sync
@@ -352,7 +393,7 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
   }
 
   model->m_Name = name;
-  s_Data.m_Models[name] = std::move(model);
+  s_Data.m_Models[name] = model;
   s_Data.m_ModelsNames.emplace_back(name);
 
   GABGL_WARN("Model: {0} baking took {1} ms", name, timer.ElapsedMillis());
@@ -380,7 +421,7 @@ void ModelManager::SetInitialControllerTransform(const std::string& name, const 
   model->CreateCharacterController(PhysX::GlmVec3ToPxVec3(model->m_ControllerTransform.GetPosition()), radius, height, slopeLimit);
 
   // Find index in the names vector
-  auto vecIt = std::find(s_Data.m_ModelsNames.begin(), s_Data.m_ModelsNames.end(), name);
+  auto vecIt = std::ranges::find(s_Data.m_ModelsNames, name);
   if (vecIt == s_Data.m_ModelsNames.end())
   {
       GABGL_WARN("Model '{}' not found in name list for SSBO!", name);
@@ -412,10 +453,9 @@ void ModelManager::SetControllerTransform(const std::string& name, const Transfo
   }
 
   const glm::mat4 matrix = transform.GetTransform();
-  const auto nameIt = std::find(s_Data.m_ModelsNames.begin(), s_Data.m_ModelsNames.end(), name);
-  if (s_Data.m_ModelsTransforms && nameIt != s_Data.m_ModelsNames.end())
+  if (const auto nameIt = std::ranges::find(s_Data.m_ModelsNames, name); s_Data.m_ModelsTransforms && nameIt != s_Data.m_ModelsNames.end())
   {
-    const size_t modelIndex = static_cast<size_t>(std::distance(s_Data.m_ModelsNames.begin(), nameIt));
+    const auto modelIndex = static_cast<size_t>(std::distance(s_Data.m_ModelsNames.begin(), nameIt));
     s_Data.m_ModelsTransforms->SetSubData(modelIndex * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(matrix));
   }
   SetModelInstanceTransform(name, 0, matrix);
@@ -441,14 +481,13 @@ void ModelManager::SetInitialModelTransform(const std::string& name, const glm::
   glm::mat4 resolvedTransform = transform;
   std::string convexName = name + "_convex";
 
-  auto convexIt = s_Data.m_Models.find(convexName);
-  if (convexIt != s_Data.m_Models.end())
+  if (auto convexIt = s_Data.m_Models.find(convexName); convexIt != s_Data.m_Models.end())
   {
     GABGL_WARN("Convex version '{}' found for model '{}'. Applying same transform.", convexName, name);
 
     const auto& convex = convexIt->second;
 
-    PxTransform pxTransform = PxTransform(PhysX::GlmMat4ToPxTransform(transform));
+    auto pxTransform = PxTransform(PhysX::GlmMat4ToPxTransform(transform));
 
     if(convex->GetPhysXMeshType() == MeshType::TRIANGLEMESH) convex->m_StaticMeshActor->setGlobalPose(pxTransform);
     else if(convex->GetPhysXMeshType() == MeshType::CONVEXMESH)
@@ -470,8 +509,7 @@ void ModelManager::SetInitialModelTransform(const std::string& name, const glm::
       else model->m_DynamicMeshActor->setGlobalPose(pxTransform);
     }
 
-    auto vec2It = std::find(s_Data.m_ModelsNames.begin(), s_Data.m_ModelsNames.end(), name);
-    if (vec2It != s_Data.m_ModelsNames.end())
+    if (auto vec2It = std::ranges::find(s_Data.m_ModelsNames, name); vec2It != s_Data.m_ModelsNames.end())
     {
       int ssboIndex = static_cast<int>(std::distance(s_Data.m_ModelsNames.begin(), vec2It));
       if (s_Data.m_ModelsTransforms)
@@ -485,7 +523,7 @@ void ModelManager::SetInitialModelTransform(const std::string& name, const glm::
   else
   {
     // No convex model, fallback to normal update
-    auto vecIt = std::find(s_Data.m_ModelsNames.begin(), s_Data.m_ModelsNames.end(), name);
+    auto vecIt = std::ranges::find(s_Data.m_ModelsNames, name);
     if (vecIt == s_Data.m_ModelsNames.end())
     {
       GABGL_WARN("Model '{}' not found in name list for SSBO!", name);
@@ -510,7 +548,7 @@ uint32_t ModelManager::AddModelInstance(const std::string& name, const glm::mat4
   }
 
   auto& instances = it->second->m_InstanceTransforms;
-  const uint32_t instanceIndex = static_cast<uint32_t>(instances.size());
+  const auto instanceIndex = static_cast<uint32_t>(instances.size());
   instances.push_back(transform);
   RefreshInstanceTransforms();
   return instanceIndex;
@@ -543,8 +581,7 @@ bool ModelManager::RemoveModelInstance(const std::string& name, uint32_t instanc
     };
 
     removePhysicsActors(model);
-    const auto convex = s_Data.m_Models.find(name + "_convex");
-    if (convex != s_Data.m_Models.end())
+    if (const auto convex = s_Data.m_Models.find(name + "_convex"); convex != s_Data.m_Models.end())
     {
       removePhysicsActors(convex->second);
       convex->second->m_InstanceTransforms.clear();
@@ -575,7 +612,7 @@ void ModelManager::SetModelInstances(const std::string& name, const std::vector<
 
 void ModelManager::SetModelInstanceTransform(const std::string& name, uint32_t instanceIndex, const glm::mat4& transform)
 {
-  auto it = s_Data.m_Models.find(name);
+  const auto it = s_Data.m_Models.find(name);
   if (it == s_Data.m_Models.end())
   {
     GABGL_WARN("Model '{}' not found in ModelManager!", name);
@@ -604,7 +641,7 @@ static void ReleaseModelResources()
 {
   std::unordered_set<GLuint64> residentHandles;
 
-  for (auto& [name, model] : s_Data.m_Models)
+  for (const auto &model: s_Data.m_Models | std::views::values)
   {
     if (model->m_ActorController)
     {
@@ -673,17 +710,19 @@ void ModelManager::UpdateTransforms(const DeltaTime& dt)
   {
     if(model->IsAnimated() && model->m_IsRendered)
     { 
+      model->UpdateAnimation(dt);
       auto& transforms = model->GetFinalBoneMatrices();
 
-      auto nameIt = std::find(s_Data.m_ModelsNames.begin(), s_Data.m_ModelsNames.end(), key);
+      auto nameIt = std::ranges::find(s_Data.m_ModelsNames, key);
       if (nameIt != s_Data.m_ModelsNames.end())
       {
         int ssboIndex = static_cast<int>(std::distance(s_Data.m_ModelsNames.begin(), nameIt));
-        size_t offset = ssboIndex * MAX_BONES * sizeof(glm::mat4); // assuming MAX_BONES is defined
-        size_t size = transforms.size() * sizeof(glm::mat4);
+        const size_t offset = static_cast<size_t>(ssboIndex) * MAX_BONES * sizeof(glm::mat4);
+        const size_t matrixCount = std::min(transforms.size(), static_cast<size_t>(MAX_BONES));
+        const size_t size = matrixCount * sizeof(glm::mat4);
 
-        s_Data.m_FinalBoneMatricesSSBO->SetSubData(offset, size, transforms.data());
-        model->UpdateAnimation(dt);
+        if (size > 0)
+          s_Data.m_FinalBoneMatricesSSBO->SetSubData(offset, size, transforms.data());
       }
       else
       {
@@ -709,8 +748,7 @@ void ModelManager::UpdateTransforms(const DeltaTime& dt)
       glm::mat4 convexTransform = PhysX::PxMat44ToGlmMat4(model->GetDynamicActor()->getGlobalPose());
       SetModelInstanceTransform(convexName, 0, convexTransform);
 
-      auto nameIt = std::find(s_Data.m_ModelsNames.begin(), s_Data.m_ModelsNames.end(), baseName);
-      if (nameIt != s_Data.m_ModelsNames.end())
+      if (auto nameIt = std::ranges::find(s_Data.m_ModelsNames, baseName); nameIt != s_Data.m_ModelsNames.end())
       {
         int ssboIndex = static_cast<int>(std::distance(s_Data.m_ModelsNames.begin(), nameIt));
         if (s_Data.m_ModelsTransforms)
@@ -822,16 +860,13 @@ void ModelManager::UploadToGPU()
   for (const auto& modelName : s_Data.m_ModelsNames)
   {
     auto& model = s_Data.m_Models[modelName];
-    const auto& meshes = model->GetMeshes();
 
-    for (size_t meshIndex = 0; meshIndex < meshes.size(); ++meshIndex)
+    for (const auto& meshes = model->GetMeshes(); const auto & mesh : meshes)
     {
-      const auto& mesh = meshes[meshIndex];
-
-      mesh.hasNormalMap ? normalMapFlags.push_back(1) : normalMapFlags.push_back(0);  
+      mesh.hasNormalMap ? normalMapFlags.push_back(1) : normalMapFlags.push_back(0);
       mesh.hasSpecularMap ? specularMapFlags.push_back(1) : specularMapFlags.push_back(0);  
 
-      MeshTextureRange range;
+      MeshTextureRange range{};
       range.StartIndex = static_cast<uint32_t>(textureHandles.size());
       range.Count = static_cast<uint32_t>(mesh.m_TexturesBindlessHandles.size());
 
@@ -850,7 +885,7 @@ void ModelManager::UploadToGPU()
   s_Data.m_MeshToTextureRangeSSBO = StorageBuffer::Create(meshTextureRanges.size() * sizeof(MeshTextureRange), 8);
   s_Data.m_MeshToTextureRangeSSBO->SetData(meshTextureRanges.size() * sizeof(MeshTextureRange), meshTextureRanges.data());
   
-  std::vector<glm::mat4> identityBones(s_Data.m_Models.size() * MAX_BONES, glm::mat4(1.0f));
+  std::vector identityBones(s_Data.m_Models.size() * MAX_BONES, glm::mat4(1.0f));
 
   s_Data.m_FinalBoneMatricesSSBO = StorageBuffer::Create(identityBones.size() * sizeof(glm::mat4), 9);
   s_Data.m_FinalBoneMatricesSSBO->SetData(identityBones.size() * sizeof(glm::mat4), identityBones.data());
@@ -1058,11 +1093,17 @@ Model::Model(const char* path, float optimizerStrength, bool isAnimated, bool is
 
   if (!m_Scene || m_Scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !m_Scene->mRootNode)
   {
-    GABGL_ERROR("[MODEL]: {0}", (std::string)importer.GetErrorString());
+    GABGL_ERROR("[MODEL]: {0}", static_cast<std::string>(importer.GetErrorString()));
     return;
   }
   std::string dirStr = std::filesystem::path(path).parent_path().string();
-  m_Directory = dirStr.c_str();  
+  m_Directory = dirStr;
+
+  const glm::mat4 rootTransform = AssimpMatToGLMMat(m_Scene->mRootNode->mTransformation);
+  const float rootDeterminant = glm::determinant(rootTransform);
+  if (std::abs(rootDeterminant) > std::numeric_limits<float>::epsilon())
+    m_GlobalInverseTransform = glm::inverse(rootTransform);
+
   processNode(m_Scene->mRootNode, m_Scene);
 
   glm::vec3 boundsMin(std::numeric_limits<float>::max());
@@ -1098,8 +1139,27 @@ Model::Model(const char* path, float optimizerStrength, bool isAnimated, bool is
 
       AnimationData animData;
       animData.name = animation->mName.C_Str();
-      animData.duration = animation->mDuration;
-      animData.ticksPerSecond = animation->mTicksPerSecond;
+      animData.duration = static_cast<float>(animation->mDuration);
+      animData.ticksPerSecond = animation->mTicksPerSecond > 0.0
+        ? static_cast<float>(animation->mTicksPerSecond)
+        : 25.0f;
+
+      if (!std::isfinite(animData.duration) ||
+          animData.duration <= std::numeric_limits<float>::epsilon())
+      {
+        double lastKeyTime = 0.0;
+        for (unsigned int channelIndex = 0; channelIndex < animation->mNumChannels; ++channelIndex)
+        {
+          const aiNodeAnim* channel = animation->mChannels[channelIndex];
+          if (channel->mNumPositionKeys > 0)
+            lastKeyTime = std::max(lastKeyTime, channel->mPositionKeys[channel->mNumPositionKeys - 1].mTime);
+          if (channel->mNumRotationKeys > 0)
+            lastKeyTime = std::max(lastKeyTime, channel->mRotationKeys[channel->mNumRotationKeys - 1].mTime);
+          if (channel->mNumScalingKeys > 0)
+            lastKeyTime = std::max(lastKeyTime, channel->mScalingKeys[channel->mNumScalingKeys - 1].mTime);
+        }
+        animData.duration = std::max(static_cast<float>(lastKeyTime), 1.0f);
+      }
 
       ReadHierarchyData(animData.hierarchy, m_Scene->mRootNode);
       ReadMissingBones(animation);
@@ -1141,7 +1201,7 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
 
   for (unsigned int i = 0; i < mesh->mNumVertices; ++i)
   {
-    Vertex vertex;
+    Vertex vertex{};
     if(m_isAnimated) SetDefaultBoneData(vertex);
     vertex.Position = {mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z};
     vertex.Normal = mesh->HasNormals() ? glm::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z) : glm::vec3(0.0f);
@@ -1152,7 +1212,7 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
     } else {
         vertex.TexCoords = glm::vec2(0.0f);
     }
-    vertices.emplace_back(std::move(vertex));
+    vertices.emplace_back(vertex);
   }
 
   std::vector<GLuint> indices;
@@ -1197,7 +1257,7 @@ bool Model::loadMaterialTextures(aiMaterial* mat, aiTextureType type, const std:
       mat->GetTexture(type, i, &str);
       std::string texturePath = str.C_Str();
 
-      if (m_TexturesLoaded.find(texturePath) != m_TexturesLoaded.end()) {
+      if (m_TexturesLoaded.contains(texturePath)) {
           textures.emplace_back(m_TexturesLoaded[texturePath]);
           loadedAny = true;
           continue;
@@ -1206,8 +1266,7 @@ bool Model::loadMaterialTextures(aiMaterial* mat, aiTextureType type, const std:
       std::shared_ptr<Texture> texture;
 
       if (texturePath[0] == '*') {
-          const aiTexture* aitexture = m_Scene->GetEmbeddedTexture(str.C_Str());
-          if (aitexture) {
+        if (const aiTexture* aitexture = m_Scene->GetEmbeddedTexture(str.C_Str())) {
               texture = Texture::CreateEMBEDDED(aitexture, texturePath);
           }
       } else {
@@ -1371,10 +1430,20 @@ void Model::ExtractBoneWeightForVertices(std::vector<Vertex>& vertices, aiMesh* 
       std::string boneName = mesh->mBones[i]->mName.C_Str();
       int boneID = -1;
 
-      if (m_BoneInfoMap.find(boneName) == m_BoneInfoMap.end()) {
+      if (m_BoneInfoMap.find(boneName) == m_BoneInfoMap.end())
+      {
+          if (m_BoneCounter >= MAX_BONES)
+          {
+              GABGL_ERROR("Model '{}' exceeds the supported limit of {} deforming bones; ignoring '{}'",
+                m_Name, MAX_BONES, boneName);
+              continue;
+          }
+
           boneID = m_BoneCounter++;
           m_BoneInfoMap[boneName] = { boneID, AssimpMatToGLMMat(mesh->mBones[i]->mOffsetMatrix) };
-      } else {
+      }
+      else
+      {
           boneID = m_BoneInfoMap[boneName].id;
       }
 
@@ -1387,6 +1456,9 @@ void Model::ExtractBoneWeightForVertices(std::vector<Vertex>& vertices, aiMesh* 
           }
       }
   }
+
+  for (Vertex& vertex : vertices)
+    NormalizeBoneWeights(vertex);
 }
 
 // Set default bone data for a vertex
@@ -1401,68 +1473,130 @@ void Model::SetDefaultBoneData(Vertex& vertex)
 // Set bone data for a vertex
 void Model::SetBoneData(Vertex& vertex, int boneID, float weight)
 {
-  if (weight <= 0.0f) return;
+  if (boneID < 0 || boneID >= MAX_BONES || weight <= 0.0f)
+    return;
 
-  for (int i = 0; i < MAX_BONE_INFLUENCE; ++i) {
-      if (vertex.m_BoneIDs[i] < 0) {
+  for (int i = 0; i < MAX_BONE_INFLUENCE; ++i)
+  {
+      if (vertex.m_BoneIDs[i] < 0)
+      {
           vertex.m_BoneIDs[i] = boneID;
           vertex.m_Weights[i] = weight;
           return;
       }
   }
+
+  int weakestIndex = 0;
+  for (int i = 1; i < MAX_BONE_INFLUENCE; ++i)
+    if (vertex.m_Weights[i] < vertex.m_Weights[weakestIndex])
+      weakestIndex = i;
+
+  if (weight > vertex.m_Weights[weakestIndex])
+  {
+    vertex.m_BoneIDs[weakestIndex] = boneID;
+    vertex.m_Weights[weakestIndex] = weight;
+  }
+}
+
+void Model::NormalizeBoneWeights(Vertex& vertex)
+{
+  float totalWeight = 0.0f;
+  for (int i = 0; i < MAX_BONE_INFLUENCE; ++i)
+    if (vertex.m_BoneIDs[i] >= 0)
+      totalWeight += vertex.m_Weights[i];
+
+  if (totalWeight <= std::numeric_limits<float>::epsilon())
+    return;
+
+  for (int i = 0; i < MAX_BONE_INFLUENCE; ++i)
+    if (vertex.m_BoneIDs[i] >= 0)
+      vertex.m_Weights[i] /= totalWeight;
 }
 
 void Model::UpdateAnimation(const DeltaTime& dt)
 {
-  float delta = dt;
+  if (!m_isAnimated || m_ProcessedAnimations.empty() ||
+      m_CurrentAnimationIndex < 0 ||
+      m_CurrentAnimationIndex >= static_cast<int>(m_ProcessedAnimations.size()))
+    return;
+
+  const float rawDelta = static_cast<float>(dt);
+  const float delta = std::isfinite(rawDelta) && rawDelta > 0.0f ? rawDelta : 0.0f;
 
   if (!m_IsBlending)
   {
-      m_CurrentTime += m_TicksPerSecond * delta;
-      m_CurrentTime = fmod(m_CurrentTime, m_Duration);
+      m_CurrentTime = WrapAnimationTime(m_CurrentTime + m_TicksPerSecond * delta, m_Duration);
 
       CalculateBoneTransform(&m_RootNode, glm::mat4(1.0f));
   }
   else
   {
     m_BlendTime += delta;
-    float blendFactor = glm::clamp(m_BlendTime / m_BlendDuration, 0.0f, 1.0f);
+    const float linearBlendFactor = glm::clamp(m_BlendTime / m_BlendDuration, 0.0f, 1.0f);
+    const float blendFactor = linearBlendFactor * linearBlendFactor * (3.0f - 2.0f * linearBlendFactor);
 
-    m_CurrentTime += m_TicksPerSecond * delta;
-    m_NextTime    += m_TicksPerSecondNext * delta;
+    if (!m_BlendFromSnapshot)
+      m_CurrentTime = WrapAnimationTime(m_CurrentTime + m_TicksPerSecond * delta, m_Duration);
+    m_NextTime = WrapAnimationTime(m_NextTime + m_TicksPerSecondNext * delta, m_DurationNext);
 
-    m_CurrentTime = fmod(m_CurrentTime, m_Duration);
-    m_NextTime    = fmod(m_NextTime, m_DurationNext);
+    CalculateBlendedBoneTransform(&m_RootNode, m_CurrentTime, m_NextTime, glm::mat4(1.0f), blendFactor);
 
-    CalculateBlendedBoneTransform(&m_RootNode, &m_RootNodeNext, m_CurrentTime, m_NextTime, glm::mat4(1.0f), blendFactor);
-
-    if (blendFactor >= 1.0f)
+    if (linearBlendFactor >= 1.0f)
     {
-        m_CurrentTime = m_NextTime;
-        m_IsBlending = false;
-        SetAnimationbyIndex(m_NextAnimationIndex);
+        const int completedAnimationIndex = m_NextAnimationIndex;
+        const float completedAnimationTime = m_NextTime;
+        SetAnimationbyIndex(completedAnimationIndex);
+        m_CurrentTime = completedAnimationTime;
     }
   }
 }
 
 bool Model::IsInAnimation(int index) const
 {
-    return (!m_IsBlending && m_CurrentAnimationIndex == index) || (m_IsBlending && m_NextAnimationIndex == index);
+  if (index < 0 || index >= static_cast<int>(m_ProcessedAnimations.size()))
+    return false;
+
+  return (!m_IsBlending && m_CurrentAnimationIndex == index) ||
+         (m_IsBlending && m_NextAnimationIndex == index);
 }
 
 void Model::StartBlendToAnimation(int32_t nextAnimationIndex, float blendDuration)
 {
-  assert(nextAnimationIndex >= 0 && nextAnimationIndex < m_ProcessedAnimations.size());
+  if (nextAnimationIndex < 0 ||
+      nextAnimationIndex >= static_cast<int32_t>(m_ProcessedAnimations.size()))
+  {
+    GABGL_ERROR("Invalid animation index {} for model '{}'", nextAnimationIndex, m_Name);
+    return;
+  }
 
-  if (IsInAnimation(nextAnimationIndex)) return; 
+  if (IsInAnimation(nextAnimationIndex))
+    return;
+
+  if (!std::isfinite(blendDuration) ||
+      blendDuration <= std::numeric_limits<float>::epsilon())
+  {
+    SetAnimationbyIndex(nextAnimationIndex);
+    return;
+  }
+
+  std::unordered_map<std::string, glm::mat4> interruptedPose;
+  if (m_IsBlending)
+  {
+    const float linearFactor = glm::clamp(m_BlendTime / m_BlendDuration, 0.0f, 1.0f);
+    const float smoothFactor = linearFactor * linearFactor * (3.0f - 2.0f * linearFactor);
+    interruptedPose.reserve(m_BlendSourcePose.size() + m_BoneInfoMap.size());
+    CaptureBlendedLocalPose(&m_RootNode, smoothFactor, interruptedPose);
+  }
 
   m_BlendTime = 0.0f;
-  m_BlendDuration = blendDuration;
+  m_BlendDuration = std::max(blendDuration, std::numeric_limits<float>::epsilon());
   m_IsBlending = true;
+  m_BlendFromSnapshot = !interruptedPose.empty();
+  m_BlendSourcePose = std::move(interruptedPose);
   m_NextAnimationIndex = nextAnimationIndex;
+  m_NextTime = 0.0f;
 
   const AnimationData& animData = m_ProcessedAnimations[nextAnimationIndex];
-  m_RootNodeNext        = animData.hierarchy;
   m_BonesNext           = animData.bones;
   m_TicksPerSecondNext  = animData.ticksPerSecond;
   m_DurationNext        = animData.duration;
@@ -1470,14 +1604,29 @@ void Model::StartBlendToAnimation(int32_t nextAnimationIndex, float blendDuratio
 
 void Model::SetAnimationbyIndex(int animationIndex)
 {
-  assert(animationIndex >= 0 && animationIndex < m_ProcessedAnimations.size());
+  if (animationIndex < 0 || animationIndex >= static_cast<int>(m_ProcessedAnimations.size()))
+  {
+    GABGL_ERROR("Invalid animation index {} for model '{}'", animationIndex, m_Name);
+    return;
+  }
 
   m_CurrentAnimationIndex = animationIndex;
+  m_CurrentTime = 0.0f;
+  m_IsBlending = false;
+  m_BlendFromSnapshot = false;
+  m_BlendSourcePose.clear();
+  m_NextAnimationIndex = -1;
+  m_NextTime = 0.0f;
   
   const AnimationData& animData = m_ProcessedAnimations[animationIndex];
 
-  m_Duration = animData.duration;
-  m_TicksPerSecond = animData.ticksPerSecond;
+  m_Duration = std::isfinite(animData.duration) &&
+               animData.duration > std::numeric_limits<float>::epsilon()
+    ? animData.duration
+    : 1.0f;
+  m_TicksPerSecond = std::isfinite(animData.ticksPerSecond) && animData.ticksPerSecond > 0.0f
+    ? animData.ticksPerSecond
+    : 25.0f;
 
   m_RootNode = animData.hierarchy;
   m_Bones = animData.bones;
@@ -1493,8 +1642,7 @@ void Model::SetAnimationByName(const std::string& animationName)
       });
 
   if (it != m_ProcessedAnimations.end()) {
-      // Get the index of the found animation
-      int animationIndex = std::distance(m_ProcessedAnimations.begin(), it);
+      const int animationIndex = static_cast<int>(std::distance(m_ProcessedAnimations.begin(), it));
       SetAnimationbyIndex(animationIndex); 
   } else {
       GABGL_ERROR("Animation not found: {}",animationName);
@@ -1503,173 +1651,99 @@ void Model::SetAnimationByName(const std::string& animationName)
 
 void Model::CalculateBoneTransform(const AssimpNodeData* node, const glm::mat4& parentTransform)
 {
-  std::string nodeName = node->name;
-  glm::mat4 nodeTransform = node->transformation;
+  const std::string& nodeName = node->name;
+  const glm::mat4 nodeTransform = SampleLocalTransform(*node, m_Bones, m_CurrentTime);
 
-  // Check if this node has a corresponding bone in the animation
-  Bone* bone = FindBone(nodeName);
-  if (bone)
-  {
-      bone->Update(m_CurrentTime);
-      nodeTransform = bone->GetLocalTransform();
-  }
+  const glm::mat4 globalTransformation = parentTransform * nodeTransform;
 
-  // Calculate the global transformation for this node
-  glm::mat4 globalTransformation = parentTransform * nodeTransform;
-
-  // Look up the bone in the boneInfoMap to get the offset matrix
   auto it = m_BoneInfoMap.find(nodeName);
   if (it != m_BoneInfoMap.end())
   {
-      int index = it->second.id;
-      glm::mat4 offset = it->second.offset;
-      m_FinalBoneMatrices[index] = globalTransformation * offset;
+      const int index = it->second.id;
+      if (index >= 0 && index < static_cast<int>(m_FinalBoneMatrices.size()))
+        m_FinalBoneMatrices[index] = m_GlobalInverseTransform * globalTransformation * it->second.offset;
   }
 
-  // Recursively calculate transformations for the children
-  for (size_t i = 0; i < node->children.size(); ++i)
-  {
-      CalculateBoneTransform(&node->children[i], globalTransformation);
-  }
+  for (const auto & i : node->children)
+      CalculateBoneTransform(&i, globalTransformation);
 }
 
-void Model::CalculateBoneTransform(const AssimpNodeData* node, const glm::mat4& parentTransform, std::vector<glm::mat4>& outMatrices, std::vector<Bone>& bones, float animationTime)
+glm::mat4 Model::SampleLocalTransform(const AssimpNodeData& node, const std::vector<Bone>& bones,
+  float animationTime) const
 {
-  std::string nodeName = node->name;
-  glm::mat4 nodeTransform = node->transformation;
-
-  Bone* bone = FindBoneInList(nodeName, bones);
-  if (bone)
-  {
-      bone->Update(animationTime); // Pass the time explicitly
-      nodeTransform = bone->GetLocalTransform();
-  }
-
-  glm::mat4 globalTransformation = parentTransform * nodeTransform;
-
-  auto it = m_BoneInfoMap.find(nodeName);
-  if (it != m_BoneInfoMap.end())
-  {
-      int index = it->second.id;
-      glm::mat4 offset = it->second.offset;
-      outMatrices[index] = globalTransformation * offset;
-  }
-
-  for (const auto& child : node->children)
-  {
-      CalculateBoneTransform(&child, globalTransformation, outMatrices, bones, animationTime);
-  }
+  if (const Bone* bone = FindBoneInList(node.name, bones))
+    return bone->GetInterpolatedTransform(animationTime, node.transformation);
+  return node.transformation;
 }
 
-void Model::CalculateBlendedBoneTransform(const AssimpNodeData* node, const AssimpNodeData* nodeNext, float timeCurrent, float timeNext, const glm::mat4& parentTransform, float blendFactor)
+void Model::CaptureBlendedLocalPose(const AssimpNodeData* node, float blendFactor,
+  std::unordered_map<std::string, glm::mat4>& outPose) const
 {
   const std::string& nodeName = node->name;
-
-  glm::mat4 transformCurrent = node->transformation;
-  Bone* boneCurrent = FindBoneInList(nodeName, m_Bones);
-  if (boneCurrent) {
-      boneCurrent->Update(timeCurrent);
-      transformCurrent = boneCurrent->GetLocalTransform();
-  }
-
-  glm::mat4 transformNext = nodeNext->transformation;
-  Bone* boneNext = FindBoneInList(nodeName, m_BonesNext);
-  if (boneNext) {
-      boneNext->Update(timeNext);
-      transformNext = boneNext->GetLocalTransform();
-  }
-
-  // Decompose matrices
-  glm::vec3 scaleCurrent, translationCurrent, skew1;
-  glm::quat rotationCurrent;
-  glm::vec4 perspective1;
-  glm::decompose(transformCurrent, scaleCurrent, rotationCurrent, translationCurrent, skew1, perspective1);
-  rotationCurrent = glm::normalize(rotationCurrent);
-
-  glm::vec3 scaleNext, translationNext, skew2;
-  glm::quat rotationNext;
-  glm::vec4 perspective2;
-  glm::decompose(transformNext, scaleNext, rotationNext, translationNext, skew2, perspective2);
-  rotationNext = glm::normalize(rotationNext);
-
-  // Blend all components
-  glm::vec3 blendedScale       = glm::mix(scaleCurrent, scaleNext, blendFactor);
-  glm::quat blendedRotation    = glm::normalize(glm::slerp(rotationCurrent, rotationNext, blendFactor));
-  glm::vec3 blendedTranslation = glm::mix(translationCurrent, translationNext, blendFactor);
-
-  // Compose blended matrix
-  glm::mat4 translationMat = glm::translate(glm::mat4(1.0f), blendedTranslation);
-  glm::mat4 rotationMat    = glm::toMat4(blendedRotation);
-  glm::mat4 scaleMat       = glm::scale(glm::mat4(1.0f), blendedScale);
-
-  glm::mat4 blendedTransform = translationMat * rotationMat * scaleMat;
-  glm::mat4 globalTransform = parentTransform * blendedTransform;
-
-  if (m_BoneInfoMap.count(nodeName)) {
-      int index = m_BoneInfoMap[nodeName].id;
-      glm::mat4 offset = m_BoneInfoMap[nodeName].offset;
-      m_FinalBoneMatrices[index] = globalTransform * offset;
-  }
-
-  for (size_t i = 0; i < node->children.size(); ++i)
+  glm::mat4 transformCurrent;
+  if (m_BlendFromSnapshot)
   {
-      CalculateBlendedBoneTransform(&node->children[i], &nodeNext->children[i], timeCurrent, timeNext, globalTransform, blendFactor);
+    const auto snapshotIt = m_BlendSourcePose.find(nodeName);
+    transformCurrent = snapshotIt != m_BlendSourcePose.end()
+      ? snapshotIt->second
+      : SampleLocalTransform(*node, m_Bones, m_CurrentTime);
   }
+  else
+  {
+    transformCurrent = SampleLocalTransform(*node, m_Bones, m_CurrentTime);
+  }
+
+  const glm::mat4 transformNext = SampleLocalTransform(*node, m_BonesNext, m_NextTime);
+  outPose[nodeName] = BlendLocalTransforms(transformCurrent, transformNext, blendFactor);
+
+  for (const AssimpNodeData& child : node->children)
+    CaptureBlendedLocalPose(&child, blendFactor, outPose);
 }
 
-bool Model::ValidateBoneConsistency()
+void Model::CalculateBlendedBoneTransform(const AssimpNodeData* node, float timeCurrent,
+  float timeNext, const glm::mat4& parentTransform, float blendFactor)
 {
-  // Step 1: Validate BoneInfoMap contains same bones
-  for (const auto& [boneName, info] : m_BoneInfoMap)
+  const std::string& nodeName = node->name;
+  glm::mat4 transformCurrent;
+  if (m_BlendFromSnapshot)
   {
-      bool foundInCurrent = FindBoneInList(boneName, m_Bones) != nullptr;
-      bool foundInNext    = FindBoneInList(boneName, m_BonesNext) != nullptr;
-
-      if (!foundInCurrent || !foundInNext)
-      {
-          GABGL_ERROR("Bone '{}' missing in {} animation", 
-              boneName, 
-              !foundInCurrent ? "current" : "next");
-          return false;
-      }
+    const auto snapshotIt = m_BlendSourcePose.find(nodeName);
+    transformCurrent = snapshotIt != m_BlendSourcePose.end()
+      ? snapshotIt->second
+      : SampleLocalTransform(*node, m_Bones, timeCurrent);
+  }
+  else
+  {
+    transformCurrent = SampleLocalTransform(*node, m_Bones, timeCurrent);
   }
 
-  // Step 2: Validate output matrix vector sizes
-  if (m_FinalBoneMatricesCurrent.size() != m_FinalBoneMatricesNext.size())
+  const glm::mat4 transformNext = SampleLocalTransform(*node, m_BonesNext, timeNext);
+  const glm::mat4 blendedTransform = BlendLocalTransforms(transformCurrent, transformNext, blendFactor);
+  const glm::mat4 globalTransform = parentTransform * blendedTransform;
+
+  if (const auto it = m_BoneInfoMap.find(nodeName); it != m_BoneInfoMap.end())
   {
-      GABGL_ERROR("Final bone matrix size mismatch: {} vs {}", 
-                  m_FinalBoneMatricesCurrent.size(), 
-                  m_FinalBoneMatricesNext.size());
-      return false;
+      const int index = it->second.id;
+      if (index >= 0 && index < static_cast<int>(m_FinalBoneMatrices.size()))
+        m_FinalBoneMatrices[index] = m_GlobalInverseTransform * globalTransform * it->second.offset;
   }
 
-  GABGL_INFO("Bone consistency validated between current and next animations.");
-  return true;
+  for (const AssimpNodeData& child : node->children)
+    CalculateBlendedBoneTransform(&child, timeCurrent, timeNext, globalTransform, blendFactor);
 }
 
-Bone* Model::FindBone(const std::string& name)
+const Bone* Model::FindBoneInList(const std::string& name, const std::vector<Bone>& bones) const
 {
-  auto iter = std::find_if(m_Bones.begin(), m_Bones.end(),
-      [&](const Bone& Bone) {
-          return Bone.GetBoneName() == name;
-      }
-  );
-  if (iter == m_Bones.end()) return nullptr;
-  else return &(*iter);
-}
-
-Bone* Model::FindBoneInList(const std::string& name, std::vector<Bone>& bones)
-{
-  auto iter = std::find_if(bones.begin(), bones.end(),
-      [&](const Bone& bone) {
-          return bone.GetBoneName() == name;
-      });
+  auto iter = std::ranges::find_if(bones,
+                                   [&](const Bone& bone) {
+                                     return bone.GetBoneName() == name;
+                                   });
   return iter != bones.end() ? &(*iter) : nullptr;
 }
 
 void Model::ResizeFinalBoneMatrices()
 {
-  m_FinalBoneMatrices.resize(m_BoneInfoMap.size(), glm::mat4(1.0f));
+  m_FinalBoneMatrices.resize(MAX_BONES, glm::mat4(1.0f));
 }
 
 void Model::ReadHierarchyData(AssimpNodeData& dest, const aiNode* src)
@@ -1682,9 +1756,9 @@ void Model::ReadHierarchyData(AssimpNodeData& dest, const aiNode* src)
 
   dest.name = src->mName.data;
   dest.transformation = AssimpMatToGLMMat(src->mTransformation);
-  dest.childrenCount = src->mNumChildren;
+  dest.childrenCount = static_cast<int>(src->mNumChildren);
 
-  for (int i = 0; i < src->mNumChildren; i++)
+  for (unsigned int i = 0; i < src->mNumChildren; i++)
   {
       if (src->mChildren[i] == nullptr) 
       {
@@ -1703,20 +1777,15 @@ void Model::ReadMissingBones(const aiAnimation* animation)
   assert(animation);  
 
   m_Bones.clear();
-  m_BoneCounter = 0;
+  m_Bones.reserve(animation->mNumChannels);
 
-  for (int i = 0; i < animation->mNumChannels; i++)
+  for (unsigned int i = 0; i < animation->mNumChannels; i++)
   {
-      auto channel = animation->mChannels[i];
-      std::string boneName = channel->mNodeName.data;
-
-      if (m_BoneInfoMap.find(boneName) == m_BoneInfoMap.end())
-      {
-          m_BoneInfoMap[boneName].id = m_BoneCounter;
-          m_BoneCounter++;
-      }
-
-      m_Bones.emplace_back(Bone(channel->mNodeName.data, m_BoneInfoMap[boneName].id, channel));
+      const aiNodeAnim* channel = animation->mChannels[i];
+      const std::string boneName = channel->mNodeName.data;
+      const auto boneInfoIt = m_BoneInfoMap.find(boneName);
+      const int boneId = boneInfoIt != m_BoneInfoMap.end() ? boneInfoIt->second.id : -1;
+      m_Bones.emplace_back(boneName, boneId, channel);
   }
 }
 
@@ -1732,11 +1801,12 @@ std::shared_ptr<Model> Model::CreateANIMATED(const char* path, float optimizerSt
 }
 
 
-Bone::Bone(const std::string& name, int ID, const aiNodeAnim* channel) : m_Name(name), m_ID(ID), m_LocalTransform(1.0f)
+Bone::Bone(const std::string& name, int ID, const aiNodeAnim* channel) : m_Name(name), m_ID(ID)
 {
   // Extract position keyframes
-  m_NumPositions = channel->mNumPositionKeys;
-  for (unsigned int i = 0; i < m_NumPositions; ++i) {
+  m_NumPositions = static_cast<int>(channel->mNumPositionKeys);
+  m_Positions.reserve(channel->mNumPositionKeys);
+  for (int i = 0; i < m_NumPositions; ++i) {
       aiVector3D aiPosition = channel->mPositionKeys[i].mValue;
       float timeStamp = static_cast<float>(channel->mPositionKeys[i].mTime);
       KeyPosition data = { AssimpVecToGLMVec(aiPosition), timeStamp };
@@ -1744,17 +1814,19 @@ Bone::Bone(const std::string& name, int ID, const aiNodeAnim* channel) : m_Name(
   }
 
   // Extract rotation keyframes
-  m_NumRotations = channel->mNumRotationKeys;
-  for (unsigned int i = 0; i < m_NumRotations; ++i) {
+  m_NumRotations = static_cast<int>(channel->mNumRotationKeys);
+  m_Rotations.reserve(channel->mNumRotationKeys);
+  for (int i = 0; i < m_NumRotations; ++i) {
       aiQuaternion aiOrientation = channel->mRotationKeys[i].mValue;
       float timeStamp = static_cast<float>(channel->mRotationKeys[i].mTime);
-      KeyRotation data = { AssimpQuatToGLMQuat(aiOrientation), timeStamp };
+      KeyRotation data = { glm::normalize(AssimpQuatToGLMQuat(aiOrientation)), timeStamp };
       m_Rotations.emplace_back(data);
   }
 
   // Extract scaling keyframes
-  m_NumScalings = channel->mNumScalingKeys;
-  for (unsigned int i = 0; i < m_NumScalings; ++i) {
+  m_NumScalings = static_cast<int>(channel->mNumScalingKeys);
+  m_Scales.reserve(channel->mNumScalingKeys);
+  for (int i = 0; i < m_NumScalings; ++i) {
       aiVector3D aiScale = channel->mScalingKeys[i].mValue;
       float timeStamp = static_cast<float>(channel->mScalingKeys[i].mTime);
       KeyScale data = { AssimpVecToGLMVec(aiScale), timeStamp };
@@ -1762,31 +1834,50 @@ Bone::Bone(const std::string& name, int ID, const aiNodeAnim* channel) : m_Name(
   }
 }
 
-void Bone::Update(float animationTime)
+glm::mat4 Bone::GetInterpolatedTransform(float animationTime, const glm::mat4& fallbackTransform) const
 {
-    glm::mat4 translation = InterpolatePosition(animationTime);
-    glm::mat4 rotation = InterpolateRotation(animationTime);
-    glm::mat4 scale = InterpolateScaling(animationTime);
-    m_LocalTransform = translation * rotation * scale;
-}
+  glm::vec3 fallbackScale(1.0f);
+  glm::quat fallbackRotation(1.0f, 0.0f, 0.0f, 0.0f);
+  glm::vec3 fallbackTranslation(0.0f);
+  glm::vec3 skew(0.0f);
+  glm::vec4 perspective(0.0f);
+  if (!glm::decompose(fallbackTransform, fallbackScale, fallbackRotation,
+      fallbackTranslation, skew, perspective))
+  {
+    fallbackScale = glm::vec3(1.0f);
+    fallbackRotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+    fallbackTranslation = glm::vec3(0.0f);
+  }
 
-glm::mat4 Bone::GetInterpolatedTransform(float animationTime) const
-{
-    glm::mat4 translation = InterpolatePosition(animationTime);
-    glm::mat4 rotation = InterpolateRotation(animationTime);
-    glm::mat4 scale = InterpolateScaling(animationTime);
-    return translation * rotation * scale;
+  const glm::mat4 translation = m_NumPositions > 0
+    ? InterpolatePosition(animationTime)
+    : glm::translate(glm::mat4(1.0f), fallbackTranslation);
+  const glm::mat4 rotation = m_NumRotations > 0
+    ? InterpolateRotation(animationTime)
+    : glm::toMat4(glm::normalize(fallbackRotation));
+  const glm::mat4 scale = m_NumScalings > 0
+    ? InterpolateScaling(animationTime)
+    : glm::scale(glm::mat4(1.0f), fallbackScale);
+
+  return translation * rotation * scale;
 }
 
 // Interpolation helper functions
 float Bone::GetScaleFactor(float lastTimeStamp, float nextTimeStamp, float animationTime) const
 {
-    float scaleFactor = (animationTime - lastTimeStamp) / (nextTimeStamp - lastTimeStamp);
-    return glm::clamp(scaleFactor, 0.0f, 1.0f); // Ensure it's in the valid range
+    const float timeRange = nextTimeStamp - lastTimeStamp;
+    if (std::abs(timeRange) <= std::numeric_limits<float>::epsilon())
+      return 0.0f;
+
+    const float scaleFactor = (animationTime - lastTimeStamp) / timeRange;
+    return glm::clamp(scaleFactor, 0.0f, 1.0f);
 }
 
 glm::mat4 Bone::InterpolatePosition(float animationTime) const
 {
+    if (m_NumPositions == 0)
+        return glm::mat4(1.0f);
+
     if (m_NumPositions == 1) {
         return glm::translate(glm::mat4(1.0f), m_Positions[0].position);
     }
@@ -1802,6 +1893,9 @@ glm::mat4 Bone::InterpolatePosition(float animationTime) const
 
 glm::mat4 Bone::InterpolateRotation(float animationTime) const
 {
+    if (m_NumRotations == 0)
+        return glm::mat4(1.0f);
+
     if (m_NumRotations == 1) {
         return glm::toMat4(glm::normalize(m_Rotations[0].orientation));
     }
@@ -1817,6 +1911,9 @@ glm::mat4 Bone::InterpolateRotation(float animationTime) const
 
 glm::mat4 Bone::InterpolateScaling(float animationTime) const
 {
+    if (m_NumScalings == 0)
+        return glm::mat4(1.0f);
+
     if (m_NumScalings == 1) {
         return glm::scale(glm::mat4(1.0f), m_Scales[0].scale);
     }
@@ -1832,35 +1929,41 @@ glm::mat4 Bone::InterpolateScaling(float animationTime) const
 
 int Bone::GetPositionIndex(float animationTime) const
 {
+    if (m_NumPositions <= 1)
+        return 0;
+
     for (int i = 0; i < m_NumPositions - 1; ++i) {
         if (animationTime < m_Positions[i + 1].timeStamp) {
             return i;
         }
     }
-    assert(false && "Invalid position index");
-    return -1;
+    return m_NumPositions - 2;
 }
 
 int Bone::GetRotationIndex(float animationTime) const
 {
+    if (m_NumRotations <= 1)
+        return 0;
+
     for (int i = 0; i < m_NumRotations - 1; ++i) {
         if (animationTime < m_Rotations[i + 1].timeStamp) {
             return i;
         }
     }
-    assert(false && "Invalid rotation index");
-    return -1;
+    return m_NumRotations - 2;
 }
 
 int Bone::GetScaleIndex(float animationTime) const
 {
+    if (m_NumScalings <= 1)
+        return 0;
+
     for (int i = 0; i < m_NumScalings - 1; ++i) {
         if (animationTime < m_Scales[i + 1].timeStamp) {
             return i;
         }
     }
-    assert(false && "Invalid scaling index");
-    return -1;
+    return m_NumScalings - 2;
 }
 
 
