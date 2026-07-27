@@ -56,4 +56,15 @@ int main()
         std::this_thread::sleep_for(targetFrameTime - elapsed);
     }
   }
+
+  SceneManager::Shutdown();
+  AudioManager::Terminate();
+  ModelManager::Shutdown();
+  LightManager::Shutdown();
+  Renderer::Shutdown();
+  FontManager::Shutdown();
+  PhysX::Shutdown();
+  Window::Terminate();
+
+  return 0;
 }

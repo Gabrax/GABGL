@@ -173,7 +173,13 @@ void Window::Init(const std::string& windowTitle, uint32_t windowWidth, uint32_t
 
 void Window::Terminate()
 {
-	glfwDestroyWindow(m_Window);
+  if (m_Window)
+  {
+	  glfwDestroyWindow(m_Window);
+    m_Window = nullptr;
+  }
+  glfwTerminate();
+  m_isRunning = false;
 }
 
 void Window::Update()

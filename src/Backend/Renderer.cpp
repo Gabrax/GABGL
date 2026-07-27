@@ -186,6 +186,12 @@ struct RendererData
   size_t m_cmdBufferSize = 0;
   uint32_t m_VisibleInstanceCount = 0;
   uint32_t m_RenderableInstanceCount = 0;
+  GLuint m_FullscreenQuadVAO = 0;
+  GLuint m_FullscreenQuadVBO = 0;
+  GLuint m_FramebufferQuadVAO = 0;
+  GLuint m_FramebufferQuadVBO = 0;
+  GLuint m_SkyboxVAO = 0;
+  GLuint m_SkyboxVBO = 0;
   bool m_PhysicsDebug = false;
   bool m_LightDebug = false;
   bool m_CullingDebug = false;
@@ -217,9 +223,8 @@ struct Frustum
 
     for (glm::vec4& plane : m_Planes)
     {
-      const float normalLength = glm::length(glm::vec3(plane));
-      if (normalLength > 0.0f)
-        plane /= normalLength;
+	    if (const float normalLength = glm::length(glm::vec3(plane)); normalLength > 0.0f)
+			plane /= normalLength;
     }
   }
 
@@ -495,12 +500,46 @@ void Renderer::Init()
 
 void Renderer::Shutdown()
 {
+  Profiler::Shutdown();
 	ParticleRenderer::Shutdown();
-	delete[] s_Data.QuadVertexBufferBase;
+  ResetModelDrawCommands();
 
   ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
+
+	delete[] s_Data.QuadVertexBufferBase;
+  s_Data.QuadVertexBufferBase = nullptr;
+  s_Data.QuadVertexBufferPtr = nullptr;
+  delete[] s_Data.LineVertexBufferBase;
+  s_Data.LineVertexBufferBase = nullptr;
+  s_Data.LineVertexBufferPtr = nullptr;
+
+  if (s_Data.m_FullscreenQuadVBO) glDeleteBuffers(1, &s_Data.m_FullscreenQuadVBO);
+  if (s_Data.m_FullscreenQuadVAO) glDeleteVertexArrays(1, &s_Data.m_FullscreenQuadVAO);
+  if (s_Data.m_FramebufferQuadVBO) glDeleteBuffers(1, &s_Data.m_FramebufferQuadVBO);
+  if (s_Data.m_FramebufferQuadVAO) glDeleteVertexArrays(1, &s_Data.m_FramebufferQuadVAO);
+  if (s_Data.m_SkyboxVBO) glDeleteBuffers(1, &s_Data.m_SkyboxVBO);
+  if (s_Data.m_SkyboxVAO) glDeleteVertexArrays(1, &s_Data.m_SkyboxVAO);
+  s_Data.m_FullscreenQuadVAO = s_Data.m_FullscreenQuadVBO = 0;
+  s_Data.m_FramebufferQuadVAO = s_Data.m_FramebufferQuadVBO = 0;
+  s_Data.m_SkyboxVAO = s_Data.m_SkyboxVBO = 0;
+
+  s_Data.m_ResultBuffer.reset();
+  s_Data.m_GeometryBuffer.reset();
+  s_Data.m_BloomBuffer.reset();
+  s_Data.m_OmniDirectShadowBuffer.reset();
+  s_Data.m_DirectShadowBuffer.reset();
+  s_Data.m_CameraUniformBuffer.reset();
+  s_Data.m_ResolutionUniformBuffer.reset();
+  s_Data.QuadVertexArray.reset();
+  s_Data.QuadVertexBuffer.reset();
+  s_Data.LineVertexArray.reset();
+  s_Data.LineVertexBuffer.reset();
+  s_Data.skyboxes.clear();
+  s_Data.TextureSlots.fill(nullptr);
+  s_Data.WhiteTexture.reset();
+  s_Data.s_Shaders = {};
 }
 
 void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic, bool advanceSimulation)
@@ -1372,8 +1411,7 @@ void Renderer::DrawCubeContour(const glm::vec3& position, const glm::vec3& size,
 
 void Renderer::DrawFullscreenQuad()
 {
-  static GLuint quadVAO = 0, quadVBO = 0;
-  if (quadVAO == 0)
+  if (s_Data.m_FullscreenQuadVAO == 0)
   {
     float quadVertices[] = {
         // positions        // tex Coords
@@ -1383,31 +1421,30 @@ void Renderer::DrawFullscreenQuad()
          1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
     };
 
-    glCreateVertexArrays(1, &quadVAO);
-    glCreateBuffers(1, &quadVBO);
+    glCreateVertexArrays(1, &s_Data.m_FullscreenQuadVAO);
+    glCreateBuffers(1, &s_Data.m_FullscreenQuadVBO);
 
-    glNamedBufferData(quadVBO, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+    glNamedBufferData(s_Data.m_FullscreenQuadVBO, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
 
-    glVertexArrayVertexBuffer(quadVAO, 0, quadVBO, 0, 5 * sizeof(float));
+    glVertexArrayVertexBuffer(s_Data.m_FullscreenQuadVAO, 0, s_Data.m_FullscreenQuadVBO, 0, 5 * sizeof(float));
 
-    glEnableVertexArrayAttrib(quadVAO, 0);
-    glVertexArrayAttribFormat(quadVAO, 0, 3, GL_FLOAT, GL_FALSE, 0);
-    glVertexArrayAttribBinding(quadVAO, 0, 0);
+    glEnableVertexArrayAttrib(s_Data.m_FullscreenQuadVAO, 0);
+    glVertexArrayAttribFormat(s_Data.m_FullscreenQuadVAO, 0, 3, GL_FLOAT, GL_FALSE, 0);
+    glVertexArrayAttribBinding(s_Data.m_FullscreenQuadVAO, 0, 0);
 
-    glEnableVertexArrayAttrib(quadVAO, 1);
-    glVertexArrayAttribFormat(quadVAO, 1, 2, GL_FLOAT, GL_FALSE, 3 * sizeof(float));
-    glVertexArrayAttribBinding(quadVAO, 1, 0);
+    glEnableVertexArrayAttrib(s_Data.m_FullscreenQuadVAO, 1);
+    glVertexArrayAttribFormat(s_Data.m_FullscreenQuadVAO, 1, 2, GL_FLOAT, GL_FALSE, 3 * sizeof(float));
+    glVertexArrayAttribBinding(s_Data.m_FullscreenQuadVAO, 1, 0);
   }
 
-  glBindVertexArray(quadVAO);
+  glBindVertexArray(s_Data.m_FullscreenQuadVAO);
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
   glBindVertexArray(0);
 }
 
 void Renderer::DrawFramebuffer(uint32_t textureID)
 {
-  static GLuint quadVAO = 0, quadVBO = 0;
-  if (quadVAO == 0)
+  if (s_Data.m_FramebufferQuadVAO == 0)
   {
     float quadVertices[] = {
         // positions   // texCoords
@@ -1420,20 +1457,20 @@ void Renderer::DrawFramebuffer(uint32_t textureID)
          1.0f,  1.0f,  1.0f, 1.0f
     };
 
-    glCreateVertexArrays(1, &quadVAO);
+    glCreateVertexArrays(1, &s_Data.m_FramebufferQuadVAO);
 
-    glCreateBuffers(1, &quadVBO);
-    glNamedBufferData(quadVBO, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+    glCreateBuffers(1, &s_Data.m_FramebufferQuadVBO);
+    glNamedBufferData(s_Data.m_FramebufferQuadVBO, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
 
-    glVertexArrayVertexBuffer(quadVAO, 0, quadVBO, 0, 4 * sizeof(float));
+    glVertexArrayVertexBuffer(s_Data.m_FramebufferQuadVAO, 0, s_Data.m_FramebufferQuadVBO, 0, 4 * sizeof(float));
 
-    glEnableVertexArrayAttrib(quadVAO, 0);
-    glVertexArrayAttribFormat(quadVAO, 0, 2, GL_FLOAT, GL_FALSE, 0);
-    glVertexArrayAttribBinding(quadVAO, 0, 0);
+    glEnableVertexArrayAttrib(s_Data.m_FramebufferQuadVAO, 0);
+    glVertexArrayAttribFormat(s_Data.m_FramebufferQuadVAO, 0, 2, GL_FLOAT, GL_FALSE, 0);
+    glVertexArrayAttribBinding(s_Data.m_FramebufferQuadVAO, 0, 0);
 
-    glEnableVertexArrayAttrib(quadVAO, 1);
-    glVertexArrayAttribFormat(quadVAO, 1, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float));
-    glVertexArrayAttribBinding(quadVAO, 1, 0);
+    glEnableVertexArrayAttrib(s_Data.m_FramebufferQuadVAO, 1);
+    glVertexArrayAttribFormat(s_Data.m_FramebufferQuadVAO, 1, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float));
+    glVertexArrayAttribBinding(s_Data.m_FramebufferQuadVAO, 1, 0);
   }
 
   s_Data.s_Shaders.FramebufferShader->Bind();
@@ -1441,7 +1478,7 @@ void Renderer::DrawFramebuffer(uint32_t textureID)
 
   glBindTextureUnit(0, textureID);
 
-  glBindVertexArray(quadVAO);
+  glBindVertexArray(s_Data.m_FramebufferQuadVAO);
   glDrawArrays(GL_TRIANGLES, 0, 6);
   glBindVertexArray(0);
   s_Data.s_Shaders.FramebufferShader->UnBind();
@@ -1454,7 +1491,7 @@ void Renderer::BakeSkyboxTextures(const std::string& name, const std::shared_ptr
   auto channels = cubemap->GetChannels();
   auto width = cubemap->GetWidth();
   auto height = cubemap->GetHeight();
-  auto pixels = cubemap->GetPixels();
+  auto& pixels = cubemap->GetPixels();
 
   GLuint rendererID = 0;
   glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &rendererID);
@@ -1498,8 +1535,7 @@ void Renderer::BakeSkyboxTextures(const std::string& name, const std::shared_ptr
 
 void Renderer::DrawSkybox(const std::string& name)
 {
-  static uint32_t SkyboxVAO = 0, SkyboxVBO = 0;
-  if (SkyboxVAO == 0)
+  if (s_Data.m_SkyboxVAO == 0)
   {
     float skyboxVertices[] =
     {
@@ -1522,14 +1558,14 @@ void Renderer::DrawSkybox(const std::string& name)
          1.0f, -1.0f, -1.0f,  -1.0f, -1.0f,  1.0f,   1.0f, -1.0f,  1.0f
     };
 
-    glCreateVertexArrays(1, &SkyboxVAO);
-    glCreateBuffers(1, &SkyboxVBO);
-    glNamedBufferData(SkyboxVBO, sizeof(skyboxVertices), skyboxVertices, GL_STATIC_DRAW);
+    glCreateVertexArrays(1, &s_Data.m_SkyboxVAO);
+    glCreateBuffers(1, &s_Data.m_SkyboxVBO);
+    glNamedBufferData(s_Data.m_SkyboxVBO, sizeof(skyboxVertices), skyboxVertices, GL_STATIC_DRAW);
 
-    glVertexArrayVertexBuffer(SkyboxVAO, 0, SkyboxVBO, 0, 3 * sizeof(float));
-    glEnableVertexArrayAttrib(SkyboxVAO, 0);
-    glVertexArrayAttribFormat(SkyboxVAO, 0, 3, GL_FLOAT, GL_FALSE, 0);
-    glVertexArrayAttribBinding(SkyboxVAO, 0, 0);
+    glVertexArrayVertexBuffer(s_Data.m_SkyboxVAO, 0, s_Data.m_SkyboxVBO, 0, 3 * sizeof(float));
+    glEnableVertexArrayAttrib(s_Data.m_SkyboxVAO, 0);
+    glVertexArrayAttribFormat(s_Data.m_SkyboxVAO, 0, 3, GL_FLOAT, GL_FALSE, 0);
+    glVertexArrayAttribBinding(s_Data.m_SkyboxVAO, 0, 0);
   }
 
   glDepthFunc(GL_LEQUAL);
@@ -1549,7 +1585,7 @@ void Renderer::DrawSkybox(const std::string& name)
     return;
   }
 
-  glBindVertexArray(SkyboxVAO);
+  glBindVertexArray(s_Data.m_SkyboxVAO);
   glDrawArrays(GL_TRIANGLES, 0, 36);
   glBindVertexArray(0);
 

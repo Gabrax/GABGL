@@ -50,6 +50,9 @@ struct GameScene : Scene
     if (m_Paused)
     {
       UpdatePauseMenu(escape && !justPaused);
+      if (SceneManager::IsLoading())
+        return;
+
       if (m_Paused)
       {
         DeltaTime frozenTime(0.0f);
@@ -63,16 +66,20 @@ struct GameScene : Scene
 
     Renderer::DrawScene(dt,[&]()
     {
+      const auto player = ModelManager::GetModel("harry");
+      if (!player)
+        return;
+
       if (Input::IsKeyPressed(Key::W) ||
           Input::IsKeyPressed(Key::S) ||
           Input::IsKeyPressed(Key::A) ||
           Input::IsKeyPressed(Key::D))
       {
-        ModelManager::GetModel("harry")->StartBlendToAnimation(1,0.8f);
+        player->StartBlendToAnimation(1,0.8f);
       }
       else
       {
-        ModelManager::GetModel("harry")->StartBlendToAnimation(0,0.8f);
+        player->StartBlendToAnimation(0,0.8f);
       }
 
       if(Input::IsKeyPressed(Key::W)) ModelManager::MoveController("harry",Movement::FORWARD,10.0f,dt);

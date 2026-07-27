@@ -38,6 +38,20 @@ void LightManager::Init()
   ResizeLightBuffers(s_Data.maxLights);
 }
 
+void LightManager::Shutdown()
+{
+  s_Data.lights.clear();
+  s_Data.pointLightPositions.clear();
+  s_Data.numLights = 0;
+  s_Data.numPointLights = 0;
+  s_Data.numDirectLights = 0;
+  s_Data.LightPosStorageBuffer.reset();
+  s_Data.LightRotationStorageBuffer.reset();
+  s_Data.LightQuantityStorageBuffer.reset();
+  s_Data.LightColorStorageBuffer.reset();
+  s_Data.LightTypeStorageBuffer.reset();
+}
+
 void LightManager::AddLight(const LightType& type, const glm::vec3& color, const glm::vec3& position, const glm::vec3& rotation)
 {
   if (type == LightType::DIRECT && s_Data.numDirectLights == 1)

@@ -51,15 +51,18 @@ struct MusicSource
 	void SetVolume(const float& val);
 
 private:
+  void ClearQueuedBuffers();
+
   bool loop = false;
-	ALuint p_Source;
+  bool playbackRequested = false;
+	ALuint p_Source = 0;
 	static const int BUFFER_SAMPLES = 8192;
 	static const int NUM_BUFFERS = 4;
-	ALuint p_Buffers[NUM_BUFFERS];
-	SNDFILE* p_SndFile;
-	SF_INFO p_Sfinfo;
-	short* p_Membuf;
-	ALenum p_Format;
+	ALuint p_Buffers[NUM_BUFFERS]{};
+	SNDFILE* p_SndFile = nullptr;
+	SF_INFO p_Sfinfo{};
+	short* p_Membuf = nullptr;
+	ALenum p_Format = AL_NONE;
 };
 
 struct AudioSystemData
@@ -118,19 +121,49 @@ void AudioManager::Init()
 
 void AudioManager::Terminate()
 {
-  alcMakeContextCurrent(nullptr);
-  alcDestroyContext(s_Data.p_ALCContext);
-  alcCloseDevice(s_Data.p_ALCDevice);
+  if (!s_Data.p_ALCContext && !s_Data.p_ALCDevice)
+    return;
 
-  alDeleteSources((ALsizei)s_Data.m_Sources.size(), s_Data.m_Sources.data());
+  if (s_Data.p_ALCContext)
+    alcMakeContextCurrent(s_Data.p_ALCContext);
+
+  {
+    std::lock_guard<std::mutex> lock(s_Data.s_AudioMutex);
+    for (const ALuint source : s_Data.m_Sources)
+    {
+      alSourceStop(source);
+      alSourcei(source, AL_BUFFER, 0);
+    }
+    for (auto& [name, player] : s_Data.players)
+      if (player)
+        alSourceStop(static_cast<ALuint>(player->getSource()));
+    s_Data.players.clear();
+  }
+
+  if (!s_Data.m_Sources.empty())
+    alDeleteSources(static_cast<ALsizei>(s_Data.m_Sources.size()), s_Data.m_Sources.data());
 
   std::vector<ALuint> allBuffers;
   for (auto& [name, buffer] : s_Data.p_SoundEffectBuffers)
       allBuffers.push_back(buffer);
-  alDeleteBuffers((ALsizei)allBuffers.size(), allBuffers.data());
+  if (!allBuffers.empty())
+    alDeleteBuffers(static_cast<ALsizei>(allBuffers.size()), allBuffers.data());
 
   s_Data.p_SoundEffectBuffers.clear();
   s_Data.m_Sources.clear();
+  s_Data.m_LastUsedBuffer = 0;
+
+  alcMakeContextCurrent(nullptr);
+  if (s_Data.p_ALCContext)
+  {
+    alcDestroyContext(s_Data.p_ALCContext);
+    s_Data.p_ALCContext = nullptr;
+  }
+  if (s_Data.p_ALCDevice)
+  {
+    alcCloseDevice(s_Data.p_ALCDevice);
+    s_Data.p_ALCDevice = nullptr;
+  }
 }
 
 void AudioManager::GetListenerLocation(float& x, float& y, float& z)
@@ -404,7 +437,6 @@ void AudioManager::LoadSound(const char* filename)
   {
       std::lock_guard<std::mutex> lock(s_Data.s_AudioMutex);
       if (s_Data.p_SoundEffectBuffers.contains(name)) {
-          GABGL_ERROR("Sound '{}' already loaded", name);
           return;
       }
   }
@@ -484,7 +516,18 @@ void AudioManager::LoadSound(const char* filename)
 bool AudioManager::UnLoadSound(const std::string& name)
 {
   auto it = s_Data.p_SoundEffectBuffers.find(name);
-  if (it != s_Data.p_SoundEffectBuffers.end()) {
+  if (it != s_Data.p_SoundEffectBuffers.end())
+  {
+      for (const ALuint source : s_Data.m_Sources)
+      {
+        ALint currentBuffer = 0;
+        alGetSourcei(source, AL_BUFFER, &currentBuffer);
+        if (static_cast<ALuint>(currentBuffer) == it->second)
+        {
+          alSourceStop(source);
+          alSourcei(source, AL_BUFFER, 0);
+        }
+      }
       alDeleteBuffers(1, &it->second);
       s_Data.p_SoundEffectBuffers.erase(it);
       return true;
@@ -494,9 +537,6 @@ bool AudioManager::UnLoadSound(const std::string& name)
 
 MusicSource::MusicSource(const char* filename)
 {
-	alGenSources(1, &p_Source);
-	alGenBuffers(NUM_BUFFERS, p_Buffers);
-
 	std::size_t frame_size;
 
 	p_SndFile = sf_open(filename, SFM_READ, &p_Sfinfo);
@@ -526,11 +566,21 @@ MusicSource::MusicSource(const char* filename)
 
 	frame_size = ((size_t)BUFFER_SAMPLES * (size_t)p_Sfinfo.channels) * sizeof(short);
 	p_Membuf = static_cast<short*>(malloc(frame_size));
+  if (!p_Membuf)
+  {
+    sf_close(p_SndFile);
+    p_SndFile = nullptr;
+    throw("could not allocate music streaming buffer");
+  }
+
+	alGenSources(1, &p_Source);
+	alGenBuffers(NUM_BUFFERS, p_Buffers);
 }
 
 MusicSource::~MusicSource()
 {
-	alDeleteSources(1, &p_Source);
+  alSourceStop(p_Source);
+  alDeleteSources(1, &p_Source);
 	if (p_SndFile)
 		sf_close(p_SndFile);
 	p_SndFile = nullptr;
@@ -538,10 +588,25 @@ MusicSource::~MusicSource()
 	alDeleteBuffers(NUM_BUFFERS, p_Buffers);
 }
 
+void MusicSource::ClearQueuedBuffers()
+{
+  alSourceStop(p_Source);
+
+  ALint queued = 0;
+  alGetSourcei(p_Source, AL_BUFFERS_QUEUED, &queued);
+  while (queued-- > 0)
+  {
+    ALuint buffer = 0;
+    alSourceUnqueueBuffers(p_Source, 1, &buffer);
+  }
+
+  AL_CheckAndThrow();
+}
+
 void MusicSource::Play(const float& volume)
 {
-  alSourceRewind(p_Source);
-  alSourcei(p_Source, AL_BUFFER, 0);
+  playbackRequested = false;
+  ClearQueuedBuffers();
   alSourcef(p_Source, AL_GAIN, volume);
 
   // Rewind file at start of play
@@ -562,21 +627,17 @@ void MusicSource::Play(const float& volume)
   alSourceQueueBuffers(p_Source, i, p_Buffers);
   alSourcePlay(p_Source);
   if (alGetError() != AL_NO_ERROR) throw("Error starting playback");
+  playbackRequested = i > 0;
 }
 
 void MusicSource::Play(const glm::vec3& position, const float& volume)
 {
   ALint i;
 
-  alSourceStop(p_Source);
-
-  ALint queued = 0;
-  alGetSourcei(p_Source, AL_BUFFERS_QUEUED, &queued);
-  while (queued-- > 0)
-  {
-    ALuint buf;
-    alSourceUnqueueBuffers(p_Source, 1, &buf);
-  }
+  playbackRequested = false;
+  ClearQueuedBuffers();
+  if (p_SndFile)
+    sf_seek(p_SndFile, 0, SEEK_SET);
 
   alSourcei(p_Source, AL_SOURCE_RELATIVE, AL_FALSE);
   alSource3f(p_Source, AL_POSITION, position.x, position.y, position.z);
@@ -613,28 +674,38 @@ void MusicSource::Play(const glm::vec3& position, const float& volume)
 
   if (alGetError() != AL_NO_ERROR)
       throw("Error starting playback");
+  playbackRequested = i > 0;
 }
 
 void MusicSource::Pause()
 {
+  if (!playbackRequested)
+    return;
+
 	alSourcePause(p_Source);
 	AL_CheckAndThrow();
 }
 
 void MusicSource::Stop()
 {
-	alSourceStop(p_Source);
-	AL_CheckAndThrow();
+  playbackRequested = false;
+  ClearQueuedBuffers();
 }
 
 void MusicSource::Resume()
 {
+  if (!playbackRequested)
+    return;
+
 	alSourcePlay(p_Source);
 	AL_CheckAndThrow();
 }
 
 void MusicSource::UpdateBufferStream()
 {
+  if (!playbackRequested)
+    return;
+
   ALint processed, state;
 
   alGetSourcei(p_Source, AL_SOURCE_STATE, &state);
@@ -683,6 +754,10 @@ void MusicSource::UpdateBufferStream()
           alSourcePlay(p_Source);
           AL_CheckAndThrow();
       }
+      else
+      {
+          playbackRequested = false;
+      }
   }
 }
 
@@ -718,9 +793,11 @@ void AudioManager::LoadMusic(const char* filename)
 
   std::lock_guard<std::mutex> lock(s_Data.s_AudioMutex);
   auto [it, inserted] = s_Data.players.emplace(name, nullptr);
-  if (inserted) it->second = std::make_unique<MusicSource>(filename);
-
-  GABGL_WARN("Music loaded: {0}",name);
+  if (inserted)
+  {
+    it->second = std::make_unique<MusicSource>(filename);
+    GABGL_WARN("Music loaded: {0}",name);
+  }
 }
 
 void AudioManager::PlayMusic(const std::string& name, bool loop, const float& volume)
@@ -728,8 +805,8 @@ void AudioManager::PlayMusic(const std::string& name, bool loop, const float& vo
   auto it = s_Data.players.find(name);
   if (it != s_Data.players.end())
   {
+    it->second->SetLoop(loop);
     it->second->Play(volume * s_Data.musicVolume);
-    if(loop) it->second->SetLoop(loop);
   }
 }
 
@@ -738,8 +815,8 @@ void AudioManager::PlayMusic(const std::string& name, const glm::vec3& position,
   auto it = s_Data.players.find(name);
   if (it != s_Data.players.end())
   {
+    it->second->SetLoop(loop);
     it->second->Play(position, volume * s_Data.musicVolume);
-    if(loop) it->second->SetLoop(loop);
   }
 }
 
@@ -755,6 +832,13 @@ void AudioManager::StopMusic(const std::string& name)
   auto it = s_Data.players.find(name);
   if (it != s_Data.players.end())
       it->second->Stop();
+}
+
+void AudioManager::StopAllMusic()
+{
+  for (auto& [name, player] : s_Data.players)
+    if (player)
+      player->Stop();
 }
 
 void AudioManager::ResumeMusic(const std::string& name)

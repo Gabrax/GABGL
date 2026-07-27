@@ -12,7 +12,7 @@ struct Shader
 {
   Shader(const char* fullshader);
   Shader(const char* vertexPath, const char* fragmentPath, const char* geometryPath = nullptr);
-  ~Shader() = default;
+  ~Shader();
 
   void Load(const char* fullshader);
   void Load(const char* vertexPath, const char* fragmentPath, const char* geometryPath = nullptr);
@@ -40,7 +40,7 @@ struct Shader
 
 private:
 
-  GLuint m_ID;
+  GLuint m_ID = 0;
   std::time_t m_lastTimeModified = 0;
   bool m_firstTimeCompile = true;
 };

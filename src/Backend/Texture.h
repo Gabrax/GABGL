@@ -65,7 +65,7 @@ struct Texture
   static std::shared_ptr<Texture> CreateCUBEMAP(const std::vector<std::string>& faces);
   static std::shared_ptr<Texture> WrapExisting(uint32_t rendererID);
 
-  inline std::array<unsigned char*, 6> GetPixels() { return pixels; }
+  inline std::array<unsigned char*, 6>& GetPixels() { return pixels; }
   inline int32_t GetChannels() { return channels; }
 
 private:
@@ -74,10 +74,10 @@ private:
 
 	TextureSpecification m_Specification;
 
-  std::array<unsigned char*, 6> pixels;
-  int32_t channels;
+  std::array<unsigned char*, 6> pixels{};
+  int32_t channels = 0;
 
-  const aiTexture* paiTexture;
+  const aiTexture* paiTexture = nullptr;
 
 	std::string m_Path;
 	std::string m_Directory;
@@ -85,9 +85,9 @@ private:
 	bool m_IsLoaded = false;
 	bool m_IsEmbeddedUnCompressed = false;
   bool m_OwnsTexture = true;
-	uint32_t m_Width, m_Height;
-	uint32_t m_RendererID;
+	uint32_t m_Width = 0, m_Height = 0;
+	uint32_t m_RendererID = 0;
 	uint8_t* m_RawData = nullptr;
-	GLenum m_InternalFormat, m_DataFormat;
+	GLenum m_InternalFormat = 0, m_DataFormat = 0;
 };
 

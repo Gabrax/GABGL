@@ -600,7 +600,7 @@ void ModelManager::SetModelInstanceTransform(const std::string& name, uint32_t i
   }
 }
 
-void ModelManager::Reset()
+static void ReleaseModelResources()
 {
   std::unordered_set<GLuint64> residentHandles;
 
@@ -654,8 +654,17 @@ void ModelManager::Reset()
   s_Data.sharedVBO = 0;
   s_Data.sharedEBO = 0;
   s_Data.sharedVAO = 0;
+}
 
+void ModelManager::Reset()
+{
+  ReleaseModelResources();
   Init();
+}
+
+void ModelManager::Shutdown()
+{
+  ReleaseModelResources();
 }
 
 void ModelManager::UpdateTransforms(const DeltaTime& dt)
@@ -1269,15 +1278,31 @@ void Model::CreatePhysXStaticMesh(std::vector<Vertex>& m_Vertices, std::vector<G
   PxTriangleMeshGeometry triGeom;
   triGeom.triangleMesh = physxMesh;
 
-  PxTransform pose = PxTransform(PxVec3(0));
-  m_StaticMeshActor = physics->createRigidStatic(pose);
-
-  if (m_StaticMeshActor) {
-      PxShape* meshShape = PxRigidActorExt::createExclusiveShape(
-          *m_StaticMeshActor, triGeom, *material
-      );
-      scene->addActor(*m_StaticMeshActor);
+  const bool actorCreated = m_StaticMeshActor == nullptr;
+  if (actorCreated)
+  {
+    const PxTransform pose(PxVec3(0));
+    m_StaticMeshActor = physics->createRigidStatic(pose);
   }
+
+  PxShape* meshShape = m_StaticMeshActor
+    ? PxRigidActorExt::createExclusiveShape(*m_StaticMeshActor, triGeom, *material)
+    : nullptr;
+  physxMesh->release();
+
+  if (!meshShape)
+  {
+    if (actorCreated && m_StaticMeshActor)
+    {
+      m_StaticMeshActor->release();
+      m_StaticMeshActor = nullptr;
+    }
+    GABGL_ERROR("Failed to create PhysX triangle mesh shape");
+    return;
+  }
+
+  if (actorCreated)
+    scene->addActor(*m_StaticMeshActor);
 }
 
 void Model::CreatePhysXDynamicMesh(std::vector<Vertex>& m_Vertices)
@@ -1303,21 +1328,36 @@ void Model::CreatePhysXDynamicMesh(std::vector<Vertex>& m_Vertices)
   convexGeom.convexMesh = convexMesh;
   convexGeom.scale = PxMeshScale(PxVec3(1.0f)); // Optional scaling
 
-  PxTransform pose = PxTransform(PxVec3(0));
-  m_DynamicMeshActor = physics->createRigidDynamic(pose);
-
-  if (m_DynamicMeshActor)
+  const bool actorCreated = m_DynamicMeshActor == nullptr;
+  if (actorCreated)
   {
-      PxShape* shape = PxRigidActorExt::createExclusiveShape(*m_DynamicMeshActor, convexGeom, *material);
-
-      material->setRestitution(0.0f);
-
-      if (m_isKinematic) m_DynamicMeshActor->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, true);
-
-      PxRigidBodyExt::setMassAndUpdateInertia(*m_DynamicMeshActor, 1.0f);
-
-      scene->addActor(*m_DynamicMeshActor);
+    const PxTransform pose(PxVec3(0));
+    m_DynamicMeshActor = physics->createRigidDynamic(pose);
   }
+
+  PxShape* shape = m_DynamicMeshActor
+    ? PxRigidActorExt::createExclusiveShape(*m_DynamicMeshActor, convexGeom, *material)
+    : nullptr;
+  convexMesh->release();
+
+  if (!shape)
+  {
+    if (actorCreated && m_DynamicMeshActor)
+    {
+      m_DynamicMeshActor->release();
+      m_DynamicMeshActor = nullptr;
+    }
+    GABGL_ERROR("Failed to create PhysX convex mesh shape");
+    return;
+  }
+
+  material->setRestitution(0.0f);
+  if (m_isKinematic)
+    m_DynamicMeshActor->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, true);
+  PxRigidBodyExt::setMassAndUpdateInertia(*m_DynamicMeshActor, 1.0f);
+
+  if (actorCreated)
+    scene->addActor(*m_DynamicMeshActor);
 }
 
 void Model::CreateCharacterController(const PxVec3& position, float radius, float height, bool slopeLimit)

@@ -226,6 +226,12 @@ Texture::~Texture()
 {
   if (m_OwnsTexture && m_RendererID != 0) glDeleteTextures(1, &m_RendererID);
   delete[] m_RawData;
+  for (unsigned char*& face : pixels)
+  {
+    if (face)
+      stbi_image_free(face);
+    face = nullptr;
+  }
 }
 
 void Texture::FlipImageVertically(unsigned char* data, int width, int height, int channels)

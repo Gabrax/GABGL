@@ -10,6 +10,7 @@ using namespace physx;
 struct PhysX
 {
   static void Init();
+  static void Shutdown();
   static void Simulate(DeltaTime& dt);
   static void raycastAndApplyForce(PxScene* scene, const glm::vec3& origin, const glm::vec3& direction, float rayLength);
   static void DisableRaycast(PxShape* shape);

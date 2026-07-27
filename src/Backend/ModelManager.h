@@ -249,6 +249,7 @@ enum class Movement : int32_t
 struct ModelManager
 {
   static void Init();
+  static void Shutdown();
   static void BakeModel(const std::string& path, const std::shared_ptr<Model>& model);
   static void UploadToGPU();
   static std::shared_ptr<Model> GetModel(const std::string& name);

@@ -6,6 +6,7 @@
 #include "Camera.h"
 #include "LightManager.h"
 #include "Logger.h"
+#include "ParticleRenderer.h"
 #include "../Input/UserInput.h"
 #include <algorithm>
 #include <fstream>
@@ -704,6 +705,9 @@ void SceneManager::LoadScene(const std::string& name)
   Renderer::ResetModelDrawCommands();
   ModelManager::Reset();
   LightManager::Clear();
+  ParticleRenderer::Clear();
+  AudioManager::StopAllSounds();
+  AudioManager::StopAllMusic();
 
   if(name == "game") s_PendingScene = std::make_unique<GameScene>();
   else if(name == "menu") s_PendingScene = std::make_unique<MenuScene>();
@@ -711,6 +715,13 @@ void SceneManager::LoadScene(const std::string& name)
 
   s_PendingScene->StartLoading();
   s_Loading = true;
+}
+
+void SceneManager::Shutdown()
+{
+  s_Loading = false;
+  s_PendingScene.reset();
+  s_ActiveScene.reset();
 }
 
 void SceneManager::Update(DeltaTime& dt)

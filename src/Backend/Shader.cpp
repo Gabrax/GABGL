@@ -48,6 +48,12 @@ Shader::Shader(const char* vertexPath, const char* fragmentPath, const char* geo
     GABGL_WARN("Shader creation took {0} ms", timer.ElapsedMillis());
 }
 
+Shader::~Shader()
+{
+  if (m_ID != 0)
+    glDeleteProgram(m_ID);
+}
+
 void Shader::Load(const char* fullshader)
 {
   std::ifstream shaderFile(fullshader);

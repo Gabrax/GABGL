@@ -43,6 +43,7 @@ struct AudioManager
   static void PlayMusic(const std::string& name, const glm::vec3& position, bool loop = false, const float& volume = 1.0f);
   static void PauseMusic(const std::string& name);
   static void StopMusic(const std::string& name);
+  static void StopAllMusic();
   static void SetMusicLoop(const std::string& name, bool loop);
   static void ResumeMusic(const std::string& name);
   static void UpdateAllMusic();

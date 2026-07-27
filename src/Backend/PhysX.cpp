@@ -25,6 +25,7 @@ struct PhysXData
   PxScene*				gScene		= nullptr;
   PxMaterial*				gMaterial	= nullptr;
   PxPvd*					gPvd        = nullptr;
+  PxPvdTransport* gPvdTransport = nullptr;
   PxControllerManager* controllerManager = nullptr;
 } s_PhysXData;
 
@@ -42,8 +43,9 @@ void PhysX::Init()
   if (!s_PhysXData.gFoundation) GABGL_ERROR("PxCreateFoundation init failed!");
 
   s_PhysXData.gPvd = PxCreatePvd(*s_PhysXData.gFoundation);
-  PxPvdTransport* transport = PxDefaultPvdSocketTransportCreate(PVD_HOST, 5425, 10);
-  s_PhysXData.gPvd->connect(*transport,PxPvdInstrumentationFlag::eALL);
+  s_PhysXData.gPvdTransport = PxDefaultPvdSocketTransportCreate(PVD_HOST, 5425, 10);
+  if (s_PhysXData.gPvd && s_PhysXData.gPvdTransport)
+    s_PhysXData.gPvd->connect(*s_PhysXData.gPvdTransport, PxPvdInstrumentationFlag::eALL);
 
   s_PhysXData.gPhysics = PxCreatePhysics(PX_PHYSICS_VERSION, *s_PhysXData.gFoundation, PxTolerancesScale(), true, s_PhysXData.gPvd);
   if (!s_PhysXData.gPhysics) GABGL_ERROR("PxCreatePhysics init failed!");
@@ -67,6 +69,51 @@ void PhysX::Init()
   s_PhysXData.controllerManager = PxCreateControllerManager(*s_PhysXData.gScene);
 
   GABGL_WARN("PhysX init success!");
+}
+
+void PhysX::Shutdown()
+{
+  if (s_PhysXData.controllerManager)
+  {
+    s_PhysXData.controllerManager->release();
+    s_PhysXData.controllerManager = nullptr;
+  }
+  if (s_PhysXData.gMaterial)
+  {
+    s_PhysXData.gMaterial->release();
+    s_PhysXData.gMaterial = nullptr;
+  }
+  if (s_PhysXData.gScene)
+  {
+    s_PhysXData.gScene->release();
+    s_PhysXData.gScene = nullptr;
+  }
+  if (s_PhysXData.gDispatcher)
+  {
+    s_PhysXData.gDispatcher->release();
+    s_PhysXData.gDispatcher = nullptr;
+  }
+  if (s_PhysXData.gPhysics)
+  {
+    s_PhysXData.gPhysics->release();
+    s_PhysXData.gPhysics = nullptr;
+  }
+  if (s_PhysXData.gPvd)
+  {
+    s_PhysXData.gPvd->disconnect();
+    s_PhysXData.gPvd->release();
+    s_PhysXData.gPvd = nullptr;
+  }
+  if (s_PhysXData.gPvdTransport)
+  {
+    s_PhysXData.gPvdTransport->release();
+    s_PhysXData.gPvdTransport = nullptr;
+  }
+  if (s_PhysXData.gFoundation)
+  {
+    s_PhysXData.gFoundation->release();
+    s_PhysXData.gFoundation = nullptr;
+  }
 }
 
 void PhysX::Simulate(DeltaTime& dt)

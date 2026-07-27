@@ -224,8 +224,6 @@
         }
       ],
       "music": [
-        "../res/audio/menu.wav",
-        "../res/audio/night.wav",
         "../res/audio/night_mono.wav"
       ],
       "skybox": [
@@ -312,9 +310,7 @@
         }
       ],
       "music": [
-        "../res/audio/menu.wav",
-        "../res/audio/night.wav",
-        "../res/audio/night_mono.wav"
+        "../res/audio/menu.wav"
       ],
       "skybox": [
         "../res/textures/NightSky_Right.png",

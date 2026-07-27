@@ -24,7 +24,20 @@ void FontManager::Init()
 
 void FontManager::Shutdown()
 {
-  FT_Done_FreeType(s_Data.ft); 
+  for (auto& [name, font] : s_Data.m_Fonts)
+  {
+    for (auto& [character, glyph] : font.m_Characters)
+      if (glyph.TextureID != 0)
+        glDeleteTextures(1, &glyph.TextureID);
+    font.m_Characters.clear();
+  }
+  s_Data.m_Fonts.clear();
+
+  if (s_Data.ft)
+  {
+    FT_Done_FreeType(s_Data.ft);
+    s_Data.ft = nullptr;
+  }
 }
 
 void FontManager::LoadFont(const char* path)

@@ -121,6 +121,7 @@ private:
 struct SceneManager
 {
   static void LoadScene(const std::string& scene);
+  static void Shutdown();
   static void Update(DeltaTime& dt);
   static bool IsLoading();
   static std::vector<std::string> GetAvailableSceneNames();

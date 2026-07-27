@@ -15,6 +15,7 @@ enum class LightType : uint32_t
 struct LightManager
 {
   static void Init();
+  static void Shutdown();
   static void AddLight(const LightType& type, const glm::vec3& color, const glm::vec3& position, const glm::vec3& rotation = glm::vec3(0.0f));
   static void EditLight(int32_t index, const std::optional<glm::vec3>& newColor = std::nullopt, 
              const std::optional<glm::vec3>& newPosition = std::nullopt,

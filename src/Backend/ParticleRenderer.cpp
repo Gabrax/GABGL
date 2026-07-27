@@ -195,6 +195,12 @@ void ParticleRenderer::Shutdown()
   s_Data.ActiveCount = 0;
 }
 
+void ParticleRenderer::Clear()
+{
+  s_Data.ActiveCount = 0;
+  s_Data.Instances.clear();
+}
+
 void ParticleRenderer::Emit()
 {
   if (s_Data.ActiveCount >= s_Data.Pool.size())
