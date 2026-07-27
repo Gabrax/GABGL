@@ -17,8 +17,15 @@ struct SceneEntity
   std::string name;
   std::string model;
   std::string type = "static";
+  std::string itemName;
   Transform transform;
   uint32_t instanceIndex = 0;
+  bool interactable = false;
+  bool pickable = false;
+  bool player = false;
+  bool active = true;
+  float interactionRange = 4.0f;
+  float labelHeight = 1.5f;
 };
 
 struct SceneLight
@@ -52,6 +59,9 @@ struct Scene
     const glm::vec3& position, const glm::vec3& rotation);
   bool RemoveLight(uint64_t lightId);
   void SyncEditorEntityTransforms();
+  void UpdateInteractions();
+  bool GetPlayerPosition(glm::vec3& position) const;
+  uint64_t GetFocusedEntityID() const { return m_FocusedEntityId; }
   SceneEntity* FindEntity(uint64_t entityId);
   SceneLight* FindLight(uint64_t lightId);
   const std::vector<SceneEntity>& GetEntities() const { return m_EditorEntities; }
@@ -104,6 +114,8 @@ private:
   std::vector<SceneLight> m_EditorLights;
   uint64_t m_NextEntityId = 1;
   uint64_t m_NextLightId = 1;
+  uint64_t m_FocusedEntityId = 0;
+  bool m_PreviousInteract = false;
 };
 
 struct SceneManager
@@ -123,6 +135,8 @@ struct SceneManager
     const glm::vec3& position, const glm::vec3& rotation);
   static bool RemoveLight(uint64_t lightId);
   static void SyncEditorEntityTransforms();
+  static bool GetPlayerPosition(glm::vec3& position);
+  static uint64_t GetFocusedEntityID();
   static bool SaveActiveScene();
   static std::string GetActiveSceneName();
 

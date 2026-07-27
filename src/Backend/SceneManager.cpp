@@ -6,6 +6,7 @@
 #include "Camera.h"
 #include "LightManager.h"
 #include "Logger.h"
+#include "../Input/UserInput.h"
 #include <algorithm>
 #include <fstream>
 #include <iomanip>
@@ -207,6 +208,14 @@ void Scene::SpawnEntities()
 
       const std::string baseName = transformDesc.value("name", e.value("name", modelName));
       entity.name = ordinal == 0 ? baseName : baseName + " #" + std::to_string(ordinal + 1);
+      entity.itemName = transformDesc.value("item_name", e.value("item_name", baseName));
+      entity.pickable = transformDesc.value("pickable", e.value("pickable", false));
+      entity.interactable = entity.pickable ||
+        transformDesc.value("interactable", e.value("interactable", false));
+      entity.player = transformDesc.value("player", e.value("player", false));
+      entity.interactionRange = std::max(0.1f,
+        transformDesc.value("interaction_range", e.value("interaction_range", 4.0f)));
+      entity.labelHeight = transformDesc.value("label_height", e.value("label_height", 1.5f));
       ++ordinal;
       m_EditorEntities.push_back(std::move(entity));
     };
@@ -239,6 +248,7 @@ void Scene::SpawnEntities()
     entity.id = m_NextEntityId++;
     entity.name = modelName;
     entity.model = modelName;
+    entity.itemName = modelName;
     entity.type = isController ? "controller" : "static";
     entity.transform = transform;
     entity.instanceIndex = 0;
@@ -411,6 +421,77 @@ void Scene::SyncEditorEntityTransforms()
   }
 }
 
+bool Scene::GetPlayerPosition(glm::vec3& position) const
+{
+  const auto player = std::find_if(m_EditorEntities.begin(), m_EditorEntities.end(),
+    [](const SceneEntity& entity) { return entity.active && entity.player; });
+  if (player == m_EditorEntities.end())
+    return false;
+
+  const auto model = ModelManager::GetModel(player->model);
+  if (model && model->GetPhysXMeshType() == MeshType::CONTROLLER)
+    position = model->GetControllerTransform().GetPosition();
+  else
+    position = player->transform.GetPosition();
+  return true;
+}
+
+void Scene::UpdateInteractions()
+{
+  SyncEditorEntityTransforms();
+
+  glm::vec3 playerPosition;
+  if (!GetPlayerPosition(playerPosition))
+  {
+    m_FocusedEntityId = 0;
+    return;
+  }
+
+  SceneEntity* focused = nullptr;
+  float closestDistanceSquared = std::numeric_limits<float>::max();
+  for (auto& entity : m_EditorEntities)
+  {
+    if (!entity.active || !entity.interactable || entity.player)
+      continue;
+
+    const glm::vec3 offset = entity.transform.GetPosition() - playerPosition;
+    const float distanceSquared = glm::dot(offset, offset);
+    if (distanceSquared <= entity.interactionRange * entity.interactionRange &&
+        distanceSquared < closestDistanceSquared)
+    {
+      closestDistanceSquared = distanceSquared;
+      focused = &entity;
+    }
+  }
+
+  m_FocusedEntityId = focused ? focused->id : 0;
+  const bool interactDown = Input::IsKeyPressed(Key::E) ||
+    Input::IsGamepadButtonPressed(Gamepad::X);
+  const bool interactPressed = interactDown && !m_PreviousInteract;
+  m_PreviousInteract = interactDown;
+  if (!focused || !interactPressed)
+    return;
+
+  const std::string& displayName = focused->itemName.empty() ? focused->name : focused->itemName;
+  GABGL_INFO("Interacted with '{}'", displayName);
+  if (!focused->pickable)
+    return;
+
+  const std::string modelName = focused->model;
+  const uint32_t removedInstance = focused->instanceIndex;
+  if (!ModelManager::RemoveModelInstance(modelName, removedInstance))
+    return;
+
+  focused->active = false;
+  m_FocusedEntityId = 0;
+  for (auto& entity : m_EditorEntities)
+  {
+    if (entity.active && entity.model == modelName && entity.instanceIndex > removedInstance)
+      --entity.instanceIndex;
+  }
+  GABGL_INFO("Picked up '{}'", displayName);
+}
+
 bool Scene::SaveToJSON(const std::string& path) const
 {
   std::ifstream input(path);
@@ -447,6 +528,18 @@ bool Scene::SaveToJSON(const std::string& path) const
     };
     if (entity.type != "static")
       serialized["type"] = entity.type;
+    if (entity.interactable)
+      serialized["interactable"] = true;
+    if (entity.pickable)
+      serialized["pickable"] = true;
+    if (entity.player)
+      serialized["player"] = true;
+    if (entity.interactable)
+    {
+      serialized["item_name"] = entity.itemName;
+      serialized["interaction_range"] = entity.interactionRange;
+      serialized["label_height"] = entity.labelHeight;
+    }
     entities.push_back(std::move(serialized));
   }
 
@@ -729,6 +822,16 @@ void SceneManager::SyncEditorEntityTransforms()
 {
   if (s_ActiveScene)
     s_ActiveScene->SyncEditorEntityTransforms();
+}
+
+bool SceneManager::GetPlayerPosition(glm::vec3& position)
+{
+  return s_ActiveScene && s_ActiveScene->GetPlayerPosition(position);
+}
+
+uint64_t SceneManager::GetFocusedEntityID()
+{
+  return s_ActiveScene ? s_ActiveScene->GetFocusedEntityID() : 0;
 }
 
 bool SceneManager::SaveActiveScene()

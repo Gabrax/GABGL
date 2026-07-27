@@ -291,6 +291,61 @@ static bool CubemapFaceCanContainVisibleReceiver(const glm::vec3& lightPosition,
   return glm::dot(glm::normalize(toCamera), glm::normalize(faceDirection)) >= std::cos(maxAngle);
 }
 
+static bool WorldToScreen(const glm::vec3& worldPosition, glm::vec2& screenPosition)
+{
+  const glm::vec4 clip = Camera::GetViewProjection() * glm::vec4(worldPosition, 1.0f);
+  if (clip.w <= 0.001f)
+    return false;
+
+  const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+  if (ndc.x < -1.0f || ndc.x > 1.0f || ndc.y < -1.0f || ndc.y > 1.0f ||
+      ndc.z < -1.0f || ndc.z > 1.0f)
+    return false;
+
+  screenPosition = {
+    (ndc.x * 0.5f + 0.5f) * static_cast<float>(Window::GetWidth()),
+    (ndc.y * 0.5f + 0.5f) * static_cast<float>(Window::GetHeight())
+  };
+  return true;
+}
+
+static void DrawInteractionLabels()
+{
+  glm::vec3 playerPosition;
+  if (!SceneManager::GetPlayerPosition(playerPosition))
+    return;
+
+  const Font* font = FontManager::GetFont("dpcomic");
+  const uint64_t focusedEntity = SceneManager::GetFocusedEntityID();
+  for (const SceneEntity& entity : SceneManager::GetEntities())
+  {
+    if (!entity.active || !entity.interactable || entity.player)
+      continue;
+
+    const float distance = glm::length(entity.transform.GetPosition() - playerPosition);
+    if (distance > entity.interactionRange)
+      continue;
+
+    glm::vec2 screenPosition;
+    if (!WorldToScreen(entity.transform.GetPosition() + glm::vec3(0.0f, entity.labelHeight, 0.0f),
+        screenPosition))
+      continue;
+
+    const float fadeStart = entity.interactionRange * 0.7f;
+    const float fadeLength = std::max(entity.interactionRange - fadeStart, 0.001f);
+    const float alpha = 1.0f - glm::clamp((distance - fadeStart) / fadeLength, 0.0f, 1.0f);
+    const bool focused = entity.id == focusedEntity;
+    const std::string& displayName = entity.itemName.empty() ? entity.name : entity.itemName;
+    Renderer::DrawText(font, displayName, screenPosition, focused ? 0.48f : 0.4f,
+      focused ? glm::vec4(1.0f, 0.88f, 0.38f, alpha) : glm::vec4(1.0f, 1.0f, 1.0f, alpha));
+    if (focused)
+    {
+      Renderer::DrawText(font, entity.pickable ? "E / X - PICK UP" : "E / X - INTERACT",
+        screenPosition - glm::vec2(0.0f, 27.0f), 0.27f, glm::vec4(0.9f, 0.9f, 0.9f, alpha));
+    }
+  }
+}
+
 void Renderer::LoadShaders()
 {
 	Shader::Create(s_Data.s_Shaders.QuadShader, "../res/shaders/batch_quad.glsl");
@@ -694,6 +749,8 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
     if (advanceSimulation)
     {
       BeginScene();
+      if (s_Data.m_SceneState == RendererData::SceneState::Play)
+        DrawInteractionLabels();
       Renderer::DrawText(FontManager::GetFont("dpcomic"), "FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f, 50.0f), 0.5f, glm::vec4(1.0f));
       EndScene();
     }
@@ -1992,6 +2049,27 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 
 		if (transformChanged)
 			SceneManager::UpdateEntityTransform(entity->id, Transform(position, rotation, scale));
+
+		if (entity->type == "controller")
+			ImGui::Checkbox("Player", &entity->player);
+		else
+		{
+			ImGui::Checkbox("Interactable", &entity->interactable);
+			ImGui::Checkbox("Pickable", &entity->pickable);
+			if (entity->pickable)
+				entity->interactable = true;
+		}
+
+		if (entity->interactable)
+		{
+			char itemName[128]{};
+			const size_t copyLength = std::min(entity->itemName.size(), sizeof(itemName) - 1);
+			entity->itemName.copy(itemName, copyLength);
+			if (ImGui::InputText("Item Name", itemName, sizeof(itemName)))
+				entity->itemName = itemName;
+			ImGui::DragFloat("Interaction Range", &entity->interactionRange, 0.1f, 0.1f, 25.0f);
+			ImGui::DragFloat("Label Height", &entity->labelHeight, 0.1f, -10.0f, 25.0f);
+		}
 
 		if (entity->type != "controller" && ImGui::Button("Duplicate / Instance"))
 		{

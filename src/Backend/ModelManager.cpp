@@ -516,6 +516,45 @@ uint32_t ModelManager::AddModelInstance(const std::string& name, const glm::mat4
   return instanceIndex;
 }
 
+bool ModelManager::RemoveModelInstance(const std::string& name, uint32_t instanceIndex)
+{
+  auto it = s_Data.m_Models.find(name);
+  if (it == s_Data.m_Models.end() || instanceIndex >= it->second->m_InstanceTransforms.size())
+    return false;
+
+  auto& model = it->second;
+  model->m_InstanceTransforms.erase(model->m_InstanceTransforms.begin() + instanceIndex);
+  if (model->m_InstanceTransforms.empty())
+  {
+    model->m_IsRendered = false;
+
+    auto removePhysicsActors = [](const std::shared_ptr<Model>& physicsModel)
+    {
+      if (physicsModel->m_StaticMeshActor)
+      {
+        physicsModel->m_StaticMeshActor->release();
+        physicsModel->m_StaticMeshActor = nullptr;
+      }
+      if (physicsModel->m_DynamicMeshActor)
+      {
+        physicsModel->m_DynamicMeshActor->release();
+        physicsModel->m_DynamicMeshActor = nullptr;
+      }
+    };
+
+    removePhysicsActors(model);
+    const auto convex = s_Data.m_Models.find(name + "_convex");
+    if (convex != s_Data.m_Models.end())
+    {
+      removePhysicsActors(convex->second);
+      convex->second->m_InstanceTransforms.clear();
+    }
+  }
+
+  RefreshInstanceTransforms();
+  return true;
+}
+
 void ModelManager::SetModelInstances(const std::string& name, const std::vector<Transform>& instances)
 {
   auto it = s_Data.m_Models.find(name);

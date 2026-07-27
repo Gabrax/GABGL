@@ -262,6 +262,7 @@ struct ModelManager
   static void SetRender(const std::string& name ,bool render);
   static void SetInitialModelTransform(const std::string& name, const glm::mat4& transform);
   static uint32_t AddModelInstance(const std::string& name, const glm::mat4& transform);
+  static bool RemoveModelInstance(const std::string& name, uint32_t instanceIndex);
   static void SetModelInstances(const std::string& name, const std::vector<Transform>& instances);
   static void SetModelInstanceTransform(const std::string& name, uint32_t instanceIndex, const glm::mat4& transform);
   static void SetInitialControllerTransform(const std::string& name, const Transform& transform, float radius, float height, bool slopeLimit);

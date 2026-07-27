@@ -59,6 +59,8 @@ struct GameScene : Scene
       }
     }
 
+    UpdateInteractions();
+
     Renderer::DrawScene(dt,[&]()
     {
       if (Input::IsKeyPressed(Key::W) ||

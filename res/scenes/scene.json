@@ -32,8 +32,11 @@
           ]
         },
         {
+          "interactable": true,
+          "item_name": "Pistol",
           "model": "pistol",
           "name": "pistol",
+          "pickable": true,
           "position": [
             15.579203605651855,
             0.4421263635158539,
@@ -51,8 +54,11 @@
           ]
         },
         {
+          "interactable": true,
+          "item_name": "Pistol Ammo",
           "model": "pistolammo",
           "name": "pistolammo",
+          "pickable": true,
           "position": [
             11.009870529174805,
             0.4398002326488495,
@@ -70,8 +76,11 @@
           ]
         },
         {
+          "interactable": true,
+          "item_name": "First Aid Kit",
           "model": "aidkit",
           "name": "aidkit",
+          "pickable": true,
           "position": [
             13.0426025390625,
             0.5630518794059753,
@@ -89,8 +98,11 @@
           ]
         },
         {
+          "interactable": true,
+          "item_name": "Shotgun",
           "model": "shotgun",
           "name": "shotgun",
+          "pickable": true,
           "position": [
             13.995615005493164,
             2.3392839431762695,
@@ -108,8 +120,11 @@
           ]
         },
         {
+          "interactable": true,
+          "item_name": "Shotgun Ammo",
           "model": "shotgunammo",
           "name": "shotgunammo",
+          "pickable": true,
           "position": [
             12.000006675720215,
             2.7347893714904785,
@@ -144,6 +159,7 @@
             1.0,
             1.0
           ],
+          "player": true,
           "type": "controller"
         },
         {
