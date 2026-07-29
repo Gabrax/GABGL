@@ -71,17 +71,17 @@ struct CameraData
 {
 	glm::mat4 ViewProjection;
 	glm::mat4 OrtoProjection;
-  glm::mat4 NonRotViewProjection;
-  glm::vec3 CameraPos;
+	glm::mat4 NonRotViewProjection;
+	glm::vec3 CameraPos;
 };
 
 struct DrawElementsIndirectCommand
 {
-  GLuint count;         // Number of indices
-  GLuint instanceCount; // This is for instancing
-  GLuint firstIndex;    // Offset into the index buffer
-  GLint baseVertex;    // Base vertex for this draw
-  GLuint baseInstance;  // You can use this to index per-object data
+	GLuint count;         // Number of indices
+	GLuint instanceCount; // This is for instancing
+	GLuint firstIndex;    // Offset into the index buffer
+	GLint baseVertex;    // Base vertex for this draw
+	GLuint baseInstance;  // You can use this to index per-object data
 };
 
 struct RendererData
@@ -117,50 +117,49 @@ struct RendererData
 	LineVertex* LineVertexBufferPtr = nullptr;
 	float LineWidth = 2.0f;
 
-  static constexpr glm::vec3 quadPositions[4] =
-  {
-    { 0.0f, 0.0f, 0.0f },
-    { 1.0f, 0.0f, 0.0f },
-    { 1.0f, 1.0f, 0.0f },
-    { 0.0f, 1.0f, 0.0f }
-  };
+	static constexpr glm::vec3 quadPositions[4] =
+	{
+		{ 0.0f, 0.0f, 0.0f },
+		{ 1.0f, 0.0f, 0.0f },
+		{ 1.0f, 1.0f, 0.0f },
+		{ 0.0f, 1.0f, 0.0f }
+	};
 
-  static constexpr glm::vec2 tex3DCoords[4] =
-  {
-    { 0.0f, 1.0f },
-    { 1.0f, 1.0f },
-    { 1.0f, 0.0f },
-    { 0.0f, 0.0f }
-  };
+	static constexpr glm::vec2 tex3DCoords[4] =
+	{
+		{ 0.0f, 1.0f },
+		{ 1.0f, 1.0f },
+		{ 1.0f, 0.0f },
+		{ 0.0f, 0.0f }
+	};
 
 	std::array<std::shared_ptr<Texture>, MaxTextureSlots> TextureSlots;
 	uint32_t TextureSlotIndex = 1; // 0 = white texture
 
 	static constexpr glm::vec2 tex2DCoords[4] = 
-  {
-    { 0.0f, 0.0f },
-    { 1.0f, 0.0f },
-    { 1.0f, 1.0f },
-    { 0.0f, 1.0f }
-  };
+	{
+		{ 0.0f, 0.0f },
+		{ 1.0f, 0.0f },
+		{ 1.0f, 1.0f },
+		{ 0.0f, 1.0f }
+	};
 	static constexpr float tilingFactor = 1.0f;
 
-  struct Shaders
+	struct Shaders
 	{
-    std::shared_ptr<Shader> QuadShader;
+		std::shared_ptr<Shader> QuadShader;
 		std::shared_ptr<Shader> CircleShader;
 		std::shared_ptr<Shader> LineShader;
-    std::shared_ptr<Shader> FramebufferShader;
-    std::shared_ptr<Shader> skyboxShader;
-    std::shared_ptr<Shader> GeometryShader;
-    std::shared_ptr<Shader> LightShader;
-    std::shared_ptr<Shader> DownSampleShader;
-    std::shared_ptr<Shader> UpSampleShader;
-    std::shared_ptr<Shader> BloomResultShader;
-    std::shared_ptr<Shader> OmniDirectShadowShader;
-    std::shared_ptr<Shader> DirectShadowShader;
-    std::shared_ptr<Shader> PhysicsDebugShader;
-
+		std::shared_ptr<Shader> FramebufferShader;
+		std::shared_ptr<Shader> skyboxShader;
+		std::shared_ptr<Shader> GeometryShader;
+		std::shared_ptr<Shader> LightShader;
+		std::shared_ptr<Shader> DownSampleShader;
+		std::shared_ptr<Shader> UpSampleShader;
+		std::shared_ptr<Shader> BloomResultShader;
+		std::shared_ptr<Shader> OmniDirectShadowShader;
+		std::shared_ptr<Shader> DirectShadowShader;
+		std::shared_ptr<Shader> PhysicsDebugShader;
 	} s_Shaders;
 
   CameraData m_CameraBuffer;
@@ -201,11 +200,7 @@ struct RendererData
   static constexpr uint32_t MaxOmniShadowLayers = 20;
   static constexpr float PointShadowRadius = 20.0f;
 
-  enum class SceneState
-	{
-		Edit = 0, Play = 1
-
-	} m_SceneState;
+	enum class SceneState { Edit = 0, Play = 1 } m_SceneState;
 
   bool Is3D = false;
 
@@ -228,7 +223,7 @@ struct Frustum
     }
   }
 
-  bool IntersectsSphere(const glm::vec3& center, float radius) const
+  [[nodiscard]] bool IntersectsSphere(const glm::vec3& center, const float radius) const
   {
     for (const glm::vec4& plane : m_Planes)
       if (glm::dot(glm::vec3(plane), center) + plane.w < -radius)
@@ -259,8 +254,7 @@ static WorldBoundingSphere TransformBoundingSphere(const Model& model, const glm
 
 static void DrawWireSphere(const glm::vec3& center, float radius, const glm::vec4& color, int segments = 24)
 {
-  if (radius <= 0.0f || segments < 3)
-    return;
+  if (radius <= 0.0f || segments < 3) return;
 
   for (int i = 0; i < segments; ++i)
   {
@@ -287,8 +281,7 @@ static bool CubemapFaceCanContainVisibleReceiver(const glm::vec3& lightPosition,
 {
   const glm::vec3 toCamera = cameraPosition - lightPosition;
   const float cameraDistance = glm::length(toCamera);
-  if (cameraDistance <= radius)
-    return true;
+  if (cameraDistance <= radius) return true;
 
   constexpr float CubemapFaceHalfDiagonal = 0.9553166f; // acos(1 / sqrt(3))
   const float receiverCone = std::asin(glm::clamp(radius / cameraDistance, 0.0f, 1.0f));
@@ -317,8 +310,7 @@ static bool WorldToScreen(const glm::vec3& worldPosition, glm::vec2& screenPosit
 static void DrawInteractionLabels()
 {
   glm::vec3 playerPosition;
-  if (!SceneManager::GetPlayerPosition(playerPosition))
-    return;
+  if (!SceneManager::GetPlayerPosition(playerPosition)) return;
 
   const Font* font = FontManager::GetFont("dpcomic");
   const uint64_t focusedEntity = SceneManager::GetFocusedEntityID();
@@ -357,15 +349,15 @@ void Renderer::LoadShaders()
 	Shader::Create(s_Data.s_Shaders.CircleShader, "../res/shaders/batch_circle.glsl");
 	Shader::Create(s_Data.s_Shaders.LineShader, "../res/shaders/batch_line.glsl");
 	Shader::Create(s_Data.s_Shaders.FramebufferShader, "../res/shaders/finalFB.glsl");
-  Shader::Create(s_Data.s_Shaders.skyboxShader, "../res/shaders/skybox.glsl");
-  Shader::Create(s_Data.s_Shaders.GeometryShader, "../res/shaders/geometry.glsl");
-  Shader::Create(s_Data.s_Shaders.LightShader, "../res/shaders/light.glsl");
-  Shader::Create(s_Data.s_Shaders.DownSampleShader, "../res/shaders/bloom_downsample.glsl");
-  Shader::Create(s_Data.s_Shaders.UpSampleShader, "../res/shaders/bloom_upsample.glsl");
-  Shader::Create(s_Data.s_Shaders.BloomResultShader, "../res/shaders/bloom_final.glsl");
-  Shader::Create(s_Data.s_Shaders.OmniDirectShadowShader, "../res/shaders/omni_shadowFB.glsl");
-  Shader::Create(s_Data.s_Shaders.DirectShadowShader, "../res/shaders/direct_shadowFB.glsl");
-  Shader::Create(s_Data.s_Shaders.PhysicsDebugShader, "../res/shaders/physics_debug.glsl");
+	Shader::Create(s_Data.s_Shaders.skyboxShader, "../res/shaders/skybox.glsl");
+	Shader::Create(s_Data.s_Shaders.GeometryShader, "../res/shaders/geometry.glsl");
+	Shader::Create(s_Data.s_Shaders.LightShader, "../res/shaders/light.glsl");
+	Shader::Create(s_Data.s_Shaders.DownSampleShader, "../res/shaders/bloom_downsample.glsl");
+	Shader::Create(s_Data.s_Shaders.UpSampleShader, "../res/shaders/bloom_upsample.glsl");
+	Shader::Create(s_Data.s_Shaders.BloomResultShader, "../res/shaders/bloom_final.glsl");
+	Shader::Create(s_Data.s_Shaders.OmniDirectShadowShader, "../res/shaders/omni_shadowFB.glsl");
+	Shader::Create(s_Data.s_Shaders.DirectShadowShader, "../res/shaders/direct_shadowFB.glsl");
+	Shader::Create(s_Data.s_Shaders.PhysicsDebugShader, "../res/shaders/physics_debug.glsl");
 }
 
 void Renderer::Init()
@@ -384,9 +376,9 @@ void Renderer::Init()
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_LINE_SMOOTH);
 
-  glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 
-  s_Data.QuadVertexArray = VertexArray::Create();
+	s_Data.QuadVertexArray = VertexArray::Create();
 	s_Data.QuadVertexBuffer = VertexBuffer::Create(s_Data.MaxVertices * sizeof(QuadVertex));
 	s_Data.QuadVertexBuffer->SetLayout({
 		{ ShaderDataType::Float3, "a_Position"     },
@@ -443,34 +435,34 @@ void Renderer::Init()
 	s_Data.QuadVertexPositions[2] = { 0.5f,  0.5f, 0.0f, 1.0f };
 	s_Data.QuadVertexPositions[3] = { -0.5f,  0.5f, 0.0f, 1.0f };
 
-  std::vector<uint32_t> indices;
-  indices.reserve(s_Data.MaxIndices);
+	std::vector<uint32_t> indices;
+	indices.reserve(s_Data.MaxIndices);
 
-  LoadShaders();
+	LoadShaders();
 
-  glm::vec2 resolution = { Window::GetWidth(), Window::GetHeight() };
+	glm::vec2 resolution = { Window::GetWidth(), Window::GetHeight() };
 
-  FramebufferSpecification fbSpec;
+	FramebufferSpecification fbSpec;
 	fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::DEPTH24STENCIL8 };
 	fbSpec.Width = resolution.x;
 	fbSpec.Height = resolution.y;
 	s_Data.m_ResultBuffer = FrameBuffer::Create(fbSpec);
 
-  s_Data.m_GeometryBuffer = GeometryBuffer::Create(resolution.x, resolution.y);
-  s_Data.m_BloomBuffer = BloomBuffer::Create(s_Data.s_Shaders.DownSampleShader, s_Data.s_Shaders.UpSampleShader, s_Data.s_Shaders.BloomResultShader);
-  ParticleRenderer::Init();
-  ApplyGraphicsSettings();
+	s_Data.m_GeometryBuffer = GeometryBuffer::Create(resolution.x, resolution.y);
+	s_Data.m_BloomBuffer = BloomBuffer::Create(s_Data.s_Shaders.DownSampleShader, s_Data.s_Shaders.UpSampleShader, s_Data.s_Shaders.BloomResultShader);
+	ParticleRenderer::Init();
+	ApplyGraphicsSettings();
 
-  s_Data.m_CameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 0);
-  Camera::Init(45.0f, (float)resolution.x / (float)resolution.y, 0.01f, 2000.0f);
-  Camera::SetViewportSize((float)resolution.x, (float)resolution.y);
+	s_Data.m_CameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 0);
+	Camera::Init(45.0f, (float)resolution.x / (float)resolution.y, 0.01f, 2000.0f);
+	Camera::SetViewportSize((float)resolution.x, (float)resolution.y);
 
-  s_Data.m_ResolutionUniformBuffer = UniformBuffer::Create(sizeof(glm::vec2), 1);
-  s_Data.m_ResolutionUniformBuffer->SetData(&resolution, sizeof(glm::vec2));
+	s_Data.m_ResolutionUniformBuffer = UniformBuffer::Create(sizeof(glm::vec2), 1);
+	s_Data.m_ResolutionUniformBuffer->SetData(&resolution, sizeof(glm::vec2));
 
-  s_Data.m_SceneState = RendererData::SceneState::Play;
-  Camera::SetMode(CameraMode::PLAYER);
-  Window::SetCursorVisible(false);
+	s_Data.m_SceneState = RendererData::SceneState::Play;
+	Camera::SetMode(CameraMode::PLAYER);
+	Window::SetCursorVisible(false);
 
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -488,58 +480,58 @@ void Renderer::Init()
 		style.Colors[ImGuiCol_WindowBg].w = 1.0f;
 	}
 
-	GLFWwindow* window = reinterpret_cast<GLFWwindow*>(Window::GetWindowPtr());
+	auto* window = reinterpret_cast<GLFWwindow*>(Window::GetWindowPtr());
 
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 410");
 	SetLineWidth(4.0f);
 	//s_Data.m_GizmoType = ImGuizmo::OPERATION::TRANSLATE;
 
-  Profiler::Init();
+	Profiler::Init();
 }
 
 void Renderer::Shutdown()
 {
-  Profiler::Shutdown();
+	Profiler::Shutdown();
 	ParticleRenderer::Shutdown();
-  ResetModelDrawCommands();
+	ResetModelDrawCommands();
 
-  ImGui_ImplOpenGL3_Shutdown();
+	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
 
 	delete[] s_Data.QuadVertexBufferBase;
-  s_Data.QuadVertexBufferBase = nullptr;
-  s_Data.QuadVertexBufferPtr = nullptr;
-  delete[] s_Data.LineVertexBufferBase;
-  s_Data.LineVertexBufferBase = nullptr;
-  s_Data.LineVertexBufferPtr = nullptr;
+	s_Data.QuadVertexBufferBase = nullptr;
+	s_Data.QuadVertexBufferPtr = nullptr;
+	delete[] s_Data.LineVertexBufferBase;
+	s_Data.LineVertexBufferBase = nullptr;
+	s_Data.LineVertexBufferPtr = nullptr;
 
-  if (s_Data.m_FullscreenQuadVBO) glDeleteBuffers(1, &s_Data.m_FullscreenQuadVBO);
-  if (s_Data.m_FullscreenQuadVAO) glDeleteVertexArrays(1, &s_Data.m_FullscreenQuadVAO);
-  if (s_Data.m_FramebufferQuadVBO) glDeleteBuffers(1, &s_Data.m_FramebufferQuadVBO);
-  if (s_Data.m_FramebufferQuadVAO) glDeleteVertexArrays(1, &s_Data.m_FramebufferQuadVAO);
-  if (s_Data.m_SkyboxVBO) glDeleteBuffers(1, &s_Data.m_SkyboxVBO);
-  if (s_Data.m_SkyboxVAO) glDeleteVertexArrays(1, &s_Data.m_SkyboxVAO);
-  s_Data.m_FullscreenQuadVAO = s_Data.m_FullscreenQuadVBO = 0;
-  s_Data.m_FramebufferQuadVAO = s_Data.m_FramebufferQuadVBO = 0;
-  s_Data.m_SkyboxVAO = s_Data.m_SkyboxVBO = 0;
+	if (s_Data.m_FullscreenQuadVBO) glDeleteBuffers(1, &s_Data.m_FullscreenQuadVBO);
+	if (s_Data.m_FullscreenQuadVAO) glDeleteVertexArrays(1, &s_Data.m_FullscreenQuadVAO);
+	if (s_Data.m_FramebufferQuadVBO) glDeleteBuffers(1, &s_Data.m_FramebufferQuadVBO);
+	if (s_Data.m_FramebufferQuadVAO) glDeleteVertexArrays(1, &s_Data.m_FramebufferQuadVAO);
+	if (s_Data.m_SkyboxVBO) glDeleteBuffers(1, &s_Data.m_SkyboxVBO);
+	if (s_Data.m_SkyboxVAO) glDeleteVertexArrays(1, &s_Data.m_SkyboxVAO);
+	s_Data.m_FullscreenQuadVAO = s_Data.m_FullscreenQuadVBO = 0;
+	s_Data.m_FramebufferQuadVAO = s_Data.m_FramebufferQuadVBO = 0;
+	s_Data.m_SkyboxVAO = s_Data.m_SkyboxVBO = 0;
 
-  s_Data.m_ResultBuffer.reset();
-  s_Data.m_GeometryBuffer.reset();
-  s_Data.m_BloomBuffer.reset();
-  s_Data.m_OmniDirectShadowBuffer.reset();
-  s_Data.m_DirectShadowBuffer.reset();
-  s_Data.m_CameraUniformBuffer.reset();
-  s_Data.m_ResolutionUniformBuffer.reset();
-  s_Data.QuadVertexArray.reset();
-  s_Data.QuadVertexBuffer.reset();
-  s_Data.LineVertexArray.reset();
-  s_Data.LineVertexBuffer.reset();
-  s_Data.skyboxes.clear();
-  s_Data.TextureSlots.fill(nullptr);
-  s_Data.WhiteTexture.reset();
-  s_Data.s_Shaders = {};
+	s_Data.m_ResultBuffer.reset();
+	s_Data.m_GeometryBuffer.reset();
+	s_Data.m_BloomBuffer.reset();
+	s_Data.m_OmniDirectShadowBuffer.reset();
+	s_Data.m_DirectShadowBuffer.reset();
+	s_Data.m_CameraUniformBuffer.reset();
+	s_Data.m_ResolutionUniformBuffer.reset();
+	s_Data.QuadVertexArray.reset();
+	s_Data.QuadVertexBuffer.reset();
+	s_Data.LineVertexArray.reset();
+	s_Data.LineVertexBuffer.reset();
+	s_Data.skyboxes.clear();
+	s_Data.TextureSlots.fill(nullptr);
+	s_Data.WhiteTexture.reset();
+	s_Data.s_Shaders = {};
 }
 
 void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic, bool advanceSimulation)
@@ -556,8 +548,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
   glCullFace(GL_FRONT);
   glFrontFace(GL_CW);
 
-  if (advanceSimulation)
-    scene_logic();
+  if (advanceSimulation) scene_logic();
 
   if (advanceSimulation)
   {
@@ -637,9 +628,8 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s_Data.m_cmdBufer);
 
     const auto& directions = s_Data.m_OmniDirectShadowBuffer->GetFaceDirections();
-    for (const ShadowCandidate& candidate : candidates)
+    for (const auto&[distanceSquared, lightIndex] : candidates)
     {
-      const uint32_t lightIndex = candidate.lightIndex;
       const glm::vec3& light = pointLights[lightIndex];
       s_Data.m_PointShadowMask |= 1 << lightIndex;
       s_Data.s_Shaders.OmniDirectShadowShader->SetVec3("gLightWorldPos",light);
@@ -676,7 +666,6 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
 
     s_Data.m_GeometryBuffer->Bind();
 
-
     glDepthFunc(GL_LESS);
     glDepthMask(GL_TRUE);
   	glClearColor(0, 0, 0, 0);
@@ -699,15 +688,14 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
   {
     GABGL_PROFILE_SCOPE("LIGHT PASS");
 
-
     s_Data.m_BloomBuffer->Bind();
 	glDisable(GL_DEPTH_TEST);
   	glClearColor(0, 0, 0, 0);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    s_Data.m_GeometryBuffer->BindPositionTextureForReading(GL_TEXTURE1); 
-    s_Data.m_GeometryBuffer->BindNormalTextureForReading(GL_TEXTURE2); 
-    s_Data.m_GeometryBuffer->BindAlbedoTextureForReading(GL_TEXTURE3); 
+    s_Data.m_GeometryBuffer->BindPositionTextureForReading(GL_TEXTURE1);
+    s_Data.m_GeometryBuffer->BindNormalTextureForReading(GL_TEXTURE2);
+    s_Data.m_GeometryBuffer->BindAlbedoTextureForReading(GL_TEXTURE3);
     s_Data.m_DirectShadowBuffer->BindShadowTextureForReading(GL_TEXTURE4);
     s_Data.m_DirectShadowBuffer->BindOffsetTextureForReading(GL_TEXTURE5);
     s_Data.m_OmniDirectShadowBuffer->BindShadowTextureForReading(GL_TEXTURE6);
@@ -749,9 +737,9 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
     s_Data.m_ResultBuffer->Bind();
     s_Data.m_ResultBuffer->SetDrawBuffer(0);
 
-    Renderer::DrawSkybox("night");
-    Renderer::DrawPhysicsDebug();
-    Renderer::DrawDebugVisualizations();
+    DrawSkybox("night");
+    DrawPhysicsDebug();
+    DrawDebugVisualizations();
     ParticleRenderer::UpdateAndRender(dt);
 
     s_Data.m_ResultBuffer->SetDrawBuffers();
@@ -766,12 +754,12 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
     {
      case RendererData::SceneState::Edit:
      {
-       Renderer::DrawEditorFrameBuffer(finalTexture);
+       DrawEditorFrameBuffer(finalTexture);
        break;
      }
      case RendererData::SceneState::Play:
      {
-       Renderer::DrawFramebuffer(finalTexture);
+       DrawFramebuffer(finalTexture);
        break;
      }
     }
@@ -788,9 +776,8 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
     if (advanceSimulation)
     {
       BeginScene();
-      if (s_Data.m_SceneState == RendererData::SceneState::Play)
-        DrawInteractionLabels();
-      Renderer::DrawText(FontManager::GetFont("dpcomic"), "FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f, 50.0f), 0.5f, glm::vec4(1.0f));
+      if (s_Data.m_SceneState == RendererData::SceneState::Play) DrawInteractionLabels();
+      DrawText(FontManager::GetFont("dpcomic"), "FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f, 50.0f), 0.5f, glm::vec4(1.0f));
       EndScene();
     }
   }
@@ -799,7 +786,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
 void Renderer::DrawLoadingScreen()
 {
   BeginScene();
-  Renderer::DrawText(FontManager::GetFont("dpcomic"),"LOADING", glm::vec2(Window::GetWidth() / 2,Window::GetHeight() / 2), 1.0f, glm::vec4(1.0f));
+  DrawText(FontManager::GetFont("dpcomic"),"LOADING", glm::vec2(Window::GetWidth() / 2,Window::GetHeight() / 2), 1.0f, glm::vec4(1.0f));
   EndScene();
 }
 
@@ -823,8 +810,8 @@ void Renderer::SetFullscreen(const std::string& sound, bool windowed)
 {
   Window::SetFullscreen(windowed);
 
-  uint32_t width = (uint32_t)Window::GetWidth(); 
-  uint32_t height = (uint32_t)Window::GetHeight();
+  auto width = Window::GetWidth();
+  auto height = Window::GetHeight();
 
   glm::vec2 newResolution = { width, height };
   s_Data.m_ResolutionUniformBuffer->SetData(&newResolution, sizeof(glm::vec2));
@@ -857,7 +844,7 @@ void Renderer::ApplyDisplaySettings()
 void Renderer::ApplyGraphicsSettings()
 {
   const GraphicsQuality quality = Settings::GetShadowQuality();
-  const uint32_t qualityValue = static_cast<uint32_t>(quality);
+  const auto qualityValue = static_cast<uint32_t>(quality);
   if (qualityValue == s_Data.m_AppliedShadowQuality &&
       s_Data.m_DirectShadowBuffer && s_Data.m_OmniDirectShadowBuffer)
     return;
@@ -912,10 +899,9 @@ void Renderer::DrawPhysicsDebug()
   for (const auto& [modelName, commandIndices] : s_Data.m_ModelDrawCommandIndices)
   {
     const auto model = ModelManager::GetModel(modelName);
-    if (!model || model->GetPhysXMeshType() != MeshType::CONVEXMESH)
-      continue;
+    if (!model || model->GetPhysXMeshType() != MeshType::CONVEXMESH) continue;
 
-    const GLsizei instanceCount = static_cast<GLsizei>(model->m_InstanceTransforms.size());
+    const auto instanceCount = static_cast<GLsizei>(model->m_InstanceTransforms.size());
     for (const size_t commandIndex : commandIndices)
     {
       const auto& command = s_Data.m_DrawCommands[commandIndex];
@@ -942,8 +928,7 @@ void Renderer::DrawPhysicsDebug()
 
 void Renderer::DrawDebugVisualizations()
 {
-  if (!s_Data.m_LightDebug && !s_Data.m_CullingDebug)
-    return;
+  if (!s_Data.m_LightDebug && !s_Data.m_CullingDebug) return;
 
   glEnable(GL_DEPTH_TEST);
   glDepthFunc(GL_LEQUAL);
@@ -960,8 +945,7 @@ void Renderer::DrawDebugVisualizations()
     for (const std::string& modelName : ModelManager::GetModelNames())
     {
       const auto model = ModelManager::GetModel(modelName);
-      if (!model || !model->m_IsRendered)
-        continue;
+      if (!model || !model->m_IsRendered) continue;
 
       for (const glm::mat4& transform : model->m_InstanceTransforms)
       {
@@ -989,11 +973,11 @@ void Renderer::DrawDebugVisualizations()
       }
       else if (light.type == LightType::POINT)
       {
-        DrawWireSphere(light.position, 0.5f, color);
-        DrawWireSphere(light.position, RendererData::PointShadowRadius, glm::vec4(light.color, 0.2f), 32);
-        DrawLine(light.position - glm::vec3(1.0f, 0.0f, 0.0f), light.position + glm::vec3(1.0f, 0.0f, 0.0f), color);
-        DrawLine(light.position - glm::vec3(0.0f, 1.0f, 0.0f), light.position + glm::vec3(0.0f, 1.0f, 0.0f), color);
-        DrawLine(light.position - glm::vec3(0.0f, 0.0f, 1.0f), light.position + glm::vec3(0.0f, 0.0f, 1.0f), color);
+		DrawWireSphere(light.position, 0.5f, color);
+		DrawWireSphere(light.position, RendererData::PointShadowRadius, glm::vec4(light.color, 0.2f), 32);
+		DrawLine(light.position - glm::vec3(1.0f, 0.0f, 0.0f), light.position + glm::vec3(1.0f, 0.0f, 0.0f), color);
+		DrawLine(light.position - glm::vec3(0.0f, 1.0f, 0.0f), light.position + glm::vec3(0.0f, 1.0f, 0.0f), color);
+		DrawLine(light.position - glm::vec3(0.0f, 0.0f, 1.0f), light.position + glm::vec3(0.0f, 0.0f, 1.0f), color);
       }
       else
       {
@@ -1006,17 +990,16 @@ void Renderer::DrawDebugVisualizations()
         const glm::vec3 right = glm::normalize(glm::cross(direction, fallbackUp));
         const glm::vec3 up = glm::normalize(glm::cross(right, direction));
         const glm::vec3 end = light.position + direction * 8.0f;
-        constexpr float coneRadius = 3.0f;
         constexpr int segments = 20;
         for (int i = 0; i < segments; ++i)
         {
-          const float angle0 = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(segments);
-          const float angle1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(segments);
-          const glm::vec3 p0 = end + (right * std::cos(angle0) + up * std::sin(angle0)) * coneRadius;
-          const glm::vec3 p1 = end + (right * std::cos(angle1) + up * std::sin(angle1)) * coneRadius;
-          DrawLine(p0, p1, color);
-          if (i % 5 == 0)
-            DrawLine(light.position, p0, color);
+	        constexpr float coneRadius = 3.0f;
+	        const float angle0 = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(segments);
+			const float angle1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(segments);
+			const glm::vec3 p0 = end + (right * std::cos(angle0) + up * std::sin(angle0)) * coneRadius;
+			const glm::vec3 p1 = end + (right * std::cos(angle1) + up * std::sin(angle1)) * coneRadius;
+			DrawLine(p0, p1, color);
+			if (i % 5 == 0) DrawLine(light.position, p0, color);
         }
         DrawWireSphere(light.position, 0.4f, color);
         DrawLine(light.position, end, color);
@@ -1036,8 +1019,8 @@ void Renderer::BeginScene()
 {
 	s_Data.m_CameraBuffer.ViewProjection = Camera::GetViewProjection();
 	s_Data.m_CameraBuffer.OrtoProjection = Camera::GetOrtoProjection();
-  s_Data.m_CameraBuffer.NonRotViewProjection = Camera::GetNonRotationViewProjection();
-  s_Data.m_CameraBuffer.CameraPos = Camera::GetPosition();
+	s_Data.m_CameraBuffer.NonRotViewProjection = Camera::GetNonRotationViewProjection();
+	s_Data.m_CameraBuffer.CameraPos = Camera::GetPosition();
 	s_Data.m_CameraUniformBuffer->SetData(&s_Data.m_CameraBuffer, sizeof(CameraData));
 
 	StartBatch();
@@ -1052,24 +1035,23 @@ void Renderer::Flush()
 {
 	if (s_Data.QuadIndexCount)
 	{
-		uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.QuadVertexBufferPtr - (uint8_t*)s_Data.QuadVertexBufferBase);
+		auto dataSize = static_cast<uint32_t>(reinterpret_cast<uint8_t *>(s_Data.QuadVertexBufferPtr) - reinterpret_cast<uint8_t *>(s_Data.QuadVertexBufferBase));
 		s_Data.QuadVertexBuffer->SetData(s_Data.QuadVertexBufferBase, dataSize);
 
-		for (uint32_t i = 0; i < s_Data.TextureSlotIndex; i++)
-			s_Data.TextureSlots[i]->Bind(i);
+		for (uint32_t i = 0; i < s_Data.TextureSlotIndex; i++) s_Data.TextureSlots[i]->Bind(i);
 
 		s_Data.s_Shaders.QuadShader->Bind();
-    s_Data.s_Shaders.QuadShader->SetBool("u_Is3D", s_Data.Is3D);
-		Renderer::DrawIndexed(s_Data.QuadVertexArray, s_Data.QuadIndexCount);
+		s_Data.s_Shaders.QuadShader->SetBool("u_Is3D", s_Data.Is3D);
+		DrawIndexed(s_Data.QuadVertexArray, s_Data.QuadIndexCount);
 	}
 	if (s_Data.LineVertexCount)
 	{
-		uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.LineVertexBufferPtr - (uint8_t*)s_Data.LineVertexBufferBase);
+		auto dataSize = static_cast<uint32_t>(reinterpret_cast<uint8_t *>(s_Data.LineVertexBufferPtr) - reinterpret_cast<uint8_t *>(s_Data.LineVertexBufferBase));
 		s_Data.LineVertexBuffer->SetData(s_Data.LineVertexBufferBase, dataSize);
 
 		s_Data.s_Shaders.LineShader->Bind();
-		Renderer::SetLineWidth(s_Data.LineWidth);
-		Renderer::DrawLines(s_Data.LineVertexArray, s_Data.LineVertexCount);
+		SetLineWidth(s_Data.LineWidth);
+		DrawLines(s_Data.LineVertexArray, s_Data.LineVertexCount);
 	}
 }
 
@@ -1091,8 +1073,7 @@ void Renderer::NextBatch()
 
 void Renderer::DrawLine(const glm::vec3& p0, const glm::vec3& p1, const glm::vec4& color, int entityID)
 {
-	if (s_Data.LineVertexCount + 2 > RendererData::MaxVertices)
-		NextBatch();
+	if (s_Data.LineVertexCount + 2 > RendererData::MaxVertices) NextBatch();
 
 	s_Data.LineVertexBufferPtr->Position = p0;
 	s_Data.LineVertexBufferPtr->Color = color;
@@ -1129,11 +1110,9 @@ void Renderer::DrawQuad(const glm::vec2& position, const glm::vec2& size, float 
 
 void Renderer::DrawQuad(const glm::mat4& transform, const glm::vec4& color, int entityID)
 {
-	const float textureIndex = 0.0f; // White Texture
-
 	if (s_Data.QuadIndexCount >= RendererData::MaxIndices) NextBatch();
 
-  glm::vec3 position = glm::vec3(transform[3]);
+  auto position = glm::vec3(transform[3]);
 
   float sizeX = glm::length(glm::vec3(transform[0]));
   float sizeY = glm::length(glm::vec3(transform[1]));
@@ -1141,25 +1120,26 @@ void Renderer::DrawQuad(const glm::mat4& transform, const glm::vec4& color, int 
   glm::vec3 cameraRight = Camera::GetRightDirection();
   glm::vec3 cameraUp = Camera::GetUpDirection();
 
-	for (size_t i = 0; i < s_Data.quadVertexCount; i++)
+	for (size_t i = 0; i < RendererData::quadVertexCount; i++)
 	{
-    if(s_Data.Is3D)
-    {
-      glm::vec3 worldPos =
-          position +
-          cameraRight * (s_Data.QuadVertexPositions[i].x * sizeX) +
-          cameraUp    * (s_Data.QuadVertexPositions[i].y * sizeY);
+		constexpr float textureIndex = 0.0f;
+		if(s_Data.Is3D)
+		{
+	      glm::vec3 worldPos =
+	          position +
+	          cameraRight * (s_Data.QuadVertexPositions[i].x * sizeX) +
+	          cameraUp    * (s_Data.QuadVertexPositions[i].y * sizeY);
 
-      s_Data.QuadVertexBufferPtr->Position = worldPos;
-    }
-    else s_Data.QuadVertexBufferPtr->Position = transform * s_Data.QuadVertexPositions[i];
+	      s_Data.QuadVertexBufferPtr->Position = worldPos;
+		}
+		else s_Data.QuadVertexBufferPtr->Position = transform * s_Data.QuadVertexPositions[i];
 
-    s_Data.QuadVertexBufferPtr->Color = color;
-    s_Data.QuadVertexBufferPtr->TexCoord = s_Data.tex3DCoords[i];
-    s_Data.QuadVertexBufferPtr->TexIndex = textureIndex;
-    s_Data.QuadVertexBufferPtr->TilingFactor = s_Data.tilingFactor;
-    s_Data.QuadVertexBufferPtr->EntityID = entityID;
-    s_Data.QuadVertexBufferPtr++;
+	    s_Data.QuadVertexBufferPtr->Color = color;
+	    s_Data.QuadVertexBufferPtr->TexCoord = RendererData::tex3DCoords[i];
+	    s_Data.QuadVertexBufferPtr->TexIndex = textureIndex;
+	    s_Data.QuadVertexBufferPtr->TilingFactor = RendererData::tilingFactor;
+	    s_Data.QuadVertexBufferPtr->EntityID = entityID;
+	    s_Data.QuadVertexBufferPtr++;
 	}
 
 	s_Data.QuadIndexCount += 6;
@@ -1194,7 +1174,7 @@ void Renderer::DrawQuad(const glm::mat4& transform, const std::shared_ptr<Textur
 	{
 		if (*s_Data.TextureSlots[i] == *texture)
 		{
-			textureIndex = (float)i;
+			textureIndex = static_cast<float>(i);
 			break;
 		}
 	}
@@ -1203,7 +1183,7 @@ void Renderer::DrawQuad(const glm::mat4& transform, const std::shared_ptr<Textur
 	{
 		if (s_Data.TextureSlotIndex >= RendererData::MaxTextureSlots) NextBatch();
 
-		textureIndex = (float)s_Data.TextureSlotIndex;
+		textureIndex = static_cast<float>(s_Data.TextureSlotIndex);
 		s_Data.TextureSlots[s_Data.TextureSlotIndex] = texture;
 		s_Data.TextureSlotIndex++;
 	}
@@ -1257,7 +1237,7 @@ void Renderer::DrawQuadContour(const glm::mat4& transform, const glm::vec4& colo
 
 void Renderer::DrawCube(const glm::vec3& position, const glm::vec3& size, const std::shared_ptr<Texture>& texture, const glm::vec4& tintColor, int entityID)
 {
-  Renderer::Set3D(true);
+  Set3D(true);
 
   GLint prevFrontFace;
   glGetIntegerv(GL_FRONT_FACE, &prevFrontFace);
@@ -1312,21 +1292,21 @@ void Renderer::DrawCube(const glm::vec3& position, const glm::vec3& size, const 
   glFrontFace(prevFrontFace);
   glDisable(GL_CULL_FACE);
 
-  Renderer::Set3D(false);
+  Set3D(false);
 }
 
 void Renderer::DrawCube(const glm::vec3& position, const glm::vec3& size, const glm::vec4& color, int entityID)
 {
-  Renderer::Set3D(true);
+	Set3D(true);
 
-  GLint prevFrontFace;
-  glGetIntegerv(GL_FRONT_FACE, &prevFrontFace);
+	GLint prevFrontFace;
+	glGetIntegerv(GL_FRONT_FACE, &prevFrontFace);
 
-  glEnable(GL_CULL_FACE);
-  glCullFace(GL_FRONT);
-  glFrontFace(GL_CCW); // Only cubes use counter-clockwise winding
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_FRONT);
+	glFrontFace(GL_CCW); // Only cubes use counter-clockwise winding
 
-  glm::vec2 xy = { size.x, size.y };
+	glm::vec2 xy = { size.x, size.y };
 	glm::vec2 yz = { size.z, size.y };
 	glm::vec2 xz = { size.x, size.z };
 
@@ -1372,7 +1352,7 @@ void Renderer::DrawCube(const glm::vec3& position, const glm::vec3& size, const 
   glFrontFace(prevFrontFace);
   glDisable(GL_CULL_FACE);
 
-  Renderer::Set3D(false);
+  Set3D(false);
 }
 
 void Renderer::DrawCubeContour(const glm::vec3& position, const glm::vec3& size, const glm::vec4& color, int entityID)
@@ -1528,7 +1508,7 @@ void Renderer::BakeSkyboxTextures(const std::string& name, const std::shared_ptr
 
   glGenerateTextureMipmap(rendererID);
 
-  s_Data.skyboxes[name] = std::move(cubemap);
+  s_Data.skyboxes[name] = cubemap;
 
   GABGL_WARN("Skybox uploading took {0} ms", timer.ElapsedMillis());
 }
@@ -1569,7 +1549,7 @@ void Renderer::DrawSkybox(const std::string& name)
   }
 
   glDepthFunc(GL_LEQUAL);
-  glDepthMask(GL_FALSE);    
+  glDepthMask(GL_FALSE);
   glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
   s_Data.s_Shaders.skyboxShader->Bind();
@@ -1577,7 +1557,7 @@ void Renderer::DrawSkybox(const std::string& name)
   auto it = s_Data.skyboxes.find(name);
   if (it != s_Data.skyboxes.end())
   {
-    glBindTextureUnit(0, it->second->GetRendererID());  
+    glBindTextureUnit(0, it->second->GetRendererID());
   }
   else
   {
@@ -1595,9 +1575,9 @@ void Renderer::DrawSkybox(const std::string& name)
 
 void Renderer::DrawText(const Font* font, const std::string& text, const glm::vec3& position, const glm::vec3& rotation, float size, const glm::vec4& color)
 {
-  Renderer::Set3D(true);
+  Set3D(true);
   DrawText(font, text, position, rotation, size, color, -1);
-  Renderer::Set3D(false);
+  Set3D(false);
 }
 
 void Renderer::DrawText(const Font* font, const std::string& text, const glm::vec2& position, float size, const glm::vec4& color)
@@ -1650,15 +1630,15 @@ void Renderer::DrawText(const Font* font, const std::string& text, const glm::ve
     auto it = font->m_Characters.find(c);
     if (it == font->m_Characters.end()) continue;
 
-    const Character& ch = it->second;
+    const auto&[TextureID, Size, Bearing, Advance] = it->second;
 
     if (s_Data.QuadIndexCount >= RendererData::MaxIndices)
         NextBatch();
 
-    float xpos = cursor.x + ch.Bearing.x * size;
-    float ypos = cursor.y + (maxBearingY - ch.Bearing.y * size);
-    float w = ch.Size.x * size;
-    float h = ch.Size.y * size;
+    float xpos = cursor.x + Bearing.x * size;
+    float ypos = cursor.y + (maxBearingY - Bearing.y * size);
+    float w = Size.x * size;
+    float h = Size.y * size;
 
     glm::mat4 localTransform = glm::translate(glm::mat4(1.0f), glm::vec3(xpos, ypos, 0.0f)) *
                                glm::scale(glm::mat4(1.0f), glm::vec3(w, h, 1.0f));
@@ -1668,7 +1648,7 @@ void Renderer::DrawText(const Font* font, const std::string& text, const glm::ve
     float textureIndex = 0.0f;
     for (uint32_t slot = 1; slot < s_Data.TextureSlotIndex; ++slot)
     {
-      if (s_Data.TextureSlots[slot] && s_Data.TextureSlots[slot]->GetRendererID() == ch.TextureID)
+      if (s_Data.TextureSlots[slot] && s_Data.TextureSlots[slot]->GetRendererID() == TextureID)
       {
         textureIndex = static_cast<float>(slot);
         break;
@@ -1680,13 +1660,13 @@ void Renderer::DrawText(const Font* font, const std::string& text, const glm::ve
         NextBatch();
 
       textureIndex = static_cast<float>(s_Data.TextureSlotIndex);
-      s_Data.TextureSlots[s_Data.TextureSlotIndex++] = Texture::WrapExisting(ch.TextureID);
+      s_Data.TextureSlots[s_Data.TextureSlotIndex++] = Texture::WrapExisting(TextureID);
     }
 
     for (int i = 0; i < 4; i++) {
-        s_Data.QuadVertexBufferPtr->Position = transform * glm::vec4(s_Data.quadPositions[i], 1.0f);
+        s_Data.QuadVertexBufferPtr->Position = transform * glm::vec4(RendererData::quadPositions[i], 1.0f);
         s_Data.QuadVertexBufferPtr->Color = color;
-        s_Data.QuadVertexBufferPtr->TexCoord = s_Data.tex3DCoords[i];
+        s_Data.QuadVertexBufferPtr->TexCoord = RendererData::tex3DCoords[i];
         s_Data.QuadVertexBufferPtr->TexIndex = textureIndex;
         s_Data.QuadVertexBufferPtr->TilingFactor = 1.0f;
         s_Data.QuadVertexBufferPtr->EntityID = entityID;
@@ -1694,7 +1674,7 @@ void Renderer::DrawText(const Font* font, const std::string& text, const glm::ve
     }
 
     s_Data.QuadIndexCount += 6;
-    cursor.x += (ch.Advance >> 6) * size;
+    cursor.x += (Advance >> 6) * size;
   }
 }
 
@@ -1702,11 +1682,11 @@ void Renderer::AddDrawCommand(const std::string& modelName, uint32_t verticesSiz
 {
   DrawElementsIndirectCommand cmd =
   {
-    .count = static_cast<GLuint>(indicesSize),
+    .count = (indicesSize),
     .instanceCount = 1,
-    .firstIndex = static_cast<GLuint>(s_Data.m_DrawIndexOffset),
+    .firstIndex = (s_Data.m_DrawIndexOffset),
     .baseVertex = static_cast<GLint>(s_Data.m_DrawVertexOffset),
-    .baseInstance = 0, 
+    .baseInstance = 0,
   };
 
   s_Data.m_ModelDrawCommandIndices[modelName].push_back(s_Data.m_DrawCommands.size()); // store index
@@ -1741,7 +1721,7 @@ void Renderer::UpdateModelFrustumCulling()
     if (!model || commandIndices == s_Data.m_ModelDrawCommandIndices.end())
       continue;
 
-    const GLuint visibleBase = static_cast<GLuint>(visibleTransforms.size());
+    const auto visibleBase = static_cast<GLuint>(visibleTransforms.size());
     GLuint visibleCount = 0;
     if (model->m_IsRendered)
     {
@@ -1775,8 +1755,7 @@ void Renderer::UpdateModelFrustumCulling()
 void Renderer::UpdateDrawCommandInstances(const std::shared_ptr<Model>& model)
 {
   const auto commandIndices = s_Data.m_ModelDrawCommandIndices.find(model->m_Name);
-  if (commandIndices == s_Data.m_ModelDrawCommandIndices.end())
-    return;
+  if (commandIndices == s_Data.m_ModelDrawCommandIndices.end()) return;
 
   const GLuint instanceCount = model->m_IsRendered
     ? static_cast<GLuint>(model->m_InstanceTransforms.size())
@@ -1802,29 +1781,23 @@ void Renderer::UpdateDrawCommandInstances(const std::shared_ptr<Model>& model)
 
 void Renderer::InitDrawCommandBuffer()
 {
-  if (s_Data.m_DrawCommands.empty())
-    return;
+  if (s_Data.m_DrawCommands.empty()) return;
 
-  if (s_Data.m_cmdBufer != 0)
-    glDeleteBuffers(1, &s_Data.m_cmdBufer);
-  if (s_Data.m_CulledCmdBuffer != 0)
-    glDeleteBuffers(1, &s_Data.m_CulledCmdBuffer);
+  if (s_Data.m_cmdBufer != 0) glDeleteBuffers(1, &s_Data.m_cmdBufer);
+  if (s_Data.m_CulledCmdBuffer != 0) glDeleteBuffers(1, &s_Data.m_CulledCmdBuffer);
 
   s_Data.m_cmdBufferSize = s_Data.m_DrawCommands.size() * sizeof(DrawElementsIndirectCommand);
   s_Data.m_CulledDrawCommands = s_Data.m_DrawCommands;
   glCreateBuffers(1, &s_Data.m_cmdBufer);
   glNamedBufferStorage(s_Data.m_cmdBufer, s_Data.m_cmdBufferSize, s_Data.m_DrawCommands.data(), GL_DYNAMIC_STORAGE_BIT);
   glCreateBuffers(1, &s_Data.m_CulledCmdBuffer);
-  glNamedBufferStorage(s_Data.m_CulledCmdBuffer, s_Data.m_cmdBufferSize,
-    s_Data.m_CulledDrawCommands.data(), GL_DYNAMIC_STORAGE_BIT);
+  glNamedBufferStorage(s_Data.m_CulledCmdBuffer, s_Data.m_cmdBufferSize, s_Data.m_CulledDrawCommands.data(), GL_DYNAMIC_STORAGE_BIT);
 }
 
 void Renderer::ResetModelDrawCommands()
 {
-  if (s_Data.m_cmdBufer != 0)
-    glDeleteBuffers(1, &s_Data.m_cmdBufer);
-  if (s_Data.m_CulledCmdBuffer != 0)
-    glDeleteBuffers(1, &s_Data.m_CulledCmdBuffer);
+  if (s_Data.m_cmdBufer != 0) glDeleteBuffers(1, &s_Data.m_cmdBufer);
+  if (s_Data.m_CulledCmdBuffer != 0) glDeleteBuffers(1, &s_Data.m_CulledCmdBuffer);
 
   s_Data.m_cmdBufer = 0;
   s_Data.m_CulledCmdBuffer = 0;
@@ -1868,14 +1841,13 @@ uint32_t Renderer::GetActiveWidgetID()
 }
 
 void Renderer::BlockEvents(bool block)
-{ 
-  s_Data.m_BlockEvents = block;
+{
+	s_Data.m_BlockEvents = block;
 }
 
 void Renderer::Set3D(bool is3D)
 {
-  if (s_Data.Is3D == is3D)
-    return;
+  if (s_Data.Is3D == is3D) return;
 
   Flush();
   StartBatch();
@@ -1914,15 +1886,14 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 		window_flags |= ImGuiWindowFlags_NoBackground;
 
 	// Important: note that we proceed even if Begin() returns false (aka window is collapsed).
-	// This is because we want to keep our DockSpace() active. If a DockSpace() is inactive, 
+	// This is because we want to keep our DockSpace() active. If a DockSpace() is inactive,
 	// all active windows docked into it will lose their parent and become undocked.
-	// We cannot preserve the docking relationship between an active window and an inactive docking, otherwise 
+	// We cannot preserve the docking relationship between an active window and an inactive docking, otherwise
 	// any change of dockspace/settings would lead to windows being stuck in limbo and never being visible.
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 	ImGui::Begin("DockSpace Demo", &dockspaceOpen, window_flags);
 	ImGui::PopStyleVar();
-	if (opt_fullscreen)
-		ImGui::PopStyleVar(2);
+	if (opt_fullscreen) ImGui::PopStyleVar(2);
 
 	// DockSpace
 	ImGuiIO& io = ImGui::GetIO();
@@ -1960,8 +1931,7 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 	}
 
 	static const char* saveStatus = nullptr;
-	if (ImGui::Button("Save Scene"))
-		saveStatus = SceneManager::SaveActiveScene() ? "Scene saved" : "Save failed";
+	if (ImGui::Button("Save Scene")) saveStatus = SceneManager::SaveActiveScene() ? "Scene saved" : "Save failed";
 	ImGui::SameLine();
 	if (ImGui::Button("Reload Scene") && !activeSceneName.empty())
 	{
@@ -1969,8 +1939,7 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 		s_Data.m_SelectedLightID = 0;
 		SceneManager::LoadScene(activeSceneName);
 	}
-	if (saveStatus)
-		ImGui::TextUnformatted(saveStatus);
+	if (saveStatus) ImGui::TextUnformatted(saveStatus);
 
 	ImGui::Separator();
 	uint64_t duplicateRequest = 0;
@@ -2012,13 +1981,11 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 	ImGui::Combo("##NewLightType", &newLightType, lightTypes, IM_ARRAYSIZE(lightTypes));
 	ImGui::SameLine();
 	const bool directLightAlreadyExists = newLightType == static_cast<int>(LightType::DIRECT) &&
-		std::any_of(SceneManager::GetLights().begin(), SceneManager::GetLights().end(),
-			[](const SceneLight& light) { return light.type == LightType::DIRECT; });
+		std::ranges::any_of(SceneManager::GetLights(), [](const SceneLight& light) { return light.type == LightType::DIRECT; });
 	ImGui::BeginDisabled(directLightAlreadyExists);
 	if (ImGui::Button("Add Light"))
 	{
-		const uint64_t lightID = SceneManager::AddLight(static_cast<LightType>(newLightType));
-		if (lightID != 0)
+		if (const uint64_t lightID = SceneManager::AddLight(static_cast<LightType>(newLightType)); lightID != 0)
 		{
 			s_Data.m_SelectedEntityID = 0;
 			s_Data.m_SelectedLightID = lightID;
@@ -2033,8 +2000,7 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 	{
 		ImGui::PushID("Light");
 		ImGui::PushID(static_cast<int>(light.id));
-		const bool selected = light.id == s_Data.m_SelectedLightID;
-		if (ImGui::Selectable(light.name.c_str(), selected))
+		if (const bool selected = light.id == s_Data.m_SelectedLightID; ImGui::Selectable(light.name.c_str(), selected))
 		{
 			s_Data.m_SelectedEntityID = 0;
 			s_Data.m_SelectedLightID = light.id;
@@ -2050,8 +2016,7 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 	}
 	if (removeLightRequest != 0 && SceneManager::RemoveLight(removeLightRequest))
 	{
-		if (s_Data.m_SelectedLightID == removeLightRequest)
-			s_Data.m_SelectedLightID = 0;
+		if (s_Data.m_SelectedLightID == removeLightRequest) s_Data.m_SelectedLightID = 0;
 	}
 
 
@@ -2083,17 +2048,14 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 		transformChanged |= ImGui::DragFloat3("Rotation", glm::value_ptr(rotation), 0.5f);
 		transformChanged |= ImGui::DragFloat3("Scale", glm::value_ptr(scale), 0.05f);
 
-		if (transformChanged)
-			SceneManager::UpdateEntityTransform(entity->id, Transform(position, rotation, scale));
+		if (transformChanged) SceneManager::UpdateEntityTransform(entity->id, Transform(position, rotation, scale));
 
-		if (entity->type == "controller")
-			ImGui::Checkbox("Player", &entity->player);
+		if (entity->type == "controller") ImGui::Checkbox("Player", &entity->player);
 		else
 		{
 			ImGui::Checkbox("Interactable", &entity->interactable);
 			ImGui::Checkbox("Pickable", &entity->pickable);
-			if (entity->pickable)
-				entity->interactable = true;
+			if (entity->pickable) entity->interactable = true;
 		}
 
 		if (entity->interactable)
@@ -2101,8 +2063,7 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 			char itemName[128]{};
 			const size_t copyLength = std::min(entity->itemName.size(), sizeof(itemName) - 1);
 			entity->itemName.copy(itemName, copyLength);
-			if (ImGui::InputText("Item Name", itemName, sizeof(itemName)))
-				entity->itemName = itemName;
+			if (ImGui::InputText("Item Name", itemName, sizeof(itemName))) entity->itemName = itemName;
 			ImGui::DragFloat("Interaction Range", &entity->interactionRange, 0.1f, 0.1f, 25.0f);
 			ImGui::DragFloat("Label Height", &entity->labelHeight, 0.1f, -10.0f, 25.0f);
 		}
@@ -2110,8 +2071,7 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 		if (entity->type != "controller" && ImGui::Button("Duplicate / Instance"))
 		{
 			const uint64_t duplicateID = SceneManager::DuplicateEntity(entity->id);
-			if (duplicateID != 0)
-				s_Data.m_SelectedEntityID = duplicateID;
+			if (duplicateID != 0) s_Data.m_SelectedEntityID = duplicateID;
 		}
 	}
 	else if (SceneLight* light = SceneManager::FindLight(s_Data.m_SelectedLightID))
@@ -2127,19 +2087,15 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 		glm::vec3 rotation = light->rotation;
 		bool lightChanged = false;
 		lightChanged |= ImGui::ColorEdit3("Color", glm::value_ptr(color), ImGuiColorEditFlags_Float);
-		if (light->type != LightType::DIRECT)
-			lightChanged |= ImGui::DragFloat3("Position", glm::value_ptr(position), 0.1f);
-		if (light->type != LightType::POINT)
-			lightChanged |= ImGui::DragFloat3("Direction", glm::value_ptr(rotation), 0.05f);
+		if (light->type != LightType::DIRECT) lightChanged |= ImGui::DragFloat3("Position", glm::value_ptr(position), 0.1f);
+		if (light->type != LightType::POINT) lightChanged |= ImGui::DragFloat3("Direction", glm::value_ptr(rotation), 0.05f);
 
-		if (lightChanged)
-			SceneManager::UpdateLight(light->id, light->name, color, position, rotation);
+		if (lightChanged) SceneManager::UpdateLight(light->id, light->name, color, position, rotation);
 
 		if (ImGui::Button("Remove Light"))
 		{
 			const uint64_t removedID = light->id;
-			if (SceneManager::RemoveLight(removedID))
-				s_Data.m_SelectedLightID = 0;
+			if (SceneManager::RemoveLight(removedID)) s_Data.m_SelectedLightID = 0;
 		}
 	}
 
@@ -2175,14 +2131,14 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 	ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
 	s_Data.m_ViewportSize = { viewportPanelSize.x, viewportPanelSize.y };
 
-	uint64_t textureID = static_cast<uint64_t>(framebufferTexture);
+	auto textureID = static_cast<uint64_t>(framebufferTexture);
 	ImGui::Image(reinterpret_cast<void*>(textureID), ImVec2{ s_Data.m_ViewportSize.x, s_Data.m_ViewportSize.y }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
 
 	ImGui::End();
 	ImGui::PopStyleVar();
 
 	ImGui::End();
-	io.DisplaySize = ImVec2((float)Window::GetWidth(), (float)Window::GetHeight());
+	io.DisplaySize = ImVec2(static_cast<float>(Window::GetWidth()), static_cast<float>(Window::GetHeight()));
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

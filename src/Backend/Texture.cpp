@@ -228,8 +228,7 @@ Texture::~Texture()
   delete[] m_RawData;
   for (unsigned char*& face : pixels)
   {
-    if (face)
-      stbi_image_free(face);
+    if (face) stbi_image_free(face);
     face = nullptr;
   }
 }
@@ -251,7 +250,7 @@ void Texture::FlipImageVertically(unsigned char* data, int width, int height, in
   }
 }
 
-void Texture::SetData(void* data, uint32_t size)
+void Texture::SetData(void* data, uint32_t size) const
 {
 	uint32_t bpp = m_DataFormat == GL_RGBA ? 4 : 3;
 	GABGL_ASSERT(size == m_Width * m_Height * bpp, "Data must be entire texture!");

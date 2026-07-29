@@ -27,7 +27,7 @@ struct Logger
       if (level < s_LogLevel)
           return;
 
-      std::lock_guard<std::mutex> lock(s_Mutex);
+      std::lock_guard lock(s_Mutex);
 
       auto message = std::format(fmt, std::forward<Args>(args)...);
       Print(level, message);

@@ -92,7 +92,7 @@ void Shader::Load(const char* fullshader)
   // Compile each shader
   GLuint vertex = 0, fragment = 0, geometry = 0, tessControl = 0, tessEvaluation = 0, compute = 0;
 
-  if (shaderSources.find("VERTEX") != shaderSources.end()) {
+  if (shaderSources.contains("VERTEX")) {
       const char* vertexCode = shaderSources["VERTEX"].c_str();
       vertex = glCreateShader(GL_VERTEX_SHADER);
       glShaderSource(vertex, 1, &vertexCode, NULL);
@@ -100,7 +100,7 @@ void Shader::Load(const char* fullshader)
       checkCompileErrors(vertex, "VERTEX");
   }
 
-  if (shaderSources.find("FRAGMENT") != shaderSources.end()) {
+  if (shaderSources.contains("FRAGMENT")) {
       const char* fragmentCode = shaderSources["FRAGMENT"].c_str();
       fragment = glCreateShader(GL_FRAGMENT_SHADER);
       glShaderSource(fragment, 1, &fragmentCode, NULL);
@@ -108,7 +108,7 @@ void Shader::Load(const char* fullshader)
       checkCompileErrors(fragment, "FRAGMENT");
   }
 
-  if (shaderSources.find("GEOMETRY") != shaderSources.end()) {
+  if (shaderSources.contains("GEOMETRY")) {
       const char* geometryCode = shaderSources["GEOMETRY"].c_str();
       geometry = glCreateShader(GL_GEOMETRY_SHADER);
       glShaderSource(geometry, 1, &geometryCode, NULL);
@@ -116,7 +116,7 @@ void Shader::Load(const char* fullshader)
       checkCompileErrors(geometry, "GEOMETRY");
   }
 
-  if (shaderSources.find("TESS_CONTROL") != shaderSources.end()) {
+  if (shaderSources.contains("TESS_CONTROL")) {
       const char* tessControlCode = shaderSources["TESS_CONTROL"].c_str();
       tessControl = glCreateShader(GL_TESS_CONTROL_SHADER);
       glShaderSource(tessControl, 1, &tessControlCode, NULL);
@@ -124,7 +124,7 @@ void Shader::Load(const char* fullshader)
       checkCompileErrors(tessControl, "TESS_CONTROL");
   }
 
-  if (shaderSources.find("TESS_EVALUATION") != shaderSources.end()) {
+  if (shaderSources.contains("TESS_EVALUATION")) {
       const char* tessEvaluationCode = shaderSources["TESS_EVALUATION"].c_str();
       tessEvaluation = glCreateShader(GL_TESS_EVALUATION_SHADER);
       glShaderSource(tessEvaluation, 1, &tessEvaluationCode, NULL);
@@ -132,7 +132,7 @@ void Shader::Load(const char* fullshader)
       checkCompileErrors(tessEvaluation, "TESS_EVALUATION");
   }
 
-  if (shaderSources.find("COMPUTE") != shaderSources.end()) {
+  if (shaderSources.contains("COMPUTE")) {
       const char* computeCode = shaderSources["COMPUTE"].c_str();
       compute = glCreateShader(GL_COMPUTE_SHADER);
       glShaderSource(compute, 1, &computeCode, NULL);

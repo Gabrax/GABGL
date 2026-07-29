@@ -57,6 +57,20 @@ static float m_Yaw = -90.0f;
 
 static float m_ViewportWidth = 0;
 static float m_ViewportHeight = 0;
+static bool m_IsAiming = false;
+static float m_AimBlend = 0.0f;
+
+namespace
+{
+  constexpr float PlayerCameraFOV = 45.0f;
+  constexpr float AimCameraFOV = 34.0f;
+  constexpr float PlayerCameraHeight = 4.95f;
+  constexpr float PlayerCameraShoulderOffset = 0.9f;
+  constexpr float PlayerCameraDistance = 3.4f;
+  constexpr float AimCameraHeight = 4.9f;
+  constexpr float AimCameraShoulderOffset = 0.55f;
+  constexpr float AimCameraDistance = 1.75f;
+}
 
 void Camera::Init(float fov, float aspectRatio, float nearClip, float farClip)
 {
@@ -172,11 +186,6 @@ float Camera::ZoomSpeed()
 	return speed;
 }
 
-float m_HeightOffset   = 4.0f;
-float m_ShoulderOffset = 15.6f;
-float m_FollowDistance = 4.0f;
-float m_SmoothSpeed = 5.0f;
-
 void Camera::OnUpdate(DeltaTime dt)
 {
   glm::vec2 mouse{ Input::GetMouseX(), Input::GetMouseY() };
@@ -202,6 +211,18 @@ void Camera::OnUpdate(DeltaTime dt)
   else if(m_Mode == CameraMode::PLAYER) 
   {
     MouseRotate(delta.x, -delta.y);
+    m_IsAiming = Input::IsMouseButtonPressed(Mouse::ButtonRight);
+    const float deltaTime = glm::clamp(static_cast<float>(dt), 0.0f, 0.1f);
+    const float aimResponse = 1.0f - std::exp(-12.0f * deltaTime);
+    m_AimBlend = glm::mix(m_AimBlend, m_IsAiming ? 1.0f : 0.0f, aimResponse);
+
+    const float targetFOV = glm::mix(PlayerCameraFOV, AimCameraFOV, m_AimBlend);
+    const float targetFOVRadians = glm::radians(targetFOV);
+    if (std::abs(m_PerspectiveFOV - targetFOVRadians) > 0.0001f)
+    {
+      m_PerspectiveFOV = targetFOVRadians;
+      RecalculateProjection();
+    }
 
     /*float velocity = m_MovementSpeed * dt;*/
     /**/
@@ -229,24 +250,20 @@ void Camera::OnUpdate(DeltaTime dt)
     direction.z = sin(glm::radians(m_Yaw)) * cos(glm::radians(m_Pitch));
     direction = glm::normalize(direction);
 
-    float distance = (m_Mode == CameraMode::ORBITAL) ? m_Distance : m_FollowDistance;
-
-    glm::vec3 desiredPos = targetPos - direction * distance;
-
     glm::vec3 right = glm::normalize(glm::cross(direction, glm::vec3(0,1,0)));
+    const float distance = glm::mix(PlayerCameraDistance, AimCameraDistance, m_AimBlend);
+    const float shoulderOffset = glm::mix(
+      PlayerCameraShoulderOffset, AimCameraShoulderOffset, m_AimBlend);
+    const float height = glm::mix(PlayerCameraHeight, AimCameraHeight, m_AimBlend);
 
-    desiredPos += right * m_ShoulderOffset;        // horizontal shoulder
-    desiredPos += glm::vec3(0, m_HeightOffset, 0); // vertical offset
+    m_Position = targetPos + glm::vec3(0.0f, height, 0.0f)
+      - direction * distance
+      + right * shoulderOffset;
 
-    /*float t = 1.0f - std::exp(-m_SmoothSpeed * (float)dt);*/
-    /*m_Position = glm::mix(m_Position, desiredPos, t);*/
-    m_Position = desiredPos;
-
-    glm::vec3 lookTarget = targetPos + glm::vec3(0, 5.0f, 0);
-
-    m_Front = glm::normalize(lookTarget - m_Position);
+    // Look where the mouse points; the shoulder offset keeps the player off-center.
+    m_Front = direction;
     m_Right = glm::normalize(glm::cross(m_Front, glm::vec3(0,1,0)));
-    m_Up    = glm::cross(m_Right, m_Front);
+    m_Up = glm::normalize(glm::cross(m_Right, m_Front));
 
     UpdateView();
   }
@@ -350,6 +367,11 @@ glm::quat Camera::GetOrientation()
 {
 	const glm::mat3 orientation(m_Right, m_Up, -m_Front);
 	return glm::normalize(glm::quat_cast(orientation));
+}
+
+bool Camera::IsAiming()
+{
+  return m_Mode == CameraMode::PLAYER && Input::IsMouseButtonPressed(Mouse::ButtonRight);
 }
 
 void Camera::SetPerspective(float verticalFOVDegrees, float nearClip, float farClip)

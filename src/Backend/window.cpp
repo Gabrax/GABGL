@@ -79,7 +79,7 @@ void Window::Init(const std::string& windowTitle, uint32_t windowWidth, uint32_t
   // Set GLFW callbacks
   glfwSetWindowSizeCallback(m_Window, [](GLFWwindow* window, int width, int height)
 	  {
-		  WindowSpecificData& data = *reinterpret_cast<WindowSpecificData*>(glfwGetWindowUserPointer(window));
+		  WindowSpecificData& data = *static_cast<WindowSpecificData*>(glfwGetWindowUserPointer(window));
 		  data.Width = width;
 		  data.Height = height;
 
@@ -89,14 +89,14 @@ void Window::Init(const std::string& windowTitle, uint32_t windowWidth, uint32_t
 
   glfwSetWindowCloseCallback(m_Window, [](GLFWwindow* window)
 	  {
-		  WindowSpecificData& data = *reinterpret_cast<WindowSpecificData*>(glfwGetWindowUserPointer(window));
+		  WindowSpecificData& data = *static_cast<WindowSpecificData*>(glfwGetWindowUserPointer(window));
 		  WindowCloseEvent event;
 		  data.EventCallback(event);
 	  });
 
   glfwSetKeyCallback(m_Window, [](GLFWwindow* window, int key, int scancode, int action, int mods)
 	  {
-		  WindowSpecificData& data = *reinterpret_cast<WindowSpecificData*>(glfwGetWindowUserPointer(window));
+		  WindowSpecificData& data = *static_cast<WindowSpecificData*>(glfwGetWindowUserPointer(window));
 
 		  switch (action)
 		  {
@@ -123,7 +123,7 @@ void Window::Init(const std::string& windowTitle, uint32_t windowWidth, uint32_t
 
   glfwSetCharCallback(m_Window, [](GLFWwindow* window, unsigned int keycode)
 	  {
-		  WindowSpecificData& data = *reinterpret_cast<WindowSpecificData*>(glfwGetWindowUserPointer(window));
+		  WindowSpecificData& data = *static_cast<WindowSpecificData*>(glfwGetWindowUserPointer(window));
 
 		  KeyTypedEvent event(keycode);
 		  data.EventCallback(event);
@@ -131,7 +131,7 @@ void Window::Init(const std::string& windowTitle, uint32_t windowWidth, uint32_t
 
   glfwSetMouseButtonCallback(m_Window, [](GLFWwindow* window, int button, int action, int mods)
 	  {
-		  WindowSpecificData& data = *reinterpret_cast<WindowSpecificData*>(glfwGetWindowUserPointer(window));
+		  WindowSpecificData& data = *static_cast<WindowSpecificData*>(glfwGetWindowUserPointer(window));
 
 		  switch (action)
 		  {
@@ -152,17 +152,17 @@ void Window::Init(const std::string& windowTitle, uint32_t windowWidth, uint32_t
 
   glfwSetScrollCallback(m_Window, [](GLFWwindow* window, double xOffset, double yOffset)
 	  {
-		  WindowSpecificData& data = *reinterpret_cast<WindowSpecificData*>(glfwGetWindowUserPointer(window));
+		  WindowSpecificData& data = *static_cast<WindowSpecificData*>(glfwGetWindowUserPointer(window));
 
-		  MouseScrolledEvent event((float)xOffset, (float)yOffset);
+		  MouseScrolledEvent event(static_cast<float>(xOffset), static_cast<float>(yOffset));
 		  data.EventCallback(event);
 	  });
 
   glfwSetCursorPosCallback(m_Window, [](GLFWwindow* window, double xPos, double yPos)
 	  {
-		  WindowSpecificData& data = *reinterpret_cast<WindowSpecificData*>(glfwGetWindowUserPointer(window));
+		  WindowSpecificData& data = *static_cast<WindowSpecificData*>(glfwGetWindowUserPointer(window));
 
-		  MouseMovedEvent event((float)xPos, (float)yPos);
+		  MouseMovedEvent event(static_cast<float>(xPos), static_cast<float>(yPos));
 		  data.EventCallback(event);
 	  });
 

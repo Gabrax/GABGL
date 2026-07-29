@@ -37,12 +37,21 @@ namespace
     glm::vec4 PositionAndSize;
     glm::vec4 Color;
     float Rotation;
+    glm::vec4 RightAndStyle;
+    glm::vec4 Up;
+  };
+
+  struct ImpactMark
+  {
+    glm::vec3 Position{0.0f};
+    glm::vec3 Right{1.0f, 0.0f, 0.0f};
+    glm::vec3 Up{0.0f, 1.0f, 0.0f};
   };
 
   struct ParticleRendererData
   {
     static constexpr size_t MaxParticles = 512;
-    static constexpr float ParticlesPerSecond = 60.0f;
+    static constexpr size_t MaxImpactMarks = 128;
 
     GLuint VertexArray = 0;
     GLuint QuadVertexBuffer = 0;
@@ -52,8 +61,8 @@ namespace
     Particle Prototype;
     std::vector<Particle> Pool;
     std::vector<ParticleInstance> Instances;
+    std::vector<ImpactMark> ImpactMarks;
     size_t ActiveCount = 0;
-    float EmissionAccumulator = 0.0f;
   } s_Data;
 
   glm::vec3 RandomDirectionInCone(const glm::vec3& direction, float coneAngle)
@@ -101,11 +110,9 @@ namespace
     glDepthMask(GL_FALSE);
     glDisable(GL_CULL_FACE);
     glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     s_Data.ParticleShader->Bind();
-    s_Data.ParticleShader->SetVec3("u_CameraRight", Camera::GetRightDirection());
-    s_Data.ParticleShader->SetVec3("u_CameraUp", Camera::GetUpDirection());
 
     glBindVertexArray(s_Data.VertexArray);
     glDrawArraysInstanced(
@@ -143,7 +150,8 @@ void ParticleRenderer::Init()
   glNamedBufferData(s_Data.QuadVertexBuffer, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
   glNamedBufferData(
     s_Data.InstanceBuffer,
-    static_cast<GLsizeiptr>(ParticleRendererData::MaxParticles * sizeof(ParticleInstance)),
+    static_cast<GLsizeiptr>(
+      (ParticleRendererData::MaxParticles + ParticleRendererData::MaxImpactMarks) * sizeof(ParticleInstance)),
     nullptr,
     GL_DYNAMIC_DRAW);
 
@@ -170,8 +178,22 @@ void ParticleRenderer::Init()
     s_Data.VertexArray, 3, 1, GL_FLOAT, GL_FALSE, static_cast<GLuint>(offsetof(ParticleInstance, Rotation)));
   glVertexArrayAttribBinding(s_Data.VertexArray, 3, 1);
 
+  glEnableVertexArrayAttrib(s_Data.VertexArray, 4);
+  glVertexArrayAttribFormat(
+    s_Data.VertexArray, 4, 4, GL_FLOAT, GL_FALSE,
+    static_cast<GLuint>(offsetof(ParticleInstance, RightAndStyle)));
+  glVertexArrayAttribBinding(s_Data.VertexArray, 4, 1);
+
+  glEnableVertexArrayAttrib(s_Data.VertexArray, 5);
+  glVertexArrayAttribFormat(
+    s_Data.VertexArray, 5, 4, GL_FLOAT, GL_FALSE,
+    static_cast<GLuint>(offsetof(ParticleInstance, Up)));
+  glVertexArrayAttribBinding(s_Data.VertexArray, 5, 1);
+
   s_Data.Pool.resize(ParticleRendererData::MaxParticles);
-  s_Data.Instances.reserve(ParticleRendererData::MaxParticles);
+  s_Data.Instances.reserve(
+    ParticleRendererData::MaxParticles + ParticleRendererData::MaxImpactMarks);
+  s_Data.ImpactMarks.reserve(ParticleRendererData::MaxImpactMarks);
 
   s_Data.Prototype.Position = glm::vec3(0.0f);
   s_Data.Prototype.Velocity = glm::vec3(0.0f, 5.0f, 0.0f);
@@ -192,6 +214,7 @@ void ParticleRenderer::Shutdown()
   s_Data.ParticleShader.reset();
   s_Data.Pool.clear();
   s_Data.Instances.clear();
+  s_Data.ImpactMarks.clear();
   s_Data.ActiveCount = 0;
 }
 
@@ -199,6 +222,7 @@ void ParticleRenderer::Clear()
 {
   s_Data.ActiveCount = 0;
   s_Data.Instances.clear();
+  s_Data.ImpactMarks.clear();
 }
 
 void ParticleRenderer::Emit()
@@ -227,6 +251,48 @@ void ParticleRenderer::Emit()
   particle.SizeEnd = s_Data.Prototype.SizeEnd;
 }
 
+void ParticleRenderer::EmitImpact(
+  const glm::vec3& position,
+  const glm::vec3& normal,
+  uint32_t particleCount)
+{
+  const glm::vec3 impactNormal = glm::dot(normal, normal) > 0.000001f
+    ? glm::normalize(normal)
+    : glm::vec3(0.0f, 1.0f, 0.0f);
+
+  const glm::vec3 reference = std::abs(impactNormal.y) < 0.99f
+    ? glm::vec3(0.0f, 1.0f, 0.0f)
+    : glm::vec3(1.0f, 0.0f, 0.0f);
+  const glm::vec3 markRight = glm::normalize(glm::cross(reference, impactNormal));
+  const glm::vec3 markUp = glm::normalize(glm::cross(impactNormal, markRight));
+
+  if (s_Data.ImpactMarks.size() >= ParticleRendererData::MaxImpactMarks)
+    s_Data.ImpactMarks.erase(s_Data.ImpactMarks.begin());
+  s_Data.ImpactMarks.push_back({
+    position + impactNormal * 0.015f,
+    markRight,
+    markUp
+  });
+
+  for (uint32_t i = 0; i < particleCount && s_Data.ActiveCount < s_Data.Pool.size(); ++i)
+  {
+    Particle& particle = s_Data.Pool[s_Data.ActiveCount++];
+    particle.Position = position + impactNormal * 0.025f;
+    particle.Rotation = RandomGen::Float() * 2.0f * glm::pi<float>();
+    particle.AngularVelocity = RandomGen::RandomRange(-8.0f, 8.0f);
+
+    const glm::vec3 direction = RandomDirectionInCone(impactNormal, glm::radians(75.0f));
+    particle.Velocity = direction * RandomGen::RandomRange(2.5f, 6.5f);
+    particle.Acceleration = glm::vec3(0.0f, -9.81f, 0.0f);
+    particle.ColorStart = glm::vec4(0.95f, 0.9f, 0.8f, 1.0f);
+    particle.ColorEnd = glm::vec4(0.25f, 0.22f, 0.18f, 0.0f);
+    particle.LifeTime = RandomGen::RandomRange(0.25f, 0.55f);
+    particle.LifeRemaining = particle.LifeTime;
+    particle.SizeBegin = RandomGen::RandomRange(0.06f, 0.14f);
+    particle.SizeEnd = 0.01f;
+  }
+}
+
 void ParticleRenderer::UpdateAndRender(const DeltaTime& dt)
 {
   const float delta = glm::clamp(static_cast<float>(dt), 0.0f, 0.1f);
@@ -246,20 +312,9 @@ void ParticleRenderer::UpdateAndRender(const DeltaTime& dt)
     ++particleIndex;
   }
 
-  s_Data.EmissionAccumulator += delta * ParticleRendererData::ParticlesPerSecond;
-  const uint32_t particlesToEmit = static_cast<uint32_t>(s_Data.EmissionAccumulator);
-  s_Data.EmissionAccumulator -= static_cast<float>(particlesToEmit);
-
-  for (uint32_t i = 0; i < particlesToEmit && s_Data.ActiveCount < s_Data.Pool.size(); ++i)
-  {
-    Emit();
-    Particle& particle = s_Data.Pool[s_Data.ActiveCount - 1];
-    const float initialAge = delta * static_cast<float>(particlesToEmit - i) /
-      static_cast<float>(particlesToEmit + 1);
-    AdvanceParticle(particle, initialAge);
-  }
-
   s_Data.Instances.clear();
+  const glm::vec3 cameraRight = Camera::GetRightDirection();
+  const glm::vec3 cameraUp = Camera::GetUpDirection();
   for (size_t i = 0; i < s_Data.ActiveCount; ++i)
   {
     const Particle& particle = s_Data.Pool[i];
@@ -269,7 +324,24 @@ void ParticleRenderer::UpdateAndRender(const DeltaTime& dt)
     color.a *= glm::smoothstep(0.0f, 0.08f, age);
     const float size = glm::mix(particle.SizeBegin, particle.SizeEnd, age);
 
-    s_Data.Instances.push_back({glm::vec4(particle.Position, size), color, particle.Rotation});
+    s_Data.Instances.push_back({
+      glm::vec4(particle.Position, size),
+      color,
+      particle.Rotation,
+      glm::vec4(cameraRight, 0.0f),
+      glm::vec4(cameraUp, 0.0f)
+    });
+  }
+
+  for (const ImpactMark& mark : s_Data.ImpactMarks)
+  {
+    s_Data.Instances.push_back({
+      glm::vec4(mark.Position, 0.22f),
+      glm::vec4(1.0f),
+      0.0f,
+      glm::vec4(mark.Right, 1.0f),
+      glm::vec4(mark.Up, 0.0f)
+    });
   }
 
   RenderInstances();

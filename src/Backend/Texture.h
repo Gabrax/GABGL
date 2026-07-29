@@ -26,12 +26,12 @@ struct TextureSpecification
 
 struct Texture 
 {
-  Texture() = default;
-	Texture(const TextureSpecification& specification);
-  Texture(const std::string& path);
-  Texture(const std::string& filename, const std::string& directory);
-  Texture(const aiTexture* paiTexture, const std::string& path);
-  Texture(const std::vector<std::string>& faces);
+	Texture() = default;
+	explicit Texture(const TextureSpecification& specification);
+	explicit Texture(const std::string& path);
+	Texture(const std::string& filename, const std::string& directory);
+	Texture(const aiTexture* paiTexture, const std::string& path);
+	explicit Texture(const std::vector<std::string>& faces);
 	~Texture();
 
 	bool operator==(const Texture& other) const 
@@ -39,52 +39,52 @@ struct Texture
 		return m_RendererID == other.GetRendererID();
 	}
 
-	void SetData(void* data, uint32_t size);
+	void SetData(void* data, uint32_t size) const;
 	void Bind(uint32_t slot = 0) const;
 	inline const TextureSpecification& GetSpecification() const { return m_Specification; }
 	inline uint32_t GetWidth() const { return m_Width; }
 	inline uint32_t GetHeight() const { return m_Height; }
-  inline void SetRendererID(uint32_t id) { m_RendererID = id; }
+	inline void SetRendererID(uint32_t id) { m_RendererID = id; }
 	inline uint32_t GetRendererID() const { return m_RendererID; }
-  inline uint32_t& GetRendererID() { return m_RendererID; }
+	inline uint32_t& GetRendererID() { return m_RendererID; }
 	inline const uint8_t* GetRawData() const { return m_RawData; }
-  inline void ClearRawData() { delete[] m_RawData; m_RawData = nullptr; }
+	inline void ClearRawData() { delete[] m_RawData; m_RawData = nullptr; }
 	inline const std::string& GetPath() const { return m_Path; }
-  inline const GLenum GetDataFormat() const { return m_DataFormat; }
-  inline const GLenum GetInternalFormat() const { return m_InternalFormat; }
-  inline void SetType(const std::string& type) { m_Type = type; }
-  inline std::string& GetType() { return m_Type; }
-  inline bool IsUnCompressed() { return m_IsEmbeddedUnCompressed; }
-  inline const aiTexture* GetEmbeddedTexture() { return paiTexture; }
+	inline GLenum GetDataFormat() const { return m_DataFormat; }
+	inline GLenum GetInternalFormat() const { return m_InternalFormat; }
+	inline void SetType(const std::string& type) { m_Type = type; }
+	inline std::string& GetType() { return m_Type; }
+	inline bool IsUnCompressed() const { return m_IsEmbeddedUnCompressed; }
+	inline const aiTexture* GetEmbeddedTexture() const { return paiTexture; }
 	inline bool IsLoaded() const { return m_IsLoaded; }
 
 	static std::shared_ptr<Texture> Create(const TextureSpecification& specification);
 	static std::shared_ptr<Texture> Create(const std::string& path);
-  static std::shared_ptr<Texture> Create(const std::string& path, const std::string& directory);
-  static std::shared_ptr<Texture> CreateEMBEDDED(const aiTexture* paiTexture, const std::string& directory);
-  static std::shared_ptr<Texture> CreateCUBEMAP(const std::vector<std::string>& faces);
-  static std::shared_ptr<Texture> WrapExisting(uint32_t rendererID);
+	static std::shared_ptr<Texture> Create(const std::string& path, const std::string& directory);
+	static std::shared_ptr<Texture> CreateEMBEDDED(const aiTexture* paiTexture, const std::string& directory);
+	static std::shared_ptr<Texture> CreateCUBEMAP(const std::vector<std::string>& faces);
+	static std::shared_ptr<Texture> WrapExisting(uint32_t rendererID);
 
-  inline std::array<unsigned char*, 6>& GetPixels() { return pixels; }
-  inline int32_t GetChannels() { return channels; }
+	inline std::array<unsigned char*, 6>& GetPixels() { return pixels; }
+	inline int32_t GetChannels() const { return channels; }
 
 private:
 
-  void FlipImageVertically(unsigned char* data, int width, int height, int channels);
+	void FlipImageVertically(unsigned char* data, int width, int height, int channels);
 
 	TextureSpecification m_Specification;
 
-  std::array<unsigned char*, 6> pixels{};
-  int32_t channels = 0;
+	std::array<unsigned char*, 6> pixels{};
+	int32_t channels = 0;
 
-  const aiTexture* paiTexture = nullptr;
+	const aiTexture* paiTexture = nullptr;
 
 	std::string m_Path;
 	std::string m_Directory;
-  std::string m_Type;
+	std::string m_Type;
 	bool m_IsLoaded = false;
 	bool m_IsEmbeddedUnCompressed = false;
-  bool m_OwnsTexture = true;
+	bool m_OwnsTexture = true;
 	uint32_t m_Width = 0, m_Height = 0;
 	uint32_t m_RendererID = 0;
 	uint8_t* m_RawData = nullptr;

@@ -61,9 +61,9 @@ void LightManager::AddLight(const LightType& type, const glm::vec3& color, const
   }
   if (s_Data.numLights >= s_Data.maxLights) ResizeLightBuffers(s_Data.maxLights * 2);
 
-  glm::vec4 newColor = glm::vec4(color.x,color.y,color.z,1.0);
+  auto newColor = glm::vec4(color.x,color.y,color.z,1.0);
 
-  std::shared_ptr<LightData> lightData = std::make_shared<LightData>(position, rotation, newColor, type);
+  auto lightData = std::make_shared<LightData>(position, rotation, newColor, type);
   s_Data.lights.push_back(lightData);
 
   if (type == LightType::POINT) s_Data.numPointLights++;

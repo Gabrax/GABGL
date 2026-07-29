@@ -9,6 +9,8 @@
 #include "Settings.h"
 #include "Window.h"
 #include "FontManager.h"
+#include "ParticleRenderer.h"
+#include "PhysX.h"
 
 #include <array>
 #include <algorithm>
@@ -63,6 +65,7 @@ struct GameScene : Scene
     }
 
     UpdateInteractions();
+    UpdateWeapon();
 
     Renderer::DrawScene(dt,[&]()
     {
@@ -92,6 +95,25 @@ struct GameScene : Scene
 private:
   enum class PauseScreen { Main, Options };
 
+  void UpdateWeapon()
+  {
+    const bool firePressed = Pressed(Input::IsMouseButtonPressed(Mouse::ButtonLeft), m_PreviousFire);
+    if (!firePressed || !Camera::IsAiming()) return;
+
+    AudioManager::PlaySound("select2", 0.8f);
+
+    const glm::vec3 direction = Camera::GetForwardDirection();
+    const glm::vec3 origin = Camera::GetPosition() + direction * 0.15f;
+
+    const auto player = ModelManager::GetModel("harry");
+    const PxRigidActor* playerActor =
+      player && player->GetController() ? player->GetController()->getActor() : nullptr;
+
+    PhysicsRaycastHit hit;
+    if (PhysX::Raycast(origin, direction, 250.0f, hit, playerActor, 12.0f))
+      ParticleRenderer::EmitImpact(hit.position, hit.normal);
+  }
+
   static bool Pressed(bool current, bool& previous)
   {
     const bool result = current && !previous;
@@ -107,14 +129,13 @@ private:
   void SetPaused(bool paused)
   {
     m_Paused = paused;
+    m_PreviousFire = Input::IsMouseButtonPressed(Mouse::ButtonLeft);
     m_PauseScreen = PauseScreen::Main;
     m_PauseSelected = 0;
     Window::SetCursorVisible(paused);
     Camera::ResetMouseDelta();
-    if (paused)
-      AudioManager::PauseMusic("night_mono");
-    else
-      AudioManager::ResumeMusic("night_mono");
+    if (paused) AudioManager::PauseMusic("night_mono");
+    else AudioManager::ResumeMusic("night_mono");
   }
 
   void UpdatePauseMenu(bool escape)
@@ -358,6 +379,7 @@ private:
   bool m_PausePreviousAccept = false;
   bool m_PausePreviousBack = false;
   bool m_PausePreviousMouse = false;
+  bool m_PreviousFire = false;
 
   static constexpr std::array<glm::uvec2, 6> m_PauseResolutions = {
     glm::uvec2(1024, 576), glm::uvec2(1280, 720), glm::uvec2(1600, 900),

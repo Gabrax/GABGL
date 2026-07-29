@@ -45,6 +45,7 @@ struct Camera
   static glm::vec3 GetForwardDirection();
   static const glm::vec3& GetPosition();
   static glm::quat GetOrientation();
+  static bool IsAiming();
 
   static float GetPitch();
   static float GetYaw();

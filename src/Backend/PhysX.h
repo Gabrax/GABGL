@@ -7,12 +7,26 @@
 
 using namespace physx;
 
+struct PhysicsRaycastHit
+{
+  glm::vec3 position{0.0f};
+  glm::vec3 normal{0.0f, 1.0f, 0.0f};
+  float distance = 0.0f;
+};
+
 struct PhysX
 {
   static void Init();
   static void Shutdown();
   static void Simulate(DeltaTime& dt);
   static void raycastAndApplyForce(PxScene* scene, const glm::vec3& origin, const glm::vec3& direction, float rayLength);
+  static bool Raycast(
+  const glm::vec3& origin,
+  const glm::vec3& direction,
+  float rayLength,
+  PhysicsRaycastHit& result,
+  const PxRigidActor* ignoredActor = nullptr,
+  float impulseStrength = 1000.0f);
   static void DisableRaycast(PxShape* shape);
   static void EnableRaycast(PxShape* shape);
 

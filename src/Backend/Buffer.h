@@ -280,7 +280,7 @@ struct FrameBuffer
 
 	inline uint32_t GetColorAttachmentRendererID(uint32_t index = 0) const { GABGL_ASSERT(index < m_ColorAttachments.size(),""); return m_ColorAttachments[index]; }
 	inline const FramebufferSpecification& GetSpecification() const { return m_Specification; };
-  inline const uint32_t GetID() { return m_RendererID; }
+  inline uint32_t GetID() const { return m_RendererID; }
   void BlitColor(const std::shared_ptr<FrameBuffer>& dst);
 
 	static std::shared_ptr<FrameBuffer> Create(const FramebufferSpecification& spec);
@@ -373,7 +373,7 @@ struct DirectShadowBuffer
 
   void UpdateShadowView(const glm::vec3& rotation, const glm::vec3& focusPoint);
 
-  inline const glm::mat4 GetShadowViewProj() const { return m_shadowProj * m_shadowVIew; }
+  inline glm::mat4 GetShadowViewProj() const { return m_shadowProj * m_shadowVIew; }
 
   static std::shared_ptr<DirectShadowBuffer> Create(float shadowWidth, float shadowHeight, float offsetSize, float filterSize, float randomRadius);
 
@@ -411,7 +411,7 @@ struct OmniDirectShadowBuffer
   void BindCubemapFaceForWriting(uint32_t cubemapIndex, uint32_t faceIndex);
   void BindShadowTextureForReading(GLenum TextureUnit);
 
-  inline glm::mat4 GetShadowProj() { return m_shadowProj; }
+  inline glm::mat4 GetShadowProj() const { return m_shadowProj; }
 
   inline std::span<const CubemapDirection, 6> GetFaceDirections() const { return m_Directions; }
 

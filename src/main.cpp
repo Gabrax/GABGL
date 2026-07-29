@@ -47,12 +47,10 @@ int main()
 
     Window::Update();
 
-    const uint32_t fpsLimit = Settings::GetFPSLimit();
-    if (!Settings::GetVSync() && fpsLimit > 0)
+    if (const uint32_t fpsLimit = Settings::GetFPSLimit(); !Settings::GetVSync() && fpsLimit > 0)
     {
       const auto targetFrameTime = std::chrono::duration<double>(1.0 / static_cast<double>(fpsLimit));
-      const auto elapsed = std::chrono::steady_clock::now() - frameStart;
-      if (elapsed < targetFrameTime)
+      if (const auto elapsed = std::chrono::steady_clock::now() - frameStart; elapsed < targetFrameTime)
         std::this_thread::sleep_for(targetFrameTime - elapsed);
     }
   }

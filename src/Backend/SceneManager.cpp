@@ -201,11 +201,9 @@ void Scene::SpawnEntities()
       entity.name = ordinal == 0 ? baseName : baseName + " #" + std::to_string(ordinal + 1);
       entity.itemName = transformDesc.value("item_name", e.value("item_name", baseName));
       entity.pickable = transformDesc.value("pickable", e.value("pickable", false));
-      entity.interactable = entity.pickable ||
-        transformDesc.value("interactable", e.value("interactable", false));
+      entity.interactable = entity.pickable || transformDesc.value("interactable", e.value("interactable", false));
       entity.player = transformDesc.value("player", e.value("player", false));
-      entity.interactionRange = std::max(0.1f,
-        transformDesc.value("interaction_range", e.value("interaction_range", 4.0f)));
+      entity.interactionRange = std::max(0.1f, transformDesc.value("interaction_range", e.value("interaction_range", 4.0f)));
       entity.labelHeight = transformDesc.value("label_height", e.value("label_height", 1.5f));
       ++ordinal;
       m_EditorEntities.push_back(std::move(entity));
@@ -213,8 +211,7 @@ void Scene::SpawnEntities()
 
     if (e.contains("instances"))
     {
-      for (const auto& instance : e["instances"])
-        spawn(instance);
+      for (const auto& instance : e["instances"]) spawn(instance);
     }
     else
     {
@@ -230,10 +227,8 @@ void Scene::SpawnEntities()
 
     Transform transform;
     const bool isController = model->GetPhysXMeshType() == MeshType::CONTROLLER;
-    if (isController)
-      ModelManager::SetInitialControllerTransform(modelName, transform, 1.0f, 1.0f, true);
-    else
-      ModelManager::SetInitialModelTransform(modelName, transform.GetTransform());
+    if (isController) ModelManager::SetInitialControllerTransform(modelName, transform, 1.0f, 1.0f, true);
+    else ModelManager::SetInitialModelTransform(modelName, transform.GetTransform());
 
     SceneEntity entity;
     entity.id = m_NextEntityId++;
@@ -252,19 +247,16 @@ void Scene::SpawnLights()
   m_EditorLights.clear();
   m_NextLightId = 1;
 
-  if (!m_Assets.lights.is_array())
-    return;
+  if (!m_Assets.lights.is_array()) return;
 
   for (const auto& description : m_Assets.lights)
   {
-    if (!description.is_object())
-      continue;
+    if (!description.is_object()) continue;
 
     SceneLight light;
     light.type = ParseLightType(description.value("type", "point"));
     if (light.type == LightType::DIRECT &&
-        std::any_of(m_EditorLights.begin(), m_EditorLights.end(),
-          [](const SceneLight& existing) { return existing.type == LightType::DIRECT; }))
+        std::ranges::any_of(m_EditorLights, [](const SceneLight& existing) { return existing.type == LightType::DIRECT; }))
     {
       GABGL_WARN("Scene '{}' contains more than one directional light; ignoring the duplicate", m_Name);
       continue;
@@ -297,16 +289,14 @@ SceneEntity* Scene::FindEntity(uint64_t entityId)
 
 SceneLight* Scene::FindLight(uint64_t lightId)
 {
-  const auto it = std::find_if(m_EditorLights.begin(), m_EditorLights.end(),
-    [lightId](const SceneLight& light) { return light.id == lightId; });
+  const auto it = std::ranges::find_if(m_EditorLights, [lightId](const SceneLight& light) { return light.id == lightId; });
   return it == m_EditorLights.end() ? nullptr : &(*it);
 }
 
 uint64_t Scene::AddLight(LightType type)
 {
   if (type == LightType::DIRECT &&
-      std::any_of(m_EditorLights.begin(), m_EditorLights.end(),
-        [](const SceneLight& light) { return light.type == LightType::DIRECT; }))
+      std::ranges::any_of(m_EditorLights, [](const SceneLight& light) { return light.type == LightType::DIRECT; }))
     return 0;
 
   SceneLight light;
@@ -328,26 +318,24 @@ bool Scene::UpdateLight(uint64_t lightId, const std::string& name, const glm::ve
 {
   const auto it = std::find_if(m_EditorLights.begin(), m_EditorLights.end(),
     [lightId](const SceneLight& light) { return light.id == lightId; });
-  if (it == m_EditorLights.end())
-    return false;
+  if (it == m_EditorLights.end()) return false;
 
   it->name = name;
   it->color = glm::max(color, glm::vec3(0.0f));
   it->position = position;
   it->rotation = rotation;
-  const int32_t managerIndex = static_cast<int32_t>(std::distance(m_EditorLights.begin(), it));
+  const auto managerIndex = static_cast<int32_t>(std::distance(m_EditorLights.begin(), it));
   LightManager::EditLight(managerIndex, it->color, it->position, it->rotation);
   return true;
 }
 
 bool Scene::RemoveLight(uint64_t lightId)
 {
-  const auto it = std::find_if(m_EditorLights.begin(), m_EditorLights.end(),
-    [lightId](const SceneLight& light) { return light.id == lightId; });
+  const auto it = std::ranges::find_if(m_EditorLights, [lightId](const SceneLight& light) { return light.id == lightId; });
   if (it == m_EditorLights.end())
     return false;
 
-  const int32_t managerIndex = static_cast<int32_t>(std::distance(m_EditorLights.begin(), it));
+  const auto managerIndex = static_cast<int32_t>(std::distance(m_EditorLights.begin(), it));
   LightManager::RemoveLight(managerIndex);
   m_EditorLights.erase(it);
   return true;
@@ -356,13 +344,11 @@ bool Scene::RemoveLight(uint64_t lightId)
 uint64_t Scene::DuplicateEntity(uint64_t entityId)
 {
   const SceneEntity* sourcePtr = FindEntity(entityId);
-  if (!sourcePtr || sourcePtr->type == "controller")
-    return 0;
+  if (!sourcePtr || sourcePtr->type == "controller") return 0;
 
   const SceneEntity source = *sourcePtr;
   const uint32_t instanceIndex = ModelManager::AddModelInstance(source.model, source.transform.GetTransform());
-  if (instanceIndex == std::numeric_limits<uint32_t>::max())
-    return 0;
+  if (instanceIndex == std::numeric_limits<uint32_t>::max()) return 0;
 
   SceneEntity duplicate = source;
   duplicate.id = m_NextEntityId++;
@@ -375,8 +361,7 @@ uint64_t Scene::DuplicateEntity(uint64_t entityId)
 bool Scene::UpdateEntityTransform(uint64_t entityId, const Transform& transform)
 {
   SceneEntity* entity = FindEntity(entityId);
-  if (!entity)
-    return false;
+  if (!entity) return false;
 
   entity->transform = transform;
   if (entity->type == "controller")
@@ -399,31 +384,25 @@ void Scene::SyncEditorEntityTransforms()
   for (auto& entity : m_EditorEntities)
   {
     const auto model = ModelManager::GetModel(entity.model);
-    if (!model || entity.instanceIndex >= model->m_InstanceTransforms.size())
-      continue;
+    if (!model || entity.instanceIndex >= model->m_InstanceTransforms.size()) continue;
 
-    glm::vec3 scale;
     glm::quat orientation;
     glm::vec3 translation;
     glm::vec3 skew;
     glm::vec4 perspective;
-    if (glm::decompose(model->m_InstanceTransforms[entity.instanceIndex], scale, orientation, translation, skew, perspective))
+    if (glm::vec3 scale; glm::decompose(model->m_InstanceTransforms[entity.instanceIndex], scale, orientation, translation, skew, perspective))
       entity.transform = Transform(translation, glm::degrees(glm::eulerAngles(orientation)), scale);
   }
 }
 
 bool Scene::GetPlayerPosition(glm::vec3& position) const
 {
-  const auto player = std::find_if(m_EditorEntities.begin(), m_EditorEntities.end(),
-    [](const SceneEntity& entity) { return entity.active && entity.player; });
-  if (player == m_EditorEntities.end())
-    return false;
+  const auto player = std::ranges::find_if(m_EditorEntities, [](const SceneEntity& entity) { return entity.active && entity.player; });
+  if (player == m_EditorEntities.end()) return false;
 
   const auto model = ModelManager::GetModel(player->model);
-  if (model && model->GetPhysXMeshType() == MeshType::CONTROLLER)
-    position = model->GetControllerTransform().GetPosition();
-  else
-    position = player->transform.GetPosition();
+  if (model && model->GetPhysXMeshType() == MeshType::CONTROLLER) position = model->GetControllerTransform().GetPosition();
+  else position = player->transform.GetPosition();
   return true;
 }
 
@@ -442,8 +421,7 @@ void Scene::UpdateInteractions()
   float closestDistanceSquared = std::numeric_limits<float>::max();
   for (auto& entity : m_EditorEntities)
   {
-    if (!entity.active || !entity.interactable || entity.player)
-      continue;
+    if (!entity.active || !entity.interactable || entity.player) continue;
 
     const glm::vec3 offset = entity.transform.GetPosition() - playerPosition;
     const float distanceSquared = glm::dot(offset, offset);
@@ -456,22 +434,18 @@ void Scene::UpdateInteractions()
   }
 
   m_FocusedEntityId = focused ? focused->id : 0;
-  const bool interactDown = Input::IsKeyPressed(Key::E) ||
-    Input::IsGamepadButtonPressed(Gamepad::X);
+  const bool interactDown = Input::IsKeyPressed(Key::E) || Input::IsGamepadButtonPressed(Gamepad::X);
   const bool interactPressed = interactDown && !m_PreviousInteract;
   m_PreviousInteract = interactDown;
-  if (!focused || !interactPressed)
-    return;
+  if (!focused || !interactPressed) return;
 
   const std::string& displayName = focused->itemName.empty() ? focused->name : focused->itemName;
   GABGL_INFO("Interacted with '{}'", displayName);
-  if (!focused->pickable)
-    return;
+  if (!focused->pickable) return;
 
   const std::string modelName = focused->model;
   const uint32_t removedInstance = focused->instanceIndex;
-  if (!ModelManager::RemoveModelInstance(modelName, removedInstance))
-    return;
+  if (!ModelManager::RemoveModelInstance(modelName, removedInstance)) return;
 
   focused->active = false;
   m_FocusedEntityId = 0;
@@ -561,8 +535,7 @@ bool Scene::SaveToJSON(const std::string& path) const
 
 void Scene::UpdateLoading()
 {
-  if(!m_Assets.loadingStarted || m_Assets.loadingDone)
-      return;
+  if(!m_Assets.loadingStarted || m_Assets.loadingDone) return;
 
   auto ready = [](auto& vec)
   {
@@ -689,8 +662,7 @@ bool SceneManager::s_Loading = false;
 
 void SceneManager::LoadScene(const std::string& name)
 {
-  if (name.empty() || s_Loading)
-    return;
+  if (name.empty() || s_Loading) return;
 
   Renderer::ResetModelDrawCommands();
   ModelManager::Reset();
@@ -821,8 +793,7 @@ bool SceneManager::RemoveLight(uint64_t lightId)
 
 void SceneManager::SyncEditorEntityTransforms()
 {
-  if (s_ActiveScene)
-    s_ActiveScene->SyncEditorEntityTransforms();
+  if (s_ActiveScene) s_ActiveScene->SyncEditorEntityTransforms();
 }
 
 bool SceneManager::GetPlayerPosition(glm::vec3& position)

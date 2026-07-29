@@ -4,6 +4,7 @@
 #include FT_FREETYPE_H
 #include <glad/glad.h>
 #include <filesystem>
+#include <ranges>
 #include <string>
 #include "Timer.hpp"
 
@@ -24,12 +25,12 @@ void FontManager::Init()
 
 void FontManager::Shutdown()
 {
-  for (auto& [name, font] : s_Data.m_Fonts)
+  for (auto &[m_Characters]: s_Data.m_Fonts | std::views::values)
   {
-    for (auto& [character, glyph] : font.m_Characters)
+    for (auto &glyph: m_Characters | std::views::values)
       if (glyph.TextureID != 0)
         glDeleteTextures(1, &glyph.TextureID);
-    font.m_Characters.clear();
+    m_Characters.clear();
   }
   s_Data.m_Fonts.clear();
 

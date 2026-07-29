@@ -133,7 +133,7 @@ struct SceneManager
   static bool UpdateEntityTransform(uint64_t entityId, const Transform& transform);
   static uint64_t AddLight(LightType type);
   static bool UpdateLight(uint64_t lightId, const std::string& name, const glm::vec3& color,
-    const glm::vec3& position, const glm::vec3& rotation);
+  const glm::vec3& position, const glm::vec3& rotation);
   static bool RemoveLight(uint64_t lightId);
   static void SyncEditorEntityTransforms();
   static bool GetPlayerPosition(glm::vec3& position);

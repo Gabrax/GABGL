@@ -19,21 +19,21 @@ struct Transform
             *  glm::toMat4(glm::quat(glm::radians(m_Rotation)))
             *  glm::scale(glm::mat4(1.0f), m_Scale);
     }
-    glm::vec3 to_forward_vector() {
+    glm::vec3 to_forward_vector() const {
         glm::quat q = glm::quat(m_Rotation);
         return glm::normalize(q * glm::vec3(0.0f, 0.0f, 1.0f));
     }
-    glm::vec3 to_right_vector() {
+    glm::vec3 to_right_vector() const {
         glm::quat q = glm::quat(m_Rotation);
         return glm::normalize(q * glm::vec3(1.0f, 0.0f, 0.0f));
     }
 
-    inline void SetPosition(const glm::vec3& position) { m_Position = position; }
-    inline glm::vec3 GetPosition() const { return m_Position; }
-    inline void SetRotation(const glm::vec3& rotation) { m_Rotation = rotation; }
-    inline glm::vec3 GetRotation() const { return m_Rotation; }
-    inline void SetScale(const glm::vec3& scale) { m_Scale = scale; }
-    inline glm::vec3 GetScale() const { return m_Scale; }
+    void SetPosition(const glm::vec3& position) { m_Position = position; }
+    glm::vec3 GetPosition() const { return m_Position; }
+    void SetRotation(const glm::vec3& rotation) { m_Rotation = rotation; }
+    glm::vec3 GetRotation() const { return m_Rotation; }
+    void SetScale(const glm::vec3& scale) { m_Scale = scale; }
+    glm::vec3 GetScale() const { return m_Scale; }
 
 private:
 

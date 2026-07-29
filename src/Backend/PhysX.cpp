@@ -283,25 +283,76 @@ void PhysX::DisableRaycast(PxShape* shape) {
 
 void PhysX::raycastAndApplyForce(PxScene* scene, const glm::vec3& origin, const glm::vec3& direction, float rayLength)
 {
-  PxVec3 pxOrigin(origin.x, origin.y, origin.z);
-  PxVec3 pxDirection(direction.x, direction.y, direction.z);
-  PxReal maxDistance = rayLength;
+  if (scene != s_PhysXData.gScene)
+    return;
 
+  PhysicsRaycastHit ignoredResult;
+  Raycast(origin, direction, rayLength, ignoredResult);
+}
+
+bool PhysX::Raycast(
+  const glm::vec3& origin,
+  const glm::vec3& direction,
+  float rayLength,
+  PhysicsRaycastHit& result,
+  const PxRigidActor* ignoredActor,
+  float impulseStrength)
+{
+  if (!s_PhysXData.gScene || rayLength <= 0.0f || glm::dot(direction, direction) < 0.000001f)
+    return false;
+
+  class IgnoreActorFilter final : public PxQueryFilterCallback
+  {
+  public:
+    explicit IgnoreActorFilter(const PxRigidActor* ignored) : m_Ignored(ignored) {}
+
+    PxQueryHitType::Enum preFilter(
+      const PxFilterData&,
+      const PxShape*,
+      const PxRigidActor* actor,
+      PxHitFlags&) override
+    {
+      return actor == m_Ignored ? PxQueryHitType::eNONE : PxQueryHitType::eBLOCK;
+    }
+
+    PxQueryHitType::Enum postFilter(
+      const PxFilterData&,
+      const PxQueryHit&,
+      const PxShape*,
+      const PxRigidActor*) override
+    {
+      return PxQueryHitType::eBLOCK;
+    }
+
+  private:
+    const PxRigidActor* m_Ignored;
+  };
+
+  const glm::vec3 normalizedDirection = glm::normalize(direction);
+  const PxVec3 pxDirection = GlmVec3ToPxVec3(normalizedDirection);
   PxRaycastBuffer hitBuffer;
+  IgnoreActorFilter filter(ignoredActor);
+  PxQueryFilterData filterData(
+    PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER);
+  const PxHitFlags hitFlags = PxHitFlag::ePOSITION | PxHitFlag::eNORMAL;
 
-  if (scene->raycast(pxOrigin, pxDirection.getNormalized(), maxDistance, hitBuffer)) {
-      if (hitBuffer.hasBlock) {
-          const PxRaycastHit& hit = hitBuffer.block;
-          PxRigidActor* actor = hit.actor;
+  if (!s_PhysXData.gScene->raycast(
+        GlmVec3ToPxVec3(origin), pxDirection, rayLength, hitBuffer, hitFlags, filterData, &filter)
+      || !hitBuffer.hasBlock)
+    return false;
 
-          if (actor && actor->is<PxRigidDynamic>()) {
-              puts("ADDING FORCE");
-              PxVec3 pxForce = PxVec3(direction.x, direction.y, direction.z) * 100000;
-              PxRigidDynamic* dynamicActor = static_cast<PxRigidDynamic*>(actor);
-              dynamicActor->addForce(pxForce,PxForceMode::eFORCE,false);
-          } 
-      } 
-  } 
+  const PxRaycastHit& hit = hitBuffer.block;
+  result.position = glm::vec3(hit.position.x, hit.position.y, hit.position.z);
+  result.normal = glm::vec3(hit.normal.x, hit.normal.y, hit.normal.z);
+  result.distance = hit.distance;
+
+  if (PxRigidDynamic* dynamicActor = hit.actor ? hit.actor->is<PxRigidDynamic>() : nullptr)
+  {
+    if (!dynamicActor->getRigidBodyFlags().isSet(PxRigidBodyFlag::eKINEMATIC))
+      dynamicActor->addForce(pxDirection * impulseStrength, PxForceMode::eIMPULSE);
+  }
+
+  return true;
 }
 
 PxTransform PhysX::GlmMat4ToPxTransform(const glm::mat4& mat)

@@ -10,7 +10,7 @@
 
 struct Shader
 {
-  Shader(const char* fullshader);
+  explicit Shader(const char* fullshader);
   Shader(const char* vertexPath, const char* fragmentPath, const char* geometryPath = nullptr);
   ~Shader();
 
