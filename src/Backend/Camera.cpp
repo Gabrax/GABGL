@@ -11,8 +11,8 @@
 #include "ModelManager.h"
 
 
-static CameraMode m_Mode = CameraMode::PLAYER;
-static ProjectionType m_ProjectionType = ProjectionType::Perspective;
+static auto m_Mode = CameraMode::PLAYER;
+static auto m_ProjectionType = ProjectionType::Perspective;
 
 // Perspective parameters
 static float m_PerspectiveFOV = glm::radians(45.0f);
@@ -43,12 +43,11 @@ static float m_Orbital_Distance = 100.0f;
 static float m_Orbital_Yaw = 0.0f;
 static float m_Orbital_Pitch = 0.0f;
 
-static float m_MovementSpeed = 5.0f;
 static float m_MouseSensitivity = 1.0f;
-static glm::vec3 m_Front = glm::vec3(0.0f, 0.0f, -1.0f);
-static glm::vec3 m_Up = glm::vec3(0.0f, 1.0f, 0.0f);
-static glm::vec3 m_WorldUp = glm::vec3(0.0f, 1.0f, 0.0f);
-static glm::vec3 m_Right = glm::vec3(1.0f, 0.0f, 0.0f);
+static auto m_Front = glm::vec3(0.0f, 0.0f, -1.0f);
+static auto m_Up = glm::vec3(0.0f, 1.0f, 0.0f);
+static auto m_WorldUp = glm::vec3(0.0f, 1.0f, 0.0f);
+static auto m_Right = glm::vec3(1.0f, 0.0f, 0.0f);
 static std::string m_FollowTarget = "harry";
 
 static float m_Distance = 0.0f;
@@ -65,11 +64,11 @@ namespace
   constexpr float PlayerCameraFOV = 45.0f;
   constexpr float AimCameraFOV = 34.0f;
   constexpr float PlayerCameraHeight = 4.95f;
-  constexpr float PlayerCameraShoulderOffset = 0.9f;
-  constexpr float PlayerCameraDistance = 3.4f;
+  constexpr float PlayerCameraShoulderOffset = 1.9f;
+  constexpr float PlayerCameraDistance = 5.4f;
   constexpr float AimCameraHeight = 4.9f;
-  constexpr float AimCameraShoulderOffset = 0.55f;
-  constexpr float AimCameraDistance = 1.75f;
+  constexpr float AimCameraShoulderOffset = 1.55f;
+  constexpr float AimCameraDistance = 2.75f;
 }
 
 void Camera::Init(float fov, float aspectRatio, float nearClip, float farClip)

@@ -271,6 +271,57 @@ static void DrawWireSphere(const glm::vec3& center, float radius, const glm::vec
   }
 }
 
+static void DrawWireCapsule(const glm::vec3& center, float radius, float height,
+  const glm::vec3& upDirection, const glm::vec4& color, int segments = 24)
+{
+  if (radius <= 0.0f || height < 0.0f || segments < 4) return;
+
+  const glm::vec3 up = glm::length(upDirection) > 0.0001f
+    ? glm::normalize(upDirection)
+    : glm::vec3(0.0f, 1.0f, 0.0f);
+  const glm::vec3 fallbackAxis = std::abs(glm::dot(up, glm::vec3(0.0f, 1.0f, 0.0f))) > 0.98f
+    ? glm::vec3(1.0f, 0.0f, 0.0f)
+    : glm::vec3(0.0f, 1.0f, 0.0f);
+  const glm::vec3 right = glm::normalize(glm::cross(up, fallbackAxis));
+  const glm::vec3 forward = glm::normalize(glm::cross(right, up));
+  const glm::vec3 topCenter = center + up * (height * 0.5f);
+  const glm::vec3 bottomCenter = center - up * (height * 0.5f);
+
+  for (int i = 0; i < segments; ++i)
+  {
+    const float angle0 = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(segments);
+    const float angle1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(segments);
+    const glm::vec3 radial0 = right * std::cos(angle0) + forward * std::sin(angle0);
+    const glm::vec3 radial1 = right * std::cos(angle1) + forward * std::sin(angle1);
+
+    Renderer::DrawLine(topCenter + radial0 * radius, topCenter + radial1 * radius, color);
+    Renderer::DrawLine(bottomCenter + radial0 * radius, bottomCenter + radial1 * radius, color);
+  }
+
+  constexpr int meridians = 8;
+  const int arcSegments = std::max(4, segments / 4);
+  for (int meridian = 0; meridian < meridians; ++meridian)
+  {
+    const float angle = glm::two_pi<float>() * static_cast<float>(meridian) / static_cast<float>(meridians);
+    const glm::vec3 radial = right * std::cos(angle) + forward * std::sin(angle);
+    Renderer::DrawLine(bottomCenter + radial * radius, topCenter + radial * radius, color);
+
+    for (int arc = 0; arc < arcSegments; ++arc)
+    {
+      const float arc0 = glm::half_pi<float>() * static_cast<float>(arc) / static_cast<float>(arcSegments);
+      const float arc1 = glm::half_pi<float>() * static_cast<float>(arc + 1) / static_cast<float>(arcSegments);
+      Renderer::DrawLine(
+        topCenter + (radial * std::cos(arc0) + up * std::sin(arc0)) * radius,
+        topCenter + (radial * std::cos(arc1) + up * std::sin(arc1)) * radius,
+        color);
+      Renderer::DrawLine(
+        bottomCenter + (radial * std::cos(arc0) - up * std::sin(arc0)) * radius,
+        bottomCenter + (radial * std::cos(arc1) - up * std::sin(arc1)) * radius,
+        color);
+    }
+  }
+}
+
 static bool SphereIntersectsFrustum(const glm::mat4& viewProjection, const glm::vec3& center, float radius)
 {
   return Frustum(viewProjection).IntersectsSphere(center, radius);
@@ -928,7 +979,7 @@ void Renderer::DrawPhysicsDebug()
 
 void Renderer::DrawDebugVisualizations()
 {
-  if (!s_Data.m_LightDebug && !s_Data.m_CullingDebug) return;
+  if (!s_Data.m_PhysicsDebug && !s_Data.m_LightDebug && !s_Data.m_CullingDebug) return;
 
   glEnable(GL_DEPTH_TEST);
   glDepthFunc(GL_LEQUAL);
@@ -938,6 +989,31 @@ void Renderer::DrawDebugVisualizations()
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
   BeginScene();
+
+  if (s_Data.m_PhysicsDebug)
+  {
+    constexpr glm::vec4 controllerColor(0.15f, 0.8f, 1.0f, 0.9f);
+    for (const std::string& modelName : ModelManager::GetModelNames())
+    {
+      const auto model = ModelManager::GetModel(modelName);
+      PxController* controller = model ? model->GetController() : nullptr;
+      if (!controller || controller->getType() != PxControllerShapeType::eCAPSULE)
+        continue;
+
+      auto* capsuleController = static_cast<PxCapsuleController*>(controller);
+      const PxExtendedVec3 position = controller->getPosition();
+      const PxVec3 upDirection = controller->getUpDirection();
+      DrawWireCapsule(
+        glm::vec3(
+          static_cast<float>(position.x),
+          static_cast<float>(position.y),
+          static_cast<float>(position.z)),
+        capsuleController->getRadius(),
+        capsuleController->getHeight(),
+        glm::vec3(upDirection.x, upDirection.y, upDirection.z),
+        controllerColor);
+    }
+  }
 
   if (s_Data.m_CullingDebug)
   {
