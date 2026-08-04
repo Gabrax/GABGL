@@ -15,6 +15,16 @@
 #include <array>
 #include <algorithm>
 
+namespace SceneUI
+{
+  inline float Scale(float width, float height)
+  {
+    // All menu measurements use the same 1280x720 reference canvas. This keeps
+    // text, rows and spacing in sync instead of scaling only their positions.
+    return std::max(0.25f, std::min(width / 1280.0f, height / 720.0f));
+  }
+}
+
 struct GameScene : Scene
 {
   GameScene() : Scene("game") {}
@@ -67,11 +77,10 @@ struct GameScene : Scene
     UpdateInteractions();
     UpdateWeapon();
 
-    Renderer::DrawScene(dt,[&]()
+    Renderer::DrawScene(dt,[&]
     {
       const auto player = ModelManager::GetModel("harry");
-      if (!player)
-        return;
+      if (!player) return;
 
       if (Input::IsKeyPressed(Key::W) ||
           Input::IsKeyPressed(Key::S) ||
@@ -109,8 +118,7 @@ private:
     const PxRigidActor* playerActor =
       player && player->GetController() ? player->GetController()->getActor() : nullptr;
 
-    PhysicsRaycastHit hit;
-    if (PhysX::Raycast(origin, direction, 250.0f, hit, playerActor, 12.0f))
+    if (PhysicsRaycastHit hit; PhysX::Raycast(origin, direction, 250.0f, hit, playerActor, 12.0f))
       ParticleRenderer::EmitImpact(hit.position, hit.normal);
   }
 
@@ -167,15 +175,16 @@ private:
     if (up) m_PauseSelected = Wrap(m_PauseSelected - 1, itemCount);
     if (down) m_PauseSelected = Wrap(m_PauseSelected + 1, itemCount);
 
-    const float screenWidth = static_cast<float>(Window::GetWidth());
-    const float screenHeight = static_cast<float>(Window::GetHeight());
-    const float rowWidth = std::min(520.0f, screenWidth * 0.52f);
+    const auto screenWidth = static_cast<float>(Window::GetWidth());
+    const auto screenHeight = static_cast<float>(Window::GetHeight());
+    const float uiScale = SceneUI::Scale(screenWidth, screenHeight);
+    const float rowWidth = std::min(520.0f * uiScale, screenWidth * 0.52f);
     const bool optionsScreen = m_PauseScreen == PauseScreen::Options;
     const float rowHeight = optionsScreen
-      ? std::clamp(screenHeight * 0.05f, 30.0f, 42.0f)
-      : std::clamp(screenHeight * 0.065f, 38.0f, 54.0f);
+      ? 36.0f * uiScale
+      : 47.0f * uiScale;
     const float startY = screenHeight * (optionsScreen ? 0.70f : 0.65f);
-    const float spacing = rowHeight + (optionsScreen ? 4.0f : 8.0f);
+    const float spacing = rowHeight + (optionsScreen ? 4.0f : 8.0f) * uiScale;
     const float x = (screenWidth - rowWidth) * 0.5f;
     const glm::vec2 mouse(Input::GetMouseX(), screenHeight - Input::GetMouseY());
 
@@ -312,7 +321,7 @@ private:
     Settings::Save();
   }
 
-  std::string PauseOptionLabel(int index) const
+  [[nodiscard]] std::string PauseOptionLabel(int index) const
   {
     static constexpr std::array<const char*, 3> modes = {"WINDOWED", "FULLSCREEN", "BORDERLESS"};
     static constexpr std::array<const char*, 4> qualities = {"OFF", "LOW", "MEDIUM", "HIGH"};
@@ -333,26 +342,27 @@ private:
   void DrawPauseMenu()
   {
     static constexpr std::array<const char*, 4> items = {"RESUME", "OPTIONS", "MAIN MENU", "EXIT"};
-    const float screenWidth = static_cast<float>(Window::GetWidth());
-    const float screenHeight = static_cast<float>(Window::GetHeight());
+    const auto screenWidth = static_cast<float>(Window::GetWidth());
+    const auto screenHeight = static_cast<float>(Window::GetHeight());
+    const float uiScale = SceneUI::Scale(screenWidth, screenHeight);
     const bool optionsScreen = m_PauseScreen == PauseScreen::Options;
     const float rowHeight = optionsScreen
-      ? std::clamp(screenHeight * 0.05f, 30.0f, 42.0f)
-      : std::clamp(screenHeight * 0.065f, 38.0f, 54.0f);
+      ? 36.0f * uiScale
+      : 47.0f * uiScale;
     const float startY = screenHeight * (optionsScreen ? 0.70f : 0.65f);
-    const float spacing = rowHeight + (optionsScreen ? 4.0f : 8.0f);
+    const float spacing = rowHeight + (optionsScreen ? 4.0f : 8.0f) * uiScale;
     const Font* font = FontManager::GetFont("dpcomic");
 
     Renderer::BeginScene();
     Renderer::DrawText(font, m_PauseScreen == PauseScreen::Main ? "PAUSED" : "OPTIONS",
-      glm::vec2(screenWidth * 0.5f, screenHeight * 0.8f), 1.1f, glm::vec4(1.0f));
+      glm::vec2(screenWidth * 0.5f, screenHeight * 0.8f), 1.1f * uiScale, glm::vec4(1.0f));
 
     const int count = m_PauseScreen == PauseScreen::Main ? 4 : 9;
     for (int i = 0; i < count; ++i)
     {
       const std::string label = m_PauseScreen == PauseScreen::Main ? std::string(items[i]) : PauseOptionLabel(i);
       Renderer::DrawText(font, label,
-        glm::vec2(screenWidth * 0.5f, startY - i * spacing + rowHeight * 0.5f), 0.58f,
+        glm::vec2(screenWidth * 0.5f, startY - i * spacing + rowHeight * 0.5f), 0.58f * uiScale,
         i == m_PauseSelected ? glm::vec4(1.0f) : glm::vec4(0.62f, 0.68f, 0.76f, 1.0f));
     }
 
@@ -360,7 +370,7 @@ private:
       m_PauseScreen == PauseScreen::Main
         ? "ESC / START: RESUME    ENTER / A: SELECT"
         : "LEFT / RIGHT: CHANGE    ESC / B: BACK",
-      glm::vec2(screenWidth * 0.5f, 34.0f), 0.3f, glm::vec4(0.7f));
+      glm::vec2(screenWidth * 0.5f, 34.0f * uiScale), 0.3f * uiScale, glm::vec4(0.7f));
     Renderer::EndScene();
   }
 
@@ -447,16 +457,17 @@ struct MenuScene : Scene
     if (navigateUp) m_Selected = (m_Selected + itemCount - 1) % itemCount;
     if (navigateDown) m_Selected = (m_Selected + 1) % itemCount;
 
-    const float width = static_cast<float>(Window::GetWidth());
-    const float height = static_cast<float>(Window::GetHeight());
+    const auto width = static_cast<float>(Window::GetWidth());
+    const auto height = static_cast<float>(Window::GetHeight());
+    const float uiScale = SceneUI::Scale(width, height);
     const glm::vec2 mouse(Input::GetMouseX(), height - Input::GetMouseY());
-    const float buttonWidth = std::min(520.0f, width * 0.52f);
+    const float buttonWidth = std::min(520.0f * uiScale, width * 0.52f);
     const bool optionsScreen = m_Screen == Screen::Options;
     const float buttonHeight = optionsScreen
-      ? std::clamp(height * 0.05f, 30.0f, 42.0f)
-      : std::clamp(height * 0.065f, 38.0f, 54.0f);
+      ? 36.0f * uiScale
+      : 47.0f * uiScale;
     const float startY = height * (optionsScreen ? 0.70f : 0.65f);
-    const float spacing = buttonHeight + (optionsScreen ? 4.0f : 8.0f);
+    const float spacing = buttonHeight + (optionsScreen ? 4.0f : 8.0f) * uiScale;
     const float buttonX = (width - buttonWidth) * 0.5f;
 
     int mouseActivated = -1;
@@ -514,7 +525,18 @@ struct MenuScene : Scene
       }
     }
 
-    DrawMenu(buttonX, startY, buttonWidth, buttonHeight, spacing, width, height);
+    // The input layout above belongs to the screen that was active at the
+    // beginning of this frame. A click may have switched Main <-> Options, so
+    // calculate the drawing layout again from the new state. Otherwise the new
+    // screen is rendered with the previous screen's row size for one frame.
+    const bool drawOptionsScreen = m_Screen == Screen::Options;
+    const float drawButtonWidth = std::min(520.0f * uiScale, width * 0.52f);
+    const float drawButtonHeight = (drawOptionsScreen ? 36.0f : 47.0f) * uiScale;
+    const float drawStartY = height * (drawOptionsScreen ? 0.70f : 0.65f);
+    const float drawSpacing = drawButtonHeight + (drawOptionsScreen ? 4.0f : 8.0f) * uiScale;
+    const float drawButtonX = (width - drawButtonWidth) * 0.5f;
+    DrawMenu(drawButtonX, drawStartY, drawButtonWidth, drawButtonHeight,
+      drawSpacing, width, height);
   }
 
 private:
@@ -605,10 +627,11 @@ private:
   {
     static constexpr std::array<const char*, 4> mainItems = {"NEW GAME", "LOAD GAME", "OPTIONS", "EXIT"};
     const Font* font = FontManager::GetFont("dpcomic");
+    const float uiScale = SceneUI::Scale(screenWidth, screenHeight);
 
     Renderer::BeginScene();
     Renderer::DrawText(font, m_Screen == Screen::Main ? "GABGL" : "OPTIONS",
-      glm::vec2(screenWidth * 0.5f, screenHeight * 0.79f), 1.25f, glm::vec4(0.82f, 0.9f, 1.0f, 1.0f));
+      glm::vec2(screenWidth * 0.5f, screenHeight * 0.79f), 1.25f * uiScale, glm::vec4(0.82f, 0.9f, 1.0f, 1.0f));
 
     const int count = m_Screen == Screen::Main ? 4 : 9;
     for (int i = 0; i < count; ++i)
@@ -616,7 +639,7 @@ private:
       const float y = startY - i * spacing;
       const bool selected = i == m_Selected;
       const std::string label = m_Screen == Screen::Main ? std::string(mainItems[i]) : OptionLabel(i);
-      Renderer::DrawText(font, label, glm::vec2(x + width * 0.5f, y + height * 0.5f), 0.58f,
+      Renderer::DrawText(font, label, glm::vec2(x + width * 0.5f, y + height * 0.5f), 0.58f * uiScale,
         selected ? glm::vec4(1.0f) : glm::vec4(0.72f, 0.78f, 0.86f, 1.0f));
     }
 
@@ -624,11 +647,11 @@ private:
       m_Screen == Screen::Main
         ? "UP / DOWN: NAVIGATE    ENTER / A: SELECT"
         : "UP / DOWN: SELECT    LEFT / RIGHT: CHANGE    ESC / B: BACK",
-      glm::vec2(screenWidth * 0.5f, 34.0f), 0.3f, glm::vec4(0.55f, 0.62f, 0.72f, 1.0f));
+      glm::vec2(screenWidth * 0.5f, 34.0f * uiScale), 0.3f * uiScale, glm::vec4(0.55f, 0.62f, 0.72f, 1.0f));
     Renderer::EndScene();
   }
 
-  std::string OptionLabel(int index) const
+  [[nodiscard]] std::string OptionLabel(int index) const
   {
     static constexpr std::array<const char*, 3> modeNames = {"WINDOWED", "FULLSCREEN", "BORDERLESS"};
     static constexpr std::array<const char*, 4> qualityNames = {"OFF", "LOW", "MEDIUM", "HIGH"};

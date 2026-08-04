@@ -191,6 +191,44 @@
             0.09999881684780121
           ],
           "type": "controller"
+        },
+        {
+          "model": "ps1_house",
+          "name": "ps1_house",
+          "position": [
+            28.08933448791504,
+            58.191593170166016,
+            80.21051788330078
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "model": "psx_abandoned_house",
+          "name": "psx_abandoned_house",
+          "position": [
+            -20.139047622680664,
+            66.8932113647461,
+            75.68829345703125
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
         }
       ],
       "lights": [
@@ -297,6 +335,16 @@
         {
           "mesh": "convex",
           "path": "../res/models/shotgun_convex.glb",
+          "scale": 1.0
+        },
+        {
+          "culling_bounds_scale": 1.0,
+          "path": "C:/Users/gabri/Desktop/ps1_house.glb",
+          "scale": 1.0
+        },
+        {
+          "culling_bounds_scale": 1.0,
+          "path": "C:/Users/gabri/Desktop/psx_abandoned_house.glb",
           "scale": 1.0
         }
       ]

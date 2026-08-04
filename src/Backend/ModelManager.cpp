@@ -566,6 +566,12 @@ bool ModelManager::RemoveModelInstance(const std::string& name, uint32_t instanc
   {
     model->m_IsRendered = false;
 
+    if (model->m_ActorController)
+    {
+      model->m_ActorController->release();
+      model->m_ActorController = nullptr;
+    }
+
     auto removePhysicsActors = [](const std::shared_ptr<Model>& physicsModel)
     {
       if (physicsModel->m_StaticMeshActor)
@@ -819,13 +825,6 @@ void ModelManager::UploadToGPU()
 
   auto transform = GetTransforms();
   s_Data.m_ModelsTransforms->SetData(transform.size() * sizeof(glm::mat4), transform.data());
-
-  for (const auto& modelName : s_Data.m_ModelsNames)
-  {
-    auto& model = s_Data.m_Models.at(modelName);
-    if (model->m_InstanceTransforms.empty())
-      model->m_InstanceTransforms.emplace_back(1.0f);
-  }
 
   s_Data.m_InstanceTransformsSSBO = StorageBuffer::Create(sizeof(glm::mat4), 13);
   s_Data.m_VisibleInstanceTransformsSSBO = StorageBuffer::Create(sizeof(glm::mat4), 13);
@@ -1636,10 +1635,10 @@ void Model::SetAnimationbyIndex(int animationIndex)
 
 void Model::SetAnimationByName(const std::string& animationName)
 {
-  auto it = std::find_if(m_ProcessedAnimations.begin(), m_ProcessedAnimations.end(),
-      [&animationName](const AnimationData& animData) {
-          return animData.name == animationName;
-      });
+  auto it = std::ranges::find_if(m_ProcessedAnimations,
+                                 [&animationName](const AnimationData& animData) {
+                                   return animData.name == animationName;
+                                 });
 
   if (it != m_ProcessedAnimations.end()) {
       const int animationIndex = static_cast<int>(std::distance(m_ProcessedAnimations.begin(), it));

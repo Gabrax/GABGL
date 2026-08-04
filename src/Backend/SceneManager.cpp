@@ -10,6 +10,7 @@
 #include "../Input/UserInput.h"
 #include <algorithm>
 #include <fstream>
+#include <filesystem>
 #include <iomanip>
 #include <limits>
 #define GLM_ENABLE_EXPERIMENTAL
@@ -107,26 +108,26 @@ void Scene::StartLoading()
 
   for(auto& m : m_Assets.music) AudioManager::LoadMusic(m.c_str());
 
-  for(auto&[path, scale, flag, meshType] : m_Assets.static_models)
+  for(const auto& model : m_Assets.static_models)
   {
     m_Assets.futureStatic.push_back(
         std::async(std::launch::async,
             Model::CreateSTATIC,
-            path.c_str(),
-            scale,
-            flag,
-            meshType));
+            model.path.c_str(),
+            model.scale,
+            model.flag,
+            model.meshType));
   }
 
-  for(auto&[path, scale, flag, meshType] : m_Assets.animated_models)
+  for(const auto& model : m_Assets.animated_models)
   {
     m_Assets.futureAnim.push_back(
         std::async(std::launch::async,
             Model::CreateANIMATED,
-            path.c_str(),
-            scale,
-            flag,
-            meshType));
+            model.path.c_str(),
+            model.scale,
+            model.flag,
+            model.meshType));
   }
 
   m_Assets.futureTextures.push_back(
@@ -219,27 +220,6 @@ void Scene::SpawnEntities()
     }
   }
 
-  for (const auto& modelName : ModelManager::GetModelNames())
-  {
-    const auto model = ModelManager::GetModel(modelName);
-    if (!model || model->GetPhysXMeshType() == MeshType::CONVEXMESH || !model->m_InstanceTransforms.empty())
-      continue;
-
-    Transform transform;
-    const bool isController = model->GetPhysXMeshType() == MeshType::CONTROLLER;
-    if (isController) ModelManager::SetInitialControllerTransform(modelName, transform, 1.0f, 1.0f, true);
-    else ModelManager::SetInitialModelTransform(modelName, transform.GetTransform());
-
-    SceneEntity entity;
-    entity.id = m_NextEntityId++;
-    entity.name = modelName;
-    entity.model = modelName;
-    entity.itemName = modelName;
-    entity.type = isController ? "controller" : "static";
-    entity.transform = transform;
-    entity.instanceIndex = 0;
-    m_EditorEntities.push_back(std::move(entity));
-  }
 }
 
 void Scene::SpawnLights()
@@ -356,6 +336,59 @@ uint64_t Scene::DuplicateEntity(uint64_t entityId)
   duplicate.instanceIndex = instanceIndex;
   m_EditorEntities.push_back(std::move(duplicate));
   return m_EditorEntities.back().id;
+}
+
+uint64_t Scene::AddModelEntity(const std::string& modelName)
+{
+  const auto model = ModelManager::GetModel(modelName);
+  if (!model || model->GetPhysXMeshType() == MeshType::CONVEXMESH ||
+      model->GetPhysXMeshType() == MeshType::CONTROLLER)
+    return 0;
+
+  const glm::vec3 position = Camera::GetPosition() + Camera::GetForwardDirection() * 3.0f;
+  const Transform transform(position, glm::vec3(0.0f), glm::vec3(1.0f));
+  const uint32_t instanceIndex = ModelManager::AddModelInstance(modelName, transform.GetTransform());
+  if (instanceIndex == std::numeric_limits<uint32_t>::max()) return 0;
+
+  if (!model->m_IsRendered) ModelManager::SetRender(modelName, true);
+
+  const auto existingCount = std::ranges::count_if(m_EditorEntities,
+    [&modelName](const SceneEntity& entity) { return entity.model == modelName; });
+  SceneEntity entity;
+  entity.id = m_NextEntityId++;
+  entity.name = existingCount == 0
+    ? modelName
+    : modelName + " #" + std::to_string(existingCount + 1);
+  entity.model = modelName;
+  entity.itemName = entity.name;
+  entity.transform = transform;
+  entity.instanceIndex = instanceIndex;
+  m_EditorEntities.push_back(std::move(entity));
+  return m_EditorEntities.back().id;
+}
+
+bool Scene::RemoveEntity(uint64_t entityId)
+{
+  const auto entityIt = std::ranges::find_if(m_EditorEntities,
+    [entityId](const SceneEntity& entity) { return entity.id == entityId; });
+  if (entityIt == m_EditorEntities.end()) return false;
+
+  const std::string modelName = entityIt->model;
+  const uint32_t removedInstance = entityIt->instanceIndex;
+  if (entityIt->active)
+  {
+    if (!ModelManager::RemoveModelInstance(modelName, removedInstance)) return false;
+    for (auto& entity : m_EditorEntities)
+    {
+      if (entity.id != entityId && entity.active && entity.model == modelName &&
+          entity.instanceIndex > removedInstance)
+        --entity.instanceIndex;
+    }
+  }
+
+  if (m_FocusedEntityId == entityId) m_FocusedEntityId = 0;
+  m_EditorEntities.erase(entityIt);
+  return true;
 }
 
 bool Scene::UpdateEntityTransform(uint64_t entityId, const Transform& transform)
@@ -491,14 +524,10 @@ bool Scene::SaveToJSON(const std::string& path) const
       {"rotation", {rotation.x, rotation.y, rotation.z}},
       {"scale", {scale.x, scale.y, scale.z}}
     };
-    if (entity.type != "static")
-      serialized["type"] = entity.type;
-    if (entity.interactable)
-      serialized["interactable"] = true;
-    if (entity.pickable)
-      serialized["pickable"] = true;
-    if (entity.player)
-      serialized["player"] = true;
+    if (entity.type != "static") serialized["type"] = entity.type;
+    if (entity.interactable) serialized["interactable"] = true;
+    if (entity.pickable) serialized["pickable"] = true;
+    if (entity.player) serialized["player"] = true;
     if (entity.interactable)
     {
       serialized["item_name"] = entity.itemName;
@@ -509,6 +538,21 @@ bool Scene::SaveToJSON(const std::string& path) const
   }
 
   data["scenes"][m_Name]["entities"] = std::move(entities);
+
+  const auto saveCullingScales = [](json& descriptions)
+  {
+    if (!descriptions.is_array()) return;
+    for (auto& description : descriptions)
+    {
+      if (!description.is_object() || !description.contains("path")) continue;
+      const std::string modelName = std::filesystem::path(description["path"].get<std::string>()).stem().string();
+      const auto model = ModelManager::GetModel(modelName);
+      if (model) description["culling_bounds_scale"] = model->GetCullingBoundsScale();
+    }
+  };
+  auto& sceneData = data["scenes"][m_Name];
+  if (sceneData.contains("static_models")) saveCullingScales(sceneData["static_models"]);
+  if (sceneData.contains("animated_models")) saveCullingScales(sceneData["animated_models"]);
 
   json lights = json::array();
   for (const auto& light : m_EditorLights)
@@ -558,16 +602,20 @@ void Scene::UpdateLoading()
 
     for(size_t i=0;i<m_Assets.static_models.size();i++)
     {
+        auto model = m_Assets.futureStatic[i].get();
+        model->SetCullingBoundsScale(m_Assets.static_models[i].cullingBoundsScale);
         ModelManager::BakeModel(
             m_Assets.static_models[i].path,
-            m_Assets.futureStatic[i].get());
+            model);
     }
 
     for(size_t i=0;i<m_Assets.animated_models.size();i++)
     {
+        auto model = m_Assets.futureAnim[i].get();
+        model->SetCullingBoundsScale(m_Assets.animated_models[i].cullingBoundsScale);
         ModelManager::BakeModel(
             m_Assets.animated_models[i].path,
-            m_Assets.futureAnim[i].get());
+            model);
     }
 
     auto skyboxTex = m_Assets.futureTextures[0].get();
@@ -622,11 +670,10 @@ void Scene::LoadSceneFromJSON(const std::string& path, const std::string& sceneN
 
             desc.path = m["path"];
             desc.scale = m.value("scale",1.0f);
+            desc.cullingBoundsScale = std::max(0.01f, m.value("culling_bounds_scale", 1.0f));
             desc.flag = false;
 
-            std::string mesh = m.value("mesh","none");
-
-            if(mesh == "trianglemesh") desc.meshType = MeshType::TRIANGLEMESH;
+            if(std::string mesh = m.value("mesh","none"); mesh == "trianglemesh") desc.meshType = MeshType::TRIANGLEMESH;
             else if(mesh == "convex")  desc.meshType = MeshType::CONVEXMESH;
             else desc.meshType = MeshType::NONE;
 
@@ -642,6 +689,7 @@ void Scene::LoadSceneFromJSON(const std::string& path, const std::string& sceneN
 
             desc.path = m["path"];
             desc.scale = m.value("scale",1.0f);
+            desc.cullingBoundsScale = std::max(0.01f, m.value("culling_bounds_scale", 1.0f));
             desc.flag = false;
             desc.meshType = MeshType::CONTROLLER;
 
@@ -770,6 +818,101 @@ uint64_t SceneManager::DuplicateEntity(uint64_t entityId)
   return s_ActiveScene ? s_ActiveScene->DuplicateEntity(entityId) : 0;
 }
 
+uint64_t SceneManager::AddModelEntity(const std::string& modelName)
+{
+  return s_ActiveScene ? s_ActiveScene->AddModelEntity(modelName) : 0;
+}
+
+bool SceneManager::RemoveEntity(uint64_t entityId)
+{
+  return s_ActiveScene && s_ActiveScene->RemoveEntity(entityId);
+}
+
+bool SceneManager::ImportExternalModel(const std::string& path, bool animated, float optimizerStrength,
+  MeshType meshType, float cullingBoundsScale)
+{
+  if (!s_ActiveScene || path.empty()) return false;
+
+  const std::filesystem::path modelPath(path);
+  if (!std::filesystem::is_regular_file(modelPath))
+  {
+    GABGL_ERROR("External model does not exist: {}", path);
+    return false;
+  }
+
+  const std::string modelName = modelPath.stem().string();
+  if (modelName.empty()) return false;
+
+  std::ifstream input(SceneFilePath);
+  if (!input) return false;
+
+  json data;
+  try
+  {
+    input >> data;
+  }
+  catch (const json::exception& exception)
+  {
+    GABGL_ERROR("Could not parse scene file '{}': {}", SceneFilePath, exception.what());
+    return false;
+  }
+
+  auto& scene = data["scenes"][s_ActiveScene->GetName()];
+  const auto containsModelName = [&modelName](const json& descriptions)
+  {
+    if (!descriptions.is_array()) return false;
+    return std::ranges::any_of(descriptions, [&modelName](const json& description)
+    {
+      if (!description.is_object() || !description.contains("path")) return false;
+      return std::filesystem::path(description["path"].get<std::string>()).stem().string() == modelName;
+    });
+  };
+
+  if (containsModelName(scene.value("static_models", json::array())) ||
+      containsModelName(scene.value("animated_models", json::array())))
+  {
+    GABGL_ERROR("A model named '{}' is already registered in scene '{}'", modelName, s_ActiveScene->GetName());
+    return false;
+  }
+
+  json description = {
+    {"path", modelPath.generic_string()},
+    {"scale", std::max(0.0f, optimizerStrength)},
+    {"culling_bounds_scale", std::max(0.01f, cullingBoundsScale)}
+  };
+  if (animated)
+  {
+    scene["animated_models"].push_back(std::move(description));
+  }
+  else
+  {
+    if (meshType == MeshType::TRIANGLEMESH) description["mesh"] = "trianglemesh";
+    else if (meshType == MeshType::CONVEXMESH) description["mesh"] = "convex";
+    scene["static_models"].push_back(std::move(description));
+  }
+
+  // A convex asset is a physics helper. Visual assets are also placed in front
+  // of the editor camera so the result is visible immediately after reloading.
+  if (meshType != MeshType::CONVEXMESH)
+  {
+    const glm::vec3 position = Camera::GetPosition() + Camera::GetForwardDirection() * 3.0f;
+    json entity = {
+      {"name", modelName},
+      {"model", modelName},
+      {"position", {position.x, position.y, position.z}},
+      {"rotation", {0.0f, 0.0f, 0.0f}},
+      {"scale", {1.0f, 1.0f, 1.0f}}
+    };
+    if (animated) entity["type"] = "controller";
+    scene["entities"].push_back(std::move(entity));
+  }
+
+  std::ofstream output(SceneFilePath, std::ios::trunc);
+  if (!output) return false;
+  output << std::setw(2) << data << '\n';
+  return output.good();
+}
+
 bool SceneManager::UpdateEntityTransform(uint64_t entityId, const Transform& transform)
 {
   return s_ActiveScene && s_ActiveScene->UpdateEntityTransform(entityId, transform);
@@ -815,4 +958,3 @@ std::string SceneManager::GetActiveSceneName()
 {
   return s_ActiveScene ? s_ActiveScene->GetName() : std::string();
 }
-

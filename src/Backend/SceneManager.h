@@ -53,6 +53,8 @@ struct Scene
   bool IsLoadingComplete() const;
   bool SaveToJSON(const std::string& path) const;
   uint64_t DuplicateEntity(uint64_t entityId);
+  uint64_t AddModelEntity(const std::string& modelName);
+  bool RemoveEntity(uint64_t entityId);
   bool UpdateEntityTransform(uint64_t entityId, const Transform& transform);
   uint64_t AddLight(LightType type);
   bool UpdateLight(uint64_t lightId, const std::string& name, const glm::vec3& color,
@@ -88,6 +90,7 @@ private:
         float scale;
         bool flag;
         MeshType meshType;
+        float cullingBoundsScale = 1.0f;
     };
 
     std::vector<ModelDesc> static_models;
@@ -130,6 +133,10 @@ struct SceneManager
   static SceneEntity* FindEntity(uint64_t entityId);
   static SceneLight* FindLight(uint64_t lightId);
   static uint64_t DuplicateEntity(uint64_t entityId);
+  static uint64_t AddModelEntity(const std::string& modelName);
+  static bool RemoveEntity(uint64_t entityId);
+  static bool ImportExternalModel(const std::string& path, bool animated, float optimizerStrength,
+    MeshType meshType, float cullingBoundsScale);
   static bool UpdateEntityTransform(uint64_t entityId, const Transform& transform);
   static uint64_t AddLight(LightType type);
   static bool UpdateLight(uint64_t lightId, const std::string& name, const glm::vec3& color,

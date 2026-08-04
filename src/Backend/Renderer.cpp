@@ -15,6 +15,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <cstring>
 #include <stb_image.h>
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -34,6 +35,7 @@
 #include "Settings.h"
 #include "Timer.hpp"
 #include "Window.h"
+#include "NativeFileDialog.h"
 
 void MessageCallback(unsigned source,unsigned type,unsigned id,unsigned severity,int length,const char* message,const void* userParam)
 {
@@ -82,6 +84,18 @@ struct DrawElementsIndirectCommand
 	GLuint firstIndex;    // Offset into the index buffer
 	GLint baseVertex;    // Base vertex for this draw
 	GLuint baseInstance;  // You can use this to index per-object data
+};
+
+struct Debug2DCommand
+{
+	enum class Type { Quad, Text } type = Type::Quad;
+	glm::vec2 position = glm::vec2(0.0f);
+	glm::vec2 size = glm::vec2(0.0f);
+	glm::vec4 color = glm::vec4(1.0f);
+	float rotation = 0.0f;
+	float textSize = 0.35f;
+	bool outline = false;
+	std::string text;
 };
 
 struct RendererData
@@ -194,6 +208,8 @@ struct RendererData
   bool m_PhysicsDebug = false;
   bool m_LightDebug = false;
   bool m_CullingDebug = false;
+  bool m_Debug2D = false;
+  std::vector<Debug2DCommand> m_Debug2DCommands;
   uint32_t m_AppliedShadowQuality = std::numeric_limits<uint32_t>::max();
   int m_PointShadowMask = 0;
   static constexpr uint32_t MaxShadowedPointLights = 4;
@@ -792,6 +808,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
     DrawPhysicsDebug();
     DrawDebugVisualizations();
     ParticleRenderer::UpdateAndRender(dt);
+    DrawDebug2D();
 
     s_Data.m_ResultBuffer->SetDrawBuffers();
     s_Data.m_ResultBuffer->UnBind();
@@ -1089,6 +1106,123 @@ void Renderer::DrawDebugVisualizations()
   glDepthFunc(GL_LESS);
   glEnable(GL_CULL_FACE);
   glDisable(GL_BLEND);
+}
+
+static bool BrowseForModelFile(char* destination, size_t destinationSize)
+{
+  if (!destination || destinationSize == 0) return false;
+  const std::string selectedPath = NativeFileDialog::OpenModelFile();
+  if (selectedPath.empty()) return false;
+  const size_t copyLength = std::min(destinationSize - 1, selectedPath.size());
+  std::memcpy(destination, selectedPath.data(), copyLength);
+  destination[copyLength] = '\0';
+  return true;
+}
+
+void Renderer::DebugDrawQuad2D(const glm::vec2& position, const glm::vec2& size,
+  const glm::vec4& color, float rotation, bool outline)
+{
+  Debug2DCommand command;
+  command.type = Debug2DCommand::Type::Quad;
+  command.position = position;
+  command.size = glm::max(size, glm::vec2(0.0f));
+  command.color = color;
+  command.rotation = rotation;
+  command.outline = outline;
+  s_Data.m_Debug2DCommands.push_back(std::move(command));
+}
+
+void Renderer::DebugDrawText2D(const std::string& text, const glm::vec2& position,
+  float size, const glm::vec4& color)
+{
+  if (text.empty()) return;
+  Debug2DCommand command;
+  command.type = Debug2DCommand::Type::Text;
+  command.position = position;
+  command.color = color;
+  command.textSize = std::max(size, 0.01f);
+  command.text = text;
+  s_Data.m_Debug2DCommands.push_back(std::move(command));
+}
+
+void Renderer::DrawDebug2D()
+{
+  if (!s_Data.m_Debug2D)
+  {
+    s_Data.m_Debug2DCommands.clear();
+    return;
+  }
+
+  const GLboolean blendWasEnabled = glIsEnabled(GL_BLEND);
+  const GLboolean depthWasEnabled = glIsEnabled(GL_DEPTH_TEST);
+  const GLboolean cullWasEnabled = glIsEnabled(GL_CULL_FACE);
+  GLboolean previousDepthMask = GL_TRUE;
+  GLint previousDepthFunc = GL_LESS;
+  GLint previousBlendSrcRGB = GL_ONE, previousBlendDstRGB = GL_ZERO;
+  GLint previousBlendSrcAlpha = GL_ONE, previousBlendDstAlpha = GL_ZERO;
+  glGetBooleanv(GL_DEPTH_WRITEMASK, &previousDepthMask);
+  glGetIntegerv(GL_DEPTH_FUNC, &previousDepthFunc);
+  glGetIntegerv(GL_BLEND_SRC_RGB, &previousBlendSrcRGB);
+  glGetIntegerv(GL_BLEND_DST_RGB, &previousBlendDstRGB);
+  glGetIntegerv(GL_BLEND_SRC_ALPHA, &previousBlendSrcAlpha);
+  glGetIntegerv(GL_BLEND_DST_ALPHA, &previousBlendDstAlpha);
+
+  glDisable(GL_DEPTH_TEST);
+  glDepthMask(GL_FALSE);
+  glDisable(GL_CULL_FACE);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  BeginScene();
+  Set3D(false);
+
+  const auto drawOutline = [](const glm::vec2& position, const glm::vec2& size,
+    float rotation, const glm::vec4& color)
+  {
+    constexpr float thickness = 2.0f;
+    const float radians = glm::radians(rotation);
+    const glm::vec2 right(std::cos(radians), std::sin(radians));
+    const glm::vec2 up(-std::sin(radians), std::cos(radians));
+    const glm::vec2 halfSize = size * 0.5f;
+    DrawQuad(position + up * halfSize.y, glm::vec2(size.x, thickness), rotation, color);
+    DrawQuad(position - up * halfSize.y, glm::vec2(size.x, thickness), rotation, color);
+    DrawQuad(position + right * halfSize.x, glm::vec2(thickness, size.y), rotation, color);
+    DrawQuad(position - right * halfSize.x, glm::vec2(thickness, size.y), rotation, color);
+  };
+
+  // A small built-in marker makes it immediately clear that the layer is active.
+  DrawQuad(glm::vec2(141.0f, 37.0f), glm::vec2(250.0f, 42.0f), 0.0f,
+    glm::vec4(0.02f, 0.04f, 0.07f, 0.78f));
+  drawOutline(glm::vec2(141.0f, 37.0f), glm::vec2(250.0f, 42.0f), 0.0f,
+    glm::vec4(0.2f, 0.85f, 1.0f, 0.9f));
+  DrawText(FontManager::GetFont("dpcomic"), "2D DEBUG RENDER",
+    glm::vec2(141.0f, 37.0f), 0.28f, glm::vec4(0.45f, 0.92f, 1.0f, 1.0f));
+
+  for (const auto& command : s_Data.m_Debug2DCommands)
+  {
+    if (command.type == Debug2DCommand::Type::Text)
+    {
+      DrawText(FontManager::GetFont("dpcomic"), command.text, command.position,
+        command.textSize, command.color);
+    }
+    else if (command.outline)
+    {
+      drawOutline(command.position, command.size, command.rotation, command.color);
+    }
+    else
+    {
+      DrawQuad(command.position, command.size, command.rotation, command.color);
+    }
+  }
+
+  EndScene();
+  s_Data.m_Debug2DCommands.clear();
+  glDepthMask(previousDepthMask);
+  glDepthFunc(previousDepthFunc);
+  glBlendFuncSeparate(previousBlendSrcRGB, previousBlendDstRGB,
+    previousBlendSrcAlpha, previousBlendDstAlpha);
+  if (blendWasEnabled) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+  if (depthWasEnabled) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+  if (cullWasEnabled) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
 }
 
 void Renderer::BeginScene()
@@ -2018,7 +2152,93 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 	if (saveStatus) ImGui::TextUnformatted(saveStatus);
 
 	ImGui::Separator();
+	if (ImGui::CollapsingHeader("Import External Model"))
+	{
+		static char externalModelPath[1024]{};
+		static bool externalModelAnimated = false;
+		static float externalModelOptimizer = 1.0f;
+		static float externalModelBoundsScale = 1.0f;
+		static int externalModelCollision = 0;
+		static std::string importStatus;
+
+		ImGui::SetNextItemWidth(-88.0f);
+		ImGui::InputText("##ExternalModelPath", externalModelPath, sizeof(externalModelPath));
+		ImGui::SameLine();
+		if (ImGui::Button("Browse...")) BrowseForModelFile(externalModelPath, sizeof(externalModelPath));
+		ImGui::Checkbox("Animated / Controller", &externalModelAnimated);
+		ImGui::DragFloat("Optimizer Strength", &externalModelOptimizer, 0.05f, 0.0f, 10.0f, "%.2f");
+		ImGui::DragFloat("Initial Bounds Scale", &externalModelBoundsScale, 0.02f, 0.01f, 100.0f, "%.2f");
+		ImGui::BeginDisabled(externalModelAnimated);
+		const char* collisionTypes[] = { "None", "Triangle Mesh", "Convex Helper" };
+		ImGui::Combo("Physics Mesh", &externalModelCollision, collisionTypes, IM_ARRAYSIZE(collisionTypes));
+		ImGui::EndDisabled();
+
+		ImGui::BeginDisabled(externalModelPath[0] == '\0' || activeSceneName.empty());
+		if (ImGui::Button("Import and Reload"))
+		{
+			const MeshType meshType = externalModelAnimated ? MeshType::CONTROLLER
+				: externalModelCollision == 1 ? MeshType::TRIANGLEMESH
+				: externalModelCollision == 2 ? MeshType::CONVEXMESH
+				: MeshType::NONE;
+			if (SceneManager::ImportExternalModel(externalModelPath, externalModelAnimated,
+				externalModelOptimizer, meshType, externalModelBoundsScale))
+			{
+				importStatus = "Model imported; reloading scene...";
+				s_Data.m_SelectedEntityID = 0;
+				s_Data.m_SelectedLightID = 0;
+				SceneManager::LoadScene(activeSceneName);
+			}
+			else
+			{
+				importStatus = "Import failed (check path or duplicate model name)";
+			}
+		}
+		ImGui::EndDisabled();
+		if (!importStatus.empty()) ImGui::TextWrapped("%s", importStatus.c_str());
+	}
+
+	ImGui::SeparatorText("Add Loaded Model");
+	static std::string modelToAdd;
+	const auto& modelNames = ModelManager::GetModelNames();
+	auto canAddModel = [](const std::string& name)
+	{
+		const auto model = ModelManager::GetModel(name);
+		return model && model->GetPhysXMeshType() != MeshType::CONVEXMESH &&
+			model->GetPhysXMeshType() != MeshType::CONTROLLER;
+	};
+	if ((modelToAdd.empty() || !canAddModel(modelToAdd)))
+	{
+		const auto firstAddable = std::ranges::find_if(modelNames, canAddModel);
+		modelToAdd = firstAddable == modelNames.end() ? std::string() : *firstAddable;
+	}
+	ImGui::SetNextItemWidth(190.0f);
+	if (ImGui::BeginCombo("##ModelToAdd", modelToAdd.empty() ? "<no model>" : modelToAdd.c_str()))
+	{
+		for (const auto& modelName : modelNames)
+		{
+			if (!canAddModel(modelName)) continue;
+			const bool selected = modelName == modelToAdd;
+			if (ImGui::Selectable(modelName.c_str(), selected)) modelToAdd = modelName;
+			if (selected) ImGui::SetItemDefaultFocus();
+		}
+		ImGui::EndCombo();
+	}
+	ImGui::SameLine();
+	ImGui::BeginDisabled(modelToAdd.empty());
+	if (ImGui::Button("Add Model"))
+	{
+		if (const uint64_t entityID = SceneManager::AddModelEntity(modelToAdd); entityID != 0)
+		{
+			s_Data.m_SelectedEntityID = entityID;
+			s_Data.m_SelectedLightID = 0;
+		}
+	}
+	ImGui::EndDisabled();
+	if (ImGui::IsItemHovered()) ImGui::SetTooltip("Adds an instance 3 units in front of the editor camera");
+
+	ImGui::SeparatorText("Models");
 	uint64_t duplicateRequest = 0;
+	uint64_t removeEntityRequest = 0;
 	for (const auto& entity : SceneManager::GetEntities())
 	{
 		ImGui::PushID(static_cast<int>(entity.id));
@@ -2035,6 +2255,8 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 				duplicateRequest = entity.id;
 			if (entity.type == "controller")
 				ImGui::TextDisabled("Controllers cannot be instanced");
+			ImGui::Separator();
+			if (ImGui::MenuItem("Remove Entity")) removeEntityRequest = entity.id;
 			ImGui::EndPopup();
 		}
 		ImGui::PopID();
@@ -2048,6 +2270,10 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 			s_Data.m_SelectedEntityID = duplicateID;
 			s_Data.m_SelectedLightID = 0;
 		}
+	}
+	if (removeEntityRequest != 0 && SceneManager::RemoveEntity(removeEntityRequest))
+	{
+		if (s_Data.m_SelectedEntityID == removeEntityRequest) s_Data.m_SelectedEntityID = 0;
 	}
 
 	ImGui::SeparatorText("Lights");
@@ -2106,11 +2332,14 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 	ImGui::Checkbox("Light Debug", &s_Data.m_LightDebug);
 	ImGui::SameLine();
 	ImGui::Checkbox("Culling Bounds", &s_Data.m_CullingDebug);
+	ImGui::SameLine();
+	ImGui::Checkbox("2D Debug", &s_Data.m_Debug2D);
 	ImGui::TextDisabled("Frustum culling: %u / %u model instances visible",
 		s_Data.m_VisibleInstanceCount, s_Data.m_RenderableInstanceCount);
 
 	if (SceneEntity* entity = SceneManager::FindEntity(s_Data.m_SelectedEntityID))
 	{
+		const uint64_t selectedEntityID = entity->id;
 		ImGui::Separator();
 		ImGui::Text("Entity: %s", entity->name.c_str());
 		ImGui::Text("Model: %s", entity->model.c_str());
@@ -2125,6 +2354,16 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 		transformChanged |= ImGui::DragFloat3("Scale", glm::value_ptr(scale), 0.05f);
 
 		if (transformChanged) SceneManager::UpdateEntityTransform(entity->id, Transform(position, rotation, scale));
+
+		if (const auto model = ModelManager::GetModel(entity->model))
+		{
+			float boundsScale = model->GetCullingBoundsScale();
+			if (ImGui::DragFloat("Culling Bounds Scale", &boundsScale, 0.02f, 0.01f, 100.0f, "%.2f"))
+				model->SetCullingBoundsScale(boundsScale);
+			ImGui::TextDisabled("Effective radius: %.3f", model->GetBoundsRadius());
+			ImGui::SameLine();
+			if (ImGui::SmallButton("Reset Bounds")) model->SetCullingBoundsScale(1.0f);
+		}
 
 		if (entity->type == "controller") ImGui::Checkbox("Player", &entity->player);
 		else
@@ -2148,6 +2387,10 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 		{
 			const uint64_t duplicateID = SceneManager::DuplicateEntity(entity->id);
 			if (duplicateID != 0) s_Data.m_SelectedEntityID = duplicateID;
+		}
+		if (ImGui::Button("Remove Entity"))
+		{
+			if (SceneManager::RemoveEntity(selectedEntityID)) s_Data.m_SelectedEntityID = 0;
 		}
 	}
 	else if (SceneLight* light = SceneManager::FindLight(s_Data.m_SelectedLightID))

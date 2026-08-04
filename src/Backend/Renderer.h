@@ -36,6 +36,13 @@ struct Renderer
 	static void DrawText(const Font* font, const std::string& text, const glm::vec2& position, float size, const glm::vec4& color = glm::vec4(1.0f));
 	static void DrawText(const Font* font, const std::string& text, const glm::vec3& position, const glm::vec3& rotation, float size, const glm::vec4& color, int entityID = -1);
 
+	// Screen-space (orthographic, pixel-coordinate) commands are consumed once per frame.
+	// Quad position and text position are their visual centers.
+	static void DebugDrawQuad2D(const glm::vec2& position, const glm::vec2& size,
+		const glm::vec4& color = glm::vec4(1.0f), float rotation = 0.0f, bool outline = false);
+	static void DebugDrawText2D(const std::string& text, const glm::vec2& position, float size = 0.35f,
+		const glm::vec4& color = glm::vec4(1.0f));
+
 	static void BakeSkyboxTextures(const std::string& name,const std::shared_ptr<Texture>& texture);
 	static void DrawSkybox(const std::string& name);
 
@@ -66,6 +73,7 @@ private:
 	static void LoadShaders();
 	static void DrawPhysicsDebug();
 	static void DrawDebugVisualizations();
+	static void DrawDebug2D();
 	static void UpdateModelFrustumCulling();
 
 	static void DrawFramebuffer(uint32_t textureID);

@@ -154,7 +154,9 @@ struct Model
   inline PxController* GetController() { return m_ActorController; }
   inline Transform& GetControllerTransform() { return m_ControllerTransform; }
   inline const glm::vec3& GetBoundsCenter() const { return m_BoundsCenter; }
-  inline float GetBoundsRadius() const { return m_BoundsRadius; }
+  inline float GetBoundsRadius() const { return m_BoundsRadius * m_CullingBoundsScale; }
+  inline float GetCullingBoundsScale() const { return m_CullingBoundsScale; }
+  inline void SetCullingBoundsScale(float scale) { m_CullingBoundsScale = glm::clamp(scale, 0.01f, 100.0f); }
 
   Transform m_ControllerTransform;
   PxVec3 m_ControllerPosition;
@@ -173,6 +175,7 @@ struct Model
   std::vector<glm::mat4> m_InstanceTransforms;
   glm::vec3 m_BoundsCenter = glm::vec3(0.0f);
   float m_BoundsRadius = 0.0f;
+  float m_CullingBoundsScale = 1.0f;
 
   std::unordered_map<std::string, std::shared_ptr<Texture>> m_TexturesLoaded; 
   std::vector<Mesh> m_Meshes;
