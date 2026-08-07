@@ -707,10 +707,40 @@ void Scene::LoadSceneFromJSON(const std::string& path, const std::string& sceneN
 std::unique_ptr<Scene> SceneManager::s_ActiveScene = nullptr;
 std::unique_ptr<Scene> SceneManager::s_PendingScene = nullptr;
 bool SceneManager::s_Loading = false;
+SceneManager::TransitionState SceneManager::s_TransitionState = SceneManager::TransitionState::None;
+std::string SceneManager::s_RequestedScene;
+float SceneManager::s_TransitionProgress = 0.0f;
+
+namespace
+{
+  constexpr float SceneFadeDuration = 0.45f;
+
+  float SmoothStep(float value)
+  {
+    value = std::clamp(value, 0.0f, 1.0f);
+    return value * value * (3.0f - 2.0f * value);
+  }
+}
 
 void SceneManager::LoadScene(const std::string& name)
 {
-  if (name.empty() || s_Loading) return;
+  if (name.empty() || s_Loading || s_TransitionState != TransitionState::None) return;
+
+  s_RequestedScene = name;
+  s_TransitionProgress = 0.0f;
+
+  if (s_ActiveScene)
+  {
+    s_TransitionState = TransitionState::FadingOut;
+    return;
+  }
+
+  BeginLoadingScene(name);
+}
+
+void SceneManager::BeginLoadingScene(const std::string& name)
+{
+  if (name.empty()) return;
 
   Renderer::ResetModelDrawCommands();
   ModelManager::Reset();
@@ -725,18 +755,40 @@ void SceneManager::LoadScene(const std::string& name)
 
   s_PendingScene->StartLoading();
   s_Loading = true;
+  s_TransitionState = TransitionState::Loading;
 }
 
 void SceneManager::Shutdown()
 {
   s_Loading = false;
+  s_TransitionState = TransitionState::None;
+  s_RequestedScene.clear();
+  s_TransitionProgress = 0.0f;
   s_PendingScene.reset();
   s_ActiveScene.reset();
 }
 
 void SceneManager::Update(DeltaTime& dt)
 {
-  if (s_Loading)
+  const float frameTime = std::clamp(dt.GetSeconds(), 0.0f, 0.1f);
+
+  if (s_TransitionState == TransitionState::FadingOut)
+  {
+    if (s_ActiveScene) s_ActiveScene->OnUpdate(dt);
+
+    s_TransitionProgress = std::min(1.0f, s_TransitionProgress + frameTime / SceneFadeDuration);
+    Renderer::DrawScreenOverlay(SmoothStep(s_TransitionProgress));
+
+    if (s_TransitionProgress >= 1.0f)
+    {
+      const std::string requestedScene = std::move(s_RequestedScene);
+      s_TransitionProgress = 0.0f;
+      BeginLoadingScene(requestedScene);
+    }
+    return;
+  }
+
+  if (s_TransitionState == TransitionState::Loading)
   {
     s_PendingScene->UpdateLoading();
 
@@ -746,8 +798,26 @@ void SceneManager::Update(DeltaTime& dt)
     {
       s_ActiveScene = std::move(s_PendingScene);
       s_Loading = false;
+      s_TransitionState = TransitionState::FadingIn;
+      s_TransitionProgress = 0.0f;
+      s_RequestedScene.clear();
+      Renderer::DrawScreenOverlay(1.0f);
     }
 
+    return;
+  }
+
+  if (s_TransitionState == TransitionState::FadingIn)
+  {
+    if (s_ActiveScene) s_ActiveScene->OnUpdate(dt);
+
+    s_TransitionProgress = std::min(1.0f, s_TransitionProgress + frameTime / SceneFadeDuration);
+    Renderer::DrawScreenOverlay(1.0f - SmoothStep(s_TransitionProgress));
+    if (s_TransitionProgress >= 1.0f)
+    {
+      s_TransitionState = TransitionState::None;
+      s_TransitionProgress = 0.0f;
+    }
     return;
   }
 

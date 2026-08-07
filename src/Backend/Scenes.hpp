@@ -14,6 +14,7 @@
 
 #include <array>
 #include <algorithm>
+#include <cmath>
 
 namespace SceneUI
 {
@@ -22,6 +23,17 @@ namespace SceneUI
     // All menu measurements use the same 1280x720 reference canvas. This keeps
     // text, rows and spacing in sync instead of scaling only their positions.
     return std::max(0.25f, std::min(width / 1280.0f, height / 720.0f));
+  }
+
+  inline float Saturate(float value)
+  {
+    return std::clamp(value, 0.0f, 1.0f);
+  }
+
+  inline float Smooth(float value)
+  {
+    value = Saturate(value);
+    return value * value * (3.0f - 2.0f * value);
   }
 }
 
@@ -47,6 +59,7 @@ struct GameScene : Scene
 
   void OnUpdate(DeltaTime& dt) override
   {
+    m_PauseFrameDelta = std::clamp(dt.GetSeconds(), 0.0f, 0.05f);
     const bool escape = Pressed(Input::IsKeyPressed(Key::Escape), m_PreviousEscape);
     const bool start = Pressed(Input::IsGamepadButtonPressed(Gamepad::Start), m_PreviousStart);
     bool justPaused = false;
@@ -61,6 +74,8 @@ struct GameScene : Scene
 
     if (m_Paused)
     {
+      m_PauseTime += m_PauseFrameDelta;
+      m_PauseReveal = std::min(1.0f, m_PauseReveal + m_PauseFrameDelta / 0.28f);
       UpdatePauseMenu(escape && !justPaused);
       if (SceneManager::IsLoading())
         return;
@@ -140,6 +155,12 @@ private:
     m_PreviousFire = Input::IsMouseButtonPressed(Mouse::ButtonLeft);
     m_PauseScreen = PauseScreen::Main;
     m_PauseSelected = 0;
+    if (paused)
+    {
+      m_PauseTime = 0.0f;
+      m_PauseReveal = 0.0f;
+      m_PauseHighlightInitialized = false;
+    }
     Window::SetCursorVisible(paused);
     Camera::ResetMouseDelta();
     if (paused) AudioManager::PauseMusic("night_mono");
@@ -219,8 +240,7 @@ private:
     if (back)
     {
       Settings::Save();
-      m_PauseScreen = PauseScreen::Main;
-      m_PauseSelected = 1;
+      SetPauseScreen(PauseScreen::Main, 1);
       return;
     }
 
@@ -232,8 +252,7 @@ private:
       if (activated == 8)
       {
         Settings::Save();
-        m_PauseScreen = PauseScreen::Main;
-        m_PauseSelected = 1;
+        SetPauseScreen(PauseScreen::Main, 1);
       }
       else
       {
@@ -251,13 +270,10 @@ private:
         SetPaused(false);
         break;
       case 1:
-        m_PauseScreen = PauseScreen::Options;
-        m_PauseSelected = 0;
+        SetPauseScreen(PauseScreen::Options, 0);
         break;
       case 2:
         Settings::Save();
-        AudioManager::StopMusic("night_mono");
-        m_Paused = false;
         Window::SetCursorVisible(true);
         SceneManager::LoadScene("menu");
         break;
@@ -345,6 +361,7 @@ private:
     const auto screenWidth = static_cast<float>(Window::GetWidth());
     const auto screenHeight = static_cast<float>(Window::GetHeight());
     const float uiScale = SceneUI::Scale(screenWidth, screenHeight);
+    const float rowWidth = std::min(520.0f * uiScale, screenWidth * 0.52f);
     const bool optionsScreen = m_PauseScreen == PauseScreen::Options;
     const float rowHeight = optionsScreen
       ? 36.0f * uiScale
@@ -352,26 +369,62 @@ private:
     const float startY = screenHeight * (optionsScreen ? 0.70f : 0.65f);
     const float spacing = rowHeight + (optionsScreen ? 4.0f : 8.0f) * uiScale;
     const Font* font = FontManager::GetFont("dpcomic");
+    const float reveal = SceneUI::Smooth(m_PauseReveal);
 
     Renderer::BeginScene();
+
+    Renderer::DrawQuad(
+      glm::vec2(screenWidth * 0.5f, screenHeight * 0.5f),
+      glm::vec2(screenWidth, screenHeight), 0.0f,
+      glm::vec4(0.008f, 0.012f, 0.025f, 0.64f * reveal));
+
+    const float targetHighlightY = startY - m_PauseSelected * spacing + rowHeight * 0.5f;
+    if (!m_PauseHighlightInitialized)
+    {
+      m_PauseHighlightY = targetHighlightY;
+      m_PauseHighlightInitialized = true;
+    }
+    const float follow = 1.0f - std::exp(-15.0f * m_PauseFrameDelta);
+    m_PauseHighlightY += (targetHighlightY - m_PauseHighlightY) * follow;
+    Renderer::DrawQuad(
+      glm::vec2(screenWidth * 0.5f, m_PauseHighlightY),
+      glm::vec2(rowWidth * (0.82f + std::sin(m_PauseTime * 5.0f) * 0.015f), rowHeight * 0.82f),
+      0.0f, glm::vec4(0.22f, 0.46f, 0.76f, 0.19f * reveal));
+
     Renderer::DrawText(font, m_PauseScreen == PauseScreen::Main ? "PAUSED" : "OPTIONS",
-      glm::vec2(screenWidth * 0.5f, screenHeight * 0.8f), 1.1f * uiScale, glm::vec4(1.0f));
+      glm::vec2(screenWidth * 0.5f,
+        screenHeight * 0.8f + (1.0f - reveal) * 24.0f * uiScale + std::sin(m_PauseTime * 1.8f) * 2.0f * uiScale),
+      (0.96f + reveal * 0.14f) * uiScale, glm::vec4(1.0f, 1.0f, 1.0f, reveal));
 
     const int count = m_PauseScreen == PauseScreen::Main ? 4 : 9;
     for (int i = 0; i < count; ++i)
     {
       const std::string label = m_PauseScreen == PauseScreen::Main ? std::string(items[i]) : PauseOptionLabel(i);
+      const float itemReveal = SceneUI::Smooth(m_PauseReveal * 1.5f - i * 0.075f);
+      const bool selected = i == m_PauseSelected;
+      const float slide = (1.0f - itemReveal) * 48.0f * uiScale;
+      const float pulse = selected ? 1.0f + std::sin(m_PauseTime * 5.5f) * 0.02f : 1.0f;
+      const glm::vec3 color = selected ? glm::vec3(1.0f) : glm::vec3(0.62f, 0.68f, 0.76f);
       Renderer::DrawText(font, label,
-        glm::vec2(screenWidth * 0.5f, startY - i * spacing + rowHeight * 0.5f), 0.58f * uiScale,
-        i == m_PauseSelected ? glm::vec4(1.0f) : glm::vec4(0.62f, 0.68f, 0.76f, 1.0f));
+        glm::vec2(screenWidth * 0.5f + slide, startY - i * spacing + rowHeight * 0.5f),
+        0.58f * uiScale * pulse, glm::vec4(color, itemReveal));
     }
 
     Renderer::DrawText(font,
       m_PauseScreen == PauseScreen::Main
         ? "ESC / START: RESUME    ENTER / A: SELECT"
         : "LEFT / RIGHT: CHANGE    ESC / B: BACK",
-      glm::vec2(screenWidth * 0.5f, 34.0f * uiScale), 0.3f * uiScale, glm::vec4(0.7f));
+      glm::vec2(screenWidth * 0.5f, 34.0f * uiScale), 0.3f * uiScale,
+      glm::vec4(0.7f, 0.7f, 0.7f, reveal));
     Renderer::EndScene();
+  }
+
+  void SetPauseScreen(PauseScreen screen, int selected)
+  {
+    m_PauseScreen = screen;
+    m_PauseSelected = selected;
+    m_PauseReveal = 0.0f;
+    m_PauseHighlightInitialized = false;
   }
 
   bool m_Paused = false;
@@ -390,6 +443,11 @@ private:
   bool m_PausePreviousBack = false;
   bool m_PausePreviousMouse = false;
   bool m_PreviousFire = false;
+  float m_PauseTime = 0.0f;
+  float m_PauseFrameDelta = 0.0f;
+  float m_PauseReveal = 0.0f;
+  float m_PauseHighlightY = 0.0f;
+  bool m_PauseHighlightInitialized = false;
 
   static constexpr std::array<glm::uvec2, 6> m_PauseResolutions = {
     glm::uvec2(1024, 576), glm::uvec2(1280, 720), glm::uvec2(1600, 900),
@@ -414,11 +472,20 @@ struct MenuScene : Scene
     m_ModeIndex = static_cast<int>(Settings::GetWindowMode());
     const auto fps = std::find(m_FPSLimits.begin(), m_FPSLimits.end(), Settings::GetFPSLimit());
     if (fps != m_FPSLimits.end()) m_FPSIndex = static_cast<int>(std::distance(m_FPSLimits.begin(), fps));
+
+    m_MenuTime = 0.0f;
+    m_IntroProgress = 0.0f;
+    m_ScreenReveal = 0.0f;
+    m_HighlightInitialized = false;
   }
 
   void OnUpdate(DeltaTime& dt) override
   {
-    (void)dt;
+    m_FrameDelta = std::clamp(dt.GetSeconds(), 0.0f, 0.05f);
+    m_MenuTime += m_FrameDelta;
+    m_IntroProgress = std::min(1.0f, m_IntroProgress + m_FrameDelta / 0.75f);
+    m_ScreenReveal = std::min(1.0f, m_ScreenReveal + m_FrameDelta / 0.38f);
+
     AudioManager::UpdateAllMusic();
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, Window::GetWidth(), Window::GetHeight());
@@ -500,8 +567,7 @@ struct MenuScene : Scene
       if (back)
       {
         Settings::Save();
-        m_Screen = Screen::Main;
-        m_Selected = 2;
+        SetScreen(Screen::Main, 2);
       }
       else
       {
@@ -513,8 +579,7 @@ struct MenuScene : Scene
           if (activated == 8)
           {
             Settings::Save();
-            m_Screen = Screen::Main;
-            m_Selected = 2;
+            SetScreen(Screen::Main, 2);
           }
           else
           {
@@ -555,13 +620,11 @@ private:
     {
       case 0:
       case 1:
-        AudioManager::StopMusic("menu");
         Window::SetCursorVisible(false);
         SceneManager::LoadScene("game");
         break;
       case 2:
-        m_Screen = Screen::Options;
-        m_Selected = 0;
+        SetScreen(Screen::Options, 0);
         break;
       case 3:
         Settings::Save();
@@ -628,10 +691,58 @@ private:
     static constexpr std::array<const char*, 4> mainItems = {"NEW GAME", "LOAD GAME", "OPTIONS", "EXIT"};
     const Font* font = FontManager::GetFont("dpcomic");
     const float uiScale = SceneUI::Scale(screenWidth, screenHeight);
+    const float intro = SceneUI::Smooth(m_IntroProgress);
+    const float screenReveal = SceneUI::Smooth(m_ScreenReveal);
 
     Renderer::BeginScene();
+
+    Renderer::DrawQuad(
+      glm::vec2(screenWidth * 0.5f, screenHeight * 0.5f),
+      glm::vec2(screenWidth, screenHeight), 0.0f,
+      glm::vec4(0.012f, 0.018f, 0.035f, 1.0f));
+
+    // Slowly drifting translucent columns give the otherwise flat menu some
+    // depth without competing with the low-resolution presentation.
+    for (int i = 0; i < 7; ++i)
+    {
+      const float columnWidth = (42.0f + static_cast<float>((i * 29) % 70)) * uiScale;
+      const float travel = screenWidth + columnWidth * 2.0f;
+      const float speed = (10.0f + static_cast<float>((i * 7) % 13)) * uiScale;
+      float columnX = std::fmod(i * screenWidth / 6.0f + m_MenuTime * speed, travel) - columnWidth;
+      Renderer::DrawQuad(
+        glm::vec2(columnX, screenHeight * 0.5f),
+        glm::vec2(columnWidth, screenHeight * 1.15f),
+        (i % 2 == 0 ? -2.0f : 2.0f),
+        glm::vec4(0.12f, 0.24f, 0.42f, 0.025f * intro));
+    }
+
+    const float targetHighlightY = startY - m_Selected * spacing + height * 0.5f;
+    if (!m_HighlightInitialized)
+    {
+      m_HighlightY = targetHighlightY;
+      m_HighlightInitialized = true;
+    }
+    const float highlightFollow = 1.0f - std::exp(-14.0f * m_FrameDelta);
+    m_HighlightY += (targetHighlightY - m_HighlightY) * highlightFollow;
+    const float highlightPulse = 1.0f + std::sin(m_MenuTime * 4.5f) * 0.025f;
+    Renderer::DrawQuad(
+      glm::vec2(x + width * 0.5f, m_HighlightY),
+      glm::vec2(width * 0.82f * highlightPulse, height * 0.82f), 0.0f,
+      glm::vec4(0.18f, 0.42f, 0.72f, 0.16f * screenReveal));
+    Renderer::DrawQuad(
+      glm::vec2(x + width * 0.09f, m_HighlightY),
+      glm::vec2(4.0f * uiScale, height * 0.62f), 0.0f,
+      glm::vec4(0.55f, 0.82f, 1.0f, 0.8f * screenReveal));
+
+    const float titleFloat = std::sin(m_MenuTime * 1.7f) * 2.5f * uiScale;
     Renderer::DrawText(font, m_Screen == Screen::Main ? "GABGL" : "OPTIONS",
-      glm::vec2(screenWidth * 0.5f, screenHeight * 0.79f), 1.25f * uiScale, glm::vec4(0.82f, 0.9f, 1.0f, 1.0f));
+      glm::vec2(screenWidth * 0.5f, screenHeight * 0.79f + titleFloat + (1.0f - intro) * 28.0f * uiScale),
+      (1.08f + intro * 0.17f) * uiScale,
+      glm::vec4(0.82f, 0.9f, 1.0f, intro));
+    Renderer::DrawQuad(
+      glm::vec2(screenWidth * 0.5f, screenHeight * 0.735f),
+      glm::vec2(210.0f * uiScale * intro, 2.0f * uiScale), 0.0f,
+      glm::vec4(0.32f, 0.62f, 0.92f, 0.55f * intro));
 
     const int count = m_Screen == Screen::Main ? 4 : 9;
     for (int i = 0; i < count; ++i)
@@ -639,16 +750,30 @@ private:
       const float y = startY - i * spacing;
       const bool selected = i == m_Selected;
       const std::string label = m_Screen == Screen::Main ? std::string(mainItems[i]) : OptionLabel(i);
-      Renderer::DrawText(font, label, glm::vec2(x + width * 0.5f, y + height * 0.5f), 0.58f * uiScale,
-        selected ? glm::vec4(1.0f) : glm::vec4(0.72f, 0.78f, 0.86f, 1.0f));
+      const float itemReveal = SceneUI::Smooth(m_ScreenReveal * 1.45f - i * 0.075f);
+      const float slide = (1.0f - itemReveal) * 65.0f * uiScale * (i % 2 == 0 ? 1.0f : -1.0f);
+      const float pulse = selected ? 1.0f + std::sin(m_MenuTime * 5.5f) * 0.025f : 1.0f;
+      const glm::vec3 color = selected ? glm::vec3(1.0f) : glm::vec3(0.72f, 0.78f, 0.86f);
+      Renderer::DrawText(font, label,
+        glm::vec2(x + width * 0.5f + slide, y + height * 0.5f),
+        0.58f * uiScale * pulse, glm::vec4(color, itemReveal));
     }
 
     Renderer::DrawText(font,
       m_Screen == Screen::Main
         ? "UP / DOWN: NAVIGATE    ENTER / A: SELECT"
         : "UP / DOWN: SELECT    LEFT / RIGHT: CHANGE    ESC / B: BACK",
-      glm::vec2(screenWidth * 0.5f, 34.0f * uiScale), 0.3f * uiScale, glm::vec4(0.55f, 0.62f, 0.72f, 1.0f));
+      glm::vec2(screenWidth * 0.5f, 34.0f * uiScale), 0.3f * uiScale,
+      glm::vec4(0.55f, 0.62f, 0.72f, screenReveal));
     Renderer::EndScene();
+  }
+
+  void SetScreen(Screen screen, int selected)
+  {
+    m_Screen = screen;
+    m_Selected = selected;
+    m_ScreenReveal = 0.0f;
+    m_HighlightInitialized = false;
   }
 
   [[nodiscard]] std::string OptionLabel(int index) const
@@ -686,6 +811,12 @@ private:
   bool m_PreviousAccept = false;
   bool m_PreviousBack = false;
   bool m_PreviousMouse = false;
+  float m_MenuTime = 0.0f;
+  float m_FrameDelta = 0.0f;
+  float m_IntroProgress = 0.0f;
+  float m_ScreenReveal = 0.0f;
+  float m_HighlightY = 0.0f;
+  bool m_HighlightInitialized = false;
 
   static constexpr std::array<glm::uvec2, 6> m_Resolutions = {
     glm::uvec2(1024, 576), glm::uvec2(1280, 720), glm::uvec2(1600, 900),

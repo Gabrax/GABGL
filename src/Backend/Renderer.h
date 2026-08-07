@@ -14,6 +14,7 @@ struct Renderer
 
 	static void DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic, bool advanceSimulation = true);
 	static void DrawLoadingScreen();
+	static void DrawScreenOverlay(float opacity, const glm::vec3& color = glm::vec3(0.0f));
 	static void BeginScene();
 	static void EndScene();
 
@@ -76,7 +77,7 @@ private:
 	static void DrawDebug2D();
 	static void UpdateModelFrustumCulling();
 
-	static void DrawFramebuffer(uint32_t textureID);
+	static void DrawFramebuffer(uint32_t textureID, bool applyPS1Effect = false);
 	static void DrawEditorFrameBuffer(uint32_t framebufferTexture);
 	static uint32_t GetActiveWidgetID();
 	static void BlockEvents(bool block);

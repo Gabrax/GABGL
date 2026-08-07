@@ -183,6 +183,7 @@ struct RendererData
   std::unordered_map<std::string, std::shared_ptr<Texture>> skyboxes;
 
   std::shared_ptr<FrameBuffer> m_ResultBuffer;
+  std::shared_ptr<FrameBuffer> m_PostProcessBuffer;
   std::shared_ptr<BloomBuffer> m_BloomBuffer;
   std::shared_ptr<OmniDirectShadowBuffer> m_OmniDirectShadowBuffer;
   std::shared_ptr<DirectShadowBuffer> m_DirectShadowBuffer;
@@ -374,12 +375,20 @@ static bool WorldToScreen(const glm::vec3& worldPosition, glm::vec2& screenPosit
   return true;
 }
 
+static float GetResolutionUIScale()
+{
+  const float widthScale = static_cast<float>(Window::GetWidth()) / 1280.0f;
+  const float heightScale = static_cast<float>(Window::GetHeight()) / 720.0f;
+  return std::max(0.25f, std::min(widthScale, heightScale));
+}
+
 static void DrawInteractionLabels()
 {
   glm::vec3 playerPosition;
   if (!SceneManager::GetPlayerPosition(playerPosition)) return;
 
   const Font* font = FontManager::GetFont("dpcomic");
+  const float uiScale = GetResolutionUIScale();
   const uint64_t focusedEntity = SceneManager::GetFocusedEntityID();
   for (const SceneEntity& entity : SceneManager::GetEntities())
   {
@@ -400,12 +409,13 @@ static void DrawInteractionLabels()
     const float alpha = 1.0f - glm::clamp((distance - fadeStart) / fadeLength, 0.0f, 1.0f);
     const bool focused = entity.id == focusedEntity;
     const std::string& displayName = entity.itemName.empty() ? entity.name : entity.itemName;
-    Renderer::DrawText(font, displayName, screenPosition, focused ? 0.48f : 0.4f,
+    Renderer::DrawText(font, displayName, screenPosition, (focused ? 0.48f : 0.4f) * uiScale,
       focused ? glm::vec4(1.0f, 0.88f, 0.38f, alpha) : glm::vec4(1.0f, 1.0f, 1.0f, alpha));
     if (focused)
     {
       Renderer::DrawText(font, entity.pickable ? "E / X - PICK UP" : "E / X - INTERACT",
-        screenPosition - glm::vec2(0.0f, 27.0f), 0.27f, glm::vec4(0.9f, 0.9f, 0.9f, alpha));
+        screenPosition - glm::vec2(0.0f, 27.0f * uiScale), 0.27f * uiScale,
+        glm::vec4(0.9f, 0.9f, 0.9f, alpha));
     }
   }
 }
@@ -515,6 +525,13 @@ void Renderer::Init()
 	fbSpec.Height = resolution.y;
 	s_Data.m_ResultBuffer = FrameBuffer::Create(fbSpec);
 
+	FramebufferSpecification postProcessSpec;
+	postProcessSpec.Attachments = { FramebufferTextureFormat::RGBA8 };
+	postProcessSpec.Width = resolution.x;
+	postProcessSpec.Height = resolution.y;
+	postProcessSpec.NearestFiltering = true;
+	s_Data.m_PostProcessBuffer = FrameBuffer::Create(postProcessSpec);
+
 	s_Data.m_GeometryBuffer = GeometryBuffer::Create(resolution.x, resolution.y);
 	s_Data.m_BloomBuffer = BloomBuffer::Create(s_Data.s_Shaders.DownSampleShader, s_Data.s_Shaders.UpSampleShader, s_Data.s_Shaders.BloomResultShader);
 	ParticleRenderer::Init();
@@ -524,7 +541,8 @@ void Renderer::Init()
 	Camera::Init(45.0f, (float)resolution.x / (float)resolution.y, 0.01f, 2000.0f);
 	Camera::SetViewportSize((float)resolution.x, (float)resolution.y);
 
-	s_Data.m_ResolutionUniformBuffer = UniformBuffer::Create(sizeof(glm::vec2), 1);
+	// std140 rounds a uniform block containing a vec2 up to a 16-byte block.
+	s_Data.m_ResolutionUniformBuffer = UniformBuffer::Create(sizeof(glm::vec4), 1);
 	s_Data.m_ResolutionUniformBuffer->SetData(&resolution, sizeof(glm::vec2));
 
 	s_Data.m_SceneState = RendererData::SceneState::Play;
@@ -585,6 +603,7 @@ void Renderer::Shutdown()
 	s_Data.m_SkyboxVAO = s_Data.m_SkyboxVBO = 0;
 
 	s_Data.m_ResultBuffer.reset();
+	s_Data.m_PostProcessBuffer.reset();
 	s_Data.m_GeometryBuffer.reset();
 	s_Data.m_BloomBuffer.reset();
 	s_Data.m_OmniDirectShadowBuffer.reset();
@@ -816,7 +835,13 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
   {
     GABGL_PROFILE_SCOPE("SCENE RESULT PASS");
 
-    uint32_t finalTexture = s_Data.m_ResultBuffer->GetColorAttachmentRendererID();
+    s_Data.m_PostProcessBuffer->Bind();
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
+    DrawFramebuffer(s_Data.m_ResultBuffer->GetColorAttachmentRendererID(), true);
+    s_Data.m_PostProcessBuffer->UnBind();
+
+    const uint32_t finalTexture = s_Data.m_PostProcessBuffer->GetColorAttachmentRendererID();
 
     switch (s_Data.m_SceneState)
     {
@@ -827,7 +852,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
      }
      case RendererData::SceneState::Play:
      {
-       DrawFramebuffer(finalTexture);
+       DrawFramebuffer(finalTexture, false);
        break;
      }
     }
@@ -843,9 +868,11 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
 
     if (advanceSimulation)
     {
+      const float uiScale = GetResolutionUIScale();
       BeginScene();
       if (s_Data.m_SceneState == RendererData::SceneState::Play) DrawInteractionLabels();
-      DrawText(FontManager::GetFont("dpcomic"), "FPS: " + std::to_string(dt.GetFPS()), glm::vec2(100.0f, 50.0f), 0.5f, glm::vec4(1.0f));
+      DrawText(FontManager::GetFont("dpcomic"), "FPS: " + std::to_string(dt.GetFPS()),
+        glm::vec2(100.0f, 50.0f) * uiScale, 0.5f * uiScale, glm::vec4(1.0f));
       EndScene();
     }
   }
@@ -853,8 +880,51 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
 
 void Renderer::DrawLoadingScreen()
 {
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glViewport(0, 0, Window::GetWidth(), Window::GetHeight());
+  glClearColor(0.008f, 0.012f, 0.025f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glDisable(GL_DEPTH_TEST);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+  const float time = static_cast<float>(glfwGetTime());
+  const int dotCount = static_cast<int>(time * 2.5f) % 4;
+  std::string label = "LOADING";
+  label.append(static_cast<size_t>(dotCount), '.');
+  const float pulse = 0.72f + std::sin(time * 3.0f) * 0.18f;
+  const float width = static_cast<float>(Window::GetWidth());
+  const float height = static_cast<float>(Window::GetHeight());
+  const float uiScale = GetResolutionUIScale();
+
   BeginScene();
-  DrawText(FontManager::GetFont("dpcomic"),"LOADING", glm::vec2(Window::GetWidth() / 2,Window::GetHeight() / 2), 1.0f, glm::vec4(1.0f));
+  DrawText(FontManager::GetFont("dpcomic"), label,
+    glm::vec2(width * 0.5f, height * 0.5f), 0.82f * uiScale,
+    glm::vec4(0.72f, 0.86f, 1.0f, pulse));
+  DrawQuad(
+    glm::vec2(width * 0.5f + std::sin(time * 1.8f) * 55.0f * uiScale, height * 0.44f),
+    glm::vec2(68.0f, 3.0f) * uiScale, 0.0f,
+    glm::vec4(0.28f, 0.58f, 0.92f, 0.65f));
+  EndScene();
+}
+
+void Renderer::DrawScreenOverlay(float opacity, const glm::vec3& color)
+{
+  opacity = std::clamp(opacity, 0.0f, 1.0f);
+  if (opacity <= 0.0f) return;
+
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glViewport(0, 0, Window::GetWidth(), Window::GetHeight());
+  glDisable(GL_DEPTH_TEST);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+  BeginScene();
+  DrawQuad(
+    glm::vec2(Window::GetWidth() * 0.5f, Window::GetHeight() * 0.5f),
+    glm::vec2(Window::GetWidth(), Window::GetHeight()),
+    0.0f,
+    glm::vec4(color, opacity));
   EndScene();
 }
 
@@ -887,6 +957,7 @@ void Renderer::SetFullscreen(const std::string& sound, bool windowed)
   s_Data.m_GeometryBuffer->Resize(width, height);
   s_Data.m_BloomBuffer->Resize(width, height);
   s_Data.m_ResultBuffer->Resize(width, height);
+  s_Data.m_PostProcessBuffer->Resize(width, height);
   Camera::SetViewportSize(width, height);
   AudioManager::PlaySound(sound);
 }
@@ -905,6 +976,7 @@ void Renderer::ApplyDisplaySettings()
   s_Data.m_ResolutionUniformBuffer->SetData(&resolution, sizeof(glm::vec2));
   s_Data.m_GeometryBuffer->Resize(width, height);
   s_Data.m_ResultBuffer->Resize(width, height);
+  s_Data.m_PostProcessBuffer->Resize(width, height);
   s_Data.m_BloomBuffer->Resize(width, height);
   Camera::SetViewportSize(width, height);
 }
@@ -1632,7 +1704,7 @@ void Renderer::DrawFullscreenQuad()
   glBindVertexArray(0);
 }
 
-void Renderer::DrawFramebuffer(uint32_t textureID)
+void Renderer::DrawFramebuffer(uint32_t textureID, bool applyPS1Effect)
 {
   if (s_Data.m_FramebufferQuadVAO == 0)
   {
@@ -1665,6 +1737,7 @@ void Renderer::DrawFramebuffer(uint32_t textureID)
 
   s_Data.s_Shaders.FramebufferShader->Bind();
   s_Data.s_Shaders.FramebufferShader->SetInt("u_Texture", 0);
+  s_Data.s_Shaders.FramebufferShader->SetBool("u_PS1Effect", applyPS1Effect);
 
   glBindTextureUnit(0, textureID);
 
@@ -1804,10 +1877,9 @@ void Renderer::DrawText(const Font* font, const std::string& text, const glm::ve
   }
 
   float textWidth = 0.0f;
-  float maxBearingY = 0.0f;
-  float maxBelowBaseline = 0.0f;
 
-  // First pass: calculate dimensions
+  // First pass: calculate the horizontal extent. Vertical placement uses the
+  // font-wide ascender/descender so every label shares the same baseline.
   for (char c : text)
   {
     auto it = font->m_Characters.find(c);
@@ -1815,19 +1887,12 @@ void Renderer::DrawText(const Font* font, const std::string& text, const glm::ve
 
     const auto& ch = it->second;
     textWidth += (ch.Advance >> 6) * size;
-
-    float bearingY = ch.Bearing.y * size;
-    float belowBaseline = (ch.Size.y - ch.Bearing.y) * size;
-
-    maxBearingY = std::max(maxBearingY, bearingY);
-    maxBelowBaseline = std::max(maxBelowBaseline, belowBaseline);
   }
 
-  float totalHeight = maxBearingY + maxBelowBaseline;
-  float originX = -textWidth * 0.5f;
-  float originY = -totalHeight * 0.5f;
-
-  glm::vec3 cursor = glm::vec3(originX, originY, 0.0f);
+  const float ascender = font->m_Ascender > 0.0f ? font->m_Ascender : 48.0f;
+  const float descender = std::max(font->m_Descender, 0.0f);
+  const float baselineY = (descender - ascender) * size * 0.5f;
+  glm::vec3 cursor(-textWidth * 0.5f, 0.0f, 0.0f);
 
   // Precompute global transform
   glm::mat4 baseTransform = glm::translate(glm::mat4(1.0f), position) *
@@ -1846,7 +1911,7 @@ void Renderer::DrawText(const Font* font, const std::string& text, const glm::ve
         NextBatch();
 
     float xpos = cursor.x + Bearing.x * size;
-    float ypos = cursor.y + (maxBearingY - Bearing.y * size);
+    float ypos = baselineY + (Bearing.y - Size.y) * size;
     float w = Size.x * size;
     float h = Size.y * size;
 

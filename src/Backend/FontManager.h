@@ -15,6 +15,9 @@ struct Character
 struct Font
 {
   std::unordered_map<char, Character> m_Characters;
+  float m_Ascender = 0.0f;
+  float m_Descender = 0.0f;
+  float m_LineHeight = 0.0f;
 };
 
 struct FontManager

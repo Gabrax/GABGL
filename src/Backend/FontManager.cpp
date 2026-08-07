@@ -25,12 +25,12 @@ void FontManager::Init()
 
 void FontManager::Shutdown()
 {
-  for (auto &[m_Characters]: s_Data.m_Fonts | std::views::values)
+  for (auto& font : s_Data.m_Fonts | std::views::values)
   {
-    for (auto &glyph: m_Characters | std::views::values)
+    for (auto& glyph : font.m_Characters | std::views::values)
       if (glyph.TextureID != 0)
         glDeleteTextures(1, &glyph.TextureID);
-    m_Characters.clear();
+    font.m_Characters.clear();
   }
   s_Data.m_Fonts.clear();
 
@@ -55,6 +55,9 @@ void FontManager::LoadFont(const char* path)
   glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // still global state
 
   Font font;
+  font.m_Ascender = static_cast<float>(face->size->metrics.ascender) / 64.0f;
+  font.m_Descender = static_cast<float>(-face->size->metrics.descender) / 64.0f;
+  font.m_LineHeight = static_cast<float>(face->size->metrics.height) / 64.0f;
 
   for (unsigned char c = 0; c < 128; c++)
   {

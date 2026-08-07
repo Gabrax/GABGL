@@ -328,7 +328,7 @@ namespace Utils
 		glCreateTextures(TextureTarget(multisampled), count, outID);
 	}
 
-	static void AttachColorTexture(uint32_t id, int samples, GLenum internalFormat, GLenum format, uint32_t width, uint32_t height, int index, uint32_t framebufferID)
+	static void AttachColorTexture(uint32_t id, int samples, GLenum internalFormat, GLenum format, uint32_t width, uint32_t height, int index, uint32_t framebufferID, bool nearestFiltering)
 	{
 		bool multisampled = samples > 1;
 
@@ -346,8 +346,9 @@ namespace Utils
 
 			glTextureStorage2D(id, 1, internalFormat, width, height);
 
-			glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			const GLenum filter = nearestFiltering ? GL_NEAREST : GL_LINEAR;
+			glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, filter);
+			glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, filter);
 			glTextureParameteri(id, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTextureParameteri(id, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 			glTextureParameteri(id, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
@@ -464,7 +465,8 @@ void FrameBuffer::Invalidate()
 			}
 
 			Utils::AttachColorTexture(m_ColorAttachments[i], m_Specification.Samples, internalFormat, format,
-									  m_Specification.Width, m_Specification.Height, static_cast<int>(i), m_RendererID);
+									  m_Specification.Width, m_Specification.Height, static_cast<int>(i), m_RendererID,
+									  m_Specification.NearestFiltering);
 		}
 	}
 

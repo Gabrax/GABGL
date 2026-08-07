@@ -17,6 +17,11 @@ layout(std140, binding = 0) uniform Camera
   vec3 CameraPos;
 };
 
+layout(std140, binding = 1) uniform Resolution
+{
+  vec2 resolution;
+};
+
 layout(std430, binding = 5) buffer ModelTransforms    { mat4 transforms[];     };
 layout(std430, binding = 6) buffer MeshToTransformMap { int meshToTransform[]; };
 
@@ -81,7 +86,18 @@ void main()
   vs_out.TBN = mat3(T, B, N);
   vs_out.TBN_FragPos = transpose(vs_out.TBN) * vs_out.FragPos;
   vs_out.TexCoords = aTexCoords;
-  gl_Position = ViewProjection * worldPos;
+
+  vec4 clipPosition = ViewProjection * worldPos;
+  vec2 outputResolution = max(resolution, vec2(1.0));
+  float virtualHeight = 240.0;
+  vec2 snapResolution = vec2(
+    max(floor(virtualHeight * outputResolution.x / outputResolution.y + 0.5), 1.0),
+    virtualHeight);
+  float safeW = abs(clipPosition.w) > 0.00001 ? clipPosition.w : 0.00001;
+  vec2 ndc = clipPosition.xy / safeW;
+  vec2 snappedNdc = (floor((ndc * 0.5 + 0.5) * snapResolution + 0.5) / snapResolution) * 2.0 - 1.0;
+  clipPosition.xy = snappedNdc * clipPosition.w;
+  gl_Position = clipPosition;
 }
 
 #type FRAGMENT

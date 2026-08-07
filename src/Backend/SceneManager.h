@@ -151,7 +151,20 @@ struct SceneManager
   static Scene* GetActiveScene();
 
 private:
+  enum class TransitionState
+  {
+    None,
+    FadingOut,
+    Loading,
+    FadingIn
+  };
+
+  static void BeginLoadingScene(const std::string& scene);
+
   static std::unique_ptr<Scene> s_ActiveScene;
   static std::unique_ptr<Scene> s_PendingScene;
   static bool s_Loading;
+  static TransitionState s_TransitionState;
+  static std::string s_RequestedScene;
+  static float s_TransitionProgress;
 };
