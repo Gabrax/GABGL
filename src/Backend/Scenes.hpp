@@ -305,7 +305,7 @@ private:
         break;
       }
       case 2:
-        m_PauseResolutionIndex = Wrap(m_PauseResolutionIndex + direction, static_cast<int>(m_PauseResolutions.size()));
+        m_PauseResolutionIndex = Wrap(m_PauseResolutionIndex + direction, m_PauseResolutions.size());
         Settings::SetResolution(m_PauseResolutions[m_PauseResolutionIndex].x, m_PauseResolutions[m_PauseResolutionIndex].y);
         Renderer::ApplyDisplaySettings();
         break;
@@ -315,7 +315,7 @@ private:
         Renderer::ApplyDisplaySettings();
         break;
       case 4:
-        m_PauseFPSIndex = Wrap(m_PauseFPSIndex + direction, static_cast<int>(m_PauseFPSLimits.size()));
+        m_PauseFPSIndex = Wrap(m_PauseFPSIndex + direction, m_PauseFPSLimits.size());
         Settings::SetFPSLimit(m_PauseFPSLimits[m_PauseFPSIndex]);
         break;
       case 5:
@@ -487,13 +487,16 @@ struct MenuScene : Scene
     m_ScreenReveal = std::min(1.0f, m_ScreenReveal + m_FrameDelta / 0.38f);
 
     AudioManager::UpdateAllMusic();
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, Window::GetWidth(), Window::GetHeight());
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glDisable(GL_DEPTH_TEST);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    if (!GraphicsAPIState::IsDirectX12())
+    {
+      glBindFramebuffer(GL_FRAMEBUFFER, 0);
+      glViewport(0, 0, Window::GetWidth(), Window::GetHeight());
+      glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      glDisable(GL_DEPTH_TEST);
+      glEnable(GL_BLEND);
+      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    }
 
     const bool navigateUp = Pressed(
       Input::IsKeyPressed(Key::Up) || Input::IsKeyPressed(Key::W) ||

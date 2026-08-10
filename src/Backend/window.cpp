@@ -1,5 +1,11 @@
-#include <GLFW/glfw3.h>
 #include "window.h"
+#if defined(GABGL_ENABLE_DX12) && defined(_WIN32)
+#ifdef APIENTRY
+#undef APIENTRY
+#endif
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
+#endif
 #include "../input/EngineEvent.h"
 #include "../input/KeyEvent.h"
 #include "Logger.h"
@@ -20,6 +26,7 @@ struct WindowSpecificData
   std::string title;
   uint32_t Width, Height;
   bool VSync;
+  GraphicsAPI API;
 
   Window::EventCallbackFn EventCallback;
 } m_Data;
@@ -33,40 +40,54 @@ static void GLFWErrorCallback(int error, const char* description)
 	GABGL_ERROR("GLFW Error ({0}): {1}", error, description);
 }
 
-void Window::Init(const std::string& windowTitle, uint32_t windowWidth, uint32_t windowHeight)
+void Window::Init(const std::string& windowTitle, uint32_t windowWidth, uint32_t windowHeight,
+                  GraphicsAPI graphicsAPI)
 {
   m_Data.title = windowTitle;
   m_Data.Width = windowWidth;
   m_Data.Height = windowHeight;
+  m_Data.API = graphicsAPI;
 
   GABGL_INFO("Creating window {0} ({1},{2})", m_Data.title, m_Data.Width, m_Data.Height);
 
   int GLFWstatus = glfwInit();
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
-  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-  glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
   GABGL_ASSERT(GLFWstatus, "Failed to init GLFW");
   glfwSetErrorCallback(GLFWErrorCallback);
-  
+
+  glfwDefaultWindowHints();
+  if (m_Data.API == GraphicsAPI::OpenGL)
+  {
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
 #ifdef DEBUG
-	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
+	  glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
 #endif
+  }
+  else
+  {
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+  }
 
   m_Window = glfwCreateWindow((int)m_Data.Width, (int)m_Data.Height, m_Data.title.c_str(), nullptr, nullptr);
+  GABGL_ASSERT(m_Window, "Failed to create GLFW window");
   m_Monitor = glfwGetPrimaryMonitor();
   m_Mode = glfwGetVideoMode(m_Monitor);
-  glfwMakeContextCurrent(m_Window);
+  if (m_Data.API == GraphicsAPI::OpenGL)
+  {
+    glfwMakeContextCurrent(m_Window);
 
-	int status = gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
-	GABGL_ASSERT(status, "Failed to initialize Glad!");
+	  int status = gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+	  GABGL_ASSERT(status, "Failed to initialize Glad!");
 
-	GABGL_INFO("OpenGL Info:");
-	GABGL_INFO("  Vendor: {}", reinterpret_cast<const char*>(glGetString(GL_VENDOR)));
-	GABGL_INFO("  Renderer: {}", reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
-	GABGL_INFO("  Version: {}", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
+	  GABGL_INFO("OpenGL Info:");
+	  GABGL_INFO("  Vendor: {}", reinterpret_cast<const char*>(glGetString(GL_VENDOR)));
+	  GABGL_INFO("  Renderer: {}", reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
+	  GABGL_INFO("  Version: {}", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
 
-	GABGL_ASSERT(GLVersion.major > 4 || (GLVersion.major == 4 && GLVersion.minor >= 5), "GABGL requires at least OpenGL version 4.5!");
+	  GABGL_ASSERT(GLVersion.major > 4 || (GLVersion.major == 4 && GLVersion.minor >= 5), "GABGL requires at least OpenGL version 4.5!");
+  }
 
   glfwSetWindowUserPointer(m_Window, &m_Data);
 
@@ -166,7 +187,8 @@ void Window::Init(const std::string& windowTitle, uint32_t windowWidth, uint32_t
 		  data.EventCallback(event);
 	  });
 
-  glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+  if (m_Data.API == GraphicsAPI::OpenGL)
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
   SetEventCallback([](Event& e) { Window::OnEvent(e); });
 }
@@ -185,7 +207,8 @@ void Window::Terminate()
 void Window::Update()
 {
 	glfwPollEvents();
-	glfwSwapBuffers(m_Window);
+	if (m_Data.API == GraphicsAPI::OpenGL)
+	  glfwSwapBuffers(m_Window);
 	if (glfwWindowShouldClose(m_Window))
 		m_isRunning = false;
 }
@@ -203,8 +226,11 @@ void Window::SetWindowIcon(const char* iconpath, GLFWwindow* window)
 
 void Window::SetVSync(bool enabled)
 {
-  if(enabled) glfwSwapInterval(1);
-  else glfwSwapInterval(0);
+  if (m_Data.API == GraphicsAPI::OpenGL)
+  {
+    if(enabled) glfwSwapInterval(1);
+    else glfwSwapInterval(0);
+  }
 
   m_Data.VSync = enabled;
 }
@@ -217,7 +243,8 @@ bool Window::IsVSync()
 void Window::SetResolution(uint32_t width, uint32_t height) 
 { 
   glfwSetWindowSize(m_Window, static_cast<int>(width), static_cast<int>(height));
-  glViewport(0, 0, width, height);
+  if (m_Data.API == GraphicsAPI::OpenGL)
+    glViewport(0, 0, width, height);
   m_Data.Width = width;
   m_Data.Height = height;
 }
@@ -263,7 +290,8 @@ void Window::SetWindowMode(WindowMode mode, uint32_t width, uint32_t height)
 
   m_Data.Width = mode == WindowMode::Borderless ? static_cast<uint32_t>(m_Mode->width) : width;
   m_Data.Height = mode == WindowMode::Borderless ? static_cast<uint32_t>(m_Mode->height) : height;
-  glViewport(0, 0, m_Data.Width, m_Data.Height);
+  if (m_Data.API == GraphicsAPI::OpenGL)
+    glViewport(0, 0, m_Data.Width, m_Data.Height);
   SetVSync(Settings::GetVSync());
 }
 
@@ -337,7 +365,8 @@ bool Window::OnWindowResize(WindowResizeEvent& e)
 	}
 
 	m_isMinimized = false;
-  glViewport(0, 0, e.GetWidth(), e.GetHeight());
+  if (m_Data.API == GraphicsAPI::OpenGL)
+    glViewport(0, 0, e.GetWidth(), e.GetHeight());
 
 	return false;
 }
@@ -345,6 +374,14 @@ bool Window::OnWindowResize(WindowResizeEvent& e)
 uint32_t Window::GetWidth(){ return m_Data.Width; }
 uint32_t Window::GetHeight(){ return m_Data.Height; }
 GLFWwindow* Window::GetWindowPtr(){ return m_Window; }
+void* Window::GetNativeHandle()
+{
+#if defined(GABGL_ENABLE_DX12) && defined(_WIN32)
+  return m_Window ? static_cast<void*>(glfwGetWin32Window(m_Window)) : nullptr;
+#else
+  return nullptr;
+#endif
+}
 void Window::SetEventCallback(const Window::EventCallbackFn& callback) { m_Data.EventCallback = callback; }
 bool Window::isClosed() { return m_WindowClosed; }
 bool Window::IsRunning() { return m_isRunning; }

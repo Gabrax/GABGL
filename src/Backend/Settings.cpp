@@ -23,6 +23,7 @@ static float m_MusicVolume = 0.5f;
 static float m_SFXVolume = 0.7f;
 static GraphicsQuality m_ShadowQuality = GraphicsQuality::Medium;
 static GraphicsQuality m_BloomQuality = GraphicsQuality::Low;
+static GraphicsAPI m_GraphicsAPI = GraphicsAPI::OpenGL;
 
 void Settings::Init()
 {
@@ -50,6 +51,7 @@ void Settings::SetDefaults()
   m_SFXVolume = 0.7f;
   m_ShadowQuality = GraphicsQuality::Medium;
   m_BloomQuality = GraphicsQuality::Low;
+  m_GraphicsAPI = GraphicsAPI::OpenGL;
 }
 
 void Settings::Save()
@@ -75,6 +77,7 @@ void Settings::Save()
   };
 
   j["graphics"] = {
+    {"api", m_GraphicsAPI == GraphicsAPI::DirectX12 ? "dx12" : "opengl"},
     {"shadows", static_cast<uint32_t>(m_ShadowQuality)},
     {"bloom", static_cast<uint32_t>(m_BloomQuality)}
   };
@@ -115,6 +118,10 @@ void Settings::Load()
     m_RenderHeight = j["render"]["height"];
 
     const auto& graphics = j.contains("graphics") ? j["graphics"] : json::object();
+    const std::string graphicsAPI = graphics.value("api", "opengl");
+    m_GraphicsAPI = graphicsAPI == "dx12" || graphicsAPI == "directx12"
+      ? GraphicsAPI::DirectX12
+      : GraphicsAPI::OpenGL;
     m_ShadowQuality = static_cast<GraphicsQuality>(
       std::min(graphics.value("shadows", static_cast<uint32_t>(GraphicsQuality::Medium)), 3u));
     m_BloomQuality = static_cast<GraphicsQuality>(
@@ -185,3 +192,5 @@ GraphicsQuality Settings::GetShadowQuality() { return m_ShadowQuality; }
 void Settings::SetShadowQuality(GraphicsQuality quality) { m_ShadowQuality = quality; }
 GraphicsQuality Settings::GetBloomQuality() { return m_BloomQuality; }
 void Settings::SetBloomQuality(GraphicsQuality quality) { m_BloomQuality = quality; }
+GraphicsAPI Settings::GetGraphicsAPI() { return m_GraphicsAPI; }
+void Settings::SetGraphicsAPI(GraphicsAPI api) { m_GraphicsAPI = api; }

@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include "Logger.h"
+#include "GraphicsAPI.h"
 #include <cstring>
 
 struct LightData 
@@ -35,7 +36,8 @@ struct LightManagerData
 
 void LightManager::Init()
 {
-  ResizeLightBuffers(s_Data.maxLights);
+  if (!GraphicsAPIState::IsDirectX12())
+    ResizeLightBuffers(s_Data.maxLights);
 }
 
 void LightManager::Shutdown()
@@ -107,6 +109,8 @@ void LightManager::ResizeLightBuffers(uint32_t newMax)
   s_Data.maxLights = newMax;
   s_Data.maxPointLights = newMax - 10;
 
+  if (GraphicsAPIState::IsDirectX12()) return;
+
   s_Data.LightPosStorageBuffer = StorageBuffer::Create(sizeof(glm::vec4) * newMax, 0);
   s_Data.LightRotationStorageBuffer = StorageBuffer::Create(sizeof(glm::vec4) * newMax, 1);
   s_Data.LightQuantityStorageBuffer = StorageBuffer::Create(sizeof(uint32_t), 2);
@@ -123,6 +127,8 @@ void LightManager::UpdateSSBOLightData()
     if (light->type == LightType::POINT)
       s_Data.pointLightPositions.push_back(light->position);
   }
+
+  if (!s_Data.LightQuantityStorageBuffer) return;
 
   s_Data.LightQuantityStorageBuffer->SetData(sizeof(int32_t), &s_Data.numLights);
   

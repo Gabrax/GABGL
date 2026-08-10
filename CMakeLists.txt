@@ -36,6 +36,8 @@ endif()
 
 project(gl_engine)
 
+option(GABGL_ENABLE_DX12 "Build the optional DirectX 12 backend" ${WIN32})
+
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries only" FORCE)
 # Assimp 
 FetchContent_Declare(
@@ -96,6 +98,13 @@ add_subdirectory(vendor/imgui-docking)
 add_subdirectory(vendor/nlohmann-json)
 add_subdirectory(vendor/physx)
 
+# The engine currently does not link the upstream ImGuizmo target (its single
+# source integration below is optional). Exclude that target because current
+# ImGuizmo master requires a newer ImGui API than the vendored docking branch.
+if(TARGET imguizmo)
+  set_target_properties(imguizmo PROPERTIES EXCLUDE_FROM_ALL TRUE)
+endif()
+
 file(GLOB_RECURSE MY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
 add_executable("${CMAKE_PROJECT_NAME}")
@@ -126,3 +135,12 @@ set(RES_FOLDER "${CMAKE_BINARY_DIR}/../res")
 file(MAKE_DIRECTORY ${RES_FOLDER})
 
 target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image imgui assimp meshoptimizer JSONparser PhysX SndFile::sndfile OpenAL::OpenAL freetype)
+
+if(GABGL_ENABLE_DX12)
+  if(NOT WIN32)
+    message(FATAL_ERROR "GABGL_ENABLE_DX12 is only supported on Windows")
+  endif()
+
+  target_compile_definitions("${CMAKE_PROJECT_NAME}" PRIVATE GABGL_ENABLE_DX12=1)
+  target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE d3d12 dxgi dxguid d3dcompiler)
+endif()

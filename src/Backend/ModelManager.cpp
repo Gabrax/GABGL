@@ -8,6 +8,8 @@
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include "Renderer.h"
+#include "DirectX12Renderer.h"
+#include "GraphicsAPI.h"
 #include "Timer.hpp"
 #include <cmath>
 #include <limits>
@@ -126,6 +128,8 @@ static void RefreshInstanceTransforms()
 
 void ModelManager::Init()
 {
+  if (GraphicsAPIState::IsDirectX12()) return;
+
   if (s_Data.sharedVBO == 0)
     glCreateBuffers(1, &s_Data.sharedVBO);
   if (s_Data.sharedEBO == 0)
@@ -169,6 +173,32 @@ void ModelManager::Init()
 void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Model>& model)
 {
   Timer timer;
+
+  if (GraphicsAPIState::IsDirectX12())
+  {
+    const std::string name = std::filesystem::path(path).stem().string();
+    model->m_Name = name;
+    model->m_IsRendered = model->GetPhysXMeshType() != MeshType::CONVEXMESH;
+
+    for (auto& mesh : model->GetMeshes())
+    {
+      if (model->GetPhysXMeshType() == MeshType::TRIANGLEMESH)
+        model->CreatePhysXStaticMesh(mesh.m_Vertices, mesh.m_Indices);
+      else if (model->GetPhysXMeshType() == MeshType::CONVEXMESH)
+        model->CreatePhysXDynamicMesh(mesh.m_Vertices);
+    }
+
+    s_Data.m_Models[name] = model;
+    s_Data.m_ModelsNames.emplace_back(name);
+    DirectX12Renderer::UploadModel(model);
+
+    for (auto& mesh : model->GetMeshes())
+      for (auto& texture : mesh.m_Textures)
+        if (texture) texture->ClearRawData();
+
+    GABGL_WARN("Model: {0} DX12 upload took {1} ms", name, timer.ElapsedMillis());
+    return;
+  }
 
   constexpr int NUM_BUFFERS = 2;
   std::array<std::unique_ptr<PixelBuffer>, NUM_BUFFERS> pboBuffers;
@@ -671,9 +701,12 @@ static void ReleaseModelResources()
 
   for (const GLuint64 handle : residentHandles)
   {
-    if (handle != 0)
+    if (!GraphicsAPIState::IsDirectX12() && handle != 0)
       glMakeTextureHandleNonResidentARB(handle);
   }
+
+  if (GraphicsAPIState::IsDirectX12())
+    DirectX12Renderer::ResetSceneResources();
 
   s_Data.m_Models.clear();
   s_Data.m_ModelsNames.clear();
@@ -691,9 +724,12 @@ static void ReleaseModelResources()
   s_Data.m_InstanceTransformsSSBO.reset();
   s_Data.m_VisibleInstanceTransformsSSBO.reset();
 
-  if (s_Data.sharedVBO) glDeleteBuffers(1, &s_Data.sharedVBO);
-  if (s_Data.sharedEBO) glDeleteBuffers(1, &s_Data.sharedEBO);
-  if (s_Data.sharedVAO) glDeleteVertexArrays(1, &s_Data.sharedVAO);
+  if (!GraphicsAPIState::IsDirectX12())
+  {
+    if (s_Data.sharedVBO) glDeleteBuffers(1, &s_Data.sharedVBO);
+    if (s_Data.sharedEBO) glDeleteBuffers(1, &s_Data.sharedEBO);
+    if (s_Data.sharedVAO) glDeleteVertexArrays(1, &s_Data.sharedVAO);
+  }
   s_Data.sharedVBO = 0;
   s_Data.sharedEBO = 0;
   s_Data.sharedVAO = 0;
@@ -727,7 +763,7 @@ void ModelManager::UpdateTransforms(const DeltaTime& dt)
         const size_t matrixCount = std::min(transforms.size(), static_cast<size_t>(MAX_BONES));
         const size_t size = matrixCount * sizeof(glm::mat4);
 
-        if (size > 0)
+        if (size > 0 && s_Data.m_FinalBoneMatricesSSBO)
           s_Data.m_FinalBoneMatricesSSBO->SetSubData(offset, size, transforms.data());
       }
       else
@@ -818,6 +854,8 @@ void ModelManager::BindVisibleInstanceTransforms()
 
 void ModelManager::UploadToGPU()
 {
+  if (GraphicsAPIState::IsDirectX12()) return;
+
   glNamedBufferStorage(s_Data.sharedVBO, s_Data.allVertices.size() * sizeof(Vertex), s_Data.allVertices.data(), 0);
   glNamedBufferStorage(s_Data.sharedEBO, s_Data.allIndices.size() * sizeof(uint32_t), s_Data.allIndices.data(), 0);
 

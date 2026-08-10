@@ -7,6 +7,8 @@
 #include "ModelManager.h"
 #include "ParticleRenderer.h"
 #include "Renderer.h"
+#include "DirectX12Renderer.h"
+#include "GraphicsAPI.h"
 #include "Shader.h"
 #include "Texture.h"
 #include "AudioManager.h"
@@ -439,6 +441,17 @@ void Renderer::LoadShaders()
 
 void Renderer::Init()
 {
+  if (GraphicsAPIState::IsDirectX12())
+  {
+    const glm::vec2 resolution = {Window::GetWidth(), Window::GetHeight()};
+    Camera::Init(45.0f, resolution.x / resolution.y, 0.01f, 2000.0f);
+    Camera::SetViewportSize(resolution.x, resolution.y);
+    Camera::SetMode(CameraMode::PLAYER);
+    Window::SetCursorVisible(false);
+    DirectX12Renderer::InitSceneRenderer();
+    return;
+  }
+
 #ifdef DEBUG
 	glEnable(GL_DEBUG_OUTPUT);
 	glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
@@ -577,6 +590,12 @@ void Renderer::Init()
 
 void Renderer::Shutdown()
 {
+  if (GraphicsAPIState::IsDirectX12())
+  {
+    DirectX12Renderer::ShutdownSceneRenderer();
+    return;
+  }
+
 	Profiler::Shutdown();
 	ParticleRenderer::Shutdown();
 	ResetModelDrawCommands();
@@ -622,6 +641,12 @@ void Renderer::Shutdown()
 
 void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic, bool advanceSimulation)
 {
+  if (GraphicsAPIState::IsDirectX12())
+  {
+    DirectX12Renderer::DrawScene(dt, scene_logic, advanceSimulation);
+    return;
+  }
+
   GABGL_RESOLVE_GPU_QUERIES();
   ApplyGraphicsSettings();
 
@@ -880,6 +905,27 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
 
 void Renderer::DrawLoadingScreen()
 {
+  if (GraphicsAPIState::IsDirectX12())
+  {
+    const float time = static_cast<float>(glfwGetTime());
+    const int dotCount = static_cast<int>(time * 2.5f) % 4;
+    std::string label = "LOADING";
+    label.append(static_cast<size_t>(dotCount), '.');
+    const float pulse = 0.72f + std::sin(time * 3.0f) * 0.18f;
+    const float width = static_cast<float>(Window::GetWidth());
+    const float height = static_cast<float>(Window::GetHeight());
+    const float uiScale = GetResolutionUIScale();
+
+    BeginScene();
+    DrawText(nullptr, label, glm::vec2(width * 0.5f, height * 0.5f),
+      0.82f * uiScale, glm::vec4(0.72f, 0.86f, 1.0f, pulse));
+    DrawQuad(glm::vec2(width * 0.5f + std::sin(time * 1.8f) * 55.0f * uiScale,
+      height * 0.44f), glm::vec2(68.0f, 3.0f) * uiScale, 0.0f,
+      glm::vec4(0.28f, 0.58f, 0.92f, 0.65f));
+    EndScene();
+    return;
+  }
+
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   glViewport(0, 0, Window::GetWidth(), Window::GetHeight());
   glClearColor(0.008f, 0.012f, 0.025f, 1.0f);
@@ -912,6 +958,16 @@ void Renderer::DrawScreenOverlay(float opacity, const glm::vec3& color)
 {
   opacity = std::clamp(opacity, 0.0f, 1.0f);
   if (opacity <= 0.0f) return;
+
+  if (GraphicsAPIState::IsDirectX12())
+  {
+    BeginScene();
+    DrawQuad(glm::vec2(Window::GetWidth() * 0.5f, Window::GetHeight() * 0.5f),
+      glm::vec2(Window::GetWidth(), Window::GetHeight()), 0.0f,
+      glm::vec4(color, opacity));
+    EndScene();
+    return;
+  }
 
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   glViewport(0, 0, Window::GetWidth(), Window::GetHeight());
@@ -952,6 +1008,12 @@ void Renderer::SetFullscreen(const std::string& sound, bool windowed)
   auto height = Window::GetHeight();
 
   glm::vec2 newResolution = { width, height };
+  if (GraphicsAPIState::IsDirectX12())
+  {
+    Camera::SetViewportSize(width, height);
+    AudioManager::PlaySound(sound);
+    return;
+  }
   s_Data.m_ResolutionUniformBuffer->SetData(&newResolution, sizeof(glm::vec2));
 
   s_Data.m_GeometryBuffer->Resize(width, height);
@@ -972,6 +1034,11 @@ void Renderer::ApplyDisplaySettings()
 
   const uint32_t width = Window::GetWidth();
   const uint32_t height = Window::GetHeight();
+  if (GraphicsAPIState::IsDirectX12())
+  {
+    Camera::SetViewportSize(width, height);
+    return;
+  }
   const glm::vec2 resolution = {width, height};
   s_Data.m_ResolutionUniformBuffer->SetData(&resolution, sizeof(glm::vec2));
   s_Data.m_GeometryBuffer->Resize(width, height);
@@ -983,6 +1050,8 @@ void Renderer::ApplyDisplaySettings()
 
 void Renderer::ApplyGraphicsSettings()
 {
+  if (GraphicsAPIState::IsDirectX12()) return;
+
   const GraphicsQuality quality = Settings::GetShadowQuality();
   const auto qualityValue = static_cast<uint32_t>(quality);
   if (qualityValue == s_Data.m_AppliedShadowQuality &&
@@ -1299,6 +1368,12 @@ void Renderer::DrawDebug2D()
 
 void Renderer::BeginScene()
 {
+	if (GraphicsAPIState::IsDirectX12())
+	{
+		DirectX12Renderer::BeginScene();
+		return;
+	}
+
 	s_Data.m_CameraBuffer.ViewProjection = Camera::GetViewProjection();
 	s_Data.m_CameraBuffer.OrtoProjection = Camera::GetOrtoProjection();
 	s_Data.m_CameraBuffer.NonRotViewProjection = Camera::GetNonRotationViewProjection();
@@ -1310,6 +1385,11 @@ void Renderer::BeginScene()
 
 void Renderer::EndScene()
 {
+	if (GraphicsAPIState::IsDirectX12())
+	{
+		DirectX12Renderer::EndScene();
+		return;
+	}
 	Flush();
 }
 
@@ -1392,6 +1472,12 @@ void Renderer::DrawQuad(const glm::vec2& position, const glm::vec2& size, float 
 
 void Renderer::DrawQuad(const glm::mat4& transform, const glm::vec4& color, int entityID)
 {
+	if (GraphicsAPIState::IsDirectX12())
+	{
+		DirectX12Renderer::DrawQuad(transform, color);
+		return;
+	}
+
 	if (s_Data.QuadIndexCount >= RendererData::MaxIndices) NextBatch();
 
   auto position = glm::vec3(transform[3]);
@@ -1749,6 +1835,8 @@ void Renderer::DrawFramebuffer(uint32_t textureID, bool applyPS1Effect)
 
 void Renderer::BakeSkyboxTextures(const std::string& name, const std::shared_ptr<Texture>& cubemap)
 {
+  if (GraphicsAPIState::IsDirectX12()) return;
+
   Timer timer;
 
   auto channels = cubemap->GetChannels();
@@ -1870,6 +1958,12 @@ void Renderer::DrawText(const Font* font, const std::string& text, const glm::ve
 
 void Renderer::DrawText(const Font* font, const std::string& text, const glm::vec3& position, const glm::vec3& rotation, float size, const glm::vec4& color, int entityID)
 {
+  if (GraphicsAPIState::IsDirectX12())
+  {
+    DirectX12Renderer::DrawText(text, glm::vec2(position), size, color);
+    return;
+  }
+
   if (!font || font->m_Characters.empty() || text.empty())
   {
       GABGL_ERROR("Font is nullptr, empty, or text is empty");
@@ -1955,6 +2049,8 @@ void Renderer::DrawText(const Font* font, const std::string& text, const glm::ve
 
 void Renderer::AddDrawCommand(const std::string& modelName, uint32_t verticesSize, uint32_t indicesSize)
 {
+  if (GraphicsAPIState::IsDirectX12()) return;
+
   DrawElementsIndirectCommand cmd =
   {
     .count = (indicesSize),
@@ -1974,6 +2070,7 @@ void Renderer::AddDrawCommand(const std::string& modelName, uint32_t verticesSiz
 void Renderer::RebuildDrawCommandsForModel(const std::shared_ptr<Model>& model, bool render)
 {
   model->m_IsRendered = render;
+  if (GraphicsAPIState::IsDirectX12()) return;
   UpdateDrawCommandInstances(model);
 }
 
@@ -2029,6 +2126,8 @@ void Renderer::UpdateModelFrustumCulling()
 
 void Renderer::UpdateDrawCommandInstances(const std::shared_ptr<Model>& model)
 {
+  if (GraphicsAPIState::IsDirectX12()) return;
+
   const auto commandIndices = s_Data.m_ModelDrawCommandIndices.find(model->m_Name);
   if (commandIndices == s_Data.m_ModelDrawCommandIndices.end()) return;
 
@@ -2056,6 +2155,8 @@ void Renderer::UpdateDrawCommandInstances(const std::shared_ptr<Model>& model)
 
 void Renderer::InitDrawCommandBuffer()
 {
+  if (GraphicsAPIState::IsDirectX12()) return;
+
   if (s_Data.m_DrawCommands.empty()) return;
 
   if (s_Data.m_cmdBufer != 0) glDeleteBuffers(1, &s_Data.m_cmdBufer);
@@ -2071,6 +2172,12 @@ void Renderer::InitDrawCommandBuffer()
 
 void Renderer::ResetModelDrawCommands()
 {
+  if (GraphicsAPIState::IsDirectX12())
+  {
+    DirectX12Renderer::ResetSceneResources();
+    return;
+  }
+
   if (s_Data.m_cmdBufer != 0) glDeleteBuffers(1, &s_Data.m_cmdBufer);
   if (s_Data.m_CulledCmdBuffer != 0) glDeleteBuffers(1, &s_Data.m_CulledCmdBuffer);
 

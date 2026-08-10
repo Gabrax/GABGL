@@ -6,6 +6,7 @@
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include "GraphicsAPI.h"
 #include "../input/Event.h"
 #include "../input/EngineEvent.h"
 
@@ -15,12 +16,14 @@ struct Window
 {
 	using EventCallbackFn = std::function<void(Event&)>;
 
-  static void Init(const std::string& windowTitle, uint32_t windowWidth, uint32_t windoHeight);
+  static void Init(const std::string& windowTitle, uint32_t windowWidth, uint32_t windoHeight,
+                   GraphicsAPI graphicsAPI = GraphicsAPI::OpenGL);
   static void Terminate();
 	static void Update();
 	static uint32_t GetWidth();
 	static uint32_t GetHeight();
 	static GLFWwindow* GetWindowPtr();
+	static void* GetNativeHandle();
 	static void SetEventCallback(const EventCallbackFn& callback);
 	static bool isClosed();
 	static void SetVSync(bool enabled);

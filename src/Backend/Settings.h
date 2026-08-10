@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include "GraphicsAPI.h"
 
 enum class WindowMode : uint32_t
 {
@@ -43,6 +44,8 @@ struct Settings
   static void SetShadowQuality(GraphicsQuality quality);
   static GraphicsQuality GetBloomQuality();
   static void SetBloomQuality(GraphicsQuality quality);
+  static GraphicsAPI GetGraphicsAPI();
+  static void SetGraphicsAPI(GraphicsAPI api);
 
 private:
   static void Load();
