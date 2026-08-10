@@ -4,11 +4,16 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <glm/glm.hpp>
 
+#include "RenderCommon.h"
+
 struct DeltaTime;
 struct Model;
+struct ParticleRenderInstance;
+struct Texture;
 
 // Minimal native DirectX 12 rendering path used while the OpenGL renderer is
 // migrated incrementally. The implementation intentionally keeps all D3D12
@@ -27,9 +32,24 @@ struct DirectX12Renderer
   static void ShutdownSceneRenderer();
   static void ResetSceneResources();
   static bool UploadModel(const std::shared_ptr<Model>& model);
+  static bool UploadSkybox(const std::shared_ptr<Texture>& cubemap);
+
+  static bool InitImGui();
+  static void ShutdownImGui();
+  static void BeginImGuiFrame();
+  static void RenderImGuiDrawData();
+  static uint64_t GetEditorTextureID();
 
   static void DrawScene(DeltaTime& dt, const std::function<void()>& sceneLogic,
-                        bool advanceSimulation = true);
+                        bool advanceSimulation, bool renderForEditor,
+                        const RenderEffectSettings& effects);
+  static void DrawParticles(const std::vector<ParticleRenderInstance>& instances);
+  static void BeginDebugLines();
+  static void DrawDebugLine(const glm::vec3& start, const glm::vec3& end,
+                            const glm::vec4& color);
+  static void EndDebugLines();
+  static void DrawPhysicsDebug();
+  static void PrepareScreenUI(const glm::vec4& clearColor, bool clear);
   static void BeginScene();
   static void EndScene();
   static void DrawQuad(const glm::mat4& transform, const glm::vec4& color);

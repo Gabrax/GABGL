@@ -8,8 +8,7 @@
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include "Renderer.h"
-#include "DirectX12Renderer.h"
-#include "GraphicsAPI.h"
+#include "RenderBackend.h"
 #include "Timer.hpp"
 #include <cmath>
 #include <limits>
@@ -128,7 +127,7 @@ static void RefreshInstanceTransforms()
 
 void ModelManager::Init()
 {
-  if (GraphicsAPIState::IsDirectX12()) return;
+  if (RenderBackend::Capabilities().NativeModelResources) return;
 
   if (s_Data.sharedVBO == 0)
     glCreateBuffers(1, &s_Data.sharedVBO);
@@ -174,7 +173,7 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
 {
   Timer timer;
 
-  if (GraphicsAPIState::IsDirectX12())
+  if (RenderBackend::Capabilities().NativeModelResources)
   {
     const std::string name = std::filesystem::path(path).stem().string();
     model->m_Name = name;
@@ -190,7 +189,7 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
 
     s_Data.m_Models[name] = model;
     s_Data.m_ModelsNames.emplace_back(name);
-    DirectX12Renderer::UploadModel(model);
+    RenderBackend::Get().UploadModel(model);
 
     for (auto& mesh : model->GetMeshes())
       for (auto& texture : mesh.m_Textures)
@@ -701,12 +700,12 @@ static void ReleaseModelResources()
 
   for (const GLuint64 handle : residentHandles)
   {
-    if (!GraphicsAPIState::IsDirectX12() && handle != 0)
+    if (RenderBackend::Capabilities().OpenGLContext && handle != 0)
       glMakeTextureHandleNonResidentARB(handle);
   }
 
-  if (GraphicsAPIState::IsDirectX12())
-    DirectX12Renderer::ResetSceneResources();
+  if (RenderBackend::Capabilities().NativeModelResources)
+    RenderBackend::Get().ResetSceneResources();
 
   s_Data.m_Models.clear();
   s_Data.m_ModelsNames.clear();
@@ -724,7 +723,7 @@ static void ReleaseModelResources()
   s_Data.m_InstanceTransformsSSBO.reset();
   s_Data.m_VisibleInstanceTransformsSSBO.reset();
 
-  if (!GraphicsAPIState::IsDirectX12())
+  if (!RenderBackend::Capabilities().NativeModelResources)
   {
     if (s_Data.sharedVBO) glDeleteBuffers(1, &s_Data.sharedVBO);
     if (s_Data.sharedEBO) glDeleteBuffers(1, &s_Data.sharedEBO);
@@ -854,7 +853,7 @@ void ModelManager::BindVisibleInstanceTransforms()
 
 void ModelManager::UploadToGPU()
 {
-  if (GraphicsAPIState::IsDirectX12()) return;
+  if (RenderBackend::Capabilities().NativeModelResources) return;
 
   glNamedBufferStorage(s_Data.sharedVBO, s_Data.allVertices.size() * sizeof(Vertex), s_Data.allVertices.data(), 0);
   glNamedBufferStorage(s_Data.sharedEBO, s_Data.allIndices.size() * sizeof(uint32_t), s_Data.allIndices.data(), 0);

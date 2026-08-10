@@ -924,7 +924,8 @@ void BloomBuffer::UnBind() const
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void BloomBuffer::CompositeTo(const std::shared_ptr<FrameBuffer>& dst, bool bloomEnabled)
+void BloomBuffer::CompositeTo(const std::shared_ptr<FrameBuffer>& dst, bool bloomEnabled,
+  float exposure, float strength, float gamma)
 {
   dst->Bind();
   dst->SetDrawBuffer(0);
@@ -941,6 +942,9 @@ void BloomBuffer::CompositeTo(const std::shared_ptr<FrameBuffer>& dst, bool bloo
     glBindTextureUnit(1, mMipChain[0].texture);
   finalShader->SetInt("bloomBlur", 1);
   finalShader->SetBool("u_BloomEnabled", bloomEnabled);
+  finalShader->SetFloat("u_Exposure", exposure);
+  finalShader->SetFloat("u_BloomStrength", strength);
+  finalShader->SetFloat("u_Gamma", gamma);
 
   renderQuad();
 

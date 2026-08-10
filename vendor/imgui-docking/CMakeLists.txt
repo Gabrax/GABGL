@@ -13,6 +13,13 @@ target_sources(imgui PRIVATE
 "${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends/imgui_impl_opengl3.cpp"
 )
 
+if(GABGL_ENABLE_DX12 AND WIN32)
+target_sources(imgui PRIVATE
+"${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends/imgui_impl_dx12.cpp"
+)
+target_link_libraries(imgui PUBLIC d3d12)
+endif()
+
 target_include_directories(imgui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/imgui")
 
 

@@ -20,8 +20,9 @@ in vec2 TexCoords;
 
 uniform sampler2D scene;
 uniform sampler2D bloomBlur;
-uniform float exposure = 0.5f;
-uniform float bloomStrength = 1.5f;
+uniform float u_Exposure;
+uniform float u_BloomStrength;
+uniform float u_Gamma;
 uniform bool u_BloomEnabled;
 
 // ACES Tone Mapping
@@ -36,16 +37,14 @@ vec3 toneMappingACES(vec3 color)
   return clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0, 1.0);
 }
 
-const float gamma = 1.2;
-
 float gammaCorrection(float value)
 {
-  return pow(value, 1.0 / gamma);
+  return pow(value, 1.0 / max(u_Gamma, 0.001));
 }
 
 vec3 gammaCorrection(vec3 value)
 {
-  return pow(value, vec3(1.0 / gamma));
+  return pow(value, vec3(1.0 / max(u_Gamma, 0.001)));
 }
 
 void main()
@@ -53,8 +52,8 @@ void main()
   vec3 hdrColor = texture(scene, TexCoords).rgb;
   vec3 bloomColor = u_BloomEnabled ? texture(bloomBlur, TexCoords).rgb : vec3(0.0);
 
-  vec3 result = hdrColor + bloomColor * bloomStrength;
-  result = toneMappingACES(result * exposure);
+  vec3 result = hdrColor + bloomColor * u_BloomStrength;
+  result = toneMappingACES(result * u_Exposure);
   result = gammaCorrection(result);
   FragColor = vec4(result, 1.0);
 }

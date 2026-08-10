@@ -19,6 +19,8 @@ layout(location = 0) out vec4 FragColor;
 
 uniform sampler2D u_Texture;
 uniform bool u_PS1Effect;
+uniform float u_PS1VirtualHeight;
+uniform float u_PS1ColorLevels;
 
 layout(std140, binding = 1) uniform Resolution
 {
@@ -43,7 +45,8 @@ void main()
   // Render the scene on a 240-line virtual display while retaining square
   // pixels on widescreen outputs.
   float aspect = resolution.x / max(resolution.y, 1.0);
-  vec2 virtualResolution = vec2(max(floor(240.0 * aspect + 0.5), 1.0), 240.0);
+  float virtualHeight = max(u_PS1VirtualHeight, 1.0);
+  vec2 virtualResolution = vec2(max(floor(virtualHeight * aspect + 0.5), 1.0), virtualHeight);
   vec2 virtualPixel = floor(v_TexCoord * virtualResolution);
   vec2 snappedUV = (virtualPixel + 0.5) / virtualResolution;
 
@@ -54,7 +57,8 @@ void main()
   ivec2 ditherCoord = ivec2(virtualPixel) & ivec2(3);
   int ditherIndex = ditherCoord.x + ditherCoord.y * 4;
   float threshold = (bayer4x4[ditherIndex] + 0.5) / 16.0;
-  vec3 ps1Color = floor(clamp(source.rgb, 0.0, 1.0) * 31.0 + threshold) / 31.0;
+  float colorLevels = max(u_PS1ColorLevels, 1.0);
+  vec3 ps1Color = floor(clamp(source.rgb, 0.0, 1.0) * colorLevels + threshold) / colorLevels;
 
   FragColor = vec4(ps1Color, source.a);
 }

@@ -41,6 +41,9 @@ layout(std430, binding = 9) buffer FinalBoneMatrices  { mat4 boneMatrices[];    
 layout(std430, binding = 10) buffer ModelIsAnimated   { int modelIsAnimated[];  };
 layout(std430, binding = 13) readonly buffer InstanceTransforms { mat4 instanceTransforms[]; };
 
+uniform bool u_PS1Enabled;
+uniform float u_PS1VirtualHeight;
+
 void main()
 {
   vs_out.DrawID = gl_DrawID;
@@ -89,14 +92,17 @@ void main()
 
   vec4 clipPosition = ViewProjection * worldPos;
   vec2 outputResolution = max(resolution, vec2(1.0));
-  float virtualHeight = 240.0;
+  float virtualHeight = max(u_PS1VirtualHeight, 1.0);
   vec2 snapResolution = vec2(
     max(floor(virtualHeight * outputResolution.x / outputResolution.y + 0.5), 1.0),
     virtualHeight);
   float safeW = abs(clipPosition.w) > 0.00001 ? clipPosition.w : 0.00001;
-  vec2 ndc = clipPosition.xy / safeW;
-  vec2 snappedNdc = (floor((ndc * 0.5 + 0.5) * snapResolution + 0.5) / snapResolution) * 2.0 - 1.0;
-  clipPosition.xy = snappedNdc * clipPosition.w;
+  if (u_PS1Enabled)
+  {
+    vec2 ndc = clipPosition.xy / safeW;
+    vec2 snappedNdc = (floor((ndc * 0.5 + 0.5) * snapResolution + 0.5) / snapResolution) * 2.0 - 1.0;
+    clipPosition.xy = snappedNdc * clipPosition.w;
+  }
   gl_Position = clipPosition;
 }
 

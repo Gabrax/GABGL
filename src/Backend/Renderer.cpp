@@ -7,8 +7,7 @@
 #include "ModelManager.h"
 #include "ParticleRenderer.h"
 #include "Renderer.h"
-#include "DirectX12Renderer.h"
-#include "GraphicsAPI.h"
+#include "RenderBackend.h"
 #include "Shader.h"
 #include "Texture.h"
 #include "AudioManager.h"
@@ -200,18 +199,12 @@ struct RendererData
   uint32_t m_cmdBufer = 0;
   uint32_t m_CulledCmdBuffer = 0;
   size_t m_cmdBufferSize = 0;
-  uint32_t m_VisibleInstanceCount = 0;
-  uint32_t m_RenderableInstanceCount = 0;
   GLuint m_FullscreenQuadVAO = 0;
   GLuint m_FullscreenQuadVBO = 0;
   GLuint m_FramebufferQuadVAO = 0;
   GLuint m_FramebufferQuadVBO = 0;
   GLuint m_SkyboxVAO = 0;
   GLuint m_SkyboxVBO = 0;
-  bool m_PhysicsDebug = false;
-  bool m_LightDebug = false;
-  bool m_CullingDebug = false;
-  bool m_Debug2D = false;
   std::vector<Debug2DCommand> m_Debug2DCommands;
   uint32_t m_AppliedShadowQuality = std::numeric_limits<uint32_t>::max();
   int m_PointShadowMask = 0;
@@ -224,52 +217,6 @@ struct RendererData
   bool Is3D = false;
 
 } s_Data;
-
-struct Frustum
-{
-  explicit Frustum(const glm::mat4& viewProjection)
-  {
-    const glm::vec4 row0(viewProjection[0][0], viewProjection[1][0], viewProjection[2][0], viewProjection[3][0]);
-    const glm::vec4 row1(viewProjection[0][1], viewProjection[1][1], viewProjection[2][1], viewProjection[3][1]);
-    const glm::vec4 row2(viewProjection[0][2], viewProjection[1][2], viewProjection[2][2], viewProjection[3][2]);
-    const glm::vec4 row3(viewProjection[0][3], viewProjection[1][3], viewProjection[2][3], viewProjection[3][3]);
-    m_Planes = {row3 + row0, row3 - row0, row3 + row1, row3 - row1, row3 + row2, row3 - row2};
-
-    for (glm::vec4& plane : m_Planes)
-    {
-	    if (const float normalLength = glm::length(glm::vec3(plane)); normalLength > 0.0f)
-			plane /= normalLength;
-    }
-  }
-
-  [[nodiscard]] bool IntersectsSphere(const glm::vec3& center, const float radius) const
-  {
-    for (const glm::vec4& plane : m_Planes)
-      if (glm::dot(glm::vec3(plane), center) + plane.w < -radius)
-        return false;
-    return true;
-  }
-
-private:
-  std::array<glm::vec4, 6> m_Planes;
-};
-
-struct WorldBoundingSphere
-{
-  glm::vec3 center;
-  float radius;
-};
-
-static WorldBoundingSphere TransformBoundingSphere(const Model& model, const glm::mat4& transform)
-{
-  const glm::vec3 center = glm::vec3(transform * glm::vec4(model.GetBoundsCenter(), 1.0f));
-  const float maxScale = std::max({
-    glm::length(glm::vec3(transform[0])),
-    glm::length(glm::vec3(transform[1])),
-    glm::length(glm::vec3(transform[2]))
-  });
-  return {center, std::max(model.GetBoundsRadius(), 0.001f) * maxScale};
-}
 
 static void DrawWireSphere(const glm::vec3& center, float radius, const glm::vec4& color, int segments = 24)
 {
@@ -343,7 +290,7 @@ static void DrawWireCapsule(const glm::vec3& center, float radius, float height,
 
 static bool SphereIntersectsFrustum(const glm::mat4& viewProjection, const glm::vec3& center, float radius)
 {
-  return Frustum(viewProjection).IntersectsSphere(center, radius);
+  return RenderFrustum(viewProjection).IntersectsSphere(center, radius);
 }
 
 static bool CubemapFaceCanContainVisibleReceiver(const glm::vec3& lightPosition,
@@ -422,6 +369,40 @@ static void DrawInteractionLabels()
   }
 }
 
+static void InitializeEditorUI()
+{
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO();
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+	ImGui::StyleColorsDark();
+
+	ImGuiStyle& style = ImGui::GetStyle();
+	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+	{
+		style.WindowRounding = 0.0f;
+		style.Colors[ImGuiCol_WindowBg].w = 1.0f;
+	}
+
+	auto* window = reinterpret_cast<GLFWwindow*>(Window::GetWindowPtr());
+	if (RenderBackend::Capabilities().OpenGLContext)
+		ImGui_ImplGlfw_InitForOpenGL(window, true);
+	else
+		ImGui_ImplGlfw_InitForOther(window, true);
+
+	if (!RenderBackend::Get().InitializeImGuiRenderer())
+		GABGL_ERROR("Could not initialize ImGui for the {} backend", RenderBackend::Get().GetName());
+}
+
+static void ShutdownEditorUI()
+{
+	RenderBackend::Get().ShutdownImGuiRenderer();
+	ImGui_ImplGlfw_Shutdown();
+	ImGui::DestroyContext();
+}
+
 void Renderer::LoadShaders()
 {
 	Shader::Create(s_Data.s_Shaders.QuadShader, "../res/shaders/batch_quad.glsl");
@@ -441,14 +422,18 @@ void Renderer::LoadShaders()
 
 void Renderer::Init()
 {
-  if (GraphicsAPIState::IsDirectX12())
+  if (RenderBackend::Capabilities().NativeSceneRenderer)
   {
     const glm::vec2 resolution = {Window::GetWidth(), Window::GetHeight()};
     Camera::Init(45.0f, resolution.x / resolution.y, 0.01f, 2000.0f);
     Camera::SetViewportSize(resolution.x, resolution.y);
     Camera::SetMode(CameraMode::PLAYER);
     Window::SetCursorVisible(false);
-    DirectX12Renderer::InitSceneRenderer();
+    RenderBackend::Get().InitializeSceneRenderer();
+    ParticleRenderer::Init();
+    s_Data.m_SceneState = RendererData::SceneState::Play;
+
+    InitializeEditorUI();
     return;
   }
 
@@ -562,26 +547,7 @@ void Renderer::Init()
 	Camera::SetMode(CameraMode::PLAYER);
 	Window::SetCursorVisible(false);
 
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO(); (void)io;
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;       // Enable Keyboard Controls
-	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;           // Enable Docking
-	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;         // Enable Multi-Viewport / Platform Windows
-
-	ImGui::StyleColorsDark();
-
-	ImGuiStyle& style = ImGui::GetStyle();
-	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-	{
-		style.WindowRounding = 0.0f;
-		style.Colors[ImGuiCol_WindowBg].w = 1.0f;
-	}
-
-	auto* window = reinterpret_cast<GLFWwindow*>(Window::GetWindowPtr());
-
-	ImGui_ImplGlfw_InitForOpenGL(window, true);
-	ImGui_ImplOpenGL3_Init("#version 410");
+	InitializeEditorUI();
 	SetLineWidth(4.0f);
 	//s_Data.m_GizmoType = ImGuizmo::OPERATION::TRANSLATE;
 
@@ -590,9 +556,11 @@ void Renderer::Init()
 
 void Renderer::Shutdown()
 {
-  if (GraphicsAPIState::IsDirectX12())
+  if (RenderBackend::Capabilities().NativeSceneRenderer)
   {
-    DirectX12Renderer::ShutdownSceneRenderer();
+    ShutdownEditorUI();
+    ParticleRenderer::Shutdown();
+    RenderBackend::Get().ShutdownSceneRenderer();
     return;
   }
 
@@ -600,9 +568,7 @@ void Renderer::Shutdown()
 	ParticleRenderer::Shutdown();
 	ResetModelDrawCommands();
 
-	ImGui_ImplOpenGL3_Shutdown();
-	ImGui_ImplGlfw_Shutdown();
-	ImGui::DestroyContext();
+	ShutdownEditorUI();
 
 	delete[] s_Data.QuadVertexBufferBase;
 	s_Data.QuadVertexBufferBase = nullptr;
@@ -641,16 +607,30 @@ void Renderer::Shutdown()
 
 void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic, bool advanceSimulation)
 {
-  if (GraphicsAPIState::IsDirectX12())
+  const RenderEffectSettings effects = RenderBackend::GetEffectSettings();
+  const bool renderForEditor = s_Data.m_SceneState == RendererData::SceneState::Edit;
+  if (RenderBackend::Get().DrawScene(dt, scene_logic, advanceSimulation, renderForEditor, effects))
   {
-    DirectX12Renderer::DrawScene(dt, scene_logic, advanceSimulation);
+    if (renderForEditor)
+    {
+      DrawEditorFrameBuffer(RenderBackend::Get().GetEditorTextureID());
+    }
+    else if (advanceSimulation)
+    {
+      const float uiScale = GetResolutionUIScale();
+      BeginScene();
+      DrawInteractionLabels();
+      DrawText(nullptr, "FPS: " + std::to_string(dt.GetFPS()),
+        glm::vec2(100.0f, 50.0f) * uiScale, 0.5f * uiScale, glm::vec4(1.0f));
+      EndScene();
+    }
     return;
   }
 
   GABGL_RESOLVE_GPU_QUERIES();
   ApplyGraphicsSettings();
 
-  const bool shadowsEnabled = Settings::GetShadowQuality() != GraphicsQuality::Off;
+  const bool shadowsEnabled = effects.ShadowQuality != GraphicsQuality::Off;
 
   glDisable(GL_DITHER);
   glDisable(GL_BLEND);
@@ -783,6 +763,8 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     s_Data.s_Shaders.GeometryShader->Bind();
+    s_Data.s_Shaders.GeometryShader->SetFloat("u_PS1VirtualHeight", effects.PS1VirtualHeight);
+    s_Data.s_Shaders.GeometryShader->SetBool("u_PS1Enabled", effects.PS1Enabled);
     BeginScene();
     glBindVertexArray(ModelManager::GetModelsVAO());
     ModelManager::BindVisibleInstanceTransforms();
@@ -830,17 +812,15 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
   {
     GABGL_PROFILE_SCOPE("BLOOM PASS");
 
-    const GraphicsQuality bloomQuality = Settings::GetBloomQuality();
-    if (bloomQuality != GraphicsQuality::Off)
+    if (effects.BloomQuality != GraphicsQuality::Off)
     {
-      const uint32_t bloomMipCount = bloomQuality == GraphicsQuality::Low ? 3u
-        : bloomQuality == GraphicsQuality::Medium ? 5u
-        : 6u;
-      s_Data.m_BloomBuffer->RenderBloomTexture(0.005f, bloomMipCount);
+      s_Data.m_BloomBuffer->RenderBloomTexture(effects.BloomFilterRadius, effects.BloomPassCount());
     }
 
     s_Data.m_ResultBuffer->ClearAttachment(1, -1);
-    s_Data.m_BloomBuffer->CompositeTo(s_Data.m_ResultBuffer, bloomQuality != GraphicsQuality::Off);
+    s_Data.m_BloomBuffer->CompositeTo(s_Data.m_ResultBuffer,
+      effects.BloomQuality != GraphicsQuality::Off,
+      effects.BloomExposure, effects.BloomStrength, effects.Gamma);
   }
   {
     GABGL_PROFILE_SCOPE("FORWARD PASS");
@@ -905,34 +885,7 @@ void Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic
 
 void Renderer::DrawLoadingScreen()
 {
-  if (GraphicsAPIState::IsDirectX12())
-  {
-    const float time = static_cast<float>(glfwGetTime());
-    const int dotCount = static_cast<int>(time * 2.5f) % 4;
-    std::string label = "LOADING";
-    label.append(static_cast<size_t>(dotCount), '.');
-    const float pulse = 0.72f + std::sin(time * 3.0f) * 0.18f;
-    const float width = static_cast<float>(Window::GetWidth());
-    const float height = static_cast<float>(Window::GetHeight());
-    const float uiScale = GetResolutionUIScale();
-
-    BeginScene();
-    DrawText(nullptr, label, glm::vec2(width * 0.5f, height * 0.5f),
-      0.82f * uiScale, glm::vec4(0.72f, 0.86f, 1.0f, pulse));
-    DrawQuad(glm::vec2(width * 0.5f + std::sin(time * 1.8f) * 55.0f * uiScale,
-      height * 0.44f), glm::vec2(68.0f, 3.0f) * uiScale, 0.0f,
-      glm::vec4(0.28f, 0.58f, 0.92f, 0.65f));
-    EndScene();
-    return;
-  }
-
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  glViewport(0, 0, Window::GetWidth(), Window::GetHeight());
-  glClearColor(0.008f, 0.012f, 0.025f, 1.0f);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  glDisable(GL_DEPTH_TEST);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  PrepareScreenUI(glm::vec4(0.008f, 0.012f, 0.025f, 1.0f));
 
   const float time = static_cast<float>(glfwGetTime());
   const int dotCount = static_cast<int>(time * 2.5f) % 4;
@@ -944,7 +897,7 @@ void Renderer::DrawLoadingScreen()
   const float uiScale = GetResolutionUIScale();
 
   BeginScene();
-  DrawText(FontManager::GetFont("dpcomic"), label,
+  DrawText(RenderBackend::Capabilities().OpenGLContext ? FontManager::GetFont("dpcomic") : nullptr, label,
     glm::vec2(width * 0.5f, height * 0.5f), 0.82f * uiScale,
     glm::vec4(0.72f, 0.86f, 1.0f, pulse));
   DrawQuad(
@@ -959,21 +912,7 @@ void Renderer::DrawScreenOverlay(float opacity, const glm::vec3& color)
   opacity = std::clamp(opacity, 0.0f, 1.0f);
   if (opacity <= 0.0f) return;
 
-  if (GraphicsAPIState::IsDirectX12())
-  {
-    BeginScene();
-    DrawQuad(glm::vec2(Window::GetWidth() * 0.5f, Window::GetHeight() * 0.5f),
-      glm::vec2(Window::GetWidth(), Window::GetHeight()), 0.0f,
-      glm::vec4(color, opacity));
-    EndScene();
-    return;
-  }
-
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  glViewport(0, 0, Window::GetWidth(), Window::GetHeight());
-  glDisable(GL_DEPTH_TEST);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  PrepareScreenUI({}, false);
 
   BeginScene();
   DrawQuad(
@@ -982,6 +921,11 @@ void Renderer::DrawScreenOverlay(float opacity, const glm::vec3& color)
     0.0f,
     glm::vec4(color, opacity));
   EndScene();
+}
+
+void Renderer::PrepareScreenUI(const glm::vec4& clearColor, bool clear)
+{
+  RenderBackend::Get().PrepareScreenUI(clearColor, clear);
 }
 
 void Renderer::SwitchRenderState()
@@ -1008,7 +952,7 @@ void Renderer::SetFullscreen(const std::string& sound, bool windowed)
   auto height = Window::GetHeight();
 
   glm::vec2 newResolution = { width, height };
-  if (GraphicsAPIState::IsDirectX12())
+  if (RenderBackend::Capabilities().NativeSceneRenderer)
   {
     Camera::SetViewportSize(width, height);
     AudioManager::PlaySound(sound);
@@ -1034,7 +978,7 @@ void Renderer::ApplyDisplaySettings()
 
   const uint32_t width = Window::GetWidth();
   const uint32_t height = Window::GetHeight();
-  if (GraphicsAPIState::IsDirectX12())
+  if (RenderBackend::Capabilities().NativeSceneRenderer)
   {
     Camera::SetViewportSize(width, height);
     return;
@@ -1050,38 +994,30 @@ void Renderer::ApplyDisplaySettings()
 
 void Renderer::ApplyGraphicsSettings()
 {
-  if (GraphicsAPIState::IsDirectX12()) return;
+  if (!RenderBackend::Capabilities().OpenGLContext) return;
 
-  const GraphicsQuality quality = Settings::GetShadowQuality();
+  const RenderEffectSettings effects = RenderBackend::GetEffectSettings();
+  const GraphicsQuality quality = effects.ShadowQuality;
   const auto qualityValue = static_cast<uint32_t>(quality);
   if (qualityValue == s_Data.m_AppliedShadowQuality &&
       s_Data.m_DirectShadowBuffer && s_Data.m_OmniDirectShadowBuffer)
     return;
 
-  uint32_t directResolution = 512;
-  uint32_t omniResolution = 256;
+  const uint32_t directResolution = effects.DirectionalShadowResolution();
+  const uint32_t omniResolution = effects.PointShadowResolution();
   float filterSize = 2.0f;
   float randomRadius = 1.5f;
 
   if (quality == GraphicsQuality::Medium)
   {
-    directResolution = 2048;
-    omniResolution = 512;
     filterSize = 4.0f;
     randomRadius = 2.0f;
   }
   else if (quality == GraphicsQuality::High)
   {
-    directResolution = 4096;
-    omniResolution = 1024;
     filterSize = 8.0f;
     randomRadius = 3.0f;
   }
-  else if (quality == GraphicsQuality::Low)
-  {
-    directResolution = 1024;
-  }
-
   s_Data.m_DirectShadowBuffer = DirectShadowBuffer::Create(
     directResolution, directResolution, 16.0f, filterSize, randomRadius);
   s_Data.m_OmniDirectShadowBuffer = OmniDirectShadowBuffer::Create(omniResolution, omniResolution);
@@ -1090,8 +1026,9 @@ void Renderer::ApplyGraphicsSettings()
 
 void Renderer::DrawPhysicsDebug()
 {
-  if (!s_Data.m_PhysicsDebug || !s_Data.s_Shaders.PhysicsDebugShader)
-    return;
+  if (!RenderBackend::DebugSettings().Physics) return;
+  if (RenderBackend::Get().DrawPhysicsDebug()) return;
+  if (!s_Data.s_Shaders.PhysicsDebugShader) return;
 
   glEnable(GL_DEPTH_TEST);
   glDepthFunc(GL_LEQUAL);
@@ -1137,18 +1074,22 @@ void Renderer::DrawPhysicsDebug()
 
 void Renderer::DrawDebugVisualizations()
 {
-  if (!s_Data.m_PhysicsDebug && !s_Data.m_LightDebug && !s_Data.m_CullingDebug) return;
+  const RenderDebugSettings& debug = RenderBackend::DebugSettings();
+  if (!debug.Physics && !debug.Lights && !debug.CullingBounds) return;
 
-  glEnable(GL_DEPTH_TEST);
-  glDepthFunc(GL_LEQUAL);
-  glDepthMask(GL_FALSE);
-  glDisable(GL_CULL_FACE);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  const bool nativeDebugLines = RenderBackend::Get().BeginDebugLines();
+  if (!nativeDebugLines)
+  {
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
+    glDepthMask(GL_FALSE);
+    glDisable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    BeginScene();
+  }
 
-  BeginScene();
-
-  if (s_Data.m_PhysicsDebug)
+  if (debug.Physics)
   {
     constexpr glm::vec4 controllerColor(0.15f, 0.8f, 1.0f, 0.9f);
     for (const std::string& modelName : ModelManager::GetModelNames())
@@ -1173,9 +1114,9 @@ void Renderer::DrawDebugVisualizations()
     }
   }
 
-  if (s_Data.m_CullingDebug)
+  if (debug.CullingBounds)
   {
-    const Frustum frustum(Camera::GetViewProjection());
+    const RenderFrustum frustum(Camera::GetViewProjection());
     for (const std::string& modelName : ModelManager::GetModelNames())
     {
       const auto model = ModelManager::GetModel(modelName);
@@ -1183,7 +1124,7 @@ void Renderer::DrawDebugVisualizations()
 
       for (const glm::mat4& transform : model->m_InstanceTransforms)
       {
-        const WorldBoundingSphere sphere = TransformBoundingSphere(*model, transform);
+        const WorldBoundingSphere sphere = CalculateWorldBoundingSphere(*model, transform);
         const bool visible = frustum.IntersectsSphere(sphere.center, sphere.radius);
         DrawWireSphere(sphere.center, sphere.radius,
           visible ? glm::vec4(0.15f, 1.0f, 0.3f, 0.8f) : glm::vec4(1.0f, 0.2f, 0.15f, 0.8f));
@@ -1191,7 +1132,7 @@ void Renderer::DrawDebugVisualizations()
     }
   }
 
-  if (s_Data.m_LightDebug)
+  if (debug.Lights)
   {
     for (const SceneLight& light : SceneManager::GetLights())
     {
@@ -1241,12 +1182,21 @@ void Renderer::DrawDebugVisualizations()
     }
   }
 
-  EndScene();
+  if (nativeDebugLines)
+    RenderBackend::Get().EndDebugLines();
+  else
+  {
+    EndScene();
+    glDepthMask(GL_TRUE);
+    glDepthFunc(GL_LESS);
+    glEnable(GL_CULL_FACE);
+    glDisable(GL_BLEND);
+  }
+}
 
-  glDepthMask(GL_TRUE);
-  glDepthFunc(GL_LESS);
-  glEnable(GL_CULL_FACE);
-  glDisable(GL_BLEND);
+void Renderer::DrawBackendDebugVisualizations()
+{
+  DrawDebugVisualizations();
 }
 
 static bool BrowseForModelFile(char* destination, size_t destinationSize)
@@ -1288,31 +1238,37 @@ void Renderer::DebugDrawText2D(const std::string& text, const glm::vec2& positio
 
 void Renderer::DrawDebug2D()
 {
-  if (!s_Data.m_Debug2D)
+  if (!RenderBackend::DebugSettings().Debug2D)
   {
     s_Data.m_Debug2DCommands.clear();
     return;
   }
 
-  const GLboolean blendWasEnabled = glIsEnabled(GL_BLEND);
-  const GLboolean depthWasEnabled = glIsEnabled(GL_DEPTH_TEST);
-  const GLboolean cullWasEnabled = glIsEnabled(GL_CULL_FACE);
+  const bool openGL = RenderBackend::Capabilities().OpenGLContext;
+  GLboolean blendWasEnabled = GL_FALSE;
+  GLboolean depthWasEnabled = GL_FALSE;
+  GLboolean cullWasEnabled = GL_FALSE;
   GLboolean previousDepthMask = GL_TRUE;
   GLint previousDepthFunc = GL_LESS;
   GLint previousBlendSrcRGB = GL_ONE, previousBlendDstRGB = GL_ZERO;
   GLint previousBlendSrcAlpha = GL_ONE, previousBlendDstAlpha = GL_ZERO;
-  glGetBooleanv(GL_DEPTH_WRITEMASK, &previousDepthMask);
-  glGetIntegerv(GL_DEPTH_FUNC, &previousDepthFunc);
-  glGetIntegerv(GL_BLEND_SRC_RGB, &previousBlendSrcRGB);
-  glGetIntegerv(GL_BLEND_DST_RGB, &previousBlendDstRGB);
-  glGetIntegerv(GL_BLEND_SRC_ALPHA, &previousBlendSrcAlpha);
-  glGetIntegerv(GL_BLEND_DST_ALPHA, &previousBlendDstAlpha);
-
-  glDisable(GL_DEPTH_TEST);
-  glDepthMask(GL_FALSE);
-  glDisable(GL_CULL_FACE);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  if (openGL)
+  {
+    blendWasEnabled = glIsEnabled(GL_BLEND);
+    depthWasEnabled = glIsEnabled(GL_DEPTH_TEST);
+    cullWasEnabled = glIsEnabled(GL_CULL_FACE);
+    glGetBooleanv(GL_DEPTH_WRITEMASK, &previousDepthMask);
+    glGetIntegerv(GL_DEPTH_FUNC, &previousDepthFunc);
+    glGetIntegerv(GL_BLEND_SRC_RGB, &previousBlendSrcRGB);
+    glGetIntegerv(GL_BLEND_DST_RGB, &previousBlendDstRGB);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &previousBlendSrcAlpha);
+    glGetIntegerv(GL_BLEND_DST_ALPHA, &previousBlendDstAlpha);
+    glDisable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    glDisable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  }
   BeginScene();
   Set3D(false);
 
@@ -1335,14 +1291,14 @@ void Renderer::DrawDebug2D()
     glm::vec4(0.02f, 0.04f, 0.07f, 0.78f));
   drawOutline(glm::vec2(141.0f, 37.0f), glm::vec2(250.0f, 42.0f), 0.0f,
     glm::vec4(0.2f, 0.85f, 1.0f, 0.9f));
-  DrawText(FontManager::GetFont("dpcomic"), "2D DEBUG RENDER",
+  DrawText(openGL ? FontManager::GetFont("dpcomic") : nullptr, "2D DEBUG RENDER",
     glm::vec2(141.0f, 37.0f), 0.28f, glm::vec4(0.45f, 0.92f, 1.0f, 1.0f));
 
   for (const auto& command : s_Data.m_Debug2DCommands)
   {
     if (command.type == Debug2DCommand::Type::Text)
     {
-      DrawText(FontManager::GetFont("dpcomic"), command.text, command.position,
+      DrawText(openGL ? FontManager::GetFont("dpcomic") : nullptr, command.text, command.position,
         command.textSize, command.color);
     }
     else if (command.outline)
@@ -1357,22 +1313,26 @@ void Renderer::DrawDebug2D()
 
   EndScene();
   s_Data.m_Debug2DCommands.clear();
-  glDepthMask(previousDepthMask);
-  glDepthFunc(previousDepthFunc);
-  glBlendFuncSeparate(previousBlendSrcRGB, previousBlendDstRGB,
-    previousBlendSrcAlpha, previousBlendDstAlpha);
-  if (blendWasEnabled) glEnable(GL_BLEND); else glDisable(GL_BLEND);
-  if (depthWasEnabled) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
-  if (cullWasEnabled) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+  if (openGL)
+  {
+    glDepthMask(previousDepthMask);
+    glDepthFunc(previousDepthFunc);
+    glBlendFuncSeparate(previousBlendSrcRGB, previousBlendDstRGB,
+      previousBlendSrcAlpha, previousBlendDstAlpha);
+    if (blendWasEnabled) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+    if (depthWasEnabled) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+    if (cullWasEnabled) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+  }
+}
+
+void Renderer::DrawBackendDebug2D()
+{
+  DrawDebug2D();
 }
 
 void Renderer::BeginScene()
 {
-	if (GraphicsAPIState::IsDirectX12())
-	{
-		DirectX12Renderer::BeginScene();
-		return;
-	}
+	if (RenderBackend::Get().BeginUI()) return;
 
 	s_Data.m_CameraBuffer.ViewProjection = Camera::GetViewProjection();
 	s_Data.m_CameraBuffer.OrtoProjection = Camera::GetOrtoProjection();
@@ -1385,11 +1345,7 @@ void Renderer::BeginScene()
 
 void Renderer::EndScene()
 {
-	if (GraphicsAPIState::IsDirectX12())
-	{
-		DirectX12Renderer::EndScene();
-		return;
-	}
+	if (RenderBackend::Get().EndUI()) return;
 	Flush();
 }
 
@@ -1435,6 +1391,7 @@ void Renderer::NextBatch()
 
 void Renderer::DrawLine(const glm::vec3& p0, const glm::vec3& p1, const glm::vec4& color, int entityID)
 {
+	if (RenderBackend::Get().DrawDebugLine(p0, p1, color)) return;
 	if (s_Data.LineVertexCount + 2 > RendererData::MaxVertices) NextBatch();
 
 	s_Data.LineVertexBufferPtr->Position = p0;
@@ -1472,11 +1429,7 @@ void Renderer::DrawQuad(const glm::vec2& position, const glm::vec2& size, float 
 
 void Renderer::DrawQuad(const glm::mat4& transform, const glm::vec4& color, int entityID)
 {
-	if (GraphicsAPIState::IsDirectX12())
-	{
-		DirectX12Renderer::DrawQuad(transform, color);
-		return;
-	}
+	if (RenderBackend::Get().DrawQuad(transform, color)) return;
 
 	if (s_Data.QuadIndexCount >= RendererData::MaxIndices) NextBatch();
 
@@ -1822,8 +1775,11 @@ void Renderer::DrawFramebuffer(uint32_t textureID, bool applyPS1Effect)
   }
 
   s_Data.s_Shaders.FramebufferShader->Bind();
+  const RenderEffectSettings effects = RenderBackend::GetEffectSettings();
   s_Data.s_Shaders.FramebufferShader->SetInt("u_Texture", 0);
-  s_Data.s_Shaders.FramebufferShader->SetBool("u_PS1Effect", applyPS1Effect);
+  s_Data.s_Shaders.FramebufferShader->SetBool("u_PS1Effect", applyPS1Effect && effects.PS1Enabled);
+  s_Data.s_Shaders.FramebufferShader->SetFloat("u_PS1VirtualHeight", effects.PS1VirtualHeight);
+  s_Data.s_Shaders.FramebufferShader->SetFloat("u_PS1ColorLevels", effects.PS1ColorLevels);
 
   glBindTextureUnit(0, textureID);
 
@@ -1835,7 +1791,7 @@ void Renderer::DrawFramebuffer(uint32_t textureID, bool applyPS1Effect)
 
 void Renderer::BakeSkyboxTextures(const std::string& name, const std::shared_ptr<Texture>& cubemap)
 {
-  if (GraphicsAPIState::IsDirectX12()) return;
+  if (RenderBackend::Get().UploadSkybox(cubemap)) return;
 
   Timer timer;
 
@@ -1958,11 +1914,7 @@ void Renderer::DrawText(const Font* font, const std::string& text, const glm::ve
 
 void Renderer::DrawText(const Font* font, const std::string& text, const glm::vec3& position, const glm::vec3& rotation, float size, const glm::vec4& color, int entityID)
 {
-  if (GraphicsAPIState::IsDirectX12())
-  {
-    DirectX12Renderer::DrawText(text, glm::vec2(position), size, color);
-    return;
-  }
+  if (RenderBackend::Get().DrawText(text, glm::vec2(position), size, color)) return;
 
   if (!font || font->m_Characters.empty() || text.empty())
   {
@@ -2049,7 +2001,7 @@ void Renderer::DrawText(const Font* font, const std::string& text, const glm::ve
 
 void Renderer::AddDrawCommand(const std::string& modelName, uint32_t verticesSize, uint32_t indicesSize)
 {
-  if (GraphicsAPIState::IsDirectX12()) return;
+  if (RenderBackend::Capabilities().NativeModelResources) return;
 
   DrawElementsIndirectCommand cmd =
   {
@@ -2070,21 +2022,23 @@ void Renderer::AddDrawCommand(const std::string& modelName, uint32_t verticesSiz
 void Renderer::RebuildDrawCommandsForModel(const std::shared_ptr<Model>& model, bool render)
 {
   model->m_IsRendered = render;
-  if (GraphicsAPIState::IsDirectX12()) return;
+  if (RenderBackend::Capabilities().NativeModelResources) return;
   UpdateDrawCommandInstances(model);
 }
 
 void Renderer::UpdateModelFrustumCulling()
 {
   if (s_Data.m_DrawCommands.empty() || s_Data.m_CulledCmdBuffer == 0)
+  {
+    RenderBackend::SetStatistics({});
     return;
+  }
 
-  const Frustum frustum(Camera::GetViewProjection());
+  const RenderFrustum frustum(Camera::GetViewProjection());
   auto& visibleTransforms = s_Data.m_VisibleInstanceTransforms;
   visibleTransforms.clear();
   s_Data.m_CulledDrawCommands = s_Data.m_DrawCommands;
-  s_Data.m_VisibleInstanceCount = 0;
-  s_Data.m_RenderableInstanceCount = 0;
+  RenderStatistics statistics;
 
   for (const std::string& modelName : ModelManager::GetModelNames())
   {
@@ -2097,10 +2051,10 @@ void Renderer::UpdateModelFrustumCulling()
     GLuint visibleCount = 0;
     if (model->m_IsRendered)
     {
-      s_Data.m_RenderableInstanceCount += static_cast<uint32_t>(model->m_InstanceTransforms.size());
+      statistics.RenderableInstances += static_cast<uint32_t>(model->m_InstanceTransforms.size());
       for (const glm::mat4& transform : model->m_InstanceTransforms)
       {
-        const WorldBoundingSphere sphere = TransformBoundingSphere(*model, transform);
+        const WorldBoundingSphere sphere = CalculateWorldBoundingSphere(*model, transform);
         if (!frustum.IntersectsSphere(sphere.center, sphere.radius))
           continue;
 
@@ -2109,7 +2063,7 @@ void Renderer::UpdateModelFrustumCulling()
       }
     }
 
-    s_Data.m_VisibleInstanceCount += visibleCount;
+    statistics.VisibleInstances += visibleCount;
     for (const size_t commandIndex : commandIndices->second)
     {
       auto& command = s_Data.m_CulledDrawCommands[commandIndex];
@@ -2122,11 +2076,12 @@ void Renderer::UpdateModelFrustumCulling()
   glNamedBufferSubData(s_Data.m_CulledCmdBuffer, 0,
     static_cast<GLsizeiptr>(s_Data.m_CulledDrawCommands.size() * sizeof(DrawElementsIndirectCommand)),
     s_Data.m_CulledDrawCommands.data());
+  RenderBackend::SetStatistics(statistics);
 }
 
 void Renderer::UpdateDrawCommandInstances(const std::shared_ptr<Model>& model)
 {
-  if (GraphicsAPIState::IsDirectX12()) return;
+  if (RenderBackend::Capabilities().NativeModelResources) return;
 
   const auto commandIndices = s_Data.m_ModelDrawCommandIndices.find(model->m_Name);
   if (commandIndices == s_Data.m_ModelDrawCommandIndices.end()) return;
@@ -2155,7 +2110,7 @@ void Renderer::UpdateDrawCommandInstances(const std::shared_ptr<Model>& model)
 
 void Renderer::InitDrawCommandBuffer()
 {
-  if (GraphicsAPIState::IsDirectX12()) return;
+  if (RenderBackend::Capabilities().NativeModelResources) return;
 
   if (s_Data.m_DrawCommands.empty()) return;
 
@@ -2172,9 +2127,9 @@ void Renderer::InitDrawCommandBuffer()
 
 void Renderer::ResetModelDrawCommands()
 {
-  if (GraphicsAPIState::IsDirectX12())
+  if (RenderBackend::Capabilities().NativeModelResources)
   {
-    DirectX12Renderer::ResetSceneResources();
+    RenderBackend::Get().ResetSceneResources();
     return;
   }
 
@@ -2190,8 +2145,7 @@ void Renderer::ResetModelDrawCommands()
   s_Data.m_ModelDrawCommandIndices.clear();
   s_Data.m_DrawIndexOffset = 0;
   s_Data.m_DrawVertexOffset = 0;
-  s_Data.m_VisibleInstanceCount = 0;
-  s_Data.m_RenderableInstanceCount = 0;
+  RenderBackend::SetStatistics({});
 }
 
 void Renderer::DrawIndexed(const std::shared_ptr<VertexArray>& vertexArray, uint32_t indexCount)
@@ -2236,9 +2190,10 @@ void Renderer::Set3D(bool is3D)
   s_Data.Is3D = is3D;
 }
 
-void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
+void Renderer::DrawEditorFrameBuffer(uint64_t framebufferTexture)
 {
-	ImGui_ImplOpenGL3_NewFrame();
+	const RenderBackendCapabilities& capabilities = RenderBackend::Capabilities();
+	RenderBackend::Get().BeginImGuiFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 	//ImGuizmo::BeginFrame();
@@ -2498,16 +2453,22 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 
 	ImGui::Begin("Components", nullptr, ImGuiWindowFlags_NoCollapse);
 
+	ImGui::BeginDisabled(!capabilities.OpenGLContext);
 	if (ImGui::Button("Reload Shaders")) LoadShaders();
+	ImGui::EndDisabled();
+	if (!capabilities.OpenGLContext && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+		ImGui::SetTooltip("Native backend shaders are compiled when the renderer starts");
 	ImGui::SameLine();
-	ImGui::Checkbox("Physics Debug", &s_Data.m_PhysicsDebug);
-	ImGui::Checkbox("Light Debug", &s_Data.m_LightDebug);
+	RenderDebugSettings& debug = RenderBackend::DebugSettings();
+	ImGui::Checkbox("Physics Debug", &debug.Physics);
+	ImGui::Checkbox("Light Debug", &debug.Lights);
 	ImGui::SameLine();
-	ImGui::Checkbox("Culling Bounds", &s_Data.m_CullingDebug);
+	ImGui::Checkbox("Culling Bounds", &debug.CullingBounds);
 	ImGui::SameLine();
-	ImGui::Checkbox("2D Debug", &s_Data.m_Debug2D);
+	ImGui::Checkbox("2D Debug", &debug.Debug2D);
+	const RenderStatistics& statistics = RenderBackend::Statistics();
 	ImGui::TextDisabled("Frustum culling: %u / %u model instances visible",
-		s_Data.m_VisibleInstanceCount, s_Data.m_RenderableInstanceCount);
+		statistics.VisibleInstances, statistics.RenderableInstances);
 
 	if (SceneEntity* entity = SceneManager::FindEntity(s_Data.m_SelectedEntityID))
 	{
@@ -2622,8 +2583,10 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 	ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
 	s_Data.m_ViewportSize = { viewportPanelSize.x, viewportPanelSize.y };
 
-	auto textureID = static_cast<uint64_t>(framebufferTexture);
-	ImGui::Image(reinterpret_cast<void*>(textureID), ImVec2{ s_Data.m_ViewportSize.x, s_Data.m_ViewportSize.y }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
+	const auto textureID = reinterpret_cast<ImTextureID>(static_cast<uintptr_t>(framebufferTexture));
+	const ImVec2 uv0 = capabilities.FramebufferOriginBottomLeft ? ImVec2{0, 1} : ImVec2{0, 0};
+	const ImVec2 uv1 = capabilities.FramebufferOriginBottomLeft ? ImVec2{1, 0} : ImVec2{1, 1};
+	ImGui::Image(textureID, ImVec2{ s_Data.m_ViewportSize.x, s_Data.m_ViewportSize.y }, uv0, uv1);
 
 	ImGui::End();
 	ImGui::PopStyleVar();
@@ -2632,15 +2595,10 @@ void Renderer::DrawEditorFrameBuffer(uint32_t framebufferTexture)
 	io.DisplaySize = ImVec2(static_cast<float>(Window::GetWidth()), static_cast<float>(Window::GetHeight()));
 
 	ImGui::Render();
-	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+	RenderBackend::Get().RenderImGuiDrawData();
 
 	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-	{
-		GLFWwindow* backup_current_context = glfwGetCurrentContext();
-		ImGui::UpdatePlatformWindows();
-		ImGui::RenderPlatformWindowsDefault();
-		glfwMakeContextCurrent(backup_current_context);
-	}
+		RenderBackend::Get().RenderImGuiPlatformWindows();
 }
 
 bool Renderer::DecomposeTransform(const glm::mat4& transform, glm::vec3& translation, glm::vec3& rotation, glm::vec3& scale)

@@ -4,7 +4,7 @@
 #include <vector>
 #include <memory>
 #include "Logger.h"
-#include "GraphicsAPI.h"
+#include "RenderBackend.h"
 #include <cstring>
 
 struct LightData 
@@ -36,7 +36,7 @@ struct LightManagerData
 
 void LightManager::Init()
 {
-  if (!GraphicsAPIState::IsDirectX12())
+  if (RenderBackend::Capabilities().OpenGLContext)
     ResizeLightBuffers(s_Data.maxLights);
 }
 
@@ -109,7 +109,7 @@ void LightManager::ResizeLightBuffers(uint32_t newMax)
   s_Data.maxLights = newMax;
   s_Data.maxPointLights = newMax - 10;
 
-  if (GraphicsAPIState::IsDirectX12()) return;
+  if (!RenderBackend::Capabilities().OpenGLContext) return;
 
   s_Data.LightPosStorageBuffer = StorageBuffer::Create(sizeof(glm::vec4) * newMax, 0);
   s_Data.LightRotationStorageBuffer = StorageBuffer::Create(sizeof(glm::vec4) * newMax, 1);

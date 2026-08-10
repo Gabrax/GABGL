@@ -4,6 +4,15 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 
+struct ParticleRenderInstance
+{
+  glm::vec4 PositionAndSize;
+  glm::vec4 Color;
+  float Rotation = 0.0f;
+  glm::vec4 RightAndStyle;
+  glm::vec4 Up;
+};
+
 struct ParticleRenderer
 {
   static void Init();

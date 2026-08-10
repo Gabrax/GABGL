@@ -8,7 +8,7 @@
 #include "backend/Settings.h"
 #include "backend/SceneManager.h"
 #include "backend/Window.h"
-#include "backend/DirectX12Renderer.h"
+#include "backend/RenderBackend.h"
 
 #include <thread>
 #include <chrono>
@@ -27,15 +27,13 @@ namespace
     GraphicsAPI api = Settings::GetGraphicsAPI();
     for (int i = 1; i < argc; ++i)
     {
-      const std::string_view argument(argv[i]);
-      if (argument == "--dx12" || argument == "--renderer=dx12")
+      if (const std::string_view argument(argv[i]); argument == "--dx12" || argument == "--renderer=dx12")
         api = GraphicsAPI::DirectX12;
       else if (argument == "--opengl" || argument == "--renderer=opengl")
         api = GraphicsAPI::OpenGL;
       else if (argument == "--renderer" && i + 1 < argc)
       {
-        const std::string_view value(argv[++i]);
-        if (value == "dx12" || value == "directx12") api = GraphicsAPI::DirectX12;
+        if (const std::string_view value(argv[++i]); value == "dx12" || value == "directx12") api = GraphicsAPI::DirectX12;
         else if (value == "opengl") api = GraphicsAPI::OpenGL;
       }
     }
@@ -58,75 +56,29 @@ int main(int argc, char** argv)
   Logger::Init();
   Settings::Init();
   const GraphicsAPI graphicsAPI = ParseGraphicsAPI(argc, argv);
-  GraphicsAPIState::Set(graphicsAPI);
+  if (!RenderBackend::Select(graphicsAPI))
+  {
+    GABGL_ERROR("Unsupported graphics API");
+    return 1;
+  }
   GABGL_INFO("Selected graphics API: {}", GraphicsAPIName(graphicsAPI));
 
-  if (graphicsAPI == GraphicsAPI::DirectX12)
+  const std::string windowTitle = graphicsAPI == GraphicsAPI::OpenGL
+    ? "GABGL" : std::string("GABGL - ") + RenderBackend::Get().GetName();
+  Window::Init(windowTitle, Settings::GetWindowWidth(), Settings::GetWindowHeight(), graphicsAPI);
+  if (!RenderBackend::Get().InitializeDevice(
+        Window::GetNativeHandle(), Window::GetWidth(), Window::GetHeight()))
   {
-#ifndef GABGL_ENABLE_DX12
-    GABGL_ERROR("This build does not include DirectX 12. Configure with -DGABGL_ENABLE_DX12=ON.");
-    return 1;
-#else
-    Window::Init("GABGL - DirectX 12", Settings::GetWindowWidth(), Settings::GetWindowHeight(), graphicsAPI);
-    if (!DirectX12Renderer::Init(Window::GetNativeHandle(), Window::GetWidth(), Window::GetHeight()))
-    {
-      Window::Terminate();
-      return 1;
-    }
-
-    AudioManager::Init();
-    LightManager::Init();
-    PhysX::Init();
-    Renderer::Init();
-    ModelManager::Init();
-
-    AudioManager::SetMusicVolume(Settings::GetMusicVolume());
-    AudioManager::SetSFXVolume(Settings::GetSFXVolume());
-    Renderer::ApplyDisplaySettings();
-    SceneManager::LoadScene("menu");
-
-    while (Window::IsRunning())
-    {
-      const auto frameStart = std::chrono::steady_clock::now();
-      Window::Update();
-
-      if (Window::IsMinimized())
-      {
-        std::this_thread::sleep_for(std::chrono::milliseconds(16));
-        continue;
-      }
-
-      if (!DirectX12Renderer::Resize(Window::GetWidth(), Window::GetHeight()) ||
-          !DirectX12Renderer::BeginFrame())
-      {
-        Window::RequestClose();
-        continue;
-      }
-
-      DeltaTime dt;
-      SceneManager::Update(dt);
-
-      if (!DirectX12Renderer::EndFrame(Settings::GetVSync()))
-        Window::RequestClose();
-      LimitFrameRate(frameStart);
-    }
-
-    SceneManager::Shutdown();
-    AudioManager::Terminate();
-    ModelManager::Shutdown();
-    LightManager::Shutdown();
-    Renderer::Shutdown();
-    PhysX::Shutdown();
-    DirectX12Renderer::Shutdown();
+    GABGL_ERROR("Could not initialize the {} backend", RenderBackend::Get().GetName());
+    if (graphicsAPI == GraphicsAPI::DirectX12)
+      GABGL_ERROR("Configure with -DGABGL_ENABLE_DX12=ON to include DirectX 12");
     Window::Terminate();
-    return 0;
-#endif
+    return 1;
   }
 
-  Window::Init("GABGL", Settings::GetWindowWidth(), Settings::GetWindowHeight(), graphicsAPI);
   AudioManager::Init();
   LightManager::Init();
-  FontManager::Init();
+  if (RenderBackend::Capabilities().OpenGLContext) FontManager::Init();
   PhysX::Init();
   Renderer::Init();
   ModelManager::Init();
@@ -140,13 +92,25 @@ int main(int argc, char** argv)
   while (Window::IsRunning())
   {
     const auto frameStart = std::chrono::steady_clock::now();
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    Window::PollEvents();
+
+    if (Window::IsMinimized())
+    {
+      std::this_thread::sleep_for(std::chrono::milliseconds(16));
+      continue;
+    }
+
+    if (!RenderBackend::Get().BeginFrame(Window::GetWidth(), Window::GetHeight()))
+    {
+      Window::RequestClose();
+      continue;
+    }
 
     DeltaTime dt;
-
     SceneManager::Update(dt);
 
-    Window::Update();
+    if (!RenderBackend::Get().EndFrame(Settings::GetVSync()))
+      Window::RequestClose();
 
     LimitFrameRate(frameStart);
   }
@@ -156,8 +120,9 @@ int main(int argc, char** argv)
   ModelManager::Shutdown();
   LightManager::Shutdown();
   Renderer::Shutdown();
-  FontManager::Shutdown();
+  if (RenderBackend::Capabilities().OpenGLContext) FontManager::Shutdown();
   PhysX::Shutdown();
+  RenderBackend::Get().ShutdownDevice();
   Window::Terminate();
 
   return 0;

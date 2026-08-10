@@ -20,6 +20,8 @@ struct Window
                    GraphicsAPI graphicsAPI = GraphicsAPI::OpenGL);
   static void Terminate();
 	static void Update();
+	static void PollEvents();
+	static void Present();
 	static uint32_t GetWidth();
 	static uint32_t GetHeight();
 	static GLFWwindow* GetWindowPtr();

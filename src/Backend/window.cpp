@@ -206,11 +206,21 @@ void Window::Terminate()
 
 void Window::Update()
 {
+	PollEvents();
+	Present();
+}
+
+void Window::PollEvents()
+{
 	glfwPollEvents();
-	if (m_Data.API == GraphicsAPI::OpenGL)
-	  glfwSwapBuffers(m_Window);
 	if (glfwWindowShouldClose(m_Window))
 		m_isRunning = false;
+}
+
+void Window::Present()
+{
+	if (m_Data.API == GraphicsAPI::OpenGL)
+	  glfwSwapBuffers(m_Window);
 }
 
 void Window::SetWindowIcon(const char* iconpath, GLFWwindow* window)

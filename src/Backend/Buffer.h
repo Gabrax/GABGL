@@ -333,7 +333,8 @@ struct BloomBuffer
   void Bind() const;
   void UnBind() const;
   void Resize(int32_t newWidth, int32_t newHeight);
-  void CompositeTo(const std::shared_ptr<FrameBuffer>& dst, bool bloomEnabled);
+  void CompositeTo(const std::shared_ptr<FrameBuffer>& dst, bool bloomEnabled,
+    float exposure, float strength, float gamma);
 
 	static std::shared_ptr<BloomBuffer> Create(const std::shared_ptr<Shader>& downsampleShader, const std::shared_ptr<Shader>& upsampleShader, const std::shared_ptr<Shader>& finalShader);
 

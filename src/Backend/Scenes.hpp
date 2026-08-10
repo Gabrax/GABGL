@@ -487,16 +487,7 @@ struct MenuScene : Scene
     m_ScreenReveal = std::min(1.0f, m_ScreenReveal + m_FrameDelta / 0.38f);
 
     AudioManager::UpdateAllMusic();
-    if (!GraphicsAPIState::IsDirectX12())
-    {
-      glBindFramebuffer(GL_FRAMEBUFFER, 0);
-      glViewport(0, 0, Window::GetWidth(), Window::GetHeight());
-      glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-      glDisable(GL_DEPTH_TEST);
-      glEnable(GL_BLEND);
-      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    }
+    Renderer::PrepareScreenUI(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
 
     const bool navigateUp = Pressed(
       Input::IsKeyPressed(Key::Up) || Input::IsKeyPressed(Key::W) ||

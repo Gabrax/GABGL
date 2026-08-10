@@ -15,6 +15,8 @@ struct Renderer
 	static void DrawScene(DeltaTime& dt, const std::function<void()>& scene_logic, bool advanceSimulation = true);
 	static void DrawLoadingScreen();
 	static void DrawScreenOverlay(float opacity, const glm::vec3& color = glm::vec3(0.0f));
+	static void PrepareScreenUI(const glm::vec4& clearColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f),
+		bool clear = true);
 	static void BeginScene();
 	static void EndScene();
 
@@ -62,6 +64,8 @@ struct Renderer
 	static void ApplyDisplaySettings();
 	static void ApplyGraphicsSettings();
 	static void SwitchRenderState();
+	static void DrawBackendDebugVisualizations();
+	static void DrawBackendDebug2D();
 
 private:
 
@@ -78,7 +82,7 @@ private:
 	static void UpdateModelFrustumCulling();
 
 	static void DrawFramebuffer(uint32_t textureID, bool applyPS1Effect = false);
-	static void DrawEditorFrameBuffer(uint32_t framebufferTexture);
+	static void DrawEditorFrameBuffer(uint64_t framebufferTexture);
 	static uint32_t GetActiveWidgetID();
 	static void BlockEvents(bool block);
 	static bool DecomposeTransform(const glm::mat4& transform, glm::vec3& translation, glm::vec3& rotation, glm::vec3& scale);

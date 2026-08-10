@@ -59,8 +59,15 @@ The DX12 path provides the native device, high-performance adapter selection,
 command queue, double-buffered flip-model swap chain, resize, VSync/tearing
 support, GPU fences, and scene rendering. It uploads the existing model and
 texture assets, renders animated instances with a depth buffer and directional
-lighting, and draws the menu/loading UI through a dedicated DX12 pipeline.
+lighting, and draws the menu/loading UI through a dedicated DX12 pipeline. The
+DX12 scene path also includes cubemap skyboxes, diffuse/normal/specular
+materials, directional/point/spot lighting, directional and point-light shadow passes, HDR
+tone mapping and bloom, particles/impact marks, interaction labels, and the
+PS1-style 240-line vertex snapping, pixelation, 5-bit color quantization, and
+ordered dithering used by the OpenGL path. The complete ImGui editing workspace
+uses the native DX12 backend and can be toggled with `Tab`.
 
-OpenGL is still the feature-complete backend. The optional DX12 renderer does
-not yet implement the OpenGL path's skybox, shadow maps, bloom, particles,
-normal/specular maps, or editor overlays.
+Both renderers are selected through the same backend contract. Models, particles,
+screen UI, ImGui, debug layers, culling statistics and visual-effect settings are
+submitted without backend-specific branches in scene code, leaving future APIs a
+single interface to implement.
