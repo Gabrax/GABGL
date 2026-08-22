@@ -15,9 +15,8 @@ struct Model;
 struct ParticleRenderInstance;
 struct Texture;
 
-// Minimal native DirectX 12 rendering path used while the OpenGL renderer is
-// migrated incrementally. The implementation intentionally keeps all D3D12
-// headers out of the rest of the engine.
+// Native DirectX 12 implementation. D3D12 headers and objects stay confined
+// to this translation unit and its backend adapter.
 struct DirectX12Renderer
 {
   static bool Init(void* nativeWindow, uint32_t width, uint32_t height);

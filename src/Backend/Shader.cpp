@@ -2,11 +2,26 @@
 #include "Logger.h"
 #include "Timer.hpp"
 
+#include <glad/glad.h>
+
+#if defined(GABGL_ENABLE_DX12) && defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifdef APIENTRY
+#undef APIENTRY
+#endif
+#include <d3dcompiler.h>
+#include <wrl/client.h>
+#endif
+
+#include <cstring>
 #include <fstream>
 #include <sstream>
 #include <string>
 #include <unordered_map>
 #include <iostream>
+#include <stdexcept>
 
 static inline void checkCompileErrors(GLuint shader, std::string type)
 {
@@ -254,7 +269,7 @@ void Shader::UnBind() const
 {
   glUseProgram(0);
 }
-GLuint Shader::GetID() const
+uint32_t Shader::GetID() const
 {
   return this->m_ID;
 }
@@ -362,5 +377,43 @@ void Shader::Create(std::shared_ptr<Shader>& shader, const char* vertexPath, con
   shader = std::make_shared<Shader>(vertexPath,fragmentPath,geometryPath);
   shader->m_lastTimeModified = cftime;
   shader->m_firstTimeCompile = false;
+}
+
+Shader::Bytecode Shader::CompileHLSL(const std::filesystem::path& path, std::string_view entryPoint,
+                                     std::string_view target)
+{
+#if defined(GABGL_ENABLE_DX12) && defined(_WIN32)
+  UINT flags = D3DCOMPILE_ENABLE_STRICTNESS;
+#ifdef DEBUG
+  flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#else
+  flags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
+#endif
+
+  const std::wstring sourcePath = path.wstring();
+  const std::string entry(entryPoint);
+  const std::string profile(target);
+  Microsoft::WRL::ComPtr<ID3DBlob> shader;
+  Microsoft::WRL::ComPtr<ID3DBlob> errors;
+  const HRESULT result = D3DCompileFromFile(
+    sourcePath.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE,
+    entry.c_str(), profile.c_str(), flags, 0, &shader, &errors);
+  if (FAILED(result))
+  {
+    std::string details;
+    if (errors)
+      details.assign(static_cast<const char*>(errors->GetBufferPointer()), errors->GetBufferSize());
+    GABGL_ERROR("HLSL shader compilation failed for '{}': {}", path.string(), details);
+    throw std::runtime_error("D3DCompileFromFile failed for " + path.string());
+  }
+
+  Bytecode bytecode;
+  bytecode.Bytes.resize(shader->GetBufferSize());
+  std::memcpy(bytecode.Bytes.data(), shader->GetBufferPointer(), bytecode.Bytes.size());
+  return bytecode;
+#else
+  GABGL_ERROR("Cannot compile HLSL shader '{}': DirectX 12 support is not enabled", path.string());
+  return {};
+#endif
 }
 

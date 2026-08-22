@@ -1,15 +1,25 @@
 #pragma once
-#include <glad/glad.h>
 #include <glm/glm.hpp>
 
+#include <cstdint>
 #include <string>
 #include <memory>
 #include <filesystem>
 #include <chrono>
 #include <ctime>
+#include <string_view>
+#include <vector>
 
 struct Shader
 {
+  struct Bytecode
+  {
+    std::vector<uint8_t> Bytes;
+
+    [[nodiscard]] const void* GetBufferPointer() const { return Bytes.data(); }
+    [[nodiscard]] size_t GetBufferSize() const { return Bytes.size(); }
+  };
+
   explicit Shader(const char* fullshader);
   Shader(const char* vertexPath, const char* fragmentPath, const char* geometryPath = nullptr);
   ~Shader();
@@ -18,7 +28,7 @@ struct Shader
   void Load(const char* vertexPath, const char* fragmentPath, const char* geometryPath = nullptr);
   void Bind() const;
   void UnBind() const;
-  GLuint GetID() const;
+  uint32_t GetID() const;
 
   static bool CheckIfModified(std::shared_ptr<Shader>& shader, const char* fullshader);
 
@@ -37,10 +47,12 @@ struct Shader
   
   static void Create(std::shared_ptr<Shader>& shader, const char* fullshader);
   static void Create(std::shared_ptr<Shader>& shader, const char* vertexPath, const char* fragmentPath, const char* geometryPath = nullptr);
+  static Bytecode CompileHLSL(const std::filesystem::path& path, std::string_view entryPoint,
+                              std::string_view target);
 
 private:
 
-  GLuint m_ID = 0;
+  uint32_t m_ID = 0;
   std::time_t m_lastTimeModified = 0;
   bool m_firstTimeCompile = true;
 };

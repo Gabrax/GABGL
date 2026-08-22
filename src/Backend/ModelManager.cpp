@@ -1,4 +1,6 @@
 #include "ModelManager.h"
+#include "Buffer.h"
+#include "Camera.h"
 #include "Logger.h"
 #include "glad/glad.h"
 #include "meshoptimizer.h"
@@ -7,8 +9,8 @@
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include "Renderer.h"
 #include "RenderBackend.h"
+#include "RenderSystem.h"
 #include "Timer.hpp"
 #include <cmath>
 #include <limits>
@@ -118,7 +120,7 @@ static void RefreshInstanceTransforms()
     const auto& model = s_Data.m_Models.at(modelName);
     model->m_InstanceBase = static_cast<uint32_t>(transforms.size());
     transforms.insert(transforms.end(), model->m_InstanceTransforms.begin(), model->m_InstanceTransforms.end());
-    Renderer::UpdateDrawCommandInstances(model);
+    RenderSystem::UpdateModelInstances(model);
   }
 
   if (s_Data.m_InstanceTransformsSSBO)
@@ -413,7 +415,8 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
     s_Data.allVertices.insert(s_Data.allVertices.end(), mesh.m_Vertices.begin(), mesh.m_Vertices.end());
     s_Data.allIndices.insert(s_Data.allIndices.end(), mesh.m_Indices.begin(), mesh.m_Indices.end());
 
-    Renderer::AddDrawCommand(name, static_cast<uint32_t>(mesh.m_Vertices.size()), static_cast<uint32_t>(mesh.m_Indices.size()));
+    RenderSystem::RegisterModelDrawCommand(name, static_cast<uint32_t>(mesh.m_Vertices.size()),
+      static_cast<uint32_t>(mesh.m_Indices.size()));
 
     for(auto& tex : mesh.m_Textures) tex->ClearRawData();
 
@@ -815,7 +818,7 @@ void ModelManager::SetRender(const std::string& name, bool render)
 
   it->second->m_IsRendered = render;
 
-  Renderer::RebuildDrawCommandsForModel(it->second,render);
+  RenderSystem::SetModelRendered(it->second, render);
 }
 
 GLsizei ModelManager::GetModelsQuantity()

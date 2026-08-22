@@ -144,3 +144,13 @@ if(GABGL_ENABLE_DX12)
   target_compile_definitions("${CMAKE_PROJECT_NAME}" PRIVATE GABGL_ENABLE_DX12=1)
   target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE d3d12 dxgi dxguid d3dcompiler)
 endif()
+
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(inventory_manager_tests
+    tests/InventoryManagerTests.cpp
+    src/Backend/InventoryManager.cpp
+  )
+  target_include_directories(inventory_manager_tests PRIVATE src/Backend)
+  add_test(NAME inventory_manager COMMAND inventory_manager_tests)
+endif()

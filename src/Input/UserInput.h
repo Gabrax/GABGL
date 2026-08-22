@@ -23,6 +23,7 @@ namespace Gamepad
     A = 0,
     B = 1,
     X = 2,
+    Y = 3,
     Start = 7,
     DPadUp = 11,
     DPadRight = 12,

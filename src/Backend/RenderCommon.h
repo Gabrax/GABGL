@@ -8,6 +8,21 @@
 
 #include <glm/glm.hpp>
 
+enum class LightType : uint32_t
+{
+  DIRECT = 0,
+  POINT = 1,
+  SPOT = 2
+};
+
+struct RenderLight
+{
+  LightType Type = LightType::POINT;
+  glm::vec3 Color{1.0f};
+  glm::vec3 Position{0.0f};
+  glm::vec3 Direction{0.0f, -1.0f, 0.0f};
+};
+
 struct RenderBackendCapabilities
 {
   bool NativePresentation = false;

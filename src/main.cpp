@@ -1,14 +1,13 @@
 #include "backend/ModelManager.h"
 #include "backend/Logger.h"
 #include "backend/AudioManager.h"
-#include "backend/LightManager.h"
-#include "backend/Renderer.h"
 #include "backend/PhysX.h"
 #include "backend/FontManager.h"
 #include "backend/Settings.h"
 #include "backend/SceneManager.h"
 #include "backend/Window.h"
 #include "backend/RenderBackend.h"
+#include "backend/RenderSystem.h"
 
 #include <thread>
 #include <chrono>
@@ -77,15 +76,14 @@ int main(int argc, char** argv)
   }
 
   AudioManager::Init();
-  LightManager::Init();
   if (RenderBackend::Capabilities().OpenGLContext) FontManager::Init();
   PhysX::Init();
-  Renderer::Init();
+  RenderSystem::Initialize();
   ModelManager::Init();
 
   AudioManager::SetMusicVolume(Settings::GetMusicVolume());
   AudioManager::SetSFXVolume(Settings::GetSFXVolume());
-  Renderer::ApplyDisplaySettings();
+  RenderSystem::ApplyDisplaySettings();
 
   SceneManager::LoadScene("menu");
 
@@ -118,8 +116,8 @@ int main(int argc, char** argv)
   SceneManager::Shutdown();
   AudioManager::Terminate();
   ModelManager::Shutdown();
-  LightManager::Shutdown();
-  Renderer::Shutdown();
+  RenderBackend::ClearLights();
+  RenderSystem::Shutdown();
   if (RenderBackend::Capabilities().OpenGLContext) FontManager::Shutdown();
   PhysX::Shutdown();
   RenderBackend::Get().ShutdownDevice();

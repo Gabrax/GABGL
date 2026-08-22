@@ -1,12 +1,13 @@
 #include "SceneManager.h"
 
 
-#include "Renderer.h"
+#include "RenderSystem.h"
 #include "AudioManager.h"
 #include "Camera.h"
-#include "LightManager.h"
+#include "InventoryManager.h"
 #include "Logger.h"
 #include "ParticleRenderer.h"
+#include "RenderBackend.h"
 #include "../Input/UserInput.h"
 #include <algorithm>
 #include <fstream>
@@ -49,13 +50,62 @@ namespace
     return true;
   }
 
+  std::shared_ptr<Item> MakeInventoryItem(const SceneEntity& entity)
+  {
+    auto item = std::make_shared<Item>();
+    item->name = entity.itemName.empty() ? entity.name : entity.itemName;
+
+    if (entity.model == "pistol")
+    {
+      item->description = "A RELIABLE SIDEARM. USEFUL AT SHORT RANGE.";
+      item->weight = 1.1f;
+      item->type = ItemType::Weapon;
+    }
+    else if (entity.model == "shotgun")
+    {
+      item->description = "POWERFUL UP CLOSE, BUT SLOW TO RELOAD.";
+      item->weight = 3.4f;
+      item->type = ItemType::Weapon;
+    }
+    else if (entity.model == "pistolammo")
+    {
+      item->description = "A BOX OF PISTOL AMMUNITION.";
+      item->weight = 0.3f;
+      item->type = ItemType::Ammunition;
+    }
+    else if (entity.model == "shotgunammo")
+    {
+      item->description = "A BOX OF SHOTGUN SHELLS.";
+      item->weight = 0.6f;
+      item->type = ItemType::Ammunition;
+    }
+    else if (entity.model == "aidkit")
+    {
+      item->description = "MEDICAL SUPPLIES FOR TREATING SERIOUS WOUNDS.";
+      item->weight = 0.8f;
+      item->type = ItemType::Medical;
+    }
+    else
+    {
+      item->description = "A COLLECTED ITEM.";
+      item->weight = 0.5f;
+    }
+
+    return item;
+  }
+
+  RenderLight ToRenderLight(const SceneLight& light)
+  {
+    return {light.type, light.color, light.position, light.rotation};
+  }
+
   struct GenericScene : Scene
   {
     explicit GenericScene(const std::string& name) : Scene(name) {}
     void OnSceneStart() override {}
     void OnUpdate(DeltaTime& dt) override
     {
-      Renderer::DrawScene(dt, []() {});
+      RenderSystem::DrawScene(dt, []() {});
     }
   };
 }
@@ -76,7 +126,7 @@ bool Scene::OnKeyPressed(KeyPressedEvent& e)
 	{
     case Key::Tab:
     {
-      Renderer::SwitchRenderState();
+      RenderSystem::SwitchRenderState();
       break;
     }
 	}
@@ -255,7 +305,11 @@ void Scene::SpawnLights()
 
     light.id = m_NextLightId++;
     light.name = description.value("name", std::string(LightTypeName(light.type)) + " light " + std::to_string(light.id));
-    LightManager::AddLight(light.type, light.color, light.position, light.rotation);
+    if (!RenderBackend::AddLight(ToRenderLight(light)))
+    {
+      GABGL_WARN("Renderer rejected light '{}'", light.name);
+      continue;
+    }
     m_EditorLights.push_back(std::move(light));
   }
 }
@@ -288,7 +342,7 @@ uint64_t Scene::AddLight(LightType type)
     ? glm::vec3(-1.0f, -2.0f, -1.0f)
     : Camera::GetForwardDirection();
 
-  LightManager::AddLight(light.type, light.color, light.position, light.rotation);
+  if (!RenderBackend::AddLight(ToRenderLight(light))) return 0;
   m_EditorLights.push_back(std::move(light));
   return m_EditorLights.back().id;
 }
@@ -304,9 +358,8 @@ bool Scene::UpdateLight(uint64_t lightId, const std::string& name, const glm::ve
   it->color = glm::max(color, glm::vec3(0.0f));
   it->position = position;
   it->rotation = rotation;
-  const auto managerIndex = static_cast<int32_t>(std::distance(m_EditorLights.begin(), it));
-  LightManager::EditLight(managerIndex, it->color, it->position, it->rotation);
-  return true;
+  const auto rendererIndex = static_cast<size_t>(std::distance(m_EditorLights.begin(), it));
+  return RenderBackend::UpdateLight(rendererIndex, ToRenderLight(*it));
 }
 
 bool Scene::RemoveLight(uint64_t lightId)
@@ -315,8 +368,8 @@ bool Scene::RemoveLight(uint64_t lightId)
   if (it == m_EditorLights.end())
     return false;
 
-  const auto managerIndex = static_cast<int32_t>(std::distance(m_EditorLights.begin(), it));
-  LightManager::RemoveLight(managerIndex);
+  const auto rendererIndex = static_cast<size_t>(std::distance(m_EditorLights.begin(), it));
+  if (!RenderBackend::RemoveLight(rendererIndex)) return false;
   m_EditorLights.erase(it);
   return true;
 }
@@ -476,9 +529,20 @@ void Scene::UpdateInteractions()
   GABGL_INFO("Interacted with '{}'", displayName);
   if (!focused->pickable) return;
 
+  auto& inventory = InventoryManager::GetInstance();
+  if (!inventory.AddItem(MakeInventoryItem(*focused)))
+  {
+    GABGL_WARN("Could not pick up '{}': inventory is full", displayName);
+    return;
+  }
+
   const std::string modelName = focused->model;
   const uint32_t removedInstance = focused->instanceIndex;
-  if (!ModelManager::RemoveModelInstance(modelName, removedInstance)) return;
+  if (!ModelManager::RemoveModelInstance(modelName, removedInstance))
+  {
+    inventory.RemoveItem(inventory.GetItemCount() - 1);
+    return;
+  }
 
   focused->active = false;
   m_FocusedEntityId = 0;
@@ -620,13 +684,13 @@ void Scene::UpdateLoading()
 
     auto skyboxTex = m_Assets.futureTextures[0].get();
 
-    Renderer::BakeSkyboxTextures("night",skyboxTex);
+    RenderSystem::UploadSkybox(skyboxTex);
 
     SpawnEntities();
     SpawnLights();
 
     ModelManager::UploadToGPU();
-    Renderer::InitDrawCommandBuffer();
+    RenderSystem::FinalizeModelUpload();
 
     m_Assets.futureStatic.clear();
     m_Assets.futureAnim.clear();
@@ -742,9 +806,9 @@ void SceneManager::BeginLoadingScene(const std::string& name)
 {
   if (name.empty()) return;
 
-  Renderer::ResetModelDrawCommands();
+  RenderSystem::ResetModelDrawCommands();
   ModelManager::Reset();
-  LightManager::Clear();
+  RenderBackend::ClearLights();
   ParticleRenderer::Clear();
   AudioManager::StopAllSounds();
   AudioManager::StopAllMusic();
@@ -777,7 +841,7 @@ void SceneManager::Update(DeltaTime& dt)
     if (s_ActiveScene) s_ActiveScene->OnUpdate(dt);
 
     s_TransitionProgress = std::min(1.0f, s_TransitionProgress + frameTime / SceneFadeDuration);
-    Renderer::DrawScreenOverlay(SmoothStep(s_TransitionProgress));
+    RenderSystem::DrawScreenOverlay(SmoothStep(s_TransitionProgress));
 
     if (s_TransitionProgress >= 1.0f)
     {
@@ -792,7 +856,7 @@ void SceneManager::Update(DeltaTime& dt)
   {
     s_PendingScene->UpdateLoading();
 
-    Renderer::DrawLoadingScreen();
+    RenderSystem::DrawLoadingScreen();
 
     if (s_PendingScene->IsLoadingComplete())
     {
@@ -801,7 +865,7 @@ void SceneManager::Update(DeltaTime& dt)
       s_TransitionState = TransitionState::FadingIn;
       s_TransitionProgress = 0.0f;
       s_RequestedScene.clear();
-      Renderer::DrawScreenOverlay(1.0f);
+      RenderSystem::DrawScreenOverlay(1.0f);
     }
 
     return;
@@ -812,7 +876,7 @@ void SceneManager::Update(DeltaTime& dt)
     if (s_ActiveScene) s_ActiveScene->OnUpdate(dt);
 
     s_TransitionProgress = std::min(1.0f, s_TransitionProgress + frameTime / SceneFadeDuration);
-    Renderer::DrawScreenOverlay(1.0f - SmoothStep(s_TransitionProgress));
+    RenderSystem::DrawScreenOverlay(1.0f - SmoothStep(s_TransitionProgress));
     if (s_TransitionProgress >= 1.0f)
     {
       s_TransitionState = TransitionState::None;

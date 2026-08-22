@@ -4,8 +4,8 @@
 
 #include "../input/UserInput.h"
 #include "AudioManager.h"
-#include "LightManager.h"
-#include "Renderer.h"
+#include "InventoryManager.h"
+#include "RenderSystem.h"
 #include "Settings.h"
 #include "Window.h"
 #include "FontManager.h"
@@ -43,6 +43,7 @@ struct GameScene : Scene
 
   void OnSceneStart() override
   {
+    InventoryManager::GetInstance().Clear();
     Window::SetCursorVisible(false);
     AudioManager::PlayMusic("night_mono",glm::vec3(25,2,15),true);
 
@@ -60,9 +61,27 @@ struct GameScene : Scene
   void OnUpdate(DeltaTime& dt) override
   {
     m_PauseFrameDelta = std::clamp(dt.GetSeconds(), 0.0f, 0.05f);
+    auto& inventory = InventoryManager::GetInstance();
+    const bool inventoryPressed = Pressed(
+      Input::IsKeyPressed(Key::I) || Input::IsGamepadButtonPressed(Gamepad::Y),
+      m_PreviousInventory);
     const bool escape = Pressed(Input::IsKeyPressed(Key::Escape), m_PreviousEscape);
     const bool start = Pressed(Input::IsGamepadButtonPressed(Gamepad::Start), m_PreviousStart);
     bool justPaused = false;
+
+    if (!m_Paused && inventoryPressed)
+      SetInventoryOpen(!inventory.IsOpen());
+
+    if (inventory.IsOpen())
+    {
+      if (escape) SetInventoryOpen(false);
+      UpdateInventorySelection();
+
+      DeltaTime frozenTime(0.0f);
+      RenderSystem::DrawScene(frozenTime, []() {}, false);
+      DrawInventory();
+      return;
+    }
 
     if (!m_Paused && (escape || start))
     {
@@ -83,7 +102,7 @@ struct GameScene : Scene
       if (m_Paused)
       {
         DeltaTime frozenTime(0.0f);
-        Renderer::DrawScene(frozenTime, []() {}, false);
+        RenderSystem::DrawScene(frozenTime, []() {}, false);
         DrawPauseMenu();
         return;
       }
@@ -92,7 +111,7 @@ struct GameScene : Scene
     UpdateInteractions();
     UpdateWeapon();
 
-    Renderer::DrawScene(dt,[&]
+    RenderSystem::DrawScene(dt,[&]
     {
       const auto player = ModelManager::GetModel("harry");
       if (!player) return;
@@ -147,6 +166,140 @@ private:
   static int Wrap(int value, int count)
   {
     return (value % count + count) % count;
+  }
+
+  void SetInventoryOpen(const bool open)
+  {
+    auto& inventory = InventoryManager::GetInstance();
+    inventory.SetOpen(open);
+    m_InventorySelected = std::min(m_InventorySelected,
+      inventory.GetItemCount() > 0 ? static_cast<int>(inventory.GetItemCount() - 1) : 0);
+    m_InventoryReveal = 0.0f;
+    m_InventoryPreviousLeft = Input::IsKeyPressed(Key::Left) || Input::IsKeyPressed(Key::A);
+    m_InventoryPreviousRight = Input::IsKeyPressed(Key::Right) || Input::IsKeyPressed(Key::D);
+    m_InventoryPreviousUp = Input::IsKeyPressed(Key::Up) || Input::IsKeyPressed(Key::W);
+    m_InventoryPreviousDown = Input::IsKeyPressed(Key::Down) || Input::IsKeyPressed(Key::S);
+    Window::SetCursorVisible(open);
+    Camera::ResetMouseDelta();
+  }
+
+  void UpdateInventorySelection()
+  {
+    auto& inventory = InventoryManager::GetInstance();
+    m_InventoryReveal = std::min(1.0f, m_InventoryReveal + m_PauseFrameDelta / 0.22f);
+    const int count = static_cast<int>(inventory.GetItemCount());
+    if (count == 0)
+    {
+      m_InventorySelected = 0;
+      return;
+    }
+
+    const bool left = Pressed(
+      Input::IsKeyPressed(Key::Left) || Input::IsKeyPressed(Key::A) ||
+      Input::IsGamepadButtonPressed(Gamepad::DPadLeft), m_InventoryPreviousLeft);
+    const bool right = Pressed(
+      Input::IsKeyPressed(Key::Right) || Input::IsKeyPressed(Key::D) ||
+      Input::IsGamepadButtonPressed(Gamepad::DPadRight), m_InventoryPreviousRight);
+    const bool up = Pressed(
+      Input::IsKeyPressed(Key::Up) || Input::IsKeyPressed(Key::W) ||
+      Input::IsGamepadButtonPressed(Gamepad::DPadUp), m_InventoryPreviousUp);
+    const bool down = Pressed(
+      Input::IsKeyPressed(Key::Down) || Input::IsKeyPressed(Key::S) ||
+      Input::IsGamepadButtonPressed(Gamepad::DPadDown), m_InventoryPreviousDown);
+
+    if (left) m_InventorySelected = Wrap(m_InventorySelected - 1, count);
+    if (right) m_InventorySelected = Wrap(m_InventorySelected + 1, count);
+    if (up) m_InventorySelected = std::max(0, m_InventorySelected - 5);
+    if (down) m_InventorySelected = std::min(count - 1, m_InventorySelected + 5);
+  }
+
+  void DrawInventory()
+  {
+    const auto& inventory = InventoryManager::GetInstance();
+    const auto& items = inventory.GetItems();
+    const float screenWidth = static_cast<float>(Window::GetWidth());
+    const float screenHeight = static_cast<float>(Window::GetHeight());
+    const float uiScale = SceneUI::Scale(screenWidth, screenHeight);
+    const float reveal = SceneUI::Smooth(m_InventoryReveal);
+    const Font* font = FontManager::GetFont("dpcomic");
+
+    const float panelWidth = std::min(940.0f * uiScale, screenWidth * 0.9f);
+    const float panelHeight = std::min(570.0f * uiScale, screenHeight * 0.86f);
+    const float gridWidth = panelWidth * 0.58f;
+    const float slotGap = 7.0f * uiScale;
+    const float slotSize = std::min(
+      (gridWidth - slotGap * 6.0f) / 5.0f,
+      (panelHeight * 0.65f - slotGap * 7.0f) / 6.0f);
+    const float gridLeft = screenWidth * 0.5f - panelWidth * 0.43f;
+    const float gridTop = screenHeight * 0.5f + panelHeight * 0.24f;
+
+    RenderSystem::BeginUI();
+    RenderSystem::DrawQuad(glm::vec2(screenWidth * 0.5f, screenHeight * 0.5f),
+      glm::vec2(screenWidth, screenHeight), 0.0f, glm::vec4(0.005f, 0.008f, 0.016f, 0.74f * reveal));
+    RenderSystem::DrawQuad(glm::vec2(screenWidth * 0.5f, screenHeight * 0.5f),
+      glm::vec2(panelWidth, panelHeight), 0.0f, glm::vec4(0.025f, 0.04f, 0.07f, 0.96f * reveal));
+
+    RenderSystem::DrawText(font, "INVENTORY",
+      glm::vec2(screenWidth * 0.5f, screenHeight * 0.5f + panelHeight * 0.41f),
+      0.82f * uiScale, glm::vec4(0.85f, 0.92f, 1.0f, reveal));
+    RenderSystem::DrawText(font,
+      std::to_string(inventory.GetItemCount()) + " / " + std::to_string(inventory.GetCapacity()) + " SLOTS",
+      glm::vec2(gridLeft + gridWidth * 0.5f, gridTop + slotSize * 0.85f),
+      0.32f * uiScale, glm::vec4(0.58f, 0.7f, 0.84f, reveal));
+
+    for (size_t index = 0; index < inventory.GetCapacity(); ++index)
+    {
+      const int column = static_cast<int>(index % 5);
+      const int row = static_cast<int>(index / 5);
+      const glm::vec2 position(
+        gridLeft + slotGap + slotSize * 0.5f + column * (slotSize + slotGap),
+        gridTop - slotSize * 0.5f - row * (slotSize + slotGap));
+      const bool occupied = index < items.size();
+      const bool selected = occupied && static_cast<int>(index) == m_InventorySelected;
+      const glm::vec4 slotColor = selected
+        ? glm::vec4(0.22f, 0.48f, 0.78f, 0.72f * reveal)
+        : occupied ? glm::vec4(0.09f, 0.14f, 0.22f, 0.9f * reveal)
+                   : glm::vec4(0.045f, 0.065f, 0.1f, 0.7f * reveal);
+      RenderSystem::DrawQuad(position, glm::vec2(slotSize), 0.0f, slotColor);
+
+      if (occupied && items[index])
+      {
+        std::string label = items[index]->name;
+        if (label.size() > 13) label = label.substr(0, 12) + ".";
+        RenderSystem::DrawText(font, label, position, 0.25f * uiScale,
+          glm::vec4(selected ? glm::vec3(1.0f) : glm::vec3(0.72f, 0.79f, 0.87f), reveal));
+      }
+    }
+
+    const float detailsX = screenWidth * 0.5f + panelWidth * 0.28f;
+    if (!items.empty() && m_InventorySelected < static_cast<int>(items.size()) && items[m_InventorySelected])
+    {
+      const auto& selected = *items[m_InventorySelected];
+      RenderSystem::DrawText(font, selected.name,
+        glm::vec2(detailsX, screenHeight * 0.5f + panelHeight * 0.17f),
+        0.55f * uiScale, glm::vec4(1.0f, 0.88f, 0.4f, reveal));
+      RenderSystem::DrawText(font, selected.description,
+        glm::vec2(detailsX, screenHeight * 0.5f + panelHeight * 0.05f),
+        0.25f * uiScale, glm::vec4(0.76f, 0.8f, 0.86f, reveal));
+      RenderSystem::DrawText(font, "WEIGHT: " + std::to_string(selected.weight).substr(0, 3) + " KG",
+        glm::vec2(detailsX, screenHeight * 0.5f - panelHeight * 0.09f),
+        0.31f * uiScale, glm::vec4(0.58f, 0.7f, 0.84f, reveal));
+    }
+    else
+    {
+      RenderSystem::DrawText(font, "NO ITEMS",
+        glm::vec2(detailsX, screenHeight * 0.5f + panelHeight * 0.05f),
+        0.45f * uiScale, glm::vec4(0.55f, 0.62f, 0.7f, reveal));
+    }
+
+    RenderSystem::DrawText(font, "TOTAL WEIGHT: " +
+      std::to_string(inventory.GetTotalWeight()).substr(0, 4) + " KG",
+      glm::vec2(detailsX, screenHeight * 0.5f - panelHeight * 0.22f),
+      0.32f * uiScale, glm::vec4(0.7f, 0.76f, 0.84f, reveal));
+    RenderSystem::DrawText(font, "ESC / I / Y: CLOSE    ARROWS / D-PAD: SELECT",
+      glm::vec2(screenWidth * 0.5f, screenHeight * 0.5f - panelHeight * 0.42f),
+      0.29f * uiScale, glm::vec4(0.62f, 0.68f, 0.76f, reveal));
+    RenderSystem::EndUI();
   }
 
   void SetPaused(bool paused)
@@ -305,17 +458,19 @@ private:
         break;
       }
       case 2:
-        m_PauseResolutionIndex = Wrap(m_PauseResolutionIndex + direction, m_PauseResolutions.size());
+        m_PauseResolutionIndex = Wrap(m_PauseResolutionIndex + direction,
+          static_cast<int>(m_PauseResolutions.size()));
         Settings::SetResolution(m_PauseResolutions[m_PauseResolutionIndex].x, m_PauseResolutions[m_PauseResolutionIndex].y);
-        Renderer::ApplyDisplaySettings();
+        RenderSystem::ApplyDisplaySettings();
         break;
       case 3:
         m_PauseModeIndex = Wrap(m_PauseModeIndex + direction, 3);
         Settings::SetWindowMode(static_cast<WindowMode>(m_PauseModeIndex));
-        Renderer::ApplyDisplaySettings();
+        RenderSystem::ApplyDisplaySettings();
         break;
       case 4:
-        m_PauseFPSIndex = Wrap(m_PauseFPSIndex + direction, m_PauseFPSLimits.size());
+        m_PauseFPSIndex = Wrap(m_PauseFPSIndex + direction,
+          static_cast<int>(m_PauseFPSLimits.size()));
         Settings::SetFPSLimit(m_PauseFPSLimits[m_PauseFPSIndex]);
         break;
       case 5:
@@ -325,7 +480,7 @@ private:
       case 6:
         Settings::SetShadowQuality(static_cast<GraphicsQuality>(Wrap(
           static_cast<int>(Settings::GetShadowQuality()) + direction, 4)));
-        Renderer::ApplyGraphicsSettings();
+        RenderSystem::ApplyGraphicsSettings();
         break;
       case 7:
         Settings::SetBloomQuality(static_cast<GraphicsQuality>(Wrap(
@@ -371,9 +526,9 @@ private:
     const Font* font = FontManager::GetFont("dpcomic");
     const float reveal = SceneUI::Smooth(m_PauseReveal);
 
-    Renderer::BeginScene();
+    RenderSystem::BeginUI();
 
-    Renderer::DrawQuad(
+    RenderSystem::DrawQuad(
       glm::vec2(screenWidth * 0.5f, screenHeight * 0.5f),
       glm::vec2(screenWidth, screenHeight), 0.0f,
       glm::vec4(0.008f, 0.012f, 0.025f, 0.64f * reveal));
@@ -386,12 +541,12 @@ private:
     }
     const float follow = 1.0f - std::exp(-15.0f * m_PauseFrameDelta);
     m_PauseHighlightY += (targetHighlightY - m_PauseHighlightY) * follow;
-    Renderer::DrawQuad(
+    RenderSystem::DrawQuad(
       glm::vec2(screenWidth * 0.5f, m_PauseHighlightY),
       glm::vec2(rowWidth * (0.82f + std::sin(m_PauseTime * 5.0f) * 0.015f), rowHeight * 0.82f),
       0.0f, glm::vec4(0.22f, 0.46f, 0.76f, 0.19f * reveal));
 
-    Renderer::DrawText(font, m_PauseScreen == PauseScreen::Main ? "PAUSED" : "OPTIONS",
+    RenderSystem::DrawText(font, m_PauseScreen == PauseScreen::Main ? "PAUSED" : "OPTIONS",
       glm::vec2(screenWidth * 0.5f,
         screenHeight * 0.8f + (1.0f - reveal) * 24.0f * uiScale + std::sin(m_PauseTime * 1.8f) * 2.0f * uiScale),
       (0.96f + reveal * 0.14f) * uiScale, glm::vec4(1.0f, 1.0f, 1.0f, reveal));
@@ -405,18 +560,18 @@ private:
       const float slide = (1.0f - itemReveal) * 48.0f * uiScale;
       const float pulse = selected ? 1.0f + std::sin(m_PauseTime * 5.5f) * 0.02f : 1.0f;
       const glm::vec3 color = selected ? glm::vec3(1.0f) : glm::vec3(0.62f, 0.68f, 0.76f);
-      Renderer::DrawText(font, label,
+      RenderSystem::DrawText(font, label,
         glm::vec2(screenWidth * 0.5f + slide, startY - i * spacing + rowHeight * 0.5f),
         0.58f * uiScale * pulse, glm::vec4(color, itemReveal));
     }
 
-    Renderer::DrawText(font,
+    RenderSystem::DrawText(font,
       m_PauseScreen == PauseScreen::Main
         ? "ESC / START: RESUME    ENTER / A: SELECT"
         : "LEFT / RIGHT: CHANGE    ESC / B: BACK",
       glm::vec2(screenWidth * 0.5f, 34.0f * uiScale), 0.3f * uiScale,
       glm::vec4(0.7f, 0.7f, 0.7f, reveal));
-    Renderer::EndScene();
+    RenderSystem::EndUI();
   }
 
   void SetPauseScreen(PauseScreen screen, int selected)
@@ -443,6 +598,13 @@ private:
   bool m_PausePreviousBack = false;
   bool m_PausePreviousMouse = false;
   bool m_PreviousFire = false;
+  bool m_PreviousInventory = false;
+  bool m_InventoryPreviousLeft = false;
+  bool m_InventoryPreviousRight = false;
+  bool m_InventoryPreviousUp = false;
+  bool m_InventoryPreviousDown = false;
+  int m_InventorySelected = 0;
+  float m_InventoryReveal = 0.0f;
   float m_PauseTime = 0.0f;
   float m_PauseFrameDelta = 0.0f;
   float m_PauseReveal = 0.0f;
@@ -487,7 +649,7 @@ struct MenuScene : Scene
     m_ScreenReveal = std::min(1.0f, m_ScreenReveal + m_FrameDelta / 0.38f);
 
     AudioManager::UpdateAllMusic();
-    Renderer::PrepareScreenUI(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+    RenderSystem::PrepareScreenUI(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
 
     const bool navigateUp = Pressed(
       Input::IsKeyPressed(Key::Up) || Input::IsKeyPressed(Key::W) ||
@@ -650,12 +812,12 @@ private:
       case 2:
         m_ResolutionIndex = Wrap(m_ResolutionIndex + direction, static_cast<int>(m_Resolutions.size()));
         Settings::SetResolution(m_Resolutions[m_ResolutionIndex].x, m_Resolutions[m_ResolutionIndex].y);
-        Renderer::ApplyDisplaySettings();
+        RenderSystem::ApplyDisplaySettings();
         break;
       case 3:
         m_ModeIndex = Wrap(m_ModeIndex + direction, 3);
         Settings::SetWindowMode(static_cast<WindowMode>(m_ModeIndex));
-        Renderer::ApplyDisplaySettings();
+        RenderSystem::ApplyDisplaySettings();
         break;
       case 4:
         m_FPSIndex = Wrap(m_FPSIndex + direction, static_cast<int>(m_FPSLimits.size()));
@@ -668,7 +830,7 @@ private:
       case 6:
         Settings::SetShadowQuality(static_cast<GraphicsQuality>(Wrap(
           static_cast<int>(Settings::GetShadowQuality()) + direction, 4)));
-        Renderer::ApplyGraphicsSettings();
+        RenderSystem::ApplyGraphicsSettings();
         break;
       case 7:
         Settings::SetBloomQuality(static_cast<GraphicsQuality>(Wrap(
@@ -688,9 +850,9 @@ private:
     const float intro = SceneUI::Smooth(m_IntroProgress);
     const float screenReveal = SceneUI::Smooth(m_ScreenReveal);
 
-    Renderer::BeginScene();
+    RenderSystem::BeginUI();
 
-    Renderer::DrawQuad(
+    RenderSystem::DrawQuad(
       glm::vec2(screenWidth * 0.5f, screenHeight * 0.5f),
       glm::vec2(screenWidth, screenHeight), 0.0f,
       glm::vec4(0.012f, 0.018f, 0.035f, 1.0f));
@@ -703,7 +865,7 @@ private:
       const float travel = screenWidth + columnWidth * 2.0f;
       const float speed = (10.0f + static_cast<float>((i * 7) % 13)) * uiScale;
       float columnX = std::fmod(i * screenWidth / 6.0f + m_MenuTime * speed, travel) - columnWidth;
-      Renderer::DrawQuad(
+      RenderSystem::DrawQuad(
         glm::vec2(columnX, screenHeight * 0.5f),
         glm::vec2(columnWidth, screenHeight * 1.15f),
         (i % 2 == 0 ? -2.0f : 2.0f),
@@ -719,21 +881,21 @@ private:
     const float highlightFollow = 1.0f - std::exp(-14.0f * m_FrameDelta);
     m_HighlightY += (targetHighlightY - m_HighlightY) * highlightFollow;
     const float highlightPulse = 1.0f + std::sin(m_MenuTime * 4.5f) * 0.025f;
-    Renderer::DrawQuad(
+    RenderSystem::DrawQuad(
       glm::vec2(x + width * 0.5f, m_HighlightY),
       glm::vec2(width * 0.82f * highlightPulse, height * 0.82f), 0.0f,
       glm::vec4(0.18f, 0.42f, 0.72f, 0.16f * screenReveal));
-    Renderer::DrawQuad(
+    RenderSystem::DrawQuad(
       glm::vec2(x + width * 0.09f, m_HighlightY),
       glm::vec2(4.0f * uiScale, height * 0.62f), 0.0f,
       glm::vec4(0.55f, 0.82f, 1.0f, 0.8f * screenReveal));
 
     const float titleFloat = std::sin(m_MenuTime * 1.7f) * 2.5f * uiScale;
-    Renderer::DrawText(font, m_Screen == Screen::Main ? "GABGL" : "OPTIONS",
+    RenderSystem::DrawText(font, m_Screen == Screen::Main ? "GABGL" : "OPTIONS",
       glm::vec2(screenWidth * 0.5f, screenHeight * 0.79f + titleFloat + (1.0f - intro) * 28.0f * uiScale),
       (1.08f + intro * 0.17f) * uiScale,
       glm::vec4(0.82f, 0.9f, 1.0f, intro));
-    Renderer::DrawQuad(
+    RenderSystem::DrawQuad(
       glm::vec2(screenWidth * 0.5f, screenHeight * 0.735f),
       glm::vec2(210.0f * uiScale * intro, 2.0f * uiScale), 0.0f,
       glm::vec4(0.32f, 0.62f, 0.92f, 0.55f * intro));
@@ -748,18 +910,18 @@ private:
       const float slide = (1.0f - itemReveal) * 65.0f * uiScale * (i % 2 == 0 ? 1.0f : -1.0f);
       const float pulse = selected ? 1.0f + std::sin(m_MenuTime * 5.5f) * 0.025f : 1.0f;
       const glm::vec3 color = selected ? glm::vec3(1.0f) : glm::vec3(0.72f, 0.78f, 0.86f);
-      Renderer::DrawText(font, label,
+      RenderSystem::DrawText(font, label,
         glm::vec2(x + width * 0.5f + slide, y + height * 0.5f),
         0.58f * uiScale * pulse, glm::vec4(color, itemReveal));
     }
 
-    Renderer::DrawText(font,
+    RenderSystem::DrawText(font,
       m_Screen == Screen::Main
         ? "UP / DOWN: NAVIGATE    ENTER / A: SELECT"
         : "UP / DOWN: SELECT    LEFT / RIGHT: CHANGE    ESC / B: BACK",
       glm::vec2(screenWidth * 0.5f, 34.0f * uiScale), 0.3f * uiScale,
       glm::vec4(0.55f, 0.62f, 0.72f, screenReveal));
-    Renderer::EndScene();
+    RenderSystem::EndUI();
   }
 
   void SetScreen(Screen screen, int selected)

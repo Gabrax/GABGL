@@ -5,7 +5,7 @@
 #include <future>
 
 #include "ModelManager.h"
-#include "LightManager.h"
+#include "RenderCommon.h"
 
 #include "json.hpp"
 

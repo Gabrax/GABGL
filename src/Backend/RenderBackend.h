@@ -12,6 +12,7 @@
 #include <glm/glm.hpp>
 
 struct DeltaTime;
+struct Font;
 struct Model;
 struct ParticleRenderInstance;
 struct Texture;
@@ -32,20 +33,26 @@ public:
 
   virtual bool InitializeSceneRenderer() = 0;
   virtual void ShutdownSceneRenderer() = 0;
-  virtual bool DrawScene(DeltaTime& dt, const std::function<void()>& sceneLogic,
+  virtual void DrawScene(DeltaTime& dt, const std::function<void()>& sceneLogic,
                          bool advanceSimulation, bool renderForEditor,
                          const RenderEffectSettings& effects) = 0;
 
   virtual bool UploadModel(const std::shared_ptr<Model>& model) = 0;
   virtual bool UploadSkybox(const std::shared_ptr<Texture>& cubemap) = 0;
   virtual void ResetSceneResources() = 0;
+  virtual void RegisterModelDrawCommand(const std::string& modelName, uint32_t vertexCount,
+                                        uint32_t indexCount) = 0;
+  virtual void UpdateModelInstances(const std::shared_ptr<Model>& model) = 0;
+  virtual void SetModelRendered(const std::shared_ptr<Model>& model, bool rendered) = 0;
+  virtual void FinalizeModelUpload() = 0;
+  virtual void ResetModelDrawCommands() = 0;
   virtual bool DrawParticles(const std::vector<ParticleRenderInstance>& instances) = 0;
 
   virtual bool BeginUI() = 0;
   virtual void PrepareScreenUI(const glm::vec4& clearColor, bool clear) = 0;
   virtual bool EndUI() = 0;
   virtual bool DrawQuad(const glm::mat4& transform, const glm::vec4& color) = 0;
-  virtual bool DrawText(const std::string& text, const glm::vec2& position,
+  virtual bool DrawText(const Font* font, const std::string& text, const glm::vec2& position,
                         float size, const glm::vec4& color) = 0;
   virtual bool BeginDebugLines() = 0;
   virtual bool DrawDebugLine(const glm::vec3& start, const glm::vec3& end,
@@ -59,6 +66,7 @@ public:
   virtual void RenderImGuiDrawData() = 0;
   virtual void RenderImGuiPlatformWindows() = 0;
   [[nodiscard]] virtual uint64_t GetEditorTextureID() const = 0;
+  virtual void OnLightsChanged(const std::vector<RenderLight>& lights) = 0;
 };
 
 struct RenderBackend
@@ -71,4 +79,9 @@ struct RenderBackend
   static RenderDebugSettings& DebugSettings();
   static const RenderStatistics& Statistics();
   static void SetStatistics(const RenderStatistics& statistics);
+  static bool AddLight(const RenderLight& light);
+  static bool UpdateLight(size_t index, const RenderLight& light);
+  static bool RemoveLight(size_t index);
+  static void ClearLights();
+  [[nodiscard]] static const std::vector<RenderLight>& Lights();
 };

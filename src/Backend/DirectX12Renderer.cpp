@@ -10,8 +10,7 @@
 #include "ParticleRenderer.h"
 #include "PhysX.h"
 #include "RenderBackend.h"
-#include "Renderer.h"
-#include "SceneManager.h"
+#include "Shader.h"
 #include "Settings.h"
 #include "Texture.h"
 #include "Window.h"
@@ -27,7 +26,6 @@
 #undef DrawText
 #endif
 #include <d3d12.h>
-#include <d3dcompiler.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 
@@ -51,6 +49,7 @@
 #include <vector>
 
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/constants.hpp>
 
 using Microsoft::WRL::ComPtr;
 
@@ -671,26 +670,9 @@ namespace
 #endif
   }
 
-  ComPtr<ID3DBlob> CompileShader(const char* source, const char* entryPoint, const char* target)
+  Shader::Bytecode CompileHLSL(const char* path, const char* entryPoint, const char* target)
   {
-    UINT flags = D3DCOMPILE_ENABLE_STRICTNESS;
-#ifdef DEBUG
-    flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#else
-    flags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
-#endif
-    ComPtr<ID3DBlob> shader;
-    ComPtr<ID3DBlob> errors;
-    const HRESULT result = D3DCompile(source, std::strlen(source), "GABGL.DX12.hlsl", nullptr,
-                                     nullptr, entryPoint, target, flags, 0, &shader, &errors);
-    if (FAILED(result))
-    {
-      if (errors)
-        GABGL_ERROR("DX12 shader compilation failed: {}",
-                    static_cast<const char*>(errors->GetBufferPointer()));
-      ThrowHRESULT(result, "D3DCompile");
-    }
-    return shader;
+    return Shader::CompileHLSL(path, entryPoint, target);
   }
 
   ComPtr<ID3D12RootSignature> CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC& description)
@@ -734,215 +716,175 @@ namespace
     return state;
   }
 
+  void DrawDebugWireSphere(const glm::vec3& center, float radius, const glm::vec4& color,
+                           int segments = 24)
+  {
+    if (radius <= 0.0f || segments < 3) return;
+    for (int i = 0; i < segments; ++i)
+    {
+      const float angle0 = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(segments);
+      const float angle1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(segments);
+      const float c0 = std::cos(angle0), s0 = std::sin(angle0);
+      const float c1 = std::cos(angle1), s1 = std::sin(angle1);
+      DirectX12Renderer::DrawDebugLine(center + glm::vec3(c0, s0, 0.0f) * radius,
+                                       center + glm::vec3(c1, s1, 0.0f) * radius, color);
+      DirectX12Renderer::DrawDebugLine(center + glm::vec3(c0, 0.0f, s0) * radius,
+                                       center + glm::vec3(c1, 0.0f, s1) * radius, color);
+      DirectX12Renderer::DrawDebugLine(center + glm::vec3(0.0f, c0, s0) * radius,
+                                       center + glm::vec3(0.0f, c1, s1) * radius, color);
+    }
+  }
+
+  void DrawDebugWireCapsule(const glm::vec3& center, float radius, float height,
+                            const glm::vec3& upDirection, const glm::vec4& color, int segments = 24)
+  {
+    if (radius <= 0.0f || height < 0.0f || segments < 4) return;
+    const glm::vec3 up = glm::length(upDirection) > 0.0001f
+      ? glm::normalize(upDirection) : glm::vec3(0.0f, 1.0f, 0.0f);
+    const glm::vec3 fallbackAxis = std::abs(glm::dot(up, glm::vec3(0.0f, 1.0f, 0.0f))) > 0.98f
+      ? glm::vec3(1.0f, 0.0f, 0.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
+    const glm::vec3 right = glm::normalize(glm::cross(up, fallbackAxis));
+    const glm::vec3 forward = glm::normalize(glm::cross(right, up));
+    const glm::vec3 topCenter = center + up * (height * 0.5f);
+    const glm::vec3 bottomCenter = center - up * (height * 0.5f);
+    for (int i = 0; i < segments; ++i)
+    {
+      const float angle0 = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(segments);
+      const float angle1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(segments);
+      const glm::vec3 radial0 = right * std::cos(angle0) + forward * std::sin(angle0);
+      const glm::vec3 radial1 = right * std::cos(angle1) + forward * std::sin(angle1);
+      DirectX12Renderer::DrawDebugLine(topCenter + radial0 * radius, topCenter + radial1 * radius, color);
+      DirectX12Renderer::DrawDebugLine(bottomCenter + radial0 * radius, bottomCenter + radial1 * radius, color);
+    }
+    constexpr int meridians = 8;
+    const int arcSegments = std::max(4, segments / 4);
+    for (int meridian = 0; meridian < meridians; ++meridian)
+    {
+      const float angle = glm::two_pi<float>() * static_cast<float>(meridian) / static_cast<float>(meridians);
+      const glm::vec3 radial = right * std::cos(angle) + forward * std::sin(angle);
+      DirectX12Renderer::DrawDebugLine(bottomCenter + radial * radius, topCenter + radial * radius, color);
+      for (int arc = 0; arc < arcSegments; ++arc)
+      {
+        const float arc0 = glm::half_pi<float>() * static_cast<float>(arc) / static_cast<float>(arcSegments);
+        const float arc1 = glm::half_pi<float>() * static_cast<float>(arc + 1) / static_cast<float>(arcSegments);
+        DirectX12Renderer::DrawDebugLine(
+          topCenter + (radial * std::cos(arc0) + up * std::sin(arc0)) * radius,
+          topCenter + (radial * std::cos(arc1) + up * std::sin(arc1)) * radius, color);
+        DirectX12Renderer::DrawDebugLine(
+          bottomCenter + (radial * std::cos(arc0) - up * std::sin(arc0)) * radius,
+          bottomCenter + (radial * std::cos(arc1) - up * std::sin(arc1)) * radius, color);
+      }
+    }
+  }
+
+  void DrawDebugVisualizations()
+  {
+    const RenderDebugSettings& debug = RenderBackend::DebugSettings();
+    if (!debug.Physics && !debug.Lights && !debug.CullingBounds) return;
+
+    DirectX12Renderer::BeginDebugLines();
+    if (debug.Physics)
+    {
+      constexpr glm::vec4 controllerColor(0.15f, 0.8f, 1.0f, 0.9f);
+      for (const std::string& modelName : ModelManager::GetModelNames())
+      {
+        const auto model = ModelManager::GetModel(modelName);
+        PxController* controller = model ? model->GetController() : nullptr;
+        if (!controller || controller->getType() != PxControllerShapeType::eCAPSULE) continue;
+        auto* capsule = static_cast<PxCapsuleController*>(controller);
+        const PxExtendedVec3 position = controller->getPosition();
+        const PxVec3 up = controller->getUpDirection();
+        DrawDebugWireCapsule(
+          glm::vec3(static_cast<float>(position.x), static_cast<float>(position.y), static_cast<float>(position.z)),
+          capsule->getRadius(), capsule->getHeight(), glm::vec3(up.x, up.y, up.z), controllerColor);
+      }
+    }
+
+    if (debug.CullingBounds)
+    {
+      const RenderFrustum frustum(Camera::GetViewProjection());
+      for (const std::string& modelName : ModelManager::GetModelNames())
+      {
+        const auto model = ModelManager::GetModel(modelName);
+        if (!model || !model->m_IsRendered) continue;
+        for (const glm::mat4& transform : model->m_InstanceTransforms)
+        {
+          const WorldBoundingSphere sphere = CalculateWorldBoundingSphere(*model, transform);
+          const bool visible = frustum.IntersectsSphere(sphere.center, sphere.radius);
+          DrawDebugWireSphere(sphere.center, sphere.radius,
+                              visible ? glm::vec4(0.15f, 1.0f, 0.3f, 0.8f)
+                                      : glm::vec4(1.0f, 0.2f, 0.15f, 0.8f));
+        }
+      }
+    }
+
+    if (debug.Lights)
+    {
+      for (const RenderLight& light : RenderBackend::Lights())
+      {
+        const glm::vec4 color(light.Color, 0.9f);
+        if (light.Type == LightType::DIRECT)
+        {
+          const glm::vec3 origin = Camera::GetPosition() + Camera::GetForwardDirection() * 8.0f;
+          const glm::vec3 direction = glm::length(light.Direction) > 0.0001f
+            ? glm::normalize(light.Direction) : glm::vec3(0.0f, -1.0f, 0.0f);
+          DrawDebugWireSphere(origin, 0.5f, color);
+          DirectX12Renderer::DrawDebugLine(origin, origin + direction * 12.0f, color);
+        }
+        else if (light.Type == LightType::POINT)
+        {
+          DrawDebugWireSphere(light.Position, 0.5f, color);
+          DrawDebugWireSphere(light.Position, PointShadowRadius, glm::vec4(light.Color, 0.2f), 32);
+          DirectX12Renderer::DrawDebugLine(light.Position - glm::vec3(1.0f, 0.0f, 0.0f), light.Position + glm::vec3(1.0f, 0.0f, 0.0f), color);
+          DirectX12Renderer::DrawDebugLine(light.Position - glm::vec3(0.0f, 1.0f, 0.0f), light.Position + glm::vec3(0.0f, 1.0f, 0.0f), color);
+          DirectX12Renderer::DrawDebugLine(light.Position - glm::vec3(0.0f, 0.0f, 1.0f), light.Position + glm::vec3(0.0f, 0.0f, 1.0f), color);
+        }
+        else
+        {
+          const glm::vec3 direction = glm::length(light.Direction) > 0.0001f
+            ? glm::normalize(light.Direction) : glm::vec3(0.0f, -1.0f, 0.0f);
+          const glm::vec3 fallbackUp = std::abs(glm::dot(direction, glm::vec3(0.0f, 1.0f, 0.0f))) > 0.98f
+            ? glm::vec3(1.0f, 0.0f, 0.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
+          const glm::vec3 right = glm::normalize(glm::cross(direction, fallbackUp));
+          const glm::vec3 up = glm::normalize(glm::cross(right, direction));
+          const glm::vec3 end = light.Position + direction * 8.0f;
+          constexpr int segments = 20;
+          for (int i = 0; i < segments; ++i)
+          {
+            constexpr float coneRadius = 3.0f;
+            const float angle0 = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(segments);
+            const float angle1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(segments);
+            const glm::vec3 p0 = end + (right * std::cos(angle0) + up * std::sin(angle0)) * coneRadius;
+            const glm::vec3 p1 = end + (right * std::cos(angle1) + up * std::sin(angle1)) * coneRadius;
+            DirectX12Renderer::DrawDebugLine(p0, p1, color);
+            if (i % 5 == 0) DirectX12Renderer::DrawDebugLine(light.Position, p0, color);
+          }
+          DrawDebugWireSphere(light.Position, 0.4f, color);
+          DirectX12Renderer::DrawDebugLine(light.Position, end, color);
+        }
+      }
+    }
+    DirectX12Renderer::EndDebugLines();
+  }
+
+  void DrawDebug2D()
+  {
+    if (!RenderBackend::DebugSettings().Debug2D) return;
+    const glm::mat4 transform = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(141.0f, 37.0f, 0.0f)),
+                                           glm::vec3(250.0f, 42.0f, 1.0f));
+    DirectX12Renderer::BeginScene();
+    DirectX12Renderer::DrawQuad(transform, glm::vec4(0.02f, 0.04f, 0.07f, 0.78f));
+    DirectX12Renderer::DrawText("2D DEBUG RENDER", glm::vec2(141.0f, 37.0f), 0.28f,
+                                glm::vec4(0.45f, 0.92f, 1.0f, 1.0f));
+    DirectX12Renderer::EndScene();
+  }
+
   void CreateScenePipeline()
   {
-    static constexpr const char* SceneShader = R"(
-#define MAX_BONES 100
-#define MAX_LIGHTS 32
+    static constexpr const char* SceneShader = "../res/shaders/hlsl/scene.hlsl";
 
-cbuffer SceneConstants : register(b0)
-{
-  float4x4 ViewProjection;
-  float4x4 Model;
-  float4x4 LightViewProjection;
-  float4x4 Bones[MAX_BONES];
-  float4 CameraPosition;
-  float4 MaterialFlags;
-  float4 LightPositions[MAX_LIGHTS];
-  float4 LightDirections[MAX_LIGHTS];
-  float4 LightColors[MAX_LIGHTS];
-  float4 LightTypes[MAX_LIGHTS];
-  uint4 LightCount;
-  float4 Resolution;
-};
-
-Texture2D DiffuseTexture : register(t0);
-Texture2D NormalTexture : register(t1);
-Texture2D SpecularTexture : register(t2);
-Texture2D ShadowTexture : register(t3);
-TextureCubeArray PointShadowTexture : register(t4);
-SamplerState LinearSampler : register(s0);
-
-struct VSInput
-{
-  float3 position : POSITION;
-  float3 normal : NORMAL;
-  float2 uv : TEXCOORD;
-  float3 tangent : TANGENT;
-  float3 bitangent : BITANGENT;
-  int4 boneIds : BONEIDS;
-  float4 weights : BONEWEIGHTS;
-};
-
-struct PSInput
-{
-  float4 position : SV_POSITION;
-  float3 worldPosition : POSITION0;
-  float3 normal : NORMAL;
-  float3 tangent : TANGENT;
-  float3 bitangent : BITANGENT;
-  float2 uv : TEXCOORD;
-  float4 shadowPosition : TEXCOORD1;
-};
-
-float4x4 SkinMatrix(VSInput input)
-{
-  float4x4 skin = float4x4(1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1);
-  if (CameraPosition.w < 0.5f) return skin;
-  skin = float4x4(0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0);
-  float totalWeight = 0.0f;
-  [unroll]
-  for (int i = 0; i < 4; ++i)
-  {
-    if (input.boneIds[i] >= 0 && input.boneIds[i] < MAX_BONES && input.weights[i] > 0.0f)
-    {
-      skin += Bones[input.boneIds[i]] * input.weights[i];
-      totalWeight += input.weights[i];
-    }
-  }
-  return totalWeight > 0.00001f ? skin / totalWeight
-    : float4x4(1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1);
-}
-
-PSInput VSMain(VSInput input)
-{
-  const float4x4 skin = SkinMatrix(input);
-  const float4 worldPosition = mul(Model, mul(skin, float4(input.position, 1.0f)));
-  const float3x3 linearTransform = mul((float3x3)Model, (float3x3)skin);
-  const float3 normal = normalize(mul(linearTransform, input.normal));
-  float3 tangent = mul(linearTransform, input.tangent);
-  tangent = normalize(tangent - normal * dot(normal, tangent));
-  const float handedness = dot(cross(input.normal, input.tangent), input.bitangent) < 0.0f ? -1.0f : 1.0f;
-  PSInput output;
-  float4 clipPosition = mul(ViewProjection, worldPosition);
-  const float2 outputResolution = max(Resolution.xy, float2(1.0f, 1.0f));
-  const float virtualHeight = max(Resolution.z, 1.0f);
-  const float2 snapResolution = float2(
-    max(floor(virtualHeight * outputResolution.x / outputResolution.y + 0.5f), 1.0f),
-    virtualHeight);
-  const float safeW = abs(clipPosition.w) > 0.00001f ? clipPosition.w : 0.00001f;
-  if (Resolution.w > 0.5f)
-  {
-    const float2 ndc = clipPosition.xy / safeW;
-    const float2 snappedNdc =
-      (floor((ndc * 0.5f + 0.5f) * snapResolution + 0.5f) / snapResolution) * 2.0f - 1.0f;
-    clipPosition.xy = snappedNdc * clipPosition.w;
-  }
-  output.position = clipPosition;
-  output.worldPosition = worldPosition.xyz;
-  output.normal = normal;
-  output.tangent = tangent;
-  output.bitangent = normalize(cross(normal, tangent)) * handedness;
-  output.uv = input.uv;
-  output.shadowPosition = mul(LightViewProjection, worldPosition);
-  return output;
-}
-
-float ShadowFactor(float4 shadowPosition, float3 normal, float3 lightDirection)
-{
-  if (LightCount.y == 0) return 1.0f;
-  if (shadowPosition.w <= 0.0f) return 1.0f;
-  const float3 ndc = shadowPosition.xyz / shadowPosition.w;
-  const float2 uv = ndc.xy * float2(0.5f, -0.5f) + 0.5f;
-  if (ndc.z <= 0.0f || ndc.z >= 1.0f || any(uv < 0.0f) || any(uv > 1.0f)) return 1.0f;
-  uint width, height;
-  ShadowTexture.GetDimensions(width, height);
-  const float2 texel = 1.0f / float2(width, height);
-  const float bias = max(0.0015f * (1.0f - saturate(dot(normal, -lightDirection))), 0.0002f);
-  float visibility = 0.0f;
-  [unroll]
-  for (int y = -1; y <= 1; ++y)
-    [unroll]
-    for (int x = -1; x <= 1; ++x)
-    {
-      const float depth = ShadowTexture.SampleLevel(LinearSampler, uv + float2(x, y) * texel, 0).r;
-      visibility += ndc.z - bias <= depth ? 1.0f : 0.18f;
-    }
-  return visibility / 9.0f;
-}
-
-float PointShadowFactor(float3 worldPosition, float3 normal, float3 lightPosition,
-                        float shadowSlotPlusOne)
-{
-  if (LightCount.y == 0 || shadowSlotPlusOne < 0.5f) return 1.0f;
-  const float3 fragToLight = worldPosition - lightPosition;
-  const float currentDepth = length(fragToLight);
-  if (currentDepth >= 20.0f || currentDepth <= 0.0001f) return 1.0f;
-  const float3 direction = fragToLight / currentDepth;
-  const float closestDepth = PointShadowTexture.SampleLevel(
-    LinearSampler, float4(direction, shadowSlotPlusOne - 1.0f), 0).r;
-  const float bias = max(0.03f * (1.0f - dot(normal, -direction)), 0.003f);
-  return currentDepth - bias > closestDepth ? 0.15f : 1.0f;
-}
-
-float4 PSMain(PSInput input) : SV_TARGET
-{
-  const float4 albedoSample = DiffuseTexture.Sample(LinearSampler, input.uv);
-  float3 normal = normalize(input.normal);
-  if (MaterialFlags.x > 0.5f)
-  {
-    const float3 tangentNormal = NormalTexture.Sample(LinearSampler, input.uv).xyz * 2.0f - 1.0f;
-    normal = normalize(tangentNormal.x * input.tangent + tangentNormal.y * input.bitangent + tangentNormal.z * normal);
-  }
-  const float specularStrength = MaterialFlags.y > 0.5f
-    ? SpecularTexture.Sample(LinearSampler, input.uv).r : 0.12f;
-  const float3 viewDirection = normalize(CameraPosition.xyz - input.worldPosition);
-  const float shininess = lerp(8.0f, 128.0f, specularStrength);
-  float3 lighting = 0.0f;
-  [loop]
-  for (uint i = 0; i < min(LightCount.x, (uint)MAX_LIGHTS); ++i)
-  {
-    const int type = (int)(LightTypes[i].x + 0.5f);
-    const float3 lightColor = LightColors[i].rgb;
-    const float3 ambient = lightColor * 0.1f;
-    float3 toLight;
-    float attenuation = 1.0f;
-    float intensity = 1.0f;
-    float shadow = 1.0f;
-    if (type == 0)
-    {
-      const float3 direction = normalize(LightDirections[i].xyz);
-      toLight = -direction;
-      shadow = ShadowFactor(input.shadowPosition, normal, direction);
-      const float diffuse = saturate(dot(normal, toLight));
-      const float specular = pow(saturate(dot(viewDirection, reflect(-toLight, normal))), shininess);
-      lighting += ambient * albedoSample.rgb;
-      lighting += lightColor * diffuse * albedoSample.rgb * shadow;
-      lighting += specularStrength * specular * shadow;
-    }
-    else if (type == 1)
-    {
-      const float3 offset = LightPositions[i].xyz - input.worldPosition;
-      const float distanceToLight = max(length(offset), 0.001f);
-      toLight = offset / distanceToLight;
-      attenuation = 1.0f / (1.0f + 0.09f * distanceToLight + 0.032f * distanceToLight * distanceToLight);
-      const float diffuse = saturate(dot(normal, toLight));
-      const float specular = pow(saturate(dot(viewDirection, reflect(-toLight, normal))), shininess);
-      shadow = PointShadowFactor(input.worldPosition, normal, LightPositions[i].xyz, LightTypes[i].y);
-      lighting += ambient * albedoSample.rgb * attenuation;
-      lighting += lightColor * diffuse * albedoSample.rgb * attenuation * shadow;
-      lighting += specularStrength * specular * attenuation * shadow;
-    }
-    else
-    {
-      const float3 offset = LightPositions[i].xyz - input.worldPosition;
-      const float distanceToLight = max(length(offset), 0.001f);
-      toLight = offset / distanceToLight;
-      attenuation = 1.0f / (1.0f + 0.09f * distanceToLight + 0.032f * distanceToLight * distanceToLight);
-      const float theta = dot(-toLight, normalize(LightDirections[i].xyz));
-      intensity = saturate((theta - cos(0.3054f)) / max(cos(0.2182f) - cos(0.3054f), 0.0001f));
-      const float diffuse = saturate(dot(normal, toLight));
-      const float specular = pow(saturate(dot(viewDirection, reflect(-toLight, normal))), shininess);
-      lighting += (ambient * albedoSample.rgb + lightColor * diffuse * albedoSample.rgb
-        + specularStrength * specular) * attenuation * intensity;
-    }
-  }
-  return float4(lighting, albedoSample.a);
-}
-)";
-
-    const auto vertexShader = CompileShader(SceneShader, "VSMain", "vs_5_1");
-    const auto pixelShader = CompileShader(SceneShader, "PSMain", "ps_5_1");
+    const auto vertexShader = CompileHLSL(SceneShader, "VSMain", "vs_5_1");
+    const auto pixelShader = CompileHLSL(SceneShader, "PSMain", "ps_5_1");
 
     std::array<D3D12_DESCRIPTOR_RANGE, 5> textureRanges{};
     for (uint32_t i = 0; i < textureRanges.size(); ++i)
@@ -1000,8 +942,8 @@ float4 PSMain(PSInput input) : SV_TARGET
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline{};
     pipeline.pRootSignature = s_Data.SceneRootSignature.Get();
-    pipeline.VS = {vertexShader->GetBufferPointer(), vertexShader->GetBufferSize()};
-    pipeline.PS = {pixelShader->GetBufferPointer(), pixelShader->GetBufferSize()};
+    pipeline.VS = {vertexShader.GetBufferPointer(), vertexShader.GetBufferSize()};
+    pipeline.PS = {pixelShader.GetBufferPointer(), pixelShader.GetBufferSize()};
     pipeline.BlendState = DefaultBlendState();
     pipeline.SampleMask = std::numeric_limits<UINT>::max();
     pipeline.RasterizerState = DefaultRasterizer();
@@ -1022,33 +964,8 @@ float4 PSMain(PSInput input) : SV_TARGET
 
   void CreateShadowPipeline()
   {
-    static constexpr const char* shaderSource = R"(
-#define MAX_BONES 100
-cbuffer ShadowConstants : register(b0)
-{
-  float4x4 LightViewProjection;
-  float4x4 Model;
-  float4x4 Bones[MAX_BONES];
-  float4 Animated;
-};
-struct VSInput { float3 position : POSITION; int4 boneIds : BONEIDS; float4 weights : BONEWEIGHTS; };
-float4 VSMain(VSInput input) : SV_POSITION
-{
-  float4x4 skin = float4x4(1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1);
-  if (Animated.x > 0.5f)
-  {
-    skin = float4x4(0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0);
-    float total = 0.0f;
-    [unroll] for (int i = 0; i < 4; ++i)
-      if (input.boneIds[i] >= 0 && input.boneIds[i] < MAX_BONES && input.weights[i] > 0.0f)
-      { skin += Bones[input.boneIds[i]] * input.weights[i]; total += input.weights[i]; }
-    if (total > 0.00001f) skin /= total;
-    else skin = float4x4(1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1);
-  }
-  return mul(LightViewProjection, mul(Model, mul(skin, float4(input.position, 1.0f))));
-}
-)";
-    const auto vertexShader = CompileShader(shaderSource, "VSMain", "vs_5_1");
+    static constexpr const char* shaderSource = "../res/shaders/hlsl/shadow.hlsl";
+    const auto vertexShader = CompileHLSL(shaderSource, "VSMain", "vs_5_1");
     D3D12_ROOT_PARAMETER parameter{};
     parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     parameter.Descriptor.ShaderRegister = 0;
@@ -1065,7 +982,7 @@ float4 VSMain(VSInput input) : SV_POSITION
     };
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline{};
     pipeline.pRootSignature = s_Data.ShadowRootSignature.Get();
-    pipeline.VS = {vertexShader->GetBufferPointer(), vertexShader->GetBufferSize()};
+    pipeline.VS = {vertexShader.GetBufferPointer(), vertexShader.GetBufferSize()};
     pipeline.BlendState = DefaultBlendState();
     pipeline.SampleMask = std::numeric_limits<UINT>::max();
     pipeline.RasterizerState = DefaultRasterizer();
@@ -1084,43 +1001,9 @@ float4 VSMain(VSInput input) : SV_POSITION
 
   void CreatePointShadowPipeline()
   {
-    static constexpr const char* shaderSource = R"(
-#define MAX_BONES 100
-cbuffer PointShadowConstants : register(b0)
-{
-  float4x4 LightViewProjection;
-  float4x4 Model;
-  float4x4 Bones[MAX_BONES];
-  float4 LightPositionAndAnimated;
-};
-struct VSInput { float3 position : POSITION; int4 boneIds : BONEIDS; float4 weights : BONEWEIGHTS; };
-struct PSInput { float4 position : SV_POSITION; float3 worldPosition : POSITION0; };
-PSInput VSMain(VSInput input)
-{
-  float4x4 skin = float4x4(1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1);
-  if (LightPositionAndAnimated.w > 0.5f)
-  {
-    skin = float4x4(0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0);
-    float total = 0.0f;
-    [unroll] for (int i = 0; i < 4; ++i)
-      if (input.boneIds[i] >= 0 && input.boneIds[i] < MAX_BONES && input.weights[i] > 0.0f)
-      { skin += Bones[input.boneIds[i]] * input.weights[i]; total += input.weights[i]; }
-    if (total > 0.00001f) skin /= total;
-    else skin = float4x4(1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1);
-  }
-  const float4 world = mul(Model, mul(skin, float4(input.position, 1.0f)));
-  PSInput output;
-  output.position = mul(LightViewProjection, world);
-  output.worldPosition = world.xyz;
-  return output;
-}
-float PSMain(PSInput input) : SV_TARGET
-{
-  return length(input.worldPosition - LightPositionAndAnimated.xyz);
-}
-)";
-    const auto vertexShader = CompileShader(shaderSource, "VSMain", "vs_5_1");
-    const auto pixelShader = CompileShader(shaderSource, "PSMain", "ps_5_1");
+    static constexpr const char* shaderSource = "../res/shaders/hlsl/point_shadow.hlsl";
+    const auto vertexShader = CompileHLSL(shaderSource, "VSMain", "vs_5_1");
+    const auto pixelShader = CompileHLSL(shaderSource, "PSMain", "ps_5_1");
     D3D12_ROOT_PARAMETER parameter{};
     parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     parameter.Descriptor.ShaderRegister = 0;
@@ -1137,8 +1020,8 @@ float PSMain(PSInput input) : SV_TARGET
     };
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline{};
     pipeline.pRootSignature = s_Data.PointShadowRootSignature.Get();
-    pipeline.VS = {vertexShader->GetBufferPointer(), vertexShader->GetBufferSize()};
-    pipeline.PS = {pixelShader->GetBufferPointer(), pixelShader->GetBufferSize()};
+    pipeline.VS = {vertexShader.GetBufferPointer(), vertexShader.GetBufferSize()};
+    pipeline.PS = {pixelShader.GetBufferPointer(), pixelShader.GetBufferSize()};
     pipeline.BlendState = DefaultBlendState();
     pipeline.SampleMask = std::numeric_limits<UINT>::max();
     pipeline.RasterizerState = DefaultRasterizer();
@@ -1158,26 +1041,9 @@ float PSMain(PSInput input) : SV_TARGET
 
   void CreateSkyboxPipeline()
   {
-    static constexpr const char* shaderSource = R"(
-cbuffer SkyboxConstants : register(b0) { float4x4 ViewProjection; };
-TextureCube SkyboxTexture : register(t0);
-SamplerState SkyboxSampler : register(s0);
-struct PSInput { float4 position : SV_POSITION; float3 direction : TEXCOORD; };
-PSInput VSMain(float3 position : POSITION)
-{
-  PSInput output;
-  float4 clip = mul(ViewProjection, float4(position, 1.0f));
-  output.position = clip.xyww;
-  output.direction = position;
-  return output;
-}
-float4 PSMain(PSInput input) : SV_TARGET
-{
-  return float4(SkyboxTexture.Sample(SkyboxSampler, input.direction).rgb * 0.65f, 1.0f);
-}
-)";
-    const auto vertexShader = CompileShader(shaderSource, "VSMain", "vs_5_1");
-    const auto pixelShader = CompileShader(shaderSource, "PSMain", "ps_5_1");
+    static constexpr const char* shaderSource = "../res/shaders/hlsl/skybox.hlsl";
+    const auto vertexShader = CompileHLSL(shaderSource, "VSMain", "vs_5_1");
+    const auto pixelShader = CompileHLSL(shaderSource, "PSMain", "ps_5_1");
     D3D12_DESCRIPTOR_RANGE range{};
     range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     range.NumDescriptors = 1;
@@ -1204,8 +1070,8 @@ float4 PSMain(PSInput input) : SV_TARGET
     const D3D12_INPUT_ELEMENT_DESC input = {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline{};
     pipeline.pRootSignature = s_Data.SkyboxRootSignature.Get();
-    pipeline.VS = {vertexShader->GetBufferPointer(), vertexShader->GetBufferSize()};
-    pipeline.PS = {pixelShader->GetBufferPointer(), pixelShader->GetBufferSize()};
+    pipeline.VS = {vertexShader.GetBufferPointer(), vertexShader.GetBufferSize()};
+    pipeline.PS = {pixelShader.GetBufferPointer(), pixelShader.GetBufferSize()};
     pipeline.BlendState = DefaultBlendState();
     pipeline.SampleMask = std::numeric_limits<UINT>::max();
     pipeline.RasterizerState = DefaultRasterizer();
@@ -1240,15 +1106,9 @@ float4 PSMain(PSInput input) : SV_TARGET
 
   void CreateParticlePipeline()
   {
-    static constexpr const char* shaderSource = R"(
-cbuffer ParticleConstants : register(b0) { float4x4 ViewProjection; };
-struct VSInput { float3 position : POSITION; float4 color : COLOR; float2 localPosition : TEXCOORD; float isSquare : STYLE; };
-struct PSInput { float4 position : SV_POSITION; float4 color : COLOR; float2 localPosition : TEXCOORD; nointerpolation float isSquare : STYLE; };
-PSInput VSMain(VSInput input) { PSInput o; o.position=mul(ViewProjection,float4(input.position,1)); o.color=input.color; o.localPosition=input.localPosition; o.isSquare=input.isSquare; return o; }
-float4 PSMain(PSInput input) : SV_TARGET { float edge=input.isSquare>0.5?1.0:1.0-smoothstep(0.15,1.0,length(input.localPosition)); float4 c=float4(input.color.rgb,input.color.a*edge); clip(c.a-0.01); return c; }
-)";
-    const auto vs = CompileShader(shaderSource, "VSMain", "vs_5_1");
-    const auto ps = CompileShader(shaderSource, "PSMain", "ps_5_1");
+    static constexpr const char* shaderSource = "../res/shaders/hlsl/particles.hlsl";
+    const auto vs = CompileHLSL(shaderSource, "VSMain", "vs_5_1");
+    const auto ps = CompileHLSL(shaderSource, "PSMain", "ps_5_1");
     D3D12_ROOT_PARAMETER parameter{};
     parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     parameter.Descriptor.ShaderRegister = 0;
@@ -1263,7 +1123,7 @@ float4 PSMain(PSInput input) : SV_TARGET { float edge=input.isSquare>0.5?1.0:1.0
       {"STYLE",0,DXGI_FORMAT_R32_FLOAT,0,offsetof(ParticleVertex,IsSquare),D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0}
     };
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline{};
-    pipeline.pRootSignature=s_Data.ParticleRootSignature.Get(); pipeline.VS={vs->GetBufferPointer(),vs->GetBufferSize()}; pipeline.PS={ps->GetBufferPointer(),ps->GetBufferSize()};
+    pipeline.pRootSignature=s_Data.ParticleRootSignature.Get(); pipeline.VS={vs.GetBufferPointer(),vs.GetBufferSize()}; pipeline.PS={ps.GetBufferPointer(),ps.GetBufferSize()};
     pipeline.BlendState=DefaultBlendState(); auto& blend=pipeline.BlendState.RenderTarget[0]; blend.BlendEnable=TRUE; blend.SrcBlend=D3D12_BLEND_SRC_ALPHA; blend.DestBlend=D3D12_BLEND_INV_SRC_ALPHA; blend.BlendOp=D3D12_BLEND_OP_ADD; blend.SrcBlendAlpha=D3D12_BLEND_ONE; blend.DestBlendAlpha=D3D12_BLEND_INV_SRC_ALPHA; blend.BlendOpAlpha=D3D12_BLEND_OP_ADD;
     pipeline.SampleMask=std::numeric_limits<UINT>::max(); pipeline.RasterizerState=DefaultRasterizer(); pipeline.DepthStencilState.DepthEnable=TRUE; pipeline.DepthStencilState.DepthWriteMask=D3D12_DEPTH_WRITE_MASK_ZERO; pipeline.DepthStencilState.DepthFunc=D3D12_COMPARISON_FUNC_LESS_EQUAL;
     pipeline.InputLayout={inputs,static_cast<UINT>(std::size(inputs))}; pipeline.PrimitiveTopologyType=D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE; pipeline.NumRenderTargets=1; pipeline.RTVFormats[0]=SceneColorFormat; pipeline.DSVFormat=DepthFormat; pipeline.SampleDesc.Count=1;
@@ -1272,39 +1132,20 @@ float4 PSMain(PSInput input) : SV_TARGET { float edge=input.isSquare>0.5?1.0:1.0
 
   void CreateDebugLinePipeline()
   {
-    static constexpr const char* shaderSource = R"(
-cbuffer LineConstants : register(b0) { float4x4 ViewProjection; };
-struct VSInput { float3 position : POSITION; float4 color : COLOR; };
-struct PSInput { float4 position : SV_POSITION; float4 color : COLOR; };
-PSInput VSMain(VSInput input) { PSInput o; o.position=mul(ViewProjection,float4(input.position,1)); o.color=input.color; return o; }
-float4 PSMain(PSInput input) : SV_TARGET { return input.color; }
-)";
-    const auto vs=CompileShader(shaderSource,"VSMain","vs_5_1"); const auto ps=CompileShader(shaderSource,"PSMain","ps_5_1");
+    static constexpr const char* shaderSource = "../res/shaders/hlsl/debug_lines.hlsl";
+    const auto vs=CompileHLSL(shaderSource,"VSMain","vs_5_1"); const auto ps=CompileHLSL(shaderSource,"PSMain","ps_5_1");
     D3D12_ROOT_PARAMETER parameter{}; parameter.ParameterType=D3D12_ROOT_PARAMETER_TYPE_CBV; parameter.Descriptor.ShaderRegister=0;
     D3D12_ROOT_SIGNATURE_DESC rootDesc{}; rootDesc.NumParameters=1; rootDesc.pParameters=&parameter; rootDesc.Flags=D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT; s_Data.DebugLineRootSignature=CreateRootSignature(rootDesc);
     static constexpr D3D12_INPUT_ELEMENT_DESC inputs[]={{"POSITION",0,DXGI_FORMAT_R32G32B32_FLOAT,0,offsetof(DebugLineVertex,Position),D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},{"COLOR",0,DXGI_FORMAT_R32G32B32A32_FLOAT,0,offsetof(DebugLineVertex,Color),D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0}};
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline{}; pipeline.pRootSignature=s_Data.DebugLineRootSignature.Get(); pipeline.VS={vs->GetBufferPointer(),vs->GetBufferSize()}; pipeline.PS={ps->GetBufferPointer(),ps->GetBufferSize()}; pipeline.BlendState=DefaultBlendState(); auto& blend=pipeline.BlendState.RenderTarget[0]; blend.BlendEnable=TRUE; blend.SrcBlend=D3D12_BLEND_SRC_ALPHA; blend.DestBlend=D3D12_BLEND_INV_SRC_ALPHA; blend.BlendOp=D3D12_BLEND_OP_ADD; blend.SrcBlendAlpha=D3D12_BLEND_ONE; blend.DestBlendAlpha=D3D12_BLEND_INV_SRC_ALPHA; blend.BlendOpAlpha=D3D12_BLEND_OP_ADD; pipeline.SampleMask=std::numeric_limits<UINT>::max(); pipeline.RasterizerState=DefaultRasterizer(); pipeline.DepthStencilState.DepthEnable=TRUE; pipeline.DepthStencilState.DepthWriteMask=D3D12_DEPTH_WRITE_MASK_ZERO; pipeline.DepthStencilState.DepthFunc=D3D12_COMPARISON_FUNC_LESS_EQUAL; pipeline.InputLayout={inputs,static_cast<UINT>(std::size(inputs))}; pipeline.PrimitiveTopologyType=D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE; pipeline.NumRenderTargets=1; pipeline.RTVFormats[0]=SceneColorFormat; pipeline.DSVFormat=DepthFormat; pipeline.SampleDesc.Count=1;
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline{}; pipeline.pRootSignature=s_Data.DebugLineRootSignature.Get(); pipeline.VS={vs.GetBufferPointer(),vs.GetBufferSize()}; pipeline.PS={ps.GetBufferPointer(),ps.GetBufferSize()}; pipeline.BlendState=DefaultBlendState(); auto& blend=pipeline.BlendState.RenderTarget[0]; blend.BlendEnable=TRUE; blend.SrcBlend=D3D12_BLEND_SRC_ALPHA; blend.DestBlend=D3D12_BLEND_INV_SRC_ALPHA; blend.BlendOp=D3D12_BLEND_OP_ADD; blend.SrcBlendAlpha=D3D12_BLEND_ONE; blend.DestBlendAlpha=D3D12_BLEND_INV_SRC_ALPHA; blend.BlendOpAlpha=D3D12_BLEND_OP_ADD; pipeline.SampleMask=std::numeric_limits<UINT>::max(); pipeline.RasterizerState=DefaultRasterizer(); pipeline.DepthStencilState.DepthEnable=TRUE; pipeline.DepthStencilState.DepthWriteMask=D3D12_DEPTH_WRITE_MASK_ZERO; pipeline.DepthStencilState.DepthFunc=D3D12_COMPARISON_FUNC_LESS_EQUAL; pipeline.InputLayout={inputs,static_cast<UINT>(std::size(inputs))}; pipeline.PrimitiveTopologyType=D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE; pipeline.NumRenderTargets=1; pipeline.RTVFormats[0]=SceneColorFormat; pipeline.DSVFormat=DepthFormat; pipeline.SampleDesc.Count=1;
     CheckHRESULT(s_Data.Device->CreateGraphicsPipelineState(&pipeline,IID_PPV_ARGS(&s_Data.DebugLinePipeline)),"Create DX12 debug line pipeline");
   }
 
   void CreatePhysicsDebugPipeline()
   {
-    static constexpr const char* shaderSource = R"(
-cbuffer PhysicsDebugConstants : register(b0)
-{
-  float4x4 ViewProjection;
-  float4x4 Model;
-  float4 Color;
-};
-struct VSInput { float3 position : POSITION; };
-float4 VSMain(VSInput input) : SV_POSITION
-{
-  return mul(ViewProjection, mul(Model, float4(input.position, 1.0f)));
-}
-float4 PSMain() : SV_TARGET { return Color; }
-)";
-    const auto vertexShader = CompileShader(shaderSource, "VSMain", "vs_5_1");
-    const auto pixelShader = CompileShader(shaderSource, "PSMain", "ps_5_1");
+    static constexpr const char* shaderSource = "../res/shaders/hlsl/physics_debug.hlsl";
+    const auto vertexShader = CompileHLSL(shaderSource, "VSMain", "vs_5_1");
+    const auto pixelShader = CompileHLSL(shaderSource, "PSMain", "ps_5_1");
 
     D3D12_ROOT_PARAMETER parameter{};
     parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -1322,8 +1163,8 @@ float4 PSMain() : SV_TARGET { return Color; }
     };
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline{};
     pipeline.pRootSignature = s_Data.PhysicsDebugRootSignature.Get();
-    pipeline.VS = {vertexShader->GetBufferPointer(), vertexShader->GetBufferSize()};
-    pipeline.PS = {pixelShader->GetBufferPointer(), pixelShader->GetBufferSize()};
+    pipeline.VS = {vertexShader.GetBufferPointer(), vertexShader.GetBufferSize()};
+    pipeline.PS = {pixelShader.GetBufferPointer(), pixelShader.GetBufferSize()};
     pipeline.BlendState = DefaultBlendState();
     auto& blend = pipeline.BlendState.RenderTarget[0];
     blend.BlendEnable = TRUE;
@@ -1352,104 +1193,22 @@ float4 PSMain() : SV_TARGET { return Color; }
 
   void CreatePostProcessPipelines()
   {
-    static constexpr const char* shaderSource = R"(
-cbuffer PostConstants : register(b0) { float4 Params; float4 EffectParams; };
-Texture2D SourceTexture : register(t0); Texture2D BloomTexture : register(t1); SamplerState LinearSampler : register(s0);
-struct PSInput { float4 position : SV_POSITION; float2 uv : TEXCOORD; };
-PSInput VSMain(uint id : SV_VertexID) { PSInput o; float2 p=float2((id<<1)&2,id&2); o.uv=p; o.position=float4(p*float2(2,-2)+float2(-1,1),0,1); return o; }
-float4 Extract(PSInput input) : SV_TARGET { float3 c=SourceTexture.Sample(LinearSampler,input.uv).rgb; float b=dot(c,float3(0.2126,0.7152,0.0722)); float threshold=max(EffectParams.x,0.0f); return b>threshold ? float4(c,1) : float4(0,0,0,1); }
-float4 Blur(PSInput input) : SV_TARGET { float2 d=Params.xy; float3 c=SourceTexture.Sample(LinearSampler,input.uv).rgb*0.227027; c+=SourceTexture.Sample(LinearSampler,input.uv+d*1.384615).rgb*0.316216; c+=SourceTexture.Sample(LinearSampler,input.uv-d*1.384615).rgb*0.316216; c+=SourceTexture.Sample(LinearSampler,input.uv+d*3.230769).rgb*0.070270; c+=SourceTexture.Sample(LinearSampler,input.uv-d*3.230769).rgb*0.070270; return float4(c,1); }
-float3 ACES(float3 x) { return saturate((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14)); }
-static const float Bayer4x4[16] = {
-   0.0f,  8.0f,  2.0f, 10.0f,
-  12.0f,  4.0f, 14.0f,  6.0f,
-   3.0f, 11.0f,  1.0f,  9.0f,
-  15.0f,  7.0f, 13.0f,  5.0f
-};
-float4 Composite(PSInput input) : SV_TARGET
-{
-  float2 sampleUV = input.uv;
-  float2 virtualPixel = 0.0f;
-  if (Params.w > 0.5f)
-  {
-    const float2 resolution = max(Params.yz, float2(1.0f, 1.0f));
-    const float aspect = resolution.x / resolution.y;
-    const float2 virtualResolution = float2(
-      max(floor(max(EffectParams.y, 1.0f) * aspect + 0.5f), 1.0f), max(EffectParams.y, 1.0f));
-    virtualPixel = floor(input.uv * virtualResolution);
-    sampleUV = (virtualPixel + 0.5f) / virtualResolution;
-  }
-
-  float3 color = SourceTexture.Sample(LinearSampler, sampleUV).rgb;
-  color += BloomTexture.Sample(LinearSampler, sampleUV).rgb * Params.x;
-  color = pow(ACES(color * EffectParams.x), 1.0f / max(EffectParams.w, 0.001f));
-
-  if (Params.w > 0.5f)
-  {
-    const uint2 ditherCoord = (uint2)virtualPixel & uint2(3, 3);
-    const uint ditherIndex = ditherCoord.x + ditherCoord.y * 4;
-    const float threshold = (Bayer4x4[ditherIndex] + 0.5f) / 16.0f;
-    const float colorLevels = max(EffectParams.z, 1.0f);
-    color = floor(saturate(color) * colorLevels + threshold) / colorLevels;
-  }
-  return float4(color, 1.0f);
-}
-)";
-    const auto vs=CompileShader(shaderSource,"VSMain","vs_5_1"); const auto extract=CompileShader(shaderSource,"Extract","ps_5_1"); const auto blur=CompileShader(shaderSource,"Blur","ps_5_1"); const auto composite=CompileShader(shaderSource,"Composite","ps_5_1");
+    static constexpr const char* shaderSource = "../res/shaders/hlsl/postprocess.hlsl";
+    const auto vs=CompileHLSL(shaderSource,"VSMain","vs_5_1"); const auto extract=CompileHLSL(shaderSource,"Extract","ps_5_1"); const auto blur=CompileHLSL(shaderSource,"Blur","ps_5_1"); const auto composite=CompileHLSL(shaderSource,"Composite","ps_5_1");
     std::array<D3D12_DESCRIPTOR_RANGE,2> ranges{}; for(uint32_t i=0;i<2;++i){ranges[i].RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_SRV;ranges[i].NumDescriptors=1;ranges[i].BaseShaderRegister=i;}
     std::array<D3D12_ROOT_PARAMETER,3> parameters{}; parameters[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS; parameters[0].Constants.ShaderRegister=0; parameters[0].Constants.Num32BitValues=8; for(uint32_t i=0;i<2;++i){parameters[i+1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;parameters[i+1].DescriptorTable={1,&ranges[i]};parameters[i+1].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;}
     D3D12_STATIC_SAMPLER_DESC sampler{}; sampler.Filter=D3D12_FILTER_MIN_MAG_MIP_LINEAR; sampler.AddressU=sampler.AddressV=sampler.AddressW=D3D12_TEXTURE_ADDRESS_MODE_CLAMP; sampler.MaxLOD=D3D12_FLOAT32_MAX; sampler.ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;
     D3D12_ROOT_SIGNATURE_DESC rootDesc{}; rootDesc.NumParameters=static_cast<UINT>(parameters.size()); rootDesc.pParameters=parameters.data(); rootDesc.NumStaticSamplers=1; rootDesc.pStaticSamplers=&sampler; s_Data.PostRootSignature=CreateRootSignature(rootDesc);
-    auto createPipeline=[&](ID3DBlob* pixelShader,DXGI_FORMAT format,ComPtr<ID3D12PipelineState>& result,const char* name){D3D12_GRAPHICS_PIPELINE_STATE_DESC p{};p.pRootSignature=s_Data.PostRootSignature.Get();p.VS={vs->GetBufferPointer(),vs->GetBufferSize()};p.PS={pixelShader->GetBufferPointer(),pixelShader->GetBufferSize()};p.BlendState=DefaultBlendState();p.SampleMask=std::numeric_limits<UINT>::max();p.RasterizerState=DefaultRasterizer();p.DepthStencilState.DepthEnable=FALSE;p.PrimitiveTopologyType=D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;p.NumRenderTargets=1;p.RTVFormats[0]=format;p.SampleDesc.Count=1;CheckHRESULT(s_Data.Device->CreateGraphicsPipelineState(&p,IID_PPV_ARGS(&result)),name);};
-    createPipeline(extract.Get(),SceneColorFormat,s_Data.BloomExtractPipeline,"Create DX12 bloom extract pipeline"); createPipeline(blur.Get(),SceneColorFormat,s_Data.BloomBlurPipeline,"Create DX12 bloom blur pipeline"); createPipeline(composite.Get(),BackBufferFormat,s_Data.CompositePipeline,"Create DX12 composite pipeline");
+    auto createPipeline=[&](const Shader::Bytecode& pixelShader,DXGI_FORMAT format,ComPtr<ID3D12PipelineState>& result,const char* name){D3D12_GRAPHICS_PIPELINE_STATE_DESC p{};p.pRootSignature=s_Data.PostRootSignature.Get();p.VS={vs.GetBufferPointer(),vs.GetBufferSize()};p.PS={pixelShader.GetBufferPointer(),pixelShader.GetBufferSize()};p.BlendState=DefaultBlendState();p.SampleMask=std::numeric_limits<UINT>::max();p.RasterizerState=DefaultRasterizer();p.DepthStencilState.DepthEnable=FALSE;p.PrimitiveTopologyType=D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;p.NumRenderTargets=1;p.RTVFormats[0]=format;p.SampleDesc.Count=1;CheckHRESULT(s_Data.Device->CreateGraphicsPipelineState(&p,IID_PPV_ARGS(&result)),name);};
+    createPipeline(extract,SceneColorFormat,s_Data.BloomExtractPipeline,"Create DX12 bloom extract pipeline"); createPipeline(blur,SceneColorFormat,s_Data.BloomBlurPipeline,"Create DX12 bloom blur pipeline"); createPipeline(composite,BackBufferFormat,s_Data.CompositePipeline,"Create DX12 composite pipeline");
   }
 
   void CreateUIPipeline()
   {
-    static constexpr const char* UIShader = R"(
-cbuffer UIConstants : register(b0)
-{
-  float2 ScreenSize;
-};
+    static constexpr const char* UIShader = "../res/shaders/hlsl/ui.hlsl";
 
-Texture2D FontAtlas : register(t0);
-SamplerState FontSampler : register(s0);
-
-struct VSInput
-{
-  float2 position : POSITION;
-  float4 color : COLOR;
-  float2 uv : TEXCOORD;
-};
-
-struct PSInput
-{
-  float4 position : SV_POSITION;
-  float4 color : COLOR;
-  float2 uv : TEXCOORD;
-};
-
-PSInput VSMain(VSInput input)
-{
-  PSInput output;
-  const float2 safeSize = max(ScreenSize, float2(1.0f, 1.0f));
-  output.position = float4(input.position.x / safeSize.x * 2.0f - 1.0f,
-                           input.position.y / safeSize.y * 2.0f - 1.0f,
-                           0.0f, 1.0f);
-  output.color = input.color;
-  output.uv = input.uv;
-  return output;
-}
-
-float4 PSMain(PSInput input) : SV_TARGET
-{
-  const float coverage = FontAtlas.Sample(FontSampler, input.uv).r;
-  return float4(input.color.rgb, input.color.a * coverage);
-}
-)";
-
-    const auto vertexShader = CompileShader(UIShader, "VSMain", "vs_5_1");
-    const auto pixelShader = CompileShader(UIShader, "PSMain", "ps_5_1");
+    const auto vertexShader = CompileHLSL(UIShader, "VSMain", "vs_5_1");
+    const auto pixelShader = CompileHLSL(UIShader, "PSMain", "ps_5_1");
 
     D3D12_DESCRIPTOR_RANGE textureRange{};
     textureRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
@@ -1494,8 +1253,8 @@ float4 PSMain(PSInput input) : SV_TARGET
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline{};
     pipeline.pRootSignature = s_Data.UIRootSignature.Get();
-    pipeline.VS = {vertexShader->GetBufferPointer(), vertexShader->GetBufferSize()};
-    pipeline.PS = {pixelShader->GetBufferPointer(), pixelShader->GetBufferSize()};
+    pipeline.VS = {vertexShader.GetBufferPointer(), vertexShader.GetBufferSize()};
+    pipeline.PS = {pixelShader.GetBufferPointer(), pixelShader.GetBufferSize()};
     pipeline.BlendState = DefaultBlendState();
     auto& blend = pipeline.BlendState.RenderTarget[0];
     blend.BlendEnable = TRUE;
@@ -1721,9 +1480,9 @@ float4 PSMain(PSInput input) : SV_TARGET
         raw = rgba.data();
       }
     }
-    else if (raw && source->GetDataFormat() != GL_RGBA)
+    else if (raw && source->GetChannels() != 4)
     {
-      const uint32_t channels = source->GetDataFormat() == GL_RGB ? 3u : 1u;
+      const uint32_t channels = static_cast<uint32_t>(std::clamp(source->GetChannels(), 1, 3));
       rgba.resize(static_cast<size_t>(width) * height * 4);
       for (size_t i = 0; i < static_cast<size_t>(width) * height; ++i)
       {
@@ -1851,7 +1610,7 @@ float4 PSMain(PSInput input) : SV_TARGET
     constants.LightViewProjection = s_Data.LightViewProjection;
     constants.CameraPosition = glm::vec4(Camera::GetPosition(), 0.0f);
     constants.Bones.fill(glm::mat4(1.0f));
-    const auto& lights = SceneManager::GetLights();
+    const auto& lights = RenderBackend::Lights();
     const uint32_t lightCount = static_cast<uint32_t>(std::min(lights.size(), static_cast<size_t>(MaxSceneLights)));
     constants.LightCount.x = lightCount;
     constants.LightCount.y = effects.ShadowQuality == GraphicsQuality::Off ? 0u : 1u;
@@ -1860,10 +1619,10 @@ float4 PSMain(PSInput input) : SV_TARGET
       effects.PS1VirtualHeight, effects.PS1Enabled ? 1.0f : 0.0f);
     for (uint32_t i = 0; i < lightCount; ++i)
     {
-      constants.LightPositions[i] = glm::vec4(lights[i].position, 1.0f);
-      constants.LightDirections[i] = glm::vec4(lights[i].rotation, 0.0f);
-      constants.LightColors[i] = glm::vec4(lights[i].color, 1.0f);
-      constants.LightTypes[i].x = static_cast<float>(lights[i].type);
+      constants.LightPositions[i] = glm::vec4(lights[i].Position, 1.0f);
+      constants.LightDirections[i] = glm::vec4(lights[i].Direction, 0.0f);
+      constants.LightColors[i] = glm::vec4(lights[i].Color, 1.0f);
+      constants.LightTypes[i].x = static_cast<float>(lights[i].Type);
     }
     for (uint32_t slot = 0;
          slot < static_cast<uint32_t>(s_Data.PointShadowLightIndices.size()); ++slot)
@@ -1925,8 +1684,8 @@ float4 PSMain(PSInput input) : SV_TARGET
   glm::mat4 CalculateLightViewProjection()
   {
     glm::vec3 direction(-1.0f, -2.0f, -1.0f);
-    for (const SceneLight& light : SceneManager::GetLights())
-      if (light.type == LightType::DIRECT) { direction = light.rotation; break; }
+    for (const RenderLight& light : RenderBackend::Lights())
+      if (light.Type == LightType::DIRECT) { direction = light.Direction; break; }
     if (glm::dot(direction, direction) < 0.0001f) direction = glm::vec3(-1.0f, -2.0f, -1.0f);
     direction = glm::normalize(direction);
     const glm::vec3 focus = Camera::GetPosition() + Camera::GetForwardDirection() * 45.0f;
@@ -2008,7 +1767,7 @@ float4 PSMain(PSInput input) : SV_TARGET
       float DistanceSquared = 0.0f;
       uint32_t LightIndex = 0;
     };
-    const auto& lights = SceneManager::GetLights();
+    const auto& lights = RenderBackend::Lights();
     std::vector<Candidate> candidates;
     candidates.reserve(lights.size());
     const glm::vec3 cameraPosition = Camera::GetPosition();
@@ -2016,10 +1775,10 @@ float4 PSMain(PSInput input) : SV_TARGET
     uint32_t supportedPointLights = 0;
     for (uint32_t i = 0; i < static_cast<uint32_t>(lights.size()); ++i)
     {
-      if (lights[i].type != LightType::POINT) continue;
+      if (lights[i].Type != LightType::POINT) continue;
       if (supportedPointLights++ >= 20u) break;
-      if (!cameraFrustum.IntersectsSphere(lights[i].position, PointShadowRadius)) continue;
-      const glm::vec3 delta = lights[i].position - cameraPosition;
+      if (!cameraFrustum.IntersectsSphere(lights[i].Position, PointShadowRadius)) continue;
+      const glm::vec3 delta = lights[i].Position - cameraPosition;
       candidates.push_back({glm::dot(delta, delta), i});
     }
     std::ranges::sort(candidates, {}, &Candidate::DistanceSquared);
@@ -2067,7 +1826,7 @@ float4 PSMain(PSInput input) : SV_TARGET
     constants.Bones.fill(glm::mat4(1.0f));
     for (uint32_t slot = 0; slot < shadowCount; ++slot)
     {
-      const glm::vec3 lightPosition = lights[s_Data.PointShadowLightIndices[slot]].position;
+      const glm::vec3 lightPosition = lights[s_Data.PointShadowLightIndices[slot]].Position;
       for (uint32_t face = 0; face < PointShadowFaceCount; ++face)
       {
         const D3D12_CPU_DESCRIPTOR_HANDLE rtv = GetRTVHandle(
@@ -2859,9 +2618,9 @@ void DirectX12Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& sc
     DrawSkybox();
     ParticleRenderer::UpdateAndRender(dt);
     if (RenderBackend::DebugSettings().Physics) DrawPhysicsDebug();
-    Renderer::DrawBackendDebugVisualizations();
+    DrawDebugVisualizations();
     s_Data.UIToSceneColor = true;
-    Renderer::DrawBackendDebug2D();
+    DrawDebug2D();
     s_Data.UIToSceneColor = false;
     PostProcessScene(renderForEditor, effects);
   }
