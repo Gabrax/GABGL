@@ -59,6 +59,7 @@ struct OpenGLRenderer
 	static void AddDrawCommand(const std::string& modelName, uint32_t verticesSize, uint32_t indicesSize);
 	static void RebuildDrawCommandsForModel(const std::shared_ptr<Model>& model, bool render);
 	static void UpdateDrawCommandInstances(const std::shared_ptr<Model>& model);
+	static void SetModelPreviews(const std::vector<RenderModelPreview>& previews);
 	static void InitDrawCommandBuffer();
 	static void ResetModelDrawCommands();
 

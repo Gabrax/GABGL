@@ -245,6 +245,7 @@ namespace
     std::vector<UIVertex> PendingUIVertices;
     std::vector<DebugLineVertex> PendingDebugLines;
     std::vector<uint32_t> PointShadowLightIndices;
+    std::vector<RenderModelPreview> ModelPreviews;
     uint32_t NextDescriptor = 0;
     uint32_t ImGuiFontDescriptor = std::numeric_limits<uint32_t>::max();
     uint32_t ShadowMapSize = 0;
@@ -1678,6 +1679,47 @@ namespace
         }
       }
     }
+
+    for (const RenderModelPreview& preview : s_Data.ModelPreviews)
+    {
+      const auto model = ModelManager::GetModel(preview.ModelName);
+      if (!model || model->GetPhysXMeshType() == MeshType::CONVEXMESH) continue;
+
+      const bool animated = model->IsAnimated();
+      constants.CameraPosition.w = animated ? 1.0f : 0.0f;
+      constants.Bones.fill(glm::mat4(1.0f));
+      if (animated)
+      {
+        const auto& bones = model->GetFinalBoneMatrices();
+        std::copy_n(bones.begin(), std::min(bones.size(), constants.Bones.size()),
+          constants.Bones.begin());
+      }
+
+      constants.Model = preview.Transform;
+      for (const Mesh& mesh : model->GetMeshes())
+      {
+        const auto gpuIt = s_Data.Meshes.find(&mesh);
+        if (gpuIt == s_Data.Meshes.end()) continue;
+        const GPUMesh& gpuMesh = gpuIt->second;
+        constants.MaterialFlags = glm::vec4(
+          gpuMesh.HasNormalMap ? 1.0f : 0.0f,
+          gpuMesh.HasSpecularMap ? 1.0f : 0.0f, preview.Brightness, 0.0f);
+        s_Data.CommandList->SetGraphicsRootConstantBufferView(0, UploadSceneConstants(constants));
+        s_Data.CommandList->SetGraphicsRootDescriptorTable(
+          1, GetSRVGPUHandle(gpuMesh.DiffuseDescriptorIndex));
+        s_Data.CommandList->SetGraphicsRootDescriptorTable(
+          2, GetSRVGPUHandle(gpuMesh.NormalDescriptorIndex));
+        s_Data.CommandList->SetGraphicsRootDescriptorTable(
+          3, GetSRVGPUHandle(gpuMesh.SpecularDescriptorIndex));
+        s_Data.CommandList->SetGraphicsRootDescriptorTable(
+          4, GetSRVGPUHandle(s_Data.ShadowMap.DescriptorIndex));
+        s_Data.CommandList->SetGraphicsRootDescriptorTable(
+          5, GetSRVGPUHandle(s_Data.PointShadowMap.DescriptorIndex));
+        s_Data.CommandList->IASetVertexBuffers(0, 1, &gpuMesh.VertexView);
+        s_Data.CommandList->IASetIndexBuffer(&gpuMesh.IndexView);
+        s_Data.CommandList->DrawIndexedInstanced(gpuMesh.IndexCount, 1, 0, 0, 0);
+      }
+    }
     RenderBackend::SetStatistics(statistics);
   }
 
@@ -2296,12 +2338,19 @@ void DirectX12Renderer::ShutdownSceneRenderer()
   s_Data.PendingUIVertices.clear();
   s_Data.PendingDebugLines.clear();
   s_Data.PointShadowLightIndices.clear();
+  s_Data.ModelPreviews.clear();
   s_Data.SceneRendererInitialized = false;
 }
 
 void DirectX12Renderer::ResetSceneResources()
 {
+  s_Data.ModelPreviews.clear();
   if (s_Data.SceneRendererInitialized) RetireSceneResources();
+}
+
+void DirectX12Renderer::SetModelPreviews(const std::vector<RenderModelPreview>& previews)
+{
+  s_Data.ModelPreviews = previews;
 }
 
 bool DirectX12Renderer::UploadModel(const std::shared_ptr<Model>& model)
@@ -2875,6 +2924,7 @@ void DirectX12Renderer::ShutdownSceneRenderer() {}
 void DirectX12Renderer::ResetSceneResources() {}
 bool DirectX12Renderer::UploadModel(const std::shared_ptr<Model>&) { return false; }
 bool DirectX12Renderer::UploadSkybox(const std::shared_ptr<Texture>&) { return false; }
+void DirectX12Renderer::SetModelPreviews(const std::vector<RenderModelPreview>&) {}
 bool DirectX12Renderer::InitImGui() { return false; }
 void DirectX12Renderer::ShutdownImGui() {}
 void DirectX12Renderer::BeginImGuiFrame() {}

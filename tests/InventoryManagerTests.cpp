@@ -1,15 +1,17 @@
 #include "InventoryManager.h"
 
-#include <cmath>
 #include <memory>
 #include <stdexcept>
 #include <string>
 
 namespace
 {
-  std::shared_ptr<Item> MakeItem(const std::string& name, const float weight)
+  std::shared_ptr<Item> MakeItem(const std::string& name)
   {
-    return std::make_shared<Item>(Item{name, "Test item", weight, ItemType::Miscellaneous});
+    auto item = std::make_shared<Item>();
+    item->name = name;
+    item->description = "Test item";
+    return item;
   }
 
   void Expect(const bool condition, const char* message)
@@ -32,24 +34,22 @@ int main()
   inventory.SetOpen(false);
   Expect(!inventory.IsOpen(), "SetOpen(false) should close the inventory");
 
-  Expect(inventory.AddItem(MakeItem("Pistol", 1.1f)), "A valid item should be added");
-  Expect(inventory.AddItem(MakeItem("Invalid weight", -4.0f)), "Negative weight should be normalized");
+  Expect(inventory.AddItem(MakeItem("Pistol")), "A valid item should be added");
+  Expect(inventory.AddItem(MakeItem("Aid kit")), "A second valid item should be added");
   Expect(inventory.GetItemCount() == 2, "Both valid item objects should occupy slots");
-  Expect(std::fabs(inventory.GetTotalWeight() - 1.1f) < 0.001f, "Total weight should ignore negative weight");
 
   Expect(!inventory.RemoveItem(99), "An out-of-range slot should not be removed");
   Expect(inventory.RemoveItem(1), "An occupied slot should be removable");
   Expect(inventory.GetItemCount() == 1, "Removing an item should release its slot");
 
   while (!inventory.IsFull())
-    Expect(inventory.AddItem(MakeItem("Item", 0.25f)), "Items should fit until capacity is reached");
+    Expect(inventory.AddItem(MakeItem("Item")), "Items should fit until capacity is reached");
 
   Expect(inventory.GetItemCount() == InventoryManager::GetCapacity(), "IsFull should match capacity");
-  Expect(!inventory.AddItem(MakeItem("Overflow", 1.0f)), "An item beyond capacity should be rejected");
+  Expect(!inventory.AddItem(MakeItem("Overflow")), "An item beyond capacity should be rejected");
 
   inventory.SetOpen(true);
   inventory.Clear();
   Expect(!inventory.IsOpen(), "Clear should also reset open state");
   Expect(inventory.GetItems().empty(), "Clear should remove every item");
-  Expect(inventory.GetTotalWeight() == 0.0f, "An empty inventory should have no weight");
 }

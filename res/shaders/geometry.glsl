@@ -43,13 +43,19 @@ layout(std430, binding = 13) readonly buffer InstanceTransforms { mat4 instanceT
 
 uniform bool u_PS1Enabled;
 uniform float u_PS1VirtualHeight;
+uniform bool u_PreviewMode;
+uniform int u_PreviewDrawID;
+uniform mat4 u_PreviewModel;
 
 void main()
 {
-  vs_out.DrawID = gl_DrawID;
-  int transformIndex = meshToTransform[vs_out.DrawID];
-  bool isAnimated = (modelIsAnimated[transformIndex] == 1);
-  mat4 modelMat = instanceTransforms[gl_BaseInstance + gl_InstanceID];
+  uint drawID = u_PreviewMode ? uint(u_PreviewDrawID) : uint(gl_DrawID);
+  vs_out.DrawID = drawID;
+  int transformIndex = meshToTransform[drawID];
+  bool isAnimated = !u_PreviewMode && (modelIsAnimated[transformIndex] == 1);
+  mat4 modelMat = u_PreviewMode
+    ? u_PreviewModel
+    : instanceTransforms[gl_BaseInstance + gl_InstanceID];
   mat4 skinMatrix = mat4(1.0);
 
   if (isAnimated)
@@ -110,7 +116,7 @@ void main()
 #version 460 core
 #extension GL_ARB_bindless_texture : require
 
-layout(location = 0) out vec3 gPosition;
+layout(location = 0) out vec4 gPosition;
 layout(location = 1) out vec3 gNormal;
 layout(location = 2) out vec4 gAlbedoSpec;
 
@@ -119,6 +125,9 @@ layout(std430, binding = 8) buffer MeshTextureRanges { uvec2 meshTextureRanges[]
 
 layout(std430, binding = 11) buffer NormalMapFlags    { int normalMapFlags[];   };
 layout(std430, binding = 12) buffer SpecularMapFlags  { int specularMapFlags[]; };
+
+uniform bool u_PreviewMode;
+uniform float u_PreviewBrightness;
 
 struct Material
 {
@@ -147,7 +156,7 @@ void main()
   material.specular = meshTextures[texRange.x + 2];
   material.shininess = 32.0;
   
-  gPosition = fs_in.FragPos;
+  gPosition = vec4(fs_in.FragPos, u_PreviewMode ? max(u_PreviewBrightness, 1.0) : 1.0);
 
   vec3 normal;
   if (normalMapFlags[fs_in.DrawID] == 1)

@@ -188,3 +188,8 @@ void RenderSystem::SetModelRendered(const std::shared_ptr<Model>& model, const b
 {
   RenderBackend::Get().SetModelRendered(model, rendered);
 }
+
+void RenderSystem::SetModelPreviews(const std::vector<RenderModelPreview>& previews)
+{
+  RenderBackend::Get().SetModelPreviews(previews);
+}

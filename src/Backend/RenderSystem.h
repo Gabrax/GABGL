@@ -5,12 +5,14 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <glm/glm.hpp>
 
 struct Font;
 struct Model;
 struct Texture;
+struct RenderModelPreview;
 
 // API-neutral entry point for rendering a game scene. The selected backend
 // always owns the scene pass; this type does not provide an OpenGL fallback.
@@ -42,4 +44,5 @@ struct RenderSystem
                                        uint32_t indexCount);
   static void UpdateModelInstances(const std::shared_ptr<Model>& model);
   static void SetModelRendered(const std::shared_ptr<Model>& model, bool rendered);
+  static void SetModelPreviews(const std::vector<RenderModelPreview>& previews);
 };

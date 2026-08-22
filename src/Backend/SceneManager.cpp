@@ -54,41 +54,36 @@ namespace
   {
     auto item = std::make_shared<Item>();
     item->name = entity.itemName.empty() ? entity.name : entity.itemName;
+    item->modelName = entity.model;
 
     if (entity.model == "pistol")
     {
       item->description = "A RELIABLE SIDEARM. USEFUL AT SHORT RANGE.";
-      item->weight = 1.1f;
       item->type = ItemType::Weapon;
     }
     else if (entity.model == "shotgun")
     {
       item->description = "POWERFUL UP CLOSE, BUT SLOW TO RELOAD.";
-      item->weight = 3.4f;
       item->type = ItemType::Weapon;
     }
     else if (entity.model == "pistolammo")
     {
       item->description = "A BOX OF PISTOL AMMUNITION.";
-      item->weight = 0.3f;
       item->type = ItemType::Ammunition;
     }
     else if (entity.model == "shotgunammo")
     {
       item->description = "A BOX OF SHOTGUN SHELLS.";
-      item->weight = 0.6f;
       item->type = ItemType::Ammunition;
     }
     else if (entity.model == "aidkit")
     {
       item->description = "MEDICAL SUPPLIES FOR TREATING SERIOUS WOUNDS.";
-      item->weight = 0.8f;
       item->type = ItemType::Medical;
     }
     else
     {
       item->description = "A COLLECTED ITEM.";
-      item->weight = 0.5f;
     }
 
     return item;

@@ -197,6 +197,7 @@ struct OpenGLRendererData
   std::vector<DrawElementsIndirectCommand> m_DrawCommands;
   std::vector<DrawElementsIndirectCommand> m_CulledDrawCommands;
   std::vector<glm::mat4> m_VisibleInstanceTransforms;
+  std::vector<RenderModelPreview> m_ModelPreviews;
   std::unordered_map<std::string, std::vector<size_t>> m_ModelDrawCommandIndices;
   uint32_t m_DrawIndexOffset = 0;
   uint32_t m_DrawVertexOffset = 0;
@@ -830,12 +831,42 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
     s_Data.s_Shaders.GeometryShader->Bind();
     s_Data.s_Shaders.GeometryShader->SetFloat("u_PS1VirtualHeight", effects.PS1VirtualHeight);
     s_Data.s_Shaders.GeometryShader->SetBool("u_PS1Enabled", effects.PS1Enabled);
+    s_Data.s_Shaders.GeometryShader->SetBool("u_PreviewMode", false);
     BeginScene();
     glBindVertexArray(ModelManager::GetModelsVAO());
     ModelManager::BindVisibleInstanceTransforms();
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s_Data.m_CulledCmdBuffer);
     glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, NULL, s_Data.m_CulledDrawCommands.size(), 0);
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+
+    if (!s_Data.m_ModelPreviews.empty())
+    {
+      s_Data.s_Shaders.GeometryShader->SetBool("u_PreviewMode", true);
+      for (const RenderModelPreview& preview : s_Data.m_ModelPreviews)
+      {
+        const auto model = ModelManager::GetModel(preview.ModelName);
+        const auto commandIndices = s_Data.m_ModelDrawCommandIndices.find(preview.ModelName);
+        if (!model || commandIndices == s_Data.m_ModelDrawCommandIndices.end() ||
+            model->GetPhysXMeshType() == MeshType::CONVEXMESH)
+          continue;
+
+        s_Data.s_Shaders.GeometryShader->SetMat4("u_PreviewModel", preview.Transform);
+        s_Data.s_Shaders.GeometryShader->SetFloat("u_PreviewBrightness", preview.Brightness);
+        for (const size_t commandIndex : commandIndices->second)
+        {
+          if (commandIndex >= s_Data.m_DrawCommands.size()) continue;
+          const DrawElementsIndirectCommand& command = s_Data.m_DrawCommands[commandIndex];
+          s_Data.s_Shaders.GeometryShader->SetInt(
+            "u_PreviewDrawID", static_cast<int>(commandIndex));
+          glDrawElementsBaseVertex(
+            GL_TRIANGLES, static_cast<GLsizei>(command.count), GL_UNSIGNED_INT,
+            reinterpret_cast<const void*>(static_cast<uintptr_t>(command.firstIndex) * sizeof(GLuint)),
+            command.baseVertex);
+        }
+      }
+      s_Data.s_Shaders.GeometryShader->SetBool("u_PreviewMode", false);
+    }
+
     glBindVertexArray(0);
     EndScene();
     s_Data.s_Shaders.GeometryShader->UnBind();
@@ -2184,6 +2215,11 @@ void OpenGLRenderer::UpdateDrawCommandInstances(const std::shared_ptr<Model>& mo
   }
 }
 
+void OpenGLRenderer::SetModelPreviews(const std::vector<RenderModelPreview>& previews)
+{
+  s_Data.m_ModelPreviews = previews;
+}
+
 void OpenGLRenderer::InitDrawCommandBuffer()
 {
   if (RenderBackend::Capabilities().NativeModelResources) return;
@@ -2218,6 +2254,7 @@ void OpenGLRenderer::ResetModelDrawCommands()
   s_Data.m_DrawCommands.clear();
   s_Data.m_CulledDrawCommands.clear();
   s_Data.m_VisibleInstanceTransforms.clear();
+  s_Data.m_ModelPreviews.clear();
   s_Data.m_ModelDrawCommandIndices.clear();
   s_Data.m_DrawIndexOffset = 0;
   s_Data.m_DrawVertexOffset = 0;

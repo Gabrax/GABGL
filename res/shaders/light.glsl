@@ -190,7 +190,8 @@ vec3 calculateSpotlight(vec3 lightPos, vec3 lightDir, vec3 fragPos, vec3 normal,
 
 void main()
 {
-  vec3 FragPos = texture(gPosition, TexCoords).rgb;
+  vec4 PositionData = texture(gPosition, TexCoords);
+  vec3 FragPos = PositionData.rgb;
   vec3 Normal = normalize(texture(gNormal, TexCoords).rgb);
   vec4 AlbedoSpec = texture(gAlbedoSpec, TexCoords);
   vec3 Color = AlbedoSpec.rgb;
@@ -221,6 +222,8 @@ void main()
       result += calculateSpotlight(position, rotation, FragPos, Normal, viewDir, Color, ambient, specularCol, lightColor, shininess);
     }
   }
+
+  result *= max(PositionData.a, 1.0);
 
   float brightness = dot(result, vec3(0.2126, 0.7152, 0.0722));
   BrightColor = brightness > 1.0 ? vec4(result, 1.0) : vec4(0.0, 0.0, 0.0, 1.0);

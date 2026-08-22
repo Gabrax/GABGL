@@ -44,6 +44,7 @@ public:
                                         uint32_t indexCount) = 0;
   virtual void UpdateModelInstances(const std::shared_ptr<Model>& model) = 0;
   virtual void SetModelRendered(const std::shared_ptr<Model>& model, bool rendered) = 0;
+  virtual void SetModelPreviews(const std::vector<RenderModelPreview>& previews) = 0;
   virtual void FinalizeModelUpload() = 0;
   virtual void ResetModelDrawCommands() = 0;
   virtual bool DrawParticles(const std::vector<ParticleRenderInstance>& instances) = 0;

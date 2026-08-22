@@ -15,6 +15,7 @@
 #include <array>
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 namespace SceneUI
 {
@@ -43,6 +44,7 @@ struct GameScene : Scene
 
   void OnSceneStart() override
   {
+    RenderSystem::SetModelPreviews({});
     InventoryManager::GetInstance().Clear();
     Window::SetCursorVisible(false);
     AudioManager::PlayMusic("night_mono",glm::vec3(25,2,15),true);
@@ -74,8 +76,16 @@ struct GameScene : Scene
 
     if (inventory.IsOpen())
     {
-      if (escape) SetInventoryOpen(false);
+      if (escape)
+      {
+        SetInventoryOpen(false);
+        DeltaTime frozenTime(0.0f);
+        RenderSystem::DrawScene(frozenTime, []() {}, false);
+        return;
+      }
+
       UpdateInventorySelection();
+      SyncInventoryPreviewModels();
 
       DeltaTime frozenTime(0.0f);
       RenderSystem::DrawScene(frozenTime, []() {}, false);
@@ -168,17 +178,113 @@ private:
     return (value % count + count) % count;
   }
 
+  struct InventoryLayout
+  {
+    float screenWidth;
+    float screenHeight;
+    float uiScale;
+    float panelWidth;
+    float panelHeight;
+    glm::vec2 panelCenter;
+    float carouselY;
+    float spacing;
+    float previewSize;
+  };
+
+  static InventoryLayout GetInventoryLayout()
+  {
+    InventoryLayout layout{};
+    layout.screenWidth = static_cast<float>(Window::GetWidth());
+    layout.screenHeight = static_cast<float>(Window::GetHeight());
+    layout.uiScale = SceneUI::Scale(layout.screenWidth, layout.screenHeight);
+    layout.panelWidth = std::min(1040.0f * layout.uiScale, layout.screenWidth * 0.92f);
+    layout.panelHeight = std::min(560.0f * layout.uiScale, layout.screenHeight * 0.86f);
+    layout.panelCenter = {layout.screenWidth * 0.5f, layout.screenHeight * 0.5f};
+    layout.carouselY = layout.panelCenter.y + layout.panelHeight * 0.015f;
+    layout.spacing = std::min(220.0f * layout.uiScale, layout.panelWidth * 0.215f);
+    layout.previewSize = std::min(150.0f * layout.uiScale, layout.panelHeight * 0.28f);
+    return layout;
+  }
+
+  void SyncInventoryPreviewModels()
+  {
+    const auto& items = InventoryManager::GetInstance().GetItems();
+    const int count = static_cast<int>(items.size());
+    if (count == 0)
+    {
+      RenderSystem::SetModelPreviews({});
+      return;
+    }
+
+    const InventoryLayout layout = GetInventoryLayout();
+    if (layout.screenWidth <= 0.0f || layout.screenHeight <= 0.0f)
+    {
+      RenderSystem::SetModelPreviews({});
+      return;
+    }
+
+    const glm::mat4& projection = Camera::GetProjection();
+    const float projectionX = std::max(std::abs(projection[0][0]), 0.001f);
+    const float projectionY = std::max(std::abs(projection[1][1]), 0.001f);
+    constexpr float previewDepth = 1.35f;
+    const glm::vec3 cameraPosition = Camera::GetPosition();
+    const glm::vec3 cameraForward = Camera::GetForwardDirection();
+    const glm::vec3 cameraRight = Camera::GetRightDirection();
+    const glm::vec3 cameraUp = Camera::GetUpDirection();
+
+    std::vector<RenderModelPreview> previews;
+    const int visibleCount = std::min(count, 5);
+    const int firstOffset = -(visibleCount / 2);
+    previews.reserve(static_cast<size_t>(visibleCount));
+    for (int slot = 0; slot < visibleCount; ++slot)
+    {
+      const int carouselIndex = m_InventoryCarouselTarget + firstOffset + slot;
+      const int itemIndex = Wrap(carouselIndex, count);
+      if (!items[itemIndex]) continue;
+      const auto model = ModelManager::GetModel(items[itemIndex]->modelName);
+      if (!model) continue;
+
+      const float relative = static_cast<float>(carouselIndex) - m_InventoryCarouselPosition;
+      const float distance = std::abs(relative);
+      const float carouselScale = std::max(0.52f, 1.0f - distance * 0.18f);
+      const float screenX = layout.panelCenter.x + relative * layout.spacing;
+      const float ndcX = screenX / (layout.screenWidth * 0.5f) - 1.0f;
+      const float ndcY = layout.carouselY / (layout.screenHeight * 0.5f) - 1.0f;
+      const glm::vec3 target = cameraPosition + cameraForward * previewDepth +
+        cameraRight * (ndcX * previewDepth / projectionX) +
+        cameraUp * (ndcY * previewDepth / projectionY);
+
+      const float pixelRadius = layout.previewSize * carouselScale * 0.42f;
+      const float worldRadius = pixelRadius / (layout.screenHeight * 0.5f) *
+        previewDepth / projectionY;
+      const float modelScale = worldRadius / std::max(model->GetBoundsRadius(), 0.0001f);
+      const float rotation = m_InventoryRotation + static_cast<float>(itemIndex) * 23.0f;
+
+      glm::mat4 transform = glm::translate(glm::mat4(1.0f), target);
+      transform = glm::rotate(transform, glm::radians(-10.0f), cameraRight);
+      transform = glm::rotate(transform, glm::radians(rotation), glm::vec3(0.0f, 1.0f, 0.0f));
+      transform = glm::scale(transform, glm::vec3(modelScale));
+      transform = glm::translate(transform, -model->GetBoundsCenter());
+      const float brightness = carouselIndex == m_InventoryCarouselTarget ? 2.15f : 1.65f;
+      previews.push_back({items[itemIndex]->modelName, transform, brightness});
+    }
+    RenderSystem::SetModelPreviews(previews);
+  }
+
   void SetInventoryOpen(const bool open)
   {
     auto& inventory = InventoryManager::GetInstance();
+    if (!open) RenderSystem::SetModelPreviews({});
     inventory.SetOpen(open);
     m_InventorySelected = std::min(m_InventorySelected,
       inventory.GetItemCount() > 0 ? static_cast<int>(inventory.GetItemCount() - 1) : 0);
     m_InventoryReveal = 0.0f;
-    m_InventoryPreviousLeft = Input::IsKeyPressed(Key::Left) || Input::IsKeyPressed(Key::A);
-    m_InventoryPreviousRight = Input::IsKeyPressed(Key::Right) || Input::IsKeyPressed(Key::D);
-    m_InventoryPreviousUp = Input::IsKeyPressed(Key::Up) || Input::IsKeyPressed(Key::W);
-    m_InventoryPreviousDown = Input::IsKeyPressed(Key::Down) || Input::IsKeyPressed(Key::S);
+    m_InventoryCarouselTarget = m_InventorySelected;
+    m_InventoryCarouselPosition = static_cast<float>(m_InventoryCarouselTarget);
+    m_InventoryPreviousLeft = Input::IsKeyPressed(Key::Left) || Input::IsKeyPressed(Key::A) ||
+      Input::IsGamepadButtonPressed(Gamepad::DPadLeft) || Input::GetGamepadAxis(Gamepad::LeftX) < -0.6f;
+    m_InventoryPreviousRight = Input::IsKeyPressed(Key::Right) || Input::IsKeyPressed(Key::D) ||
+      Input::IsGamepadButtonPressed(Gamepad::DPadRight) || Input::GetGamepadAxis(Gamepad::LeftX) > 0.6f;
     Window::SetCursorVisible(open);
     Camera::ResetMouseDelta();
   }
@@ -187,117 +293,126 @@ private:
   {
     auto& inventory = InventoryManager::GetInstance();
     m_InventoryReveal = std::min(1.0f, m_InventoryReveal + m_PauseFrameDelta / 0.22f);
+    m_InventoryRotation = std::fmod(m_InventoryRotation + m_PauseFrameDelta * 48.0f, 360.0f);
     const int count = static_cast<int>(inventory.GetItemCount());
     if (count == 0)
     {
       m_InventorySelected = 0;
+      m_InventoryCarouselTarget = 0;
+      m_InventoryCarouselPosition = 0.0f;
       return;
     }
 
     const bool left = Pressed(
       Input::IsKeyPressed(Key::Left) || Input::IsKeyPressed(Key::A) ||
-      Input::IsGamepadButtonPressed(Gamepad::DPadLeft), m_InventoryPreviousLeft);
+      Input::IsGamepadButtonPressed(Gamepad::DPadLeft) || Input::GetGamepadAxis(Gamepad::LeftX) < -0.6f,
+      m_InventoryPreviousLeft);
     const bool right = Pressed(
       Input::IsKeyPressed(Key::Right) || Input::IsKeyPressed(Key::D) ||
-      Input::IsGamepadButtonPressed(Gamepad::DPadRight), m_InventoryPreviousRight);
-    const bool up = Pressed(
-      Input::IsKeyPressed(Key::Up) || Input::IsKeyPressed(Key::W) ||
-      Input::IsGamepadButtonPressed(Gamepad::DPadUp), m_InventoryPreviousUp);
-    const bool down = Pressed(
-      Input::IsKeyPressed(Key::Down) || Input::IsKeyPressed(Key::S) ||
-      Input::IsGamepadButtonPressed(Gamepad::DPadDown), m_InventoryPreviousDown);
+      Input::IsGamepadButtonPressed(Gamepad::DPadRight) || Input::GetGamepadAxis(Gamepad::LeftX) > 0.6f,
+      m_InventoryPreviousRight);
 
-    if (left) m_InventorySelected = Wrap(m_InventorySelected - 1, count);
-    if (right) m_InventorySelected = Wrap(m_InventorySelected + 1, count);
-    if (up) m_InventorySelected = std::max(0, m_InventorySelected - 5);
-    if (down) m_InventorySelected = std::min(count - 1, m_InventorySelected + 5);
+    if (count > 1)
+    {
+      if (left) --m_InventoryCarouselTarget;
+      if (right) ++m_InventoryCarouselTarget;
+    }
+    m_InventorySelected = Wrap(m_InventoryCarouselTarget, count);
+
+    const float follow = 1.0f - std::exp(-12.0f * m_PauseFrameDelta);
+    m_InventoryCarouselPosition +=
+      (static_cast<float>(m_InventoryCarouselTarget) - m_InventoryCarouselPosition) * follow;
   }
 
   void DrawInventory()
   {
     const auto& inventory = InventoryManager::GetInstance();
     const auto& items = inventory.GetItems();
-    const float screenWidth = static_cast<float>(Window::GetWidth());
-    const float screenHeight = static_cast<float>(Window::GetHeight());
-    const float uiScale = SceneUI::Scale(screenWidth, screenHeight);
+    const InventoryLayout layout = GetInventoryLayout();
+    const float screenWidth = layout.screenWidth;
+    const float screenHeight = layout.screenHeight;
+    const float uiScale = layout.uiScale;
+    const float panelWidth = layout.panelWidth;
+    const float panelHeight = layout.panelHeight;
+    const glm::vec2 panelCenter = layout.panelCenter;
+    const float carouselY = layout.carouselY;
+    const float spacing = layout.spacing;
+    const float previewSize = layout.previewSize;
     const float reveal = SceneUI::Smooth(m_InventoryReveal);
     const Font* font = FontManager::GetFont("dpcomic");
 
-    const float panelWidth = std::min(940.0f * uiScale, screenWidth * 0.9f);
-    const float panelHeight = std::min(570.0f * uiScale, screenHeight * 0.86f);
-    const float gridWidth = panelWidth * 0.58f;
-    const float slotGap = 7.0f * uiScale;
-    const float slotSize = std::min(
-      (gridWidth - slotGap * 6.0f) / 5.0f,
-      (panelHeight * 0.65f - slotGap * 7.0f) / 6.0f);
-    const float gridLeft = screenWidth * 0.5f - panelWidth * 0.43f;
-    const float gridTop = screenHeight * 0.5f + panelHeight * 0.24f;
-
     RenderSystem::BeginUI();
     RenderSystem::DrawQuad(glm::vec2(screenWidth * 0.5f, screenHeight * 0.5f),
-      glm::vec2(screenWidth, screenHeight), 0.0f, glm::vec4(0.005f, 0.008f, 0.016f, 0.74f * reveal));
-    RenderSystem::DrawQuad(glm::vec2(screenWidth * 0.5f, screenHeight * 0.5f),
-      glm::vec2(panelWidth, panelHeight), 0.0f, glm::vec4(0.025f, 0.04f, 0.07f, 0.96f * reveal));
+      glm::vec2(screenWidth, screenHeight), 0.0f, glm::vec4(0.005f, 0.008f, 0.016f, 0.46f * reveal));
+    RenderSystem::DrawQuad(panelCenter,
+      glm::vec2(panelWidth, panelHeight), 0.0f, glm::vec4(0.025f, 0.04f, 0.07f, 0.12f * reveal));
+    RenderSystem::DrawQuad(panelCenter + glm::vec2(0.0f, panelHeight * 0.37f),
+      glm::vec2(panelWidth, panelHeight * 0.18f), 0.0f,
+      glm::vec4(0.018f, 0.032f, 0.058f, 0.88f * reveal));
+    RenderSystem::DrawQuad(panelCenter - glm::vec2(0.0f, panelHeight * 0.36f),
+      glm::vec2(panelWidth, panelHeight * 0.22f), 0.0f,
+      glm::vec4(0.018f, 0.032f, 0.058f, 0.82f * reveal));
 
     RenderSystem::DrawText(font, "INVENTORY",
-      glm::vec2(screenWidth * 0.5f, screenHeight * 0.5f + panelHeight * 0.41f),
+      glm::vec2(panelCenter.x, panelCenter.y + panelHeight * 0.41f),
       0.82f * uiScale, glm::vec4(0.85f, 0.92f, 1.0f, reveal));
-    RenderSystem::DrawText(font,
-      std::to_string(inventory.GetItemCount()) + " / " + std::to_string(inventory.GetCapacity()) + " SLOTS",
-      glm::vec2(gridLeft + gridWidth * 0.5f, gridTop + slotSize * 0.85f),
-      0.32f * uiScale, glm::vec4(0.58f, 0.7f, 0.84f, reveal));
-
-    for (size_t index = 0; index < inventory.GetCapacity(); ++index)
+    if (!items.empty())
     {
-      const int column = static_cast<int>(index % 5);
-      const int row = static_cast<int>(index / 5);
-      const glm::vec2 position(
-        gridLeft + slotGap + slotSize * 0.5f + column * (slotSize + slotGap),
-        gridTop - slotSize * 0.5f - row * (slotSize + slotGap));
-      const bool occupied = index < items.size();
-      const bool selected = occupied && static_cast<int>(index) == m_InventorySelected;
-      const glm::vec4 slotColor = selected
-        ? glm::vec4(0.22f, 0.48f, 0.78f, 0.72f * reveal)
-        : occupied ? glm::vec4(0.09f, 0.14f, 0.22f, 0.9f * reveal)
-                   : glm::vec4(0.045f, 0.065f, 0.1f, 0.7f * reveal);
-      RenderSystem::DrawQuad(position, glm::vec2(slotSize), 0.0f, slotColor);
+      RenderSystem::DrawText(font,
+        std::to_string(m_InventorySelected + 1) + " / " + std::to_string(items.size()),
+        glm::vec2(panelCenter.x, panelCenter.y + panelHeight * 0.325f),
+        0.32f * uiScale, glm::vec4(0.58f, 0.7f, 0.84f, reveal));
 
-      if (occupied && items[index])
+      const int count = static_cast<int>(items.size());
+      const int visibleCount = std::min(count, 5);
+      const int firstOffset = -(visibleCount / 2);
+      for (int slot = 0; slot < visibleCount; ++slot)
       {
-        std::string label = items[index]->name;
-        if (label.size() > 13) label = label.substr(0, 12) + ".";
-        RenderSystem::DrawText(font, label, position, 0.25f * uiScale,
-          glm::vec4(selected ? glm::vec3(1.0f) : glm::vec3(0.72f, 0.79f, 0.87f), reveal));
-      }
-    }
+        const int carouselIndex = m_InventoryCarouselTarget + firstOffset + slot;
+        const int itemIndex = Wrap(carouselIndex, count);
+        if (!items[itemIndex]) continue;
 
-    const float detailsX = screenWidth * 0.5f + panelWidth * 0.28f;
-    if (!items.empty() && m_InventorySelected < static_cast<int>(items.size()) && items[m_InventorySelected])
-    {
+        const float relative = static_cast<float>(carouselIndex) - m_InventoryCarouselPosition;
+        const float distance = std::abs(relative);
+        const bool selected = carouselIndex == m_InventoryCarouselTarget;
+        const float scale = std::max(0.52f, 1.0f - distance * 0.18f);
+        const float itemOpacity = reveal * std::max(0.22f, 1.0f - distance * 0.25f);
+        const glm::vec2 position(panelCenter.x + relative * spacing, carouselY);
+
+        std::string label = items[itemIndex]->name;
+        if (label.size() > 20) label = label.substr(0, 19) + ".";
+        RenderSystem::DrawText(font, label,
+          glm::vec2(position.x, carouselY + previewSize * scale * 0.72f),
+          (selected ? 0.42f : 0.30f) * uiScale,
+          glm::vec4(selected ? glm::vec3(1.0f, 0.88f, 0.4f) : glm::vec3(0.68f, 0.75f, 0.84f),
+                    itemOpacity));
+        if (selected)
+          RenderSystem::DrawQuad(
+            glm::vec2(position.x, carouselY - previewSize * scale * 0.62f),
+            glm::vec2(72.0f * uiScale, 3.0f * uiScale), 0.0f,
+            glm::vec4(0.42f, 0.72f, 1.0f, 0.9f * reveal));
+      }
+
       const auto& selected = *items[m_InventorySelected];
-      RenderSystem::DrawText(font, selected.name,
-        glm::vec2(detailsX, screenHeight * 0.5f + panelHeight * 0.17f),
-        0.55f * uiScale, glm::vec4(1.0f, 0.88f, 0.4f, reveal));
       RenderSystem::DrawText(font, selected.description,
-        glm::vec2(detailsX, screenHeight * 0.5f + panelHeight * 0.05f),
-        0.25f * uiScale, glm::vec4(0.76f, 0.8f, 0.86f, reveal));
-      RenderSystem::DrawText(font, "WEIGHT: " + std::to_string(selected.weight).substr(0, 3) + " KG",
-        glm::vec2(detailsX, screenHeight * 0.5f - panelHeight * 0.09f),
-        0.31f * uiScale, glm::vec4(0.58f, 0.7f, 0.84f, reveal));
+        glm::vec2(panelCenter.x, panelCenter.y - panelHeight * 0.265f),
+        0.29f * uiScale, glm::vec4(0.76f, 0.8f, 0.86f, reveal));
+      RenderSystem::DrawText(font, "<",
+        glm::vec2(panelCenter.x - panelWidth * 0.445f, carouselY),
+        0.82f * uiScale, glm::vec4(0.52f, 0.72f, 0.94f, reveal));
+      RenderSystem::DrawText(font, ">",
+        glm::vec2(panelCenter.x + panelWidth * 0.445f, carouselY),
+        0.82f * uiScale, glm::vec4(0.52f, 0.72f, 0.94f, reveal));
     }
     else
     {
       RenderSystem::DrawText(font, "NO ITEMS",
-        glm::vec2(detailsX, screenHeight * 0.5f + panelHeight * 0.05f),
+        panelCenter,
         0.45f * uiScale, glm::vec4(0.55f, 0.62f, 0.7f, reveal));
     }
 
-    RenderSystem::DrawText(font, "TOTAL WEIGHT: " +
-      std::to_string(inventory.GetTotalWeight()).substr(0, 4) + " KG",
-      glm::vec2(detailsX, screenHeight * 0.5f - panelHeight * 0.22f),
-      0.32f * uiScale, glm::vec4(0.7f, 0.76f, 0.84f, reveal));
-    RenderSystem::DrawText(font, "ESC / I / Y: CLOSE    ARROWS / D-PAD: SELECT",
-      glm::vec2(screenWidth * 0.5f, screenHeight * 0.5f - panelHeight * 0.42f),
+    RenderSystem::DrawText(font, "ESC / I / Y: CLOSE    LEFT / RIGHT / D-PAD: BROWSE",
+      glm::vec2(panelCenter.x, panelCenter.y - panelHeight * 0.42f),
       0.29f * uiScale, glm::vec4(0.62f, 0.68f, 0.76f, reveal));
     RenderSystem::EndUI();
   }
@@ -601,9 +716,10 @@ private:
   bool m_PreviousInventory = false;
   bool m_InventoryPreviousLeft = false;
   bool m_InventoryPreviousRight = false;
-  bool m_InventoryPreviousUp = false;
-  bool m_InventoryPreviousDown = false;
   int m_InventorySelected = 0;
+  int m_InventoryCarouselTarget = 0;
+  float m_InventoryCarouselPosition = 0.0f;
+  float m_InventoryRotation = 0.0f;
   float m_InventoryReveal = 0.0f;
   float m_PauseTime = 0.0f;
   float m_PauseFrameDelta = 0.0f;

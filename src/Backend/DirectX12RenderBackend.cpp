@@ -53,6 +53,10 @@ namespace
     void RegisterModelDrawCommand(const std::string&, uint32_t, uint32_t) override {}
     void UpdateModelInstances(const std::shared_ptr<Model>&) override {}
     void SetModelRendered(const std::shared_ptr<Model>&, bool) override {}
+    void SetModelPreviews(const std::vector<RenderModelPreview>& previews) override
+    {
+      DirectX12Renderer::SetModelPreviews(previews);
+    }
     void FinalizeModelUpload() override {}
     void ResetModelDrawCommands() override {}
     bool DrawParticles(const std::vector<ParticleRenderInstance>& instances) override

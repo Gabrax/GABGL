@@ -198,5 +198,5 @@ float4 PSMain(PSInput input) : SV_TARGET
         + specularStrength * specular) * attenuation * intensity;
     }
   }
-  return float4(lighting, albedoSample.a);
+  return float4(lighting * max(MaterialFlags.z, 1.0f), albedoSample.a);
 }

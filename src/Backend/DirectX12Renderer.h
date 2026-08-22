@@ -32,6 +32,7 @@ struct DirectX12Renderer
   static void ResetSceneResources();
   static bool UploadModel(const std::shared_ptr<Model>& model);
   static bool UploadSkybox(const std::shared_ptr<Texture>& cubemap);
+  static void SetModelPreviews(const std::vector<RenderModelPreview>& previews);
 
   static bool InitImGui();
   static void ShutdownImGui();

@@ -68,6 +68,10 @@ namespace
     {
       OpenGLRenderer::RebuildDrawCommandsForModel(model, rendered);
     }
+    void SetModelPreviews(const std::vector<RenderModelPreview>& previews) override
+    {
+      OpenGLRenderer::SetModelPreviews(previews);
+    }
     void FinalizeModelUpload() override { OpenGLRenderer::InitDrawCommandBuffer(); }
     void ResetModelDrawCommands() override { OpenGLRenderer::ResetModelDrawCommands(); }
     bool DrawParticles(const std::vector<ParticleRenderInstance>&) override { return false; }

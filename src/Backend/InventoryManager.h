@@ -17,7 +17,7 @@ struct Item
 {
   std::string name;
   std::string description;
-  float weight = 0.0f;
+  std::string modelName;
   ItemType type = ItemType::Miscellaneous;
 };
 
@@ -39,7 +39,6 @@ public:
   [[nodiscard]] size_t GetItemCount() const { return m_Items.size(); }
   [[nodiscard]] static constexpr size_t GetCapacity() { return MaxSlots; }
   [[nodiscard]] bool IsFull() const { return m_Items.size() >= MaxSlots; }
-  [[nodiscard]] float GetTotalWeight() const;
 
 private:
   InventoryManager() = default;
