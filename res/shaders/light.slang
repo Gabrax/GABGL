@@ -15,6 +15,10 @@ void main()
 #version 460 core
 #extension GL_ARB_bindless_texture : require
 
+#define GABGL_FLOAT3 vec3
+#define GABGL_SATURATE(value) clamp(value, 0.0, 1.0)
+#include "common/material_lighting.slang"
+
 in vec2 TexCoords;
 
 layout (location = 0) out vec4 FragColor;
@@ -132,60 +136,26 @@ float calculatePointShadow(vec3 fragPos, vec3 lightPos, vec3 normal, int lightIn
 vec3 calculateDirectionalLight(vec3 lightDir, vec3 normal, vec3 viewDir, vec3 surfaceColor, vec4 fragPosLightSpace, vec3 ambientCol, vec3 specularCol, vec3 lightColor, float shininess) {
   lightDir = normalize(-lightDir);
   float shadow = calculateDirectShadow(fragPosLightSpace, lightDir, normal);
-  float diff = max(dot(normal, lightDir), 0.0);
-
-  vec3 reflectDir = reflect(-lightDir, normal);
-  float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
-
-  vec3 ambient = ambientCol * surfaceColor;
-  vec3 diffuse = lightColor * diff * surfaceColor * shadow;
-  vec3 specular = specularCol * spec * shadow;
-
-  return ambient + diffuse + specular;
+  return GabglEvaluateLight(lightColor, surfaceColor, specularCol, normal,
+    viewDir, lightDir, shininess, 1.0, 1.0, shadow);
 }
 
 vec3 calculatePointLight(vec3 lightPos, vec3 fragPos, vec3 normal, vec3 viewDir, vec3 surfaceColor, vec3 ambientCol, vec3 specularCol, int lightIndex, vec3 lightColor, float shininess) {
   vec3 lightDir = normalize(lightPos - fragPos);
-  float diff = max(dot(normal, lightDir), 0.0);
-
-  vec3 reflectDir = reflect(-lightDir, normal);
-  float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
-
   float distance = length(lightPos - fragPos);
-  float attenuation = 1.0 / (1.0 + 0.09 * distance + 0.032 * (distance * distance));
+  float attenuation = GabglDistanceAttenuation(distance);
   float shadow = calculatePointShadow(fragPos, lightPos, normal, lightIndex);
-
-  vec3 ambient = ambientCol * surfaceColor * attenuation;
-  vec3 diffuse = lightColor * diff * surfaceColor * shadow * attenuation;
-  vec3 specular = specularCol * spec * shadow * attenuation;
-
-  return ambient + diffuse + specular;
+  return GabglEvaluateLight(lightColor, surfaceColor, specularCol, normal,
+    viewDir, lightDir, shininess, attenuation, 1.0, shadow);
 }
 
 vec3 calculateSpotlight(vec3 lightPos, vec3 lightDir, vec3 fragPos, vec3 normal, vec3 viewDir, vec3 surfaceColor, vec3 ambientCol, vec3 specularCol, vec3 lightColor, float shininess) {
   vec3 lightToFrag = normalize(fragPos - lightPos);
-  vec3 normLightDir = normalize(lightDir); // Light direction points "outward"
-
-  float theta = dot(lightToFrag, normLightDir);
-  float cutOff = cos(radians(12.5));
-  float outerCutOff = cos(radians(17.5));
-  float epsilon = cutOff - outerCutOff;
-  float intensity = clamp((theta - outerCutOff) / epsilon, 0.0, 1.0);
-
-  float diff = max(dot(normal, -lightToFrag), 0.0);
-
-  vec3 reflectDir = reflect(lightToFrag, normal);
-  float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
-
+  float intensity = GabglSpotIntensity(lightToFrag, lightDir);
   float distance = length(lightPos - fragPos);
-  float attenuation = 1.0 / (1.0 + 0.09 * distance + 0.032 * distance * distance);
-
-  vec3 ambient  = ambientCol  * surfaceColor;
-  vec3 diffuse  = lightColor  * diff * surfaceColor;
-  vec3 specular = specularCol * spec;
-
-  vec3 result = (ambient + diffuse + specular) * attenuation * intensity;
-  return result;
+  float attenuation = GabglDistanceAttenuation(distance);
+  return GabglEvaluateLight(lightColor, surfaceColor, specularCol, normal,
+    viewDir, -lightToFrag, shininess, attenuation, intensity, 1.0);
 }
 
 void main()
@@ -199,7 +169,7 @@ void main()
   vec4 fragPosLightSpace = u_DirectShadowViewProj * vec4(FragPos, 1.0);
   vec3 specularCol = vec3(AlbedoSpec.a);
 
-  float shininess = mix(8.0, 128.0, AlbedoSpec.a);
+  float shininess = GabglMaterialShininess(AlbedoSpec.a);
 
   vec3 result = vec3(0.0);
 

@@ -130,7 +130,7 @@ void ParticleRenderer::Init()
   RandomGen::Init();
   if (!RenderBackend::Capabilities().NativeParticleRenderer)
   {
-    Shader::Create(s_Data.ParticleShader, "../res/shaders/particle.glsl");
+    Shader::Create(s_Data.ParticleShader, "../res/shaders/particle.slang");
 
     constexpr glm::vec2 quadVertices[4] = {
       {-0.5f, -0.5f},

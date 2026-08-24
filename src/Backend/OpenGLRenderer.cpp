@@ -437,19 +437,19 @@ static void ShutdownEditorUI()
 
 void OpenGLRenderer::LoadShaders()
 {
-	Shader::Create(s_Data.s_Shaders.QuadShader, "../res/shaders/batch_quad.glsl");
-	Shader::Create(s_Data.s_Shaders.CircleShader, "../res/shaders/batch_circle.glsl");
-	Shader::Create(s_Data.s_Shaders.LineShader, "../res/shaders/batch_line.glsl");
-	Shader::Create(s_Data.s_Shaders.FramebufferShader, "../res/shaders/finalFB.glsl");
-	Shader::Create(s_Data.s_Shaders.skyboxShader, "../res/shaders/skybox.glsl");
-	Shader::Create(s_Data.s_Shaders.GeometryShader, "../res/shaders/geometry.glsl");
-	Shader::Create(s_Data.s_Shaders.LightShader, "../res/shaders/light.glsl");
-	Shader::Create(s_Data.s_Shaders.DownSampleShader, "../res/shaders/bloom_downsample.glsl");
-	Shader::Create(s_Data.s_Shaders.UpSampleShader, "../res/shaders/bloom_upsample.glsl");
-	Shader::Create(s_Data.s_Shaders.BloomResultShader, "../res/shaders/bloom_final.glsl");
-	Shader::Create(s_Data.s_Shaders.OmniDirectShadowShader, "../res/shaders/omni_shadowFB.glsl");
-	Shader::Create(s_Data.s_Shaders.DirectShadowShader, "../res/shaders/direct_shadowFB.glsl");
-	Shader::Create(s_Data.s_Shaders.PhysicsDebugShader, "../res/shaders/physics_debug.glsl");
+	Shader::Create(s_Data.s_Shaders.QuadShader, "../res/shaders/ui.slang");
+	Shader::Create(s_Data.s_Shaders.CircleShader, "../res/shaders/batch_circle.slang");
+	Shader::Create(s_Data.s_Shaders.LineShader, "../res/shaders/debug_lines.slang");
+	Shader::Create(s_Data.s_Shaders.FramebufferShader, "../res/shaders/postprocess.slang");
+	Shader::Create(s_Data.s_Shaders.skyboxShader, "../res/shaders/skybox.slang");
+	Shader::Create(s_Data.s_Shaders.GeometryShader, "../res/shaders/scene.slang");
+	Shader::Create(s_Data.s_Shaders.LightShader, "../res/shaders/light.slang");
+	Shader::Create(s_Data.s_Shaders.DownSampleShader, "../res/shaders/bloom_downsample.slang");
+	Shader::Create(s_Data.s_Shaders.UpSampleShader, "../res/shaders/bloom_upsample.slang");
+	Shader::Create(s_Data.s_Shaders.BloomResultShader, "../res/shaders/bloom_final.slang");
+	Shader::Create(s_Data.s_Shaders.OmniDirectShadowShader, "../res/shaders/point_shadow.slang");
+	Shader::Create(s_Data.s_Shaders.DirectShadowShader, "../res/shaders/shadow.slang");
+	Shader::Create(s_Data.s_Shaders.PhysicsDebugShader, "../res/shaders/physics_debug.slang");
 }
 
 void OpenGLRenderer::SetLights(const std::vector<RenderLight>& lights)

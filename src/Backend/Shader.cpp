@@ -4,17 +4,12 @@
 
 #include <glad/glad.h>
 
-#if defined(GABGL_ENABLE_DX12) && defined(_WIN32)
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#ifdef APIENTRY
-#undef APIENTRY
-#endif
-#include <d3dcompiler.h>
-#include <wrl/client.h>
-#endif
+#include <slang-com-ptr.h>
+#include <slang.h>
 
+#include <array>
+#include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <fstream>
 #include <sstream>
@@ -23,31 +18,274 @@
 #include <iostream>
 #include <stdexcept>
 
-static inline void checkCompileErrors(GLuint shader, std::string type)
+namespace
 {
-  GLint success;
-  GLchar infoLog[1024];
-  if (type != "PROGRAM")
+using Slang::ComPtr;
+
+void LogSlangDiagnostics(slang::IBlob* diagnostics)
+{
+  if (diagnostics && diagnostics->getBufferSize() > 0)
+    GABGL_WARN("{}", static_cast<const char*>(diagnostics->getBufferPointer()));
+}
+
+slang::IGlobalSession* GetSlangGlobalSession()
+{
+  static ComPtr<slang::IGlobalSession> session = []
   {
-      glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-      if (!success)
-      {
-          glGetShaderInfoLog(shader, 1024, NULL, infoLog);
-          GABGL_ERROR("ERROR::SHADER_COMPILATION_ERROR of type: {0}",type);
-          GABGL_ERROR("ERROR::INFO: {0}",infoLog);
-      }
+    ComPtr<slang::IGlobalSession> result;
+    SlangGlobalSessionDesc description{};
+    description.enableGLSL = true;
+    if (SLANG_FAILED(slang::createGlobalSession(&description, result.writeRef())))
+      throw std::runtime_error("Failed to initialize the Slang compiler");
+    return result;
+  }();
+  return session.get();
+}
+
+Shader::Bytecode CompileSlangSource(const std::string& source,
+                                    const std::filesystem::path& path,
+                                    std::string_view entryPoint,
+                                    SlangStage stage,
+                                    SlangCompileTarget format,
+                                    const char* profile,
+                                    bool allowGLSLSyntax)
+{
+  auto* globalSession = GetSlangGlobalSession();
+
+  slang::TargetDesc target{};
+  target.format = format;
+  target.profile = globalSession->findProfile(profile);
+
+  slang::CompilerOptionEntry options[3]{};
+  options[0].name = slang::CompilerOptionName::NoMangle;
+  options[0].value.intValue0 = 1;
+  options[1].name = slang::CompilerOptionName::PreserveParameters;
+  options[1].value.intValue0 = 1;
+  // OpenGL uses separate binding namespaces for textures, UBOs and SSBOs,
+  // while Slang's cross-API validator conservatively treats them as shared.
+  options[2].name = slang::CompilerOptionName::DisableWarnings;
+  options[2].value.kind = slang::CompilerOptionValueKind::String;
+  options[2].value.stringValue0 = "39001";
+
+  const std::string searchPath = path.parent_path().string();
+  const char* searchPaths[] = {searchPath.c_str()};
+  slang::SessionDesc sessionDescription{};
+  // Slang's GLSL compatibility front-end reverses this setting when emitting
+  // the explicit GLSL buffer qualifier. OpenGL therefore needs row-major here
+  // to retain column-major UBO/SSBO storage, while DXBC must keep the original
+  // HLSL column-major constant-buffer ABI used by GLM uploads.
+  sessionDescription.defaultMatrixLayoutMode = format == SLANG_DXBC
+    ? SLANG_MATRIX_LAYOUT_COLUMN_MAJOR
+    : SLANG_MATRIX_LAYOUT_ROW_MAJOR;
+  sessionDescription.targets = &target;
+  sessionDescription.targetCount = 1;
+  sessionDescription.searchPaths = searchPaths;
+  sessionDescription.searchPathCount = 1;
+  sessionDescription.allowGLSLSyntax = allowGLSLSyntax;
+  sessionDescription.compilerOptionEntries = options;
+  sessionDescription.compilerOptionEntryCount = static_cast<uint32_t>(std::size(options));
+
+  ComPtr<slang::ISession> session;
+  if (SLANG_FAILED(globalSession->createSession(sessionDescription, session.writeRef())))
+    throw std::runtime_error("Failed to create a Slang compilation session");
+
+  ComPtr<slang::IBlob> sourceBlob;
+  sourceBlob.attach(slang_createBlob(source.data(), source.size()));
+  ComPtr<slang::IBlob> diagnostics;
+  const std::string moduleName = path.stem().string() + "_" + std::string(entryPoint);
+  const std::string sourcePath = path.string();
+  slang::IModule* module = session->loadModuleFromSource(
+    moduleName.c_str(), sourcePath.c_str(), sourceBlob.get(), diagnostics.writeRef());
+  LogSlangDiagnostics(diagnostics.get());
+  if (!module)
+    throw std::runtime_error("Slang failed to load shader " + sourcePath);
+
+  ComPtr<slang::IEntryPoint> entry;
+  diagnostics.setNull();
+  const std::string entryName(entryPoint);
+  const SlangResult entryResult = module->findAndCheckEntryPoint(
+    entryName.c_str(), stage, entry.writeRef(), diagnostics.writeRef());
+  LogSlangDiagnostics(diagnostics.get());
+  if (SLANG_FAILED(entryResult))
+    throw std::runtime_error("Slang entry point '" + entryName + "' failed in " + sourcePath);
+
+  slang::IComponentType* components[] = {module, entry.get()};
+  ComPtr<slang::IComponentType> program;
+  diagnostics.setNull();
+  const SlangResult composeResult = session->createCompositeComponentType(
+    components, std::size(components), program.writeRef(), diagnostics.writeRef());
+  LogSlangDiagnostics(diagnostics.get());
+  if (SLANG_FAILED(composeResult))
+    throw std::runtime_error("Slang failed to compose shader " + sourcePath);
+
+  ComPtr<slang::IComponentType> linkedProgram;
+  diagnostics.setNull();
+  const SlangResult linkResult = program->link(linkedProgram.writeRef(), diagnostics.writeRef());
+  LogSlangDiagnostics(diagnostics.get());
+  if (SLANG_FAILED(linkResult))
+    throw std::runtime_error("Slang failed to link shader " + sourcePath);
+
+  ComPtr<slang::IBlob> code;
+  diagnostics.setNull();
+  const SlangResult codeResult = linkedProgram->getEntryPointCode(
+    0, 0, code.writeRef(), diagnostics.writeRef());
+  LogSlangDiagnostics(diagnostics.get());
+  if (SLANG_FAILED(codeResult))
+    throw std::runtime_error("Slang code generation failed for " + sourcePath);
+
+  Shader::Bytecode bytecode;
+  const auto* begin = static_cast<const uint8_t*>(code->getBufferPointer());
+  bytecode.Bytes.assign(begin, begin + code->getBufferSize());
+  return bytecode;
+}
+
+std::string UnpackSlangGlobalUniforms(std::string source)
+{
+  constexpr std::string_view blockMarker = "uniform block_GlobalParams_";
+  size_t marker = source.find(blockMarker);
+  while (marker != std::string::npos)
+  {
+    const size_t layoutStart = source.rfind("layout(binding", marker);
+    const size_t bodyStart = source.find('{', marker);
+    const size_t bodyEnd = source.find('}', bodyStart);
+    const size_t declarationEnd = source.find(';', bodyEnd);
+    if (layoutStart == std::string::npos || bodyStart == std::string::npos ||
+        bodyEnd == std::string::npos || declarationEnd == std::string::npos)
+      break;
+
+    const size_t instanceStart = source.find_first_not_of(" \t\r\n", bodyEnd + 1);
+    const std::string instanceName = source.substr(instanceStart, declarationEnd - instanceStart);
+    std::istringstream members(source.substr(bodyStart + 1, bodyEnd - bodyStart - 1));
+    std::string uniforms;
+    std::string line;
+    while (std::getline(members, line))
+    {
+      const size_t first = line.find_first_not_of(" \t\r");
+      if (first == std::string::npos)
+        continue;
+      uniforms += "uniform " + line.substr(first) + "\n";
+    }
+
+    source.replace(layoutStart, declarationEnd - layoutStart + 1, uniforms);
+    const std::string prefix = instanceName + ".";
+    size_t use = source.find(prefix);
+    while (use != std::string::npos)
+    {
+      source.erase(use, prefix.size());
+      use = source.find(prefix, use);
+    }
+    marker = source.find(blockMarker);
   }
-  else
+  return source;
+}
+
+void ReplaceIdentifier(std::string& source, std::string_view from, std::string_view to)
+{
+  size_t position = source.find(from);
+  while (position != std::string::npos)
   {
-      glGetProgramiv(shader, GL_LINK_STATUS, &success);
-      if (!success)
-      {
-          glGetProgramInfoLog(shader, 1024, NULL, infoLog);
-          GABGL_ERROR("ERROR::PROGRAM_LINKING_ERROR of type: {0}",type);
-          GABGL_ERROR("ERROR::INFO: {0}",infoLog);
-      }
+    const auto isIdentifier = [](const char character)
+    {
+      return std::isalnum(static_cast<unsigned char>(character)) || character == '_';
+    };
+    const bool startsIdentifier = position > 0 && isIdentifier(source[position - 1]);
+    const size_t after = position + from.size();
+    const bool endsIdentifier = after < source.size() && isIdentifier(source[after]);
+    if (!startsIdentifier && !endsIdentifier)
+    {
+      source.replace(position, from.size(), to);
+      position = source.find(from, position + to.size());
+    }
+    else
+      position = source.find(from, after);
   }
 }
+
+void CheckCompileErrors(GLuint object, std::string_view type, std::string_view generatedSource = {})
+{
+  GLint success = GL_FALSE;
+  if (type != "PROGRAM")
+  {
+    glGetShaderiv(object, GL_COMPILE_STATUS, &success);
+    if (success == GL_TRUE) return;
+    GLint length = 0;
+    glGetShaderiv(object, GL_INFO_LOG_LENGTH, &length);
+    std::string log(static_cast<size_t>(std::max(length, 1)), '\0');
+    glGetShaderInfoLog(object, length, nullptr, log.data());
+    GABGL_ERROR("OpenGL shader compilation failed for {}: {}", type, log);
+    if (!generatedSource.empty())
+      GABGL_ERROR("Generated GLSL source:\n{}", generatedSource);
+    throw std::runtime_error("OpenGL shader compilation failed");
+  }
+
+  glGetProgramiv(object, GL_LINK_STATUS, &success);
+  if (success == GL_TRUE) return;
+  GLint length = 0;
+  glGetProgramiv(object, GL_INFO_LOG_LENGTH, &length);
+  std::string log(static_cast<size_t>(std::max(length, 1)), '\0');
+  glGetProgramInfoLog(object, length, nullptr, log.data());
+  GABGL_ERROR("OpenGL shader linking failed: {}", log);
+  throw std::runtime_error("OpenGL shader linking failed");
+}
+
+GLuint CompileOpenGLStage(const std::string& source,
+                          const std::filesystem::path& path,
+                          GLenum shaderType,
+                          SlangStage stage)
+{
+  auto generated = CompileSlangSource(
+    source, path, "main", stage, SLANG_GLSL, "glsl_460", true);
+  std::string glsl(reinterpret_cast<const char*>(generated.Bytes.data()), generated.Bytes.size());
+  glsl = UnpackSlangGlobalUniforms(std::move(glsl));
+  if (source.find("GL_ARB_bindless_texture") != std::string::npos)
+  {
+    const size_t versionEnd = glsl.find('\n');
+    glsl.insert(versionEnd + 1, "#extension GL_ARB_bindless_texture : require\n");
+  }
+  // Slang's GLSL target uses Vulkan names for these two built-ins. OpenGL
+  // exposes their equivalent core names instead.
+  ReplaceIdentifier(glsl, "gl_InstanceIndex", "gl_InstanceID");
+  ReplaceIdentifier(glsl, "gl_VertexIndex", "gl_VertexID");
+
+  const char* code = glsl.c_str();
+  const GLuint shader = glCreateShader(shaderType);
+  glShaderSource(shader, 1, &code, nullptr);
+  glCompileShader(shader);
+  CheckCompileErrors(shader, path.string(), glsl);
+  return shader;
+}
+
+std::string ReadTextFile(const std::filesystem::path& path)
+{
+  std::ifstream file(path, std::ios::binary);
+  if (!file)
+    throw std::runtime_error("Cannot open shader " + path.string());
+  return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+}
+
+std::string SelectApiSection(const std::string& source,
+                             std::string_view api,
+                             const std::filesystem::path& path)
+{
+  constexpr std::string_view markerPrefix = "#api ";
+  if (source.find(markerPrefix) == std::string::npos)
+    return source;
+
+  const std::string marker = std::string(markerPrefix) + std::string(api);
+  const size_t markerPosition = source.find(marker);
+  if (markerPosition == std::string::npos)
+    throw std::runtime_error("Shader " + path.string() + " has no " + std::string(api) + " section");
+
+  const size_t sectionStart = source.find('\n', markerPosition);
+  if (sectionStart == std::string::npos)
+    return {};
+
+  const size_t nextMarker = source.find("\n#api ", sectionStart + 1);
+  return source.substr(sectionStart + 1,
+                       nextMarker == std::string::npos ? std::string::npos
+                                                       : nextMarker - sectionStart - 1);
+}
+} // namespace
 
 Shader::Shader(const char* fullshader)
 {
@@ -71,18 +309,8 @@ Shader::~Shader()
 
 void Shader::Load(const char* fullshader)
 {
-  std::ifstream shaderFile(fullshader);
-  shaderFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-  std::string fileContent;
-  try {
-      std::stringstream shaderStream;
-      shaderStream << shaderFile.rdbuf();
-      fileContent = shaderStream.str();
-  }
-  catch (std::ifstream::failure& e) {
-      GABGL_WARN("ERROR::SHADER::FILE_NOT_SUCCESSFULLY_READ: ",e.what());
-      return;
-  }
+  const std::filesystem::path path(fullshader);
+  const std::string fileContent = SelectApiSection(ReadTextFile(path), "OPENGL", path);
 
   // Parse the shader file into sections based on #type
   std::unordered_map<std::string, std::string> shaderSources;
@@ -104,67 +332,38 @@ void Shader::Load(const char* fullshader)
       pos = nextTypePos;
   }
 
-  // Compile each shader
-  GLuint vertex = 0, fragment = 0, geometry = 0, tessControl = 0, tessEvaluation = 0, compute = 0;
+  struct StageDescription
+  {
+    const char* Name;
+    GLenum OpenGLStage;
+    SlangStage SlangStageValue;
+  };
+  constexpr StageDescription stages[] = {
+    {"VERTEX", GL_VERTEX_SHADER, SLANG_STAGE_VERTEX},
+    {"FRAGMENT", GL_FRAGMENT_SHADER, SLANG_STAGE_FRAGMENT},
+    {"GEOMETRY", GL_GEOMETRY_SHADER, SLANG_STAGE_GEOMETRY},
+    {"TESS_CONTROL", GL_TESS_CONTROL_SHADER, SLANG_STAGE_HULL},
+    {"TESS_EVALUATION", GL_TESS_EVALUATION_SHADER, SLANG_STAGE_DOMAIN},
+    {"COMPUTE", GL_COMPUTE_SHADER, SLANG_STAGE_COMPUTE},
+  };
 
-  if (shaderSources.contains("VERTEX")) {
-      const char* vertexCode = shaderSources["VERTEX"].c_str();
-      vertex = glCreateShader(GL_VERTEX_SHADER);
-      glShaderSource(vertex, 1, &vertexCode, NULL);
-      glCompileShader(vertex);
-      checkCompileErrors(vertex, "VERTEX");
+  std::vector<GLuint> compiledStages;
+  for (const auto& stage : stages)
+  {
+    const auto source = shaderSources.find(stage.Name);
+    if (source != shaderSources.end())
+      compiledStages.push_back(CompileOpenGLStage(
+        source->second, path, stage.OpenGLStage, stage.SlangStageValue));
   }
-
-  if (shaderSources.contains("FRAGMENT")) {
-      const char* fragmentCode = shaderSources["FRAGMENT"].c_str();
-      fragment = glCreateShader(GL_FRAGMENT_SHADER);
-      glShaderSource(fragment, 1, &fragmentCode, NULL);
-      glCompileShader(fragment);
-      checkCompileErrors(fragment, "FRAGMENT");
-  }
-
-  if (shaderSources.contains("GEOMETRY")) {
-      const char* geometryCode = shaderSources["GEOMETRY"].c_str();
-      geometry = glCreateShader(GL_GEOMETRY_SHADER);
-      glShaderSource(geometry, 1, &geometryCode, NULL);
-      glCompileShader(geometry);
-      checkCompileErrors(geometry, "GEOMETRY");
-  }
-
-  if (shaderSources.contains("TESS_CONTROL")) {
-      const char* tessControlCode = shaderSources["TESS_CONTROL"].c_str();
-      tessControl = glCreateShader(GL_TESS_CONTROL_SHADER);
-      glShaderSource(tessControl, 1, &tessControlCode, NULL);
-      glCompileShader(tessControl);
-      checkCompileErrors(tessControl, "TESS_CONTROL");
-  }
-
-  if (shaderSources.contains("TESS_EVALUATION")) {
-      const char* tessEvaluationCode = shaderSources["TESS_EVALUATION"].c_str();
-      tessEvaluation = glCreateShader(GL_TESS_EVALUATION_SHADER);
-      glShaderSource(tessEvaluation, 1, &tessEvaluationCode, NULL);
-      glCompileShader(tessEvaluation);
-      checkCompileErrors(tessEvaluation, "TESS_EVALUATION");
-  }
-
-  if (shaderSources.contains("COMPUTE")) {
-      const char* computeCode = shaderSources["COMPUTE"].c_str();
-      compute = glCreateShader(GL_COMPUTE_SHADER);
-      glShaderSource(compute, 1, &computeCode, NULL);
-      glCompileShader(compute);
-      checkCompileErrors(compute, "COMPUTE");
-  }
+  if (compiledStages.empty())
+    throw std::runtime_error("Shader has no #type sections: " + path.string());
 
   // Link shaders into a program
   this->m_ID = glCreateProgram();
-  if (vertex != 0) glAttachShader(this->m_ID, vertex);
-  if (fragment != 0) glAttachShader(this->m_ID, fragment);
-  if (geometry != 0) glAttachShader(this->m_ID, geometry);
-  if (tessControl != 0) glAttachShader(this->m_ID, tessControl);
-  if (tessEvaluation != 0) glAttachShader(this->m_ID, tessEvaluation);
-  if (compute != 0) glAttachShader(this->m_ID, compute);
+  for (const GLuint stage : compiledStages)
+    glAttachShader(this->m_ID, stage);
   glLinkProgram(this->m_ID);
-  checkCompileErrors(this->m_ID, "PROGRAM");
+  CheckCompileErrors(this->m_ID, "PROGRAM");
 
   // Validate the program
   glValidateProgram(this->m_ID);
@@ -176,89 +375,34 @@ void Shader::Load(const char* fullshader)
       GABGL_ERROR("ERROR::PROGRAM_VALIDATION_ERROR: ", infoLog);
   }
 
-  if (vertex != 0) glDeleteShader(vertex);
-  if (fragment != 0) glDeleteShader(fragment);
-  if (geometry != 0) glDeleteShader(geometry);
-  if (tessControl != 0) glDeleteShader(tessControl);
-  if (tessEvaluation != 0) glDeleteShader(tessEvaluation);
-  if (compute != 0) glDeleteShader(compute);
+  for (const GLuint stage : compiledStages)
+    glDeleteShader(stage);
 }
 
 void Shader::Load(const char* vertexPath, const char* fragmentPath, const char* geometryPath)
 {
-  std::string vertexCode;
-  std::string fragmentCode;
-  std::string geometryCode;
-  std::ifstream vShaderFile;
-  std::ifstream fShaderFile;
-  std::ifstream gShaderFile;
-
-  vShaderFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-  fShaderFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-  gShaderFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-  try
-  {
-    vShaderFile.open(vertexPath);
-    fShaderFile.open(fragmentPath);
-    std::stringstream vShaderStream, fShaderStream;
-
-    vShaderStream << vShaderFile.rdbuf();
-    fShaderStream << fShaderFile.rdbuf();
-
-    vShaderFile.close();
-    fShaderFile.close();
-
-    vertexCode = vShaderStream.str();
-    fragmentCode = fShaderStream.str();
-
-    if (geometryPath != nullptr)
-    {
-        gShaderFile.open(geometryPath);
-        std::stringstream gShaderStream;
-        gShaderStream << gShaderFile.rdbuf();
-        gShaderFile.close();
-        geometryCode = gShaderStream.str();
-    }
-  }
-  catch (std::ifstream::failure& e)
-  {
-    GABGL_WARN("ERROR::SHADER::FILE_NOT_SUCCESSFULLY_READ: ", e.what());
-  }
-  const char* vShaderCode = vertexCode.c_str();
-  const char* fShaderCode = fragmentCode.c_str();
-
-  GLuint vertex, fragment;
-
-  vertex = glCreateShader(GL_VERTEX_SHADER);
-  glShaderSource(vertex, 1, &vShaderCode, NULL);
-  glCompileShader(vertex);
-  checkCompileErrors(vertex, "VERTEX");
-
-  fragment = glCreateShader(GL_FRAGMENT_SHADER);
-  glShaderSource(fragment, 1, &fShaderCode, NULL);
-  glCompileShader(fragment);
-  checkCompileErrors(fragment, "FRAGMENT");
-
-  unsigned int geometry;
-  if (geometryPath != nullptr)
-  {
-      const char* gShaderCode = geometryCode.c_str();
-      geometry = glCreateShader(GL_GEOMETRY_SHADER);
-      glShaderSource(geometry, 1, &gShaderCode, NULL);
-      glCompileShader(geometry);
-      checkCompileErrors(geometry, "GEOMETRY");
-  }
+  const GLuint vertex = CompileOpenGLStage(
+    SelectApiSection(ReadTextFile(vertexPath), "OPENGL", vertexPath),
+    vertexPath, GL_VERTEX_SHADER, SLANG_STAGE_VERTEX);
+  const GLuint fragment = CompileOpenGLStage(
+    SelectApiSection(ReadTextFile(fragmentPath), "OPENGL", fragmentPath),
+    fragmentPath, GL_FRAGMENT_SHADER, SLANG_STAGE_FRAGMENT);
+  GLuint geometry = 0;
+  if (geometryPath)
+    geometry = CompileOpenGLStage(
+      SelectApiSection(ReadTextFile(geometryPath), "OPENGL", geometryPath),
+      geometryPath, GL_GEOMETRY_SHADER, SLANG_STAGE_GEOMETRY);
 
   this->m_ID = glCreateProgram();
   glAttachShader(this->m_ID, vertex);
   glAttachShader(this->m_ID, fragment);
-  if (geometryPath != nullptr) glAttachShader(this->m_ID, geometry);
+  if (geometry != 0) glAttachShader(this->m_ID, geometry);
   glLinkProgram(this->m_ID);
-  checkCompileErrors(this->m_ID, "PROGRAM");
+  CheckCompileErrors(this->m_ID, "PROGRAM");
 
   glDeleteShader(vertex);
   glDeleteShader(fragment);
-  if (geometryPath != nullptr) glDeleteShader(geometry);
+  if (geometry != 0) glDeleteShader(geometry);
 }
 
 void Shader::Bind() const
@@ -379,40 +523,25 @@ void Shader::Create(std::shared_ptr<Shader>& shader, const char* vertexPath, con
   shader->m_firstTimeCompile = false;
 }
 
-Shader::Bytecode Shader::CompileHLSL(const std::filesystem::path& path, std::string_view entryPoint,
-                                     std::string_view target)
+Shader::Bytecode Shader::CompileSlang(const std::filesystem::path& path, std::string_view entryPoint,
+                                      std::string_view target)
 {
 #if defined(GABGL_ENABLE_DX12) && defined(_WIN32)
-  UINT flags = D3DCOMPILE_ENABLE_STRICTNESS;
-#ifdef DEBUG
-  flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#else
-  flags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
-#endif
+  SlangStage stage = SLANG_STAGE_NONE;
+  if (target.starts_with("vs_")) stage = SLANG_STAGE_VERTEX;
+  else if (target.starts_with("ps_")) stage = SLANG_STAGE_FRAGMENT;
+  else if (target.starts_with("gs_")) stage = SLANG_STAGE_GEOMETRY;
+  else if (target.starts_with("hs_")) stage = SLANG_STAGE_HULL;
+  else if (target.starts_with("ds_")) stage = SLANG_STAGE_DOMAIN;
+  else if (target.starts_with("cs_")) stage = SLANG_STAGE_COMPUTE;
+  if (stage == SLANG_STAGE_NONE)
+    throw std::runtime_error("Unsupported Slang shader profile: " + std::string(target));
 
-  const std::wstring sourcePath = path.wstring();
-  const std::string entry(entryPoint);
-  const std::string profile(target);
-  Microsoft::WRL::ComPtr<ID3DBlob> shader;
-  Microsoft::WRL::ComPtr<ID3DBlob> errors;
-  const HRESULT result = D3DCompileFromFile(
-    sourcePath.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE,
-    entry.c_str(), profile.c_str(), flags, 0, &shader, &errors);
-  if (FAILED(result))
-  {
-    std::string details;
-    if (errors)
-      details.assign(static_cast<const char*>(errors->GetBufferPointer()), errors->GetBufferSize());
-    GABGL_ERROR("HLSL shader compilation failed for '{}': {}", path.string(), details);
-    throw std::runtime_error("D3DCompileFromFile failed for " + path.string());
-  }
-
-  Bytecode bytecode;
-  bytecode.Bytes.resize(shader->GetBufferSize());
-  std::memcpy(bytecode.Bytes.data(), shader->GetBufferPointer(), bytecode.Bytes.size());
-  return bytecode;
+  return CompileSlangSource(
+    SelectApiSection(ReadTextFile(path), "DX12", path),
+    path, entryPoint, stage, SLANG_DXBC, std::string(target).c_str(), false);
 #else
-  GABGL_ERROR("Cannot compile HLSL shader '{}': DirectX 12 support is not enabled", path.string());
+  GABGL_ERROR("Cannot compile Slang shader '{}': DirectX 12 support is not enabled", path.string());
   return {};
 #endif
 }

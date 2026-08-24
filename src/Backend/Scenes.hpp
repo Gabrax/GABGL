@@ -4,6 +4,7 @@
 
 #include "../input/UserInput.h"
 #include "AudioManager.h"
+#include "DialogueManager.h"
 #include "InventoryManager.h"
 #include "RenderSystem.h"
 #include "Settings.h"
@@ -15,6 +16,7 @@
 #include <array>
 #include <algorithm>
 #include <cmath>
+#include <sstream>
 #include <vector>
 
 namespace SceneUI
@@ -44,6 +46,7 @@ struct GameScene : Scene
 
   void OnSceneStart() override
   {
+    DialogueManager::Close();
     RenderSystem::SetModelPreviews({});
     InventoryManager::GetInstance().Clear();
     Window::SetCursorVisible(false);
@@ -70,6 +73,38 @@ struct GameScene : Scene
     const bool escape = Pressed(Input::IsKeyPressed(Key::Escape), m_PreviousEscape);
     const bool start = Pressed(Input::IsGamepadButtonPressed(Gamepad::Start), m_PreviousStart);
     bool justPaused = false;
+
+    if (DialogueManager::IsActive())
+    {
+      const bool advanceDown = Input::IsKeyPressed(Key::E) || Input::IsKeyPressed(Key::Enter) ||
+        Input::IsKeyPressed(Key::Space) || Input::IsGamepadButtonPressed(Gamepad::X) ||
+        Input::IsGamepadButtonPressed(Gamepad::A);
+      const bool backDown = Input::IsGamepadButtonPressed(Gamepad::B);
+
+      // The interaction key which opened the dialogue may still be held. Seed
+      // edge detection on the first frame so it cannot skip the first line.
+      if (!m_DialogueWasActive)
+      {
+        m_PreviousDialogueAdvance = advanceDown;
+        m_PreviousDialogueBack = backDown;
+        m_DialogueReveal = 0.0f;
+        m_DialogueWasActive = true;
+      }
+      else
+      {
+        const bool advance = Pressed(advanceDown, m_PreviousDialogueAdvance);
+        const bool back = escape || Pressed(backDown, m_PreviousDialogueBack);
+        if (back) DialogueManager::Close();
+        else if (advance) DialogueManager::Advance();
+      }
+
+      m_DialogueReveal = std::min(1.0f, m_DialogueReveal + m_PauseFrameDelta / 0.18f);
+      DeltaTime frozenTime(0.0f);
+      RenderSystem::DrawScene(frozenTime, []() {}, false);
+      if (DialogueManager::IsActive()) DrawDialogue();
+      return;
+    }
+    m_DialogueWasActive = false;
 
     if (!m_Paused && inventoryPressed)
       SetInventoryOpen(!inventory.IsOpen());
@@ -147,6 +182,71 @@ struct GameScene : Scene
 
 private:
   enum class PauseScreen { Main, Options };
+
+  static std::vector<std::string> WrapDialogue(const std::string& text, size_t maxCharacters)
+  {
+    std::vector<std::string> lines;
+    std::istringstream words(text);
+    std::string word;
+    std::string line;
+    while (words >> word)
+    {
+      if (!line.empty() && line.size() + word.size() + 1 > maxCharacters)
+      {
+        lines.push_back(std::move(line));
+        line.clear();
+      }
+      if (!line.empty()) line += ' ';
+      line += word;
+    }
+    if (!line.empty()) lines.push_back(std::move(line));
+    if (lines.empty()) lines.emplace_back();
+    return lines;
+  }
+
+  void DrawDialogue() const
+  {
+    const float screenWidth = static_cast<float>(Window::GetWidth());
+    const float screenHeight = static_cast<float>(Window::GetHeight());
+    const float uiScale = SceneUI::Scale(screenWidth, screenHeight);
+    const float reveal = SceneUI::Smooth(m_DialogueReveal);
+    const float panelWidth = std::min(1080.0f * uiScale, screenWidth * 0.92f);
+    const float panelHeight = std::min(190.0f * uiScale, screenHeight * 0.3f);
+    const glm::vec2 panelCenter(screenWidth * 0.5f, panelHeight * 0.5f + 24.0f * uiScale);
+    const Font* font = FontManager::GetFont("dpcomic");
+    const size_t maxCharacters = static_cast<size_t>(std::clamp(panelWidth / (12.0f * uiScale), 32.0f, 92.0f));
+    const auto lines = WrapDialogue(DialogueManager::GetCurrentLine(), maxCharacters);
+
+    RenderSystem::BeginUI();
+    RenderSystem::DrawQuad(glm::vec2(screenWidth * 0.5f, screenHeight * 0.5f),
+      glm::vec2(screenWidth, screenHeight), 0.0f, glm::vec4(0.003f, 0.006f, 0.012f, 0.2f * reveal));
+    RenderSystem::DrawQuad(panelCenter, glm::vec2(panelWidth, panelHeight), 0.0f,
+      glm::vec4(0.018f, 0.028f, 0.05f, 0.94f * reveal));
+    RenderSystem::DrawQuad(panelCenter + glm::vec2(0.0f, panelHeight * 0.47f),
+      glm::vec2(panelWidth, 3.0f * uiScale), 0.0f, glm::vec4(0.35f, 0.68f, 1.0f, reveal));
+
+    RenderSystem::DrawText(font, DialogueManager::GetSpeaker(),
+      glm::vec2(panelCenter.x, panelCenter.y + panelHeight * 0.31f), 0.52f * uiScale,
+      glm::vec4(1.0f, 0.84f, 0.34f, reveal));
+    const float lineSpacing = 31.0f * uiScale;
+    const float firstLineY = panelCenter.y + 8.0f * uiScale +
+      static_cast<float>(lines.size() - 1) * lineSpacing * 0.5f;
+    for (size_t index = 0; index < lines.size(); ++index)
+      RenderSystem::DrawText(font, lines[index],
+        glm::vec2(panelCenter.x, firstLineY - static_cast<float>(index) * lineSpacing),
+        0.38f * uiScale, glm::vec4(0.9f, 0.94f, 1.0f, reveal));
+
+    const bool lastLine = DialogueManager::GetLineIndex() + 1 >= DialogueManager::GetLineCount();
+    RenderSystem::DrawText(font, lastLine ? "E / ENTER / A: CLOSE" : "E / ENTER / A: NEXT",
+      glm::vec2(panelCenter.x, panelCenter.y - panelHeight * 0.36f), 0.27f * uiScale,
+      glm::vec4(0.6f, 0.7f, 0.82f, reveal));
+    RenderSystem::DrawText(font,
+      std::to_string(DialogueManager::GetLineIndex() + 1) + " / " +
+        std::to_string(DialogueManager::GetLineCount()),
+      glm::vec2(panelCenter.x + panelWidth * 0.43f, panelCenter.y - panelHeight * 0.36f),
+      0.24f * uiScale, glm::vec4(0.48f, 0.58f, 0.7f, reveal));
+    RenderSystem::EndUI();
+  }
 
   void UpdateWeapon()
   {
@@ -714,6 +814,9 @@ private:
   bool m_PausePreviousMouse = false;
   bool m_PreviousFire = false;
   bool m_PreviousInventory = false;
+  bool m_DialogueWasActive = false;
+  bool m_PreviousDialogueAdvance = false;
+  bool m_PreviousDialogueBack = false;
   bool m_InventoryPreviousLeft = false;
   bool m_InventoryPreviousRight = false;
   int m_InventorySelected = 0;
@@ -721,6 +824,7 @@ private:
   float m_InventoryCarouselPosition = 0.0f;
   float m_InventoryRotation = 0.0f;
   float m_InventoryReveal = 0.0f;
+  float m_DialogueReveal = 0.0f;
   float m_PauseTime = 0.0f;
   float m_PauseFrameDelta = 0.0f;
   float m_PauseReveal = 0.0f;

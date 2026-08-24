@@ -71,7 +71,8 @@ namespace
       RenderSystem::DrawText(font, name, screenPosition, (focused ? 0.48f : 0.4f) * scale,
         focused ? glm::vec4(1.0f, 0.88f, 0.38f, alpha) : glm::vec4(1.0f, 1.0f, 1.0f, alpha));
       if (focused)
-        RenderSystem::DrawText(font, entity.pickable ? "E / X - PICK UP" : "E / X - INTERACT",
+        RenderSystem::DrawText(font,
+          entity.pickable ? "E / X - PICK UP" : (!entity.dialogue.empty() ? "E / X - TALK" : "E / X - INTERACT"),
           screenPosition - glm::vec2(0.0f, 27.0f * scale), 0.27f * scale,
           glm::vec4(0.9f, 0.9f, 0.9f, alpha));
     }

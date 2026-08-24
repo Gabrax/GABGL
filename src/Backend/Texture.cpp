@@ -50,11 +50,12 @@ Texture::Texture(const std::string& path) : m_Path(path)
 {
   Timer timer;
 
-  int width, height, channels;
-  stbi_uc* data = stbi_load(path.c_str(), &width, &height, &channels, 0);
+  int width, height, sourceChannels;
+  stbi_uc* data = stbi_load(path.c_str(), &width, &height, &sourceChannels, STBI_rgb_alpha);
 
   if (data)
   {
+      constexpr int channels = 4;
       FlipImageVertically(data, width, height, channels);
       m_RawData = new uint8_t[width * height * channels];
       memcpy(m_RawData, data, width * height * channels);
@@ -62,21 +63,10 @@ Texture::Texture(const std::string& path) : m_Path(path)
 
       m_Width = width;
       m_Height = height;
+      this->channels = channels;
 
-      GLenum internalFormat = 0, dataFormat = 0;
-      if (channels == 4)
-      {
-          internalFormat = GL_RGBA8;
-          dataFormat = GL_RGBA;
-      }
-      else if (channels == 3)
-      {
-          internalFormat = GL_RGB8;
-          dataFormat = GL_RGB;
-      }
-
-      m_InternalFormat = internalFormat;
-      m_DataFormat = dataFormat;
+      m_InternalFormat = GL_RGBA8;
+      m_DataFormat = GL_RGBA;
 
       stbi_image_free(data);
       GABGL_WARN("Texture loading took {0} ms", timer.ElapsedMillis());
@@ -92,10 +82,11 @@ Texture::Texture(const std::string& path, const std::string& directory) : m_Path
   Timer timer;
 
   std::string filename = directory + '/' + path;
-  int width, height, channels;
-  stbi_uc* data = stbi_load(filename.c_str(), &width, &height, &channels, 0);
+  int width, height, sourceChannels;
+  stbi_uc* data = stbi_load(filename.c_str(), &width, &height, &sourceChannels, STBI_rgb_alpha);
   if (data)
   {
+      constexpr int channels = 4;
       FlipImageVertically(data, width, height, channels);
       m_RawData = new uint8_t[width * height * channels];
       memcpy(m_RawData, data, width * height * channels);
@@ -103,26 +94,10 @@ Texture::Texture(const std::string& path, const std::string& directory) : m_Path
 
       m_Width = width;
       m_Height = height;
+      this->channels = channels;
 
-      GLenum internalFormat = 0, dataFormat = 0;
-      if (channels == 4)
-      {
-          internalFormat = GL_RGBA8;
-          dataFormat = GL_RGBA;
-      }
-      else if (channels == 3)
-      {
-          internalFormat = GL_RGB8;
-          dataFormat = GL_RGB;
-      }
-      else if (channels == 1)
-      {
-          internalFormat = GL_R8;
-          dataFormat = GL_RED;
-      }
-
-      m_InternalFormat = internalFormat;
-      m_DataFormat = dataFormat;
+      m_InternalFormat = GL_RGBA8;
+      m_DataFormat = GL_RGBA;
 
       stbi_image_free(data);
       GABGL_WARN("Texture loading took {0} ms", timer.ElapsedMillis());
@@ -137,11 +112,14 @@ Texture::Texture(const aiTexture* paiTexture, const std::string& path) : paiText
 {
   if (paiTexture->mHeight == 0)
   {
-    int width, height, channels;
-    unsigned char* data = stbi_load_from_memory(reinterpret_cast<const unsigned char*>(paiTexture->pcData),paiTexture->mWidth, &width, &height, &channels, 0);
+    int width, height, sourceChannels;
+    unsigned char* data = stbi_load_from_memory(
+      reinterpret_cast<const unsigned char*>(paiTexture->pcData), paiTexture->mWidth,
+      &width, &height, &sourceChannels, STBI_rgb_alpha);
 
     if (data)
     {
+      constexpr int channels = 4;
       FlipImageVertically(data, width, height, channels);
       m_RawData = new uint8_t[width * height * channels];
       memcpy(m_RawData, data, width * height * channels);
@@ -149,26 +127,10 @@ Texture::Texture(const aiTexture* paiTexture, const std::string& path) : paiText
 
       m_Width = width;
       m_Height = height;
+      this->channels = channels;
 
-      GLenum internalFormat = 0, dataFormat = 0;
-      if (channels == 4)
-      {
-          internalFormat = GL_RGBA8;
-          dataFormat = GL_RGBA;
-      }
-      else if (channels == 3)
-      {
-          internalFormat = GL_RGB8;
-          dataFormat = GL_RGB;
-      }
-      else if (channels == 1)
-      {
-          internalFormat = GL_R8;
-          dataFormat = GL_RED;
-      }
-
-      m_InternalFormat = internalFormat;
-      m_DataFormat = dataFormat;
+      m_InternalFormat = GL_RGBA8;
+      m_DataFormat = GL_RGBA;
 
       stbi_image_free(data);
     }
@@ -179,9 +141,19 @@ Texture::Texture(const aiTexture* paiTexture, const std::string& path) : paiText
   }
   else
   {
-    m_IsEmbeddedUnCompressed = true;
     m_Width = paiTexture->mWidth;
     m_Height = paiTexture->mHeight;
+    channels = 4;
+    m_RawData = new uint8_t[static_cast<size_t>(m_Width) * m_Height * channels];
+    for (size_t i = 0; i < static_cast<size_t>(m_Width) * m_Height; ++i)
+    {
+      m_RawData[i * 4 + 0] = paiTexture->pcData[i].r;
+      m_RawData[i * 4 + 1] = paiTexture->pcData[i].g;
+      m_RawData[i * 4 + 2] = paiTexture->pcData[i].b;
+      m_RawData[i * 4 + 3] = paiTexture->pcData[i].a;
+    }
+    FlipImageVertically(m_RawData, static_cast<int>(m_Width), static_cast<int>(m_Height), channels);
+    m_IsLoaded = true;
     m_InternalFormat = GL_RGBA8;
     m_DataFormat = GL_RGBA;
   }
@@ -193,7 +165,6 @@ Texture::Texture(const std::vector<std::string>& faces)
 
   GABGL_ASSERT(faces.size() == 6, "Cubemap must have exactly 6 faces!");
 
-  stbi_set_flip_vertically_on_load(false);
   for (int i = 0; i < 6; ++i)
   {
       int w, h, c;
@@ -218,7 +189,6 @@ Texture::Texture(const std::vector<std::string>& faces)
 
       pixels[i] = data;
   }
-  stbi_set_flip_vertically_on_load(true);
   GABGL_WARN("Texture loading took {0} ms", timer.ElapsedMillis());
 }
 

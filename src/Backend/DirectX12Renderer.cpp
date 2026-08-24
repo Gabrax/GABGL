@@ -69,7 +69,11 @@ namespace
   constexpr uint32_t BloomARTVIndex = FrameCount + 1;
   constexpr uint32_t BloomBRTVIndex = FrameCount + 2;
   constexpr uint32_t PostProcessRTVIndex = FrameCount + 3;
-  constexpr uint32_t PointShadowRTVBaseIndex = FrameCount + 4;
+  constexpr uint32_t SceneResultRTVIndex = FrameCount + 4;
+  constexpr uint32_t GPositionRTVIndex = FrameCount + 5;
+  constexpr uint32_t GNormalRTVIndex = FrameCount + 6;
+  constexpr uint32_t GAlbedoSpecRTVIndex = FrameCount + 7;
+  constexpr uint32_t PointShadowRTVBaseIndex = FrameCount + 8;
   constexpr DXGI_FORMAT BackBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
   constexpr DXGI_FORMAT SceneColorFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
   constexpr DXGI_FORMAT DepthFormat = DXGI_FORMAT_D32_FLOAT;
@@ -202,6 +206,7 @@ namespace
 
     ComPtr<ID3D12RootSignature> SceneRootSignature;
     ComPtr<ID3D12PipelineState> ScenePipeline;
+    ComPtr<ID3D12PipelineState> LightingPipeline;
     ComPtr<ID3D12RootSignature> ShadowRootSignature;
     ComPtr<ID3D12PipelineState> ShadowPipeline;
     ComPtr<ID3D12RootSignature> PointShadowRootSignature;
@@ -218,6 +223,7 @@ namespace
     ComPtr<ID3D12PipelineState> BloomExtractPipeline;
     ComPtr<ID3D12PipelineState> BloomBlurPipeline;
     ComPtr<ID3D12PipelineState> CompositePipeline;
+    ComPtr<ID3D12PipelineState> PostProcessPipeline;
     ComPtr<ID3D12RootSignature> UIRootSignature;
     ComPtr<ID3D12PipelineState> UIPipeline;
     ComPtr<ID3D12PipelineState> SceneUIPipeline;
@@ -227,6 +233,10 @@ namespace
     GPUTexture FontAtlas;
     GPUTexture SkyboxTexture;
     GPUTexture SceneColor;
+    GPUTexture SceneResult;
+    GPUTexture GPosition;
+    GPUTexture GNormal;
+    GPUTexture GAlbedoSpec;
     GPUTexture BloomA;
     GPUTexture BloomB;
     GPUTexture PostProcessColor;
@@ -359,6 +369,8 @@ namespace
 
   D3D12_CPU_DESCRIPTOR_HANDLE GetSRVCPUHandle(uint32_t index)
   {
+    if (!s_Data.SRVHeap || index >= s_Data.NextDescriptor)
+      throw std::runtime_error("Invalid DX12 SRV descriptor index");
     D3D12_CPU_DESCRIPTOR_HANDLE handle = s_Data.SRVHeap->GetCPUDescriptorHandleForHeapStart();
     handle.ptr += static_cast<SIZE_T>(index) * s_Data.SRVDescriptorSize;
     return handle;
@@ -366,6 +378,8 @@ namespace
 
   D3D12_GPU_DESCRIPTOR_HANDLE GetSRVGPUHandle(uint32_t index)
   {
+    if (!s_Data.SRVHeap || index >= s_Data.NextDescriptor)
+      throw std::runtime_error("Invalid DX12 SRV descriptor index");
     D3D12_GPU_DESCRIPTOR_HANDLE handle = s_Data.SRVHeap->GetGPUDescriptorHandleForHeapStart();
     handle.ptr += static_cast<UINT64>(index) * s_Data.SRVDescriptorSize;
     return handle;
@@ -482,11 +496,19 @@ namespace
       s_Data.BloomA.DescriptorIndex = AllocateDescriptor();
       s_Data.BloomB.DescriptorIndex = AllocateDescriptor();
       s_Data.PostProcessColor.DescriptorIndex = AllocateDescriptor();
+      s_Data.SceneResult.DescriptorIndex = AllocateDescriptor();
+      s_Data.GPosition.DescriptorIndex = AllocateDescriptor();
+      s_Data.GNormal.DescriptorIndex = AllocateDescriptor();
+      s_Data.GAlbedoSpec.DescriptorIndex = AllocateDescriptor();
     }
     const uint32_t sceneDescriptor = s_Data.SceneColor.DescriptorIndex;
     const uint32_t bloomADescriptor = s_Data.BloomA.DescriptorIndex;
     const uint32_t bloomBDescriptor = s_Data.BloomB.DescriptorIndex;
     const uint32_t postProcessDescriptor = s_Data.PostProcessColor.DescriptorIndex;
+    const uint32_t sceneResultDescriptor = s_Data.SceneResult.DescriptorIndex;
+    const uint32_t gPositionDescriptor = s_Data.GPosition.DescriptorIndex;
+    const uint32_t gNormalDescriptor = s_Data.GNormal.DescriptorIndex;
+    const uint32_t gAlbedoSpecDescriptor = s_Data.GAlbedoSpec.DescriptorIndex;
     s_Data.SceneColor = CreateColorTarget(width, height, SceneRTVIndex, sceneDescriptor);
     const uint32_t bloomWidth = std::max(1u, width / 2u);
     const uint32_t bloomHeight = std::max(1u, height / 2u);
@@ -494,6 +516,14 @@ namespace
     s_Data.BloomB = CreateColorTarget(bloomWidth, bloomHeight, BloomBRTVIndex, bloomBDescriptor);
     s_Data.PostProcessColor = CreateColorTarget(
       width, height, PostProcessRTVIndex, postProcessDescriptor, BackBufferFormat);
+    s_Data.SceneResult = CreateColorTarget(
+      width, height, SceneResultRTVIndex, sceneResultDescriptor, SceneColorFormat);
+    s_Data.GPosition = CreateColorTarget(
+      width, height, GPositionRTVIndex, gPositionDescriptor, SceneColorFormat);
+    s_Data.GNormal = CreateColorTarget(
+      width, height, GNormalRTVIndex, gNormalDescriptor, SceneColorFormat);
+    s_Data.GAlbedoSpec = CreateColorTarget(
+      width, height, GAlbedoSpecRTVIndex, gAlbedoSpecDescriptor, BackBufferFormat);
   }
 
   void CreateShadowMap(uint32_t size)
@@ -671,9 +701,9 @@ namespace
 #endif
   }
 
-  Shader::Bytecode CompileHLSL(const char* path, const char* entryPoint, const char* target)
+  Shader::Bytecode CompileSlang(const char* path, const char* entryPoint, const char* target)
   {
-    return Shader::CompileHLSL(path, entryPoint, target);
+    return Shader::CompileSlang(path, entryPoint, target);
   }
 
   ComPtr<ID3D12RootSignature> CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC& description)
@@ -882,10 +912,12 @@ namespace
 
   void CreateScenePipeline()
   {
-    static constexpr const char* SceneShader = "../res/shaders/hlsl/scene.hlsl";
+    static constexpr const char* SceneShader = "../res/shaders/scene.slang";
 
-    const auto vertexShader = CompileHLSL(SceneShader, "VSMain", "vs_5_1");
-    const auto pixelShader = CompileHLSL(SceneShader, "PSMain", "ps_5_1");
+    const auto vertexShader = CompileSlang(SceneShader, "VSMain", "vs_5_1");
+    const auto geometryPixelShader = CompileSlang(SceneShader, "GBufferPS", "ps_5_1");
+    const auto lightingVertexShader = CompileSlang(SceneShader, "LightingVS", "vs_5_1");
+    const auto lightingPixelShader = CompileSlang(SceneShader, "LightingPS", "ps_5_1");
 
     std::array<D3D12_DESCRIPTOR_RANGE, 5> textureRanges{};
     for (uint32_t i = 0; i < textureRanges.size(); ++i)
@@ -908,19 +940,27 @@ namespace
       parameters[i + 1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     }
 
-    D3D12_STATIC_SAMPLER_DESC sampler{};
-    sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    sampler.MaxLOD = D3D12_FLOAT32_MAX;
-    sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    std::array<D3D12_STATIC_SAMPLER_DESC, 2> samplers{};
+    samplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    samplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    samplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    samplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    samplers[0].MaxLOD = D3D12_FLOAT32_MAX;
+    samplers[0].ShaderRegister = 0;
+    samplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    samplers[1].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+    samplers[1].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    samplers[1].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    samplers[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    samplers[1].MaxLOD = D3D12_FLOAT32_MAX;
+    samplers[1].ShaderRegister = 1;
+    samplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     D3D12_ROOT_SIGNATURE_DESC rootDesc{};
     rootDesc.NumParameters = static_cast<UINT>(parameters.size());
     rootDesc.pParameters = parameters.data();
-    rootDesc.NumStaticSamplers = 1;
-    rootDesc.pStaticSamplers = &sampler;
+    rootDesc.NumStaticSamplers = static_cast<UINT>(samplers.size());
+    rootDesc.pStaticSamplers = samplers.data();
     rootDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
     s_Data.SceneRootSignature = CreateRootSignature(rootDesc);
 
@@ -944,7 +984,7 @@ namespace
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline{};
     pipeline.pRootSignature = s_Data.SceneRootSignature.Get();
     pipeline.VS = {vertexShader.GetBufferPointer(), vertexShader.GetBufferSize()};
-    pipeline.PS = {pixelShader.GetBufferPointer(), pixelShader.GetBufferSize()};
+    pipeline.PS = {geometryPixelShader.GetBufferPointer(), geometryPixelShader.GetBufferSize()};
     pipeline.BlendState = DefaultBlendState();
     pipeline.SampleMask = std::numeric_limits<UINT>::max();
     pipeline.RasterizerState = DefaultRasterizer();
@@ -954,19 +994,39 @@ namespace
     pipeline.DepthStencilState.StencilEnable = FALSE;
     pipeline.InputLayout = {InputLayout, static_cast<UINT>(std::size(InputLayout))};
     pipeline.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    pipeline.NumRenderTargets = 1;
+    pipeline.NumRenderTargets = 3;
     pipeline.RTVFormats[0] = SceneColorFormat;
+    pipeline.RTVFormats[1] = SceneColorFormat;
+    pipeline.RTVFormats[2] = BackBufferFormat;
     pipeline.DSVFormat = DepthFormat;
     pipeline.SampleDesc.Count = 1;
     CheckHRESULT(s_Data.Device->CreateGraphicsPipelineState(
                    &pipeline, IID_PPV_ARGS(&s_Data.ScenePipeline)),
                  "ID3D12Device::CreateGraphicsPipelineState (scene)");
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC lightingPipeline{};
+    lightingPipeline.pRootSignature = s_Data.SceneRootSignature.Get();
+    lightingPipeline.VS = {
+      lightingVertexShader.GetBufferPointer(), lightingVertexShader.GetBufferSize()};
+    lightingPipeline.PS = {
+      lightingPixelShader.GetBufferPointer(), lightingPixelShader.GetBufferSize()};
+    lightingPipeline.BlendState = DefaultBlendState();
+    lightingPipeline.SampleMask = std::numeric_limits<UINT>::max();
+    lightingPipeline.RasterizerState = DefaultRasterizer();
+    lightingPipeline.DepthStencilState.DepthEnable = FALSE;
+    lightingPipeline.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    lightingPipeline.NumRenderTargets = 1;
+    lightingPipeline.RTVFormats[0] = SceneColorFormat;
+    lightingPipeline.SampleDesc.Count = 1;
+    CheckHRESULT(s_Data.Device->CreateGraphicsPipelineState(
+                   &lightingPipeline, IID_PPV_ARGS(&s_Data.LightingPipeline)),
+                 "ID3D12Device::CreateGraphicsPipelineState (lighting)");
   }
 
   void CreateShadowPipeline()
   {
-    static constexpr const char* shaderSource = "../res/shaders/hlsl/shadow.hlsl";
-    const auto vertexShader = CompileHLSL(shaderSource, "VSMain", "vs_5_1");
+    static constexpr const char* shaderSource = "../res/shaders/shadow.slang";
+    const auto vertexShader = CompileSlang(shaderSource, "VSMain", "vs_5_1");
     D3D12_ROOT_PARAMETER parameter{};
     parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     parameter.Descriptor.ShaderRegister = 0;
@@ -1002,9 +1062,9 @@ namespace
 
   void CreatePointShadowPipeline()
   {
-    static constexpr const char* shaderSource = "../res/shaders/hlsl/point_shadow.hlsl";
-    const auto vertexShader = CompileHLSL(shaderSource, "VSMain", "vs_5_1");
-    const auto pixelShader = CompileHLSL(shaderSource, "PSMain", "ps_5_1");
+    static constexpr const char* shaderSource = "../res/shaders/point_shadow.slang";
+    const auto vertexShader = CompileSlang(shaderSource, "VSMain", "vs_5_1");
+    const auto pixelShader = CompileSlang(shaderSource, "PSMain", "ps_5_1");
     D3D12_ROOT_PARAMETER parameter{};
     parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     parameter.Descriptor.ShaderRegister = 0;
@@ -1042,9 +1102,9 @@ namespace
 
   void CreateSkyboxPipeline()
   {
-    static constexpr const char* shaderSource = "../res/shaders/hlsl/skybox.hlsl";
-    const auto vertexShader = CompileHLSL(shaderSource, "VSMain", "vs_5_1");
-    const auto pixelShader = CompileHLSL(shaderSource, "PSMain", "ps_5_1");
+    static constexpr const char* shaderSource = "../res/shaders/skybox.slang";
+    const auto vertexShader = CompileSlang(shaderSource, "VSMain", "vs_5_1");
+    const auto pixelShader = CompileSlang(shaderSource, "PSMain", "ps_5_1");
     D3D12_DESCRIPTOR_RANGE range{};
     range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     range.NumDescriptors = 1;
@@ -1107,9 +1167,9 @@ namespace
 
   void CreateParticlePipeline()
   {
-    static constexpr const char* shaderSource = "../res/shaders/hlsl/particles.hlsl";
-    const auto vs = CompileHLSL(shaderSource, "VSMain", "vs_5_1");
-    const auto ps = CompileHLSL(shaderSource, "PSMain", "ps_5_1");
+    static constexpr const char* shaderSource = "../res/shaders/particle.slang";
+    const auto vs = CompileSlang(shaderSource, "VSMain", "vs_5_1");
+    const auto ps = CompileSlang(shaderSource, "PSMain", "ps_5_1");
     D3D12_ROOT_PARAMETER parameter{};
     parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     parameter.Descriptor.ShaderRegister = 0;
@@ -1133,8 +1193,8 @@ namespace
 
   void CreateDebugLinePipeline()
   {
-    static constexpr const char* shaderSource = "../res/shaders/hlsl/debug_lines.hlsl";
-    const auto vs=CompileHLSL(shaderSource,"VSMain","vs_5_1"); const auto ps=CompileHLSL(shaderSource,"PSMain","ps_5_1");
+    static constexpr const char* shaderSource = "../res/shaders/debug_lines.slang";
+    const auto vs=CompileSlang(shaderSource,"VSMain","vs_5_1"); const auto ps=CompileSlang(shaderSource,"PSMain","ps_5_1");
     D3D12_ROOT_PARAMETER parameter{}; parameter.ParameterType=D3D12_ROOT_PARAMETER_TYPE_CBV; parameter.Descriptor.ShaderRegister=0;
     D3D12_ROOT_SIGNATURE_DESC rootDesc{}; rootDesc.NumParameters=1; rootDesc.pParameters=&parameter; rootDesc.Flags=D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT; s_Data.DebugLineRootSignature=CreateRootSignature(rootDesc);
     static constexpr D3D12_INPUT_ELEMENT_DESC inputs[]={{"POSITION",0,DXGI_FORMAT_R32G32B32_FLOAT,0,offsetof(DebugLineVertex,Position),D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},{"COLOR",0,DXGI_FORMAT_R32G32B32A32_FLOAT,0,offsetof(DebugLineVertex,Color),D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0}};
@@ -1144,9 +1204,9 @@ namespace
 
   void CreatePhysicsDebugPipeline()
   {
-    static constexpr const char* shaderSource = "../res/shaders/hlsl/physics_debug.hlsl";
-    const auto vertexShader = CompileHLSL(shaderSource, "VSMain", "vs_5_1");
-    const auto pixelShader = CompileHLSL(shaderSource, "PSMain", "ps_5_1");
+    static constexpr const char* shaderSource = "../res/shaders/physics_debug.slang";
+    const auto vertexShader = CompileSlang(shaderSource, "VSMain", "vs_5_1");
+    const auto pixelShader = CompileSlang(shaderSource, "PSMain", "ps_5_1");
 
     D3D12_ROOT_PARAMETER parameter{};
     parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -1194,22 +1254,22 @@ namespace
 
   void CreatePostProcessPipelines()
   {
-    static constexpr const char* shaderSource = "../res/shaders/hlsl/postprocess.hlsl";
-    const auto vs=CompileHLSL(shaderSource,"VSMain","vs_5_1"); const auto extract=CompileHLSL(shaderSource,"Extract","ps_5_1"); const auto blur=CompileHLSL(shaderSource,"Blur","ps_5_1"); const auto composite=CompileHLSL(shaderSource,"Composite","ps_5_1");
+    static constexpr const char* shaderSource = "../res/shaders/postprocess.slang";
+    const auto vs=CompileSlang(shaderSource,"VSMain","vs_5_1"); const auto extract=CompileSlang(shaderSource,"Extract","ps_5_1"); const auto blur=CompileSlang(shaderSource,"Blur","ps_5_1"); const auto composite=CompileSlang(shaderSource,"Composite","ps_5_1"); const auto postProcess=CompileSlang(shaderSource,"PostProcess","ps_5_1");
     std::array<D3D12_DESCRIPTOR_RANGE,2> ranges{}; for(uint32_t i=0;i<2;++i){ranges[i].RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_SRV;ranges[i].NumDescriptors=1;ranges[i].BaseShaderRegister=i;}
     std::array<D3D12_ROOT_PARAMETER,3> parameters{}; parameters[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS; parameters[0].Constants.ShaderRegister=0; parameters[0].Constants.Num32BitValues=8; for(uint32_t i=0;i<2;++i){parameters[i+1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;parameters[i+1].DescriptorTable={1,&ranges[i]};parameters[i+1].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;}
     D3D12_STATIC_SAMPLER_DESC sampler{}; sampler.Filter=D3D12_FILTER_MIN_MAG_MIP_LINEAR; sampler.AddressU=sampler.AddressV=sampler.AddressW=D3D12_TEXTURE_ADDRESS_MODE_CLAMP; sampler.MaxLOD=D3D12_FLOAT32_MAX; sampler.ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;
     D3D12_ROOT_SIGNATURE_DESC rootDesc{}; rootDesc.NumParameters=static_cast<UINT>(parameters.size()); rootDesc.pParameters=parameters.data(); rootDesc.NumStaticSamplers=1; rootDesc.pStaticSamplers=&sampler; s_Data.PostRootSignature=CreateRootSignature(rootDesc);
     auto createPipeline=[&](const Shader::Bytecode& pixelShader,DXGI_FORMAT format,ComPtr<ID3D12PipelineState>& result,const char* name){D3D12_GRAPHICS_PIPELINE_STATE_DESC p{};p.pRootSignature=s_Data.PostRootSignature.Get();p.VS={vs.GetBufferPointer(),vs.GetBufferSize()};p.PS={pixelShader.GetBufferPointer(),pixelShader.GetBufferSize()};p.BlendState=DefaultBlendState();p.SampleMask=std::numeric_limits<UINT>::max();p.RasterizerState=DefaultRasterizer();p.DepthStencilState.DepthEnable=FALSE;p.PrimitiveTopologyType=D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;p.NumRenderTargets=1;p.RTVFormats[0]=format;p.SampleDesc.Count=1;CheckHRESULT(s_Data.Device->CreateGraphicsPipelineState(&p,IID_PPV_ARGS(&result)),name);};
-    createPipeline(extract,SceneColorFormat,s_Data.BloomExtractPipeline,"Create DX12 bloom extract pipeline"); createPipeline(blur,SceneColorFormat,s_Data.BloomBlurPipeline,"Create DX12 bloom blur pipeline"); createPipeline(composite,BackBufferFormat,s_Data.CompositePipeline,"Create DX12 composite pipeline");
+    createPipeline(extract,SceneColorFormat,s_Data.BloomExtractPipeline,"Create DX12 bloom extract pipeline"); createPipeline(blur,SceneColorFormat,s_Data.BloomBlurPipeline,"Create DX12 bloom blur pipeline"); createPipeline(composite,SceneColorFormat,s_Data.CompositePipeline,"Create DX12 composite pipeline"); createPipeline(postProcess,BackBufferFormat,s_Data.PostProcessPipeline,"Create DX12 post-process pipeline");
   }
 
   void CreateUIPipeline()
   {
-    static constexpr const char* UIShader = "../res/shaders/hlsl/ui.hlsl";
+    static constexpr const char* UIShader = "../res/shaders/ui.slang";
 
-    const auto vertexShader = CompileHLSL(UIShader, "VSMain", "vs_5_1");
-    const auto pixelShader = CompileHLSL(UIShader, "PSMain", "ps_5_1");
+    const auto vertexShader = CompileSlang(UIShader, "VSMain", "vs_5_1");
+    const auto pixelShader = CompileSlang(UIShader, "PSMain", "ps_5_1");
 
     D3D12_DESCRIPTOR_RANGE textureRange{};
     textureRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
@@ -1284,7 +1344,8 @@ namespace
   }
 
   GPUTexture UploadTextureBytes(const uint8_t* pixels, uint32_t width, uint32_t height,
-                                DXGI_FORMAT format, uint32_t bytesPerPixel)
+                                DXGI_FORMAT format, uint32_t bytesPerPixel,
+                                bool generateMips = false)
   {
     if (!pixels || width == 0 || height == 0)
       return s_Data.WhiteTexture;
@@ -1297,7 +1358,14 @@ namespace
     textureDesc.Width = width;
     textureDesc.Height = height;
     textureDesc.DepthOrArraySize = 1;
-    textureDesc.MipLevels = 1;
+    uint16_t mipLevels = 1;
+    if (generateMips)
+      for (uint32_t mipWidth = width, mipHeight = height;
+           mipWidth > 1 || mipHeight > 1;
+           mipWidth = std::max(1u, mipWidth / 2u),
+           mipHeight = std::max(1u, mipHeight / 2u))
+        ++mipLevels;
+    textureDesc.MipLevels = mipLevels;
     textureDesc.Format = format;
     textureDesc.SampleDesc.Count = 1;
     textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
@@ -1309,23 +1377,64 @@ namespace
                    IID_PPV_ARGS(&texture.Resource)),
                  "ID3D12Device::CreateCommittedResource (texture)");
 
-    D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
-    UINT rowCount = 0;
-    UINT64 rowSize = 0;
+    std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> footprints(mipLevels);
+    std::vector<UINT> rowCounts(mipLevels);
+    std::vector<UINT64> rowSizes(mipLevels);
     UINT64 uploadSize = 0;
     s_Data.Device->GetCopyableFootprints(
-      &textureDesc, 0, 1, 0, &footprint, &rowCount, &rowSize, &uploadSize);
+      &textureDesc, 0, mipLevels, 0, footprints.data(), rowCounts.data(),
+      rowSizes.data(), &uploadSize);
     ComPtr<ID3D12Resource> upload = CreateUploadBuffer(uploadSize);
     uint8_t* mapped = nullptr;
     const D3D12_RANGE noRead{0, 0};
     CheckHRESULT(upload->Map(0, &noRead, reinterpret_cast<void**>(&mapped)),
                  "ID3D12Resource::Map (texture upload)");
-    const uint64_t sourcePitch = static_cast<uint64_t>(width) * bytesPerPixel;
-    for (uint32_t row = 0; row < height; ++row)
+    std::vector<uint8_t> currentPixels(
+      pixels, pixels + static_cast<size_t>(width) * height * bytesPerPixel);
+    uint32_t mipWidth = width;
+    uint32_t mipHeight = height;
+    for (uint16_t mip = 0; mip < mipLevels; ++mip)
     {
-      std::memcpy(mapped + footprint.Offset + static_cast<uint64_t>(row) * footprint.Footprint.RowPitch,
-                  pixels + static_cast<uint64_t>(row) * sourcePitch,
-                  static_cast<size_t>(sourcePitch));
+      const uint64_t sourcePitch = static_cast<uint64_t>(mipWidth) * bytesPerPixel;
+      if (rowCounts[mip] != mipHeight || rowSizes[mip] < sourcePitch)
+        throw std::runtime_error("Invalid DX12 texture upload footprint");
+      for (uint32_t row = 0; row < mipHeight; ++row)
+        std::memcpy(
+          mapped + footprints[mip].Offset +
+            static_cast<uint64_t>(row) * footprints[mip].Footprint.RowPitch,
+          currentPixels.data() + static_cast<uint64_t>(row) * sourcePitch,
+          static_cast<size_t>(sourcePitch));
+
+      if (mip + 1 < mipLevels)
+      {
+        const uint32_t nextWidth = std::max(1u, mipWidth / 2u);
+        const uint32_t nextHeight = std::max(1u, mipHeight / 2u);
+        std::vector<uint8_t> nextPixels(
+          static_cast<size_t>(nextWidth) * nextHeight * bytesPerPixel);
+        for (uint32_t y = 0; y < nextHeight; ++y)
+          for (uint32_t x = 0; x < nextWidth; ++x)
+            for (uint32_t channel = 0; channel < bytesPerPixel; ++channel)
+            {
+              uint32_t sum = 0;
+              uint32_t samples = 0;
+              for (uint32_t offsetY = 0; offsetY < 2; ++offsetY)
+                for (uint32_t offsetX = 0; offsetX < 2; ++offsetX)
+                {
+                  const uint32_t sourceX = x * 2u + offsetX;
+                  const uint32_t sourceY = y * 2u + offsetY;
+                  if (sourceX >= mipWidth || sourceY >= mipHeight) continue;
+                  sum += currentPixels[
+                    (static_cast<size_t>(sourceY) * mipWidth + sourceX) *
+                      bytesPerPixel + channel];
+                  ++samples;
+                }
+              nextPixels[(static_cast<size_t>(y) * nextWidth + x) *
+                bytesPerPixel + channel] = static_cast<uint8_t>(sum / samples);
+            }
+        currentPixels = std::move(nextPixels);
+        mipWidth = nextWidth;
+        mipHeight = nextHeight;
+      }
     }
     upload->Unmap(0, nullptr);
 
@@ -1333,15 +1442,19 @@ namespace
     CheckHRESULT(s_Data.UploadCommandList->Reset(s_Data.UploadAllocator.Get(), nullptr),
                  "ID3D12GraphicsCommandList::Reset (upload)");
 
-    D3D12_TEXTURE_COPY_LOCATION destination{};
-    destination.pResource = texture.Resource.Get();
-    destination.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-    destination.SubresourceIndex = 0;
-    D3D12_TEXTURE_COPY_LOCATION source{};
-    source.pResource = upload.Get();
-    source.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-    source.PlacedFootprint = footprint;
-    s_Data.UploadCommandList->CopyTextureRegion(&destination, 0, 0, 0, &source, nullptr);
+    for (uint16_t mip = 0; mip < mipLevels; ++mip)
+    {
+      D3D12_TEXTURE_COPY_LOCATION destination{};
+      destination.pResource = texture.Resource.Get();
+      destination.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+      destination.SubresourceIndex = mip;
+      D3D12_TEXTURE_COPY_LOCATION source{};
+      source.pResource = upload.Get();
+      source.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+      source.PlacedFootprint = footprints[mip];
+      s_Data.UploadCommandList->CopyTextureRegion(
+        &destination, 0, 0, 0, &source, nullptr);
+    }
 
     D3D12_RESOURCE_BARRIER barrier{};
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -1359,7 +1472,7 @@ namespace
     view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     view.Format = format;
     view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    view.Texture2D.MipLevels = 1;
+    view.Texture2D.MipLevels = mipLevels;
     s_Data.Device->CreateShaderResourceView(
       texture.Resource.Get(), &view, GetSRVCPUHandle(texture.DescriptorIndex));
     return texture;
@@ -1460,46 +1573,32 @@ namespace
     if (const auto existing = s_Data.Textures.find(source.get()); existing != s_Data.Textures.end())
       return existing->second.DescriptorIndex;
 
-    const uint8_t* raw = source->GetRawData();
     const uint32_t width = source->GetWidth();
     const uint32_t height = source->GetHeight();
-    std::vector<uint8_t> rgba;
-
-    if (source->IsUnCompressed())
-    {
-      const aiTexture* embedded = source->GetEmbeddedTexture();
-      if (embedded && embedded->pcData && embedded->mHeight > 0)
-      {
-        rgba.resize(static_cast<size_t>(width) * height * 4);
-        for (size_t i = 0; i < static_cast<size_t>(width) * height; ++i)
-        {
-          rgba[i * 4 + 0] = embedded->pcData[i].r;
-          rgba[i * 4 + 1] = embedded->pcData[i].g;
-          rgba[i * 4 + 2] = embedded->pcData[i].b;
-          rgba[i * 4 + 3] = embedded->pcData[i].a;
-        }
-        raw = rgba.data();
-      }
-    }
-    else if (raw && source->GetChannels() != 4)
-    {
-      const uint32_t channels = static_cast<uint32_t>(std::clamp(source->GetChannels(), 1, 3));
-      rgba.resize(static_cast<size_t>(width) * height * 4);
-      for (size_t i = 0; i < static_cast<size_t>(width) * height; ++i)
-      {
-        const uint8_t r = raw[i * channels];
-        rgba[i * 4 + 0] = r;
-        rgba[i * 4 + 1] = channels > 1 ? raw[i * channels + 1] : r;
-        rgba[i * 4 + 2] = channels > 1 ? raw[i * channels + 2] : r;
-        rgba[i * 4 + 3] = 255;
-      }
-      raw = rgba.data();
-    }
-
+    const uint8_t* raw = source->GetRawData();
     if (!raw || width == 0 || height == 0)
       return s_Data.WhiteTexture.DescriptorIndex;
 
-    GPUTexture texture = UploadTextureBytes(raw, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, 4);
+    const uint32_t channelCount = static_cast<uint32_t>(
+      std::clamp(source->GetChannels(), 1, 4));
+    std::vector<uint8_t> rgba(static_cast<size_t>(width) * height * 4);
+
+    // Texture owns one canonical row order used by every backend. Reversing
+    // the rows only for Direct3D makes atlas UVs address a different material
+    // region (especially visible on animated characters).
+    for (size_t pixel = 0; pixel < static_cast<size_t>(width) * height; ++pixel)
+    {
+      const size_t sourcePixel = pixel * channelCount;
+      const size_t destinationPixel = pixel * 4;
+      const uint8_t r = raw[sourcePixel];
+      rgba[destinationPixel + 0] = r;
+      rgba[destinationPixel + 1] = channelCount > 1 ? raw[sourcePixel + 1] : r;
+      rgba[destinationPixel + 2] = channelCount > 2 ? raw[sourcePixel + 2] : r;
+      rgba[destinationPixel + 3] = channelCount > 3 ? raw[sourcePixel + 3] : 255;
+    }
+
+    GPUTexture texture = UploadTextureBytes(
+      rgba.data(), width, height, DXGI_FORMAT_R8G8B8A8_UNORM, 4, true);
     const uint32_t descriptorIndex = texture.DescriptorIndex;
     s_Data.Textures.emplace(source.get(), std::move(texture));
     return descriptorIndex;
@@ -1591,28 +1690,16 @@ namespace
     return correction * Camera::GetViewProjection();
   }
 
-  void DrawModels(const RenderEffectSettings& effects)
+  SceneConstants BuildSceneConstants(const RenderEffectSettings& effects)
   {
-    RenderStatistics statistics;
-    if (s_Data.Meshes.empty())
-    {
-      RenderBackend::SetStatistics(statistics);
-      return;
-    }
-
-    ID3D12DescriptorHeap* descriptorHeaps[] = {s_Data.SRVHeap.Get()};
-    s_Data.CommandList->SetDescriptorHeaps(1, descriptorHeaps);
-    s_Data.CommandList->SetPipelineState(s_Data.ScenePipeline.Get());
-    s_Data.CommandList->SetGraphicsRootSignature(s_Data.SceneRootSignature.Get());
-    s_Data.CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
     SceneConstants constants;
     constants.ViewProjection = DirectXViewProjection();
     constants.LightViewProjection = s_Data.LightViewProjection;
     constants.CameraPosition = glm::vec4(Camera::GetPosition(), 0.0f);
     constants.Bones.fill(glm::mat4(1.0f));
     const auto& lights = RenderBackend::Lights();
-    const uint32_t lightCount = static_cast<uint32_t>(std::min(lights.size(), static_cast<size_t>(MaxSceneLights)));
+    const uint32_t lightCount = static_cast<uint32_t>(
+      std::min(lights.size(), static_cast<size_t>(MaxSceneLights)));
     constants.LightCount.x = lightCount;
     constants.LightCount.y = effects.ShadowQuality == GraphicsQuality::Off ? 0u : 1u;
     constants.Resolution = glm::vec4(
@@ -1632,6 +1719,25 @@ namespace
       if (lightIndex < lightCount)
         constants.LightTypes[lightIndex].y = static_cast<float>(slot + 1u);
     }
+    return constants;
+  }
+
+  void DrawModels(const RenderEffectSettings& effects)
+  {
+    RenderStatistics statistics;
+    if (s_Data.Meshes.empty())
+    {
+      RenderBackend::SetStatistics(statistics);
+      return;
+    }
+
+    ID3D12DescriptorHeap* descriptorHeaps[] = {s_Data.SRVHeap.Get()};
+    s_Data.CommandList->SetDescriptorHeaps(1, descriptorHeaps);
+    s_Data.CommandList->SetPipelineState(s_Data.ScenePipeline.Get());
+    s_Data.CommandList->SetGraphicsRootSignature(s_Data.SceneRootSignature.Get());
+    s_Data.CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    SceneConstants constants = BuildSceneConstants(effects);
 
     const RenderFrustum frustum(Camera::GetViewProjection());
     for (const std::string& modelName : ModelManager::GetModelNames())
@@ -1730,11 +1836,23 @@ namespace
       if (light.Type == LightType::DIRECT) { direction = light.Direction; break; }
     if (glm::dot(direction, direction) < 0.0001f) direction = glm::vec3(-1.0f, -2.0f, -1.0f);
     direction = glm::normalize(direction);
-    const glm::vec3 focus = Camera::GetPosition() + Camera::GetForwardDirection() * 45.0f;
-    const glm::vec3 up = std::abs(glm::dot(direction, glm::vec3(0.0f, 1.0f, 0.0f))) > 0.98f
-      ? glm::vec3(1.0f, 0.0f, 0.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
-    const glm::mat4 view = glm::lookAt(focus - direction * 90.0f, focus, up);
-    const glm::mat4 projection = glm::ortho(-65.0f, 65.0f, -65.0f, 65.0f, 1.0f, 220.0f);
+    constexpr float orthoSize = 90.0f;
+    glm::vec3 focus = Camera::GetPosition() + Camera::GetForwardDirection() * 45.0f;
+    const glm::vec3 fallbackUp =
+      std::abs(glm::dot(direction, glm::vec3(0.0f, 1.0f, 0.0f))) > 0.98f
+        ? glm::vec3(0.0f, 0.0f, 1.0f)
+        : glm::vec3(0.0f, 1.0f, 0.0f);
+    const glm::vec3 right = glm::normalize(glm::cross(direction, fallbackUp));
+    const glm::vec3 lightUp = glm::normalize(glm::cross(right, direction));
+    const float worldUnitsPerTexel =
+      (2.0f * orthoSize) / static_cast<float>(std::max(s_Data.ShadowMapSize, 1u));
+    focus += right * (std::round(glm::dot(focus, right) / worldUnitsPerTexel)
+      * worldUnitsPerTexel - glm::dot(focus, right));
+    focus += lightUp * (std::round(glm::dot(focus, lightUp) / worldUnitsPerTexel)
+      * worldUnitsPerTexel - glm::dot(focus, lightUp));
+    const glm::mat4 view = glm::lookAt(focus - direction * 180.0f, focus, lightUp);
+    const glm::mat4 projection = glm::ortho(
+      -orthoSize, orthoSize, -orthoSize, orthoSize, 0.1f, 400.0f);
     glm::mat4 correction(1.0f);
     correction[2][2] = 0.5f;
     correction[3][2] = 0.5f;
@@ -1922,18 +2040,73 @@ namespace
     s_Data.PointShadowMapReadable = true;
   }
 
-  void BeginSceneColorPass()
+  void BeginGeometryPass()
+  {
+    TransitionResource(s_Data.GPosition.Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+                       D3D12_RESOURCE_STATE_RENDER_TARGET);
+    TransitionResource(s_Data.GNormal.Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+                       D3D12_RESOURCE_STATE_RENDER_TARGET);
+    TransitionResource(s_Data.GAlbedoSpec.Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+                       D3D12_RESOURCE_STATE_RENDER_TARGET);
+    const std::array<D3D12_CPU_DESCRIPTOR_HANDLE, 3> renderTargets = {
+      GetRTVHandle(GPositionRTVIndex),
+      GetRTVHandle(GNormalRTVIndex),
+      GetRTVHandle(GAlbedoSpecRTVIndex)
+    };
+    const D3D12_CPU_DESCRIPTOR_HANDLE dsv = GetDSVHandle(0);
+    static constexpr float clear[] = {0.0f, 0.0f, 0.0f, 0.0f};
+    for (const auto& renderTarget : renderTargets)
+      s_Data.CommandList->ClearRenderTargetView(renderTarget, clear, 0, nullptr);
+    s_Data.CommandList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+    s_Data.CommandList->OMSetRenderTargets(
+      static_cast<UINT>(renderTargets.size()), renderTargets.data(), FALSE, &dsv);
+    s_Data.CommandList->RSSetViewports(1, &s_Data.Viewport);
+    s_Data.CommandList->RSSetScissorRects(1, &s_Data.ScissorRect);
+  }
+
+  void EndGeometryPass()
+  {
+    TransitionResource(s_Data.GPosition.Resource.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET,
+                       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    TransitionResource(s_Data.GNormal.Resource.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET,
+                       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    TransitionResource(s_Data.GAlbedoSpec.Resource.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET,
+                       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+  }
+
+  void DrawLightingPass(const RenderEffectSettings& effects)
   {
     TransitionResource(s_Data.SceneColor.Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
                        D3D12_RESOURCE_STATE_RENDER_TARGET);
     const D3D12_CPU_DESCRIPTOR_HANDLE rtv = GetRTVHandle(SceneRTVIndex);
-    const D3D12_CPU_DESCRIPTOR_HANDLE dsv = GetDSVHandle(0);
     static constexpr float clear[] = {0.0f, 0.0f, 0.0f, 0.0f};
     s_Data.CommandList->ClearRenderTargetView(rtv, clear, 0, nullptr);
-    s_Data.CommandList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
-    s_Data.CommandList->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
+    s_Data.CommandList->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
     s_Data.CommandList->RSSetViewports(1, &s_Data.Viewport);
     s_Data.CommandList->RSSetScissorRects(1, &s_Data.ScissorRect);
+    ID3D12DescriptorHeap* descriptorHeaps[] = {s_Data.SRVHeap.Get()};
+    s_Data.CommandList->SetDescriptorHeaps(1, descriptorHeaps);
+    s_Data.CommandList->SetPipelineState(s_Data.LightingPipeline.Get());
+    s_Data.CommandList->SetGraphicsRootSignature(s_Data.SceneRootSignature.Get());
+    const SceneConstants constants = BuildSceneConstants(effects);
+    s_Data.CommandList->SetGraphicsRootConstantBufferView(0, UploadSceneConstants(constants));
+    s_Data.CommandList->SetGraphicsRootDescriptorTable(
+      1, GetSRVGPUHandle(s_Data.GPosition.DescriptorIndex));
+    s_Data.CommandList->SetGraphicsRootDescriptorTable(
+      2, GetSRVGPUHandle(s_Data.GNormal.DescriptorIndex));
+    s_Data.CommandList->SetGraphicsRootDescriptorTable(
+      3, GetSRVGPUHandle(s_Data.GAlbedoSpec.DescriptorIndex));
+    s_Data.CommandList->SetGraphicsRootDescriptorTable(
+      4, GetSRVGPUHandle(s_Data.ShadowMap.DescriptorIndex));
+    s_Data.CommandList->SetGraphicsRootDescriptorTable(
+      5, GetSRVGPUHandle(s_Data.PointShadowMap.DescriptorIndex));
+    s_Data.CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    s_Data.CommandList->DrawInstanced(3, 1, 0, 0);
+
+    // The deferred light pass does not use depth, but all following forward
+    // draws (skybox, particles and debug geometry) share the geometry depth.
+    const D3D12_CPU_DESCRIPTOR_HANDLE dsv = GetDSVHandle(0);
+    s_Data.CommandList->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
   }
 
   void DrawSkybox()
@@ -1971,7 +2144,7 @@ namespace
     s_Data.CommandList->DrawInstanced(3, 1, 0, 0);
   }
 
-  void PostProcessScene(bool renderForEditor, const RenderEffectSettings& effects)
+  void CompositeLighting(const RenderEffectSettings& effects)
   {
     TransitionResource(s_Data.SceneColor.Resource.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET,
                        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -2021,6 +2194,29 @@ namespace
       }
     }
 
+    TransitionResource(s_Data.SceneResult.Resource.Get(),
+                       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+                       D3D12_RESOURCE_STATE_RENDER_TARGET);
+    const D3D12_CPU_DESCRIPTOR_HANDLE sceneResult = GetRTVHandle(SceneResultRTVIndex);
+    s_Data.CommandList->OMSetRenderTargets(1, &sceneResult, FALSE, nullptr);
+    s_Data.CommandList->RSSetViewports(1, &s_Data.Viewport);
+    s_Data.CommandList->RSSetScissorRects(1, &s_Data.ScissorRect);
+    DrawFullscreenPass(s_Data.CompositePipeline.Get(), s_Data.SceneColor.DescriptorIndex,
+                       s_Data.BloomA.DescriptorIndex,
+                       glm::vec4(bloomEnabled ? effects.BloomStrength : 0.0f),
+                       glm::vec4(effects.BloomExposure, 0.0f, 0.0f, effects.Gamma));
+
+    // OpenGL composites lighting and bloom before its forward pass. Keep the
+    // same depth buffer so skybox, particles and debug geometry behave alike.
+    const D3D12_CPU_DESCRIPTOR_HANDLE dsv = GetDSVHandle(0);
+    s_Data.CommandList->OMSetRenderTargets(1, &sceneResult, FALSE, &dsv);
+  }
+
+  void PostProcessScene(bool renderForEditor, const RenderEffectSettings& effects)
+  {
+    TransitionResource(s_Data.SceneResult.Resource.Get(),
+                       D3D12_RESOURCE_STATE_RENDER_TARGET,
+                       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     const D3D12_CPU_DESCRIPTOR_HANDLE backBuffer = GetRTVHandle(s_Data.FrameIndex);
     D3D12_CPU_DESCRIPTOR_HANDLE outputTarget = backBuffer;
     if (renderForEditor)
@@ -2033,13 +2229,13 @@ namespace
     s_Data.CommandList->OMSetRenderTargets(1, &outputTarget, FALSE, nullptr);
     s_Data.CommandList->RSSetViewports(1, &s_Data.Viewport);
     s_Data.CommandList->RSSetScissorRects(1, &s_Data.ScissorRect);
-    DrawFullscreenPass(s_Data.CompositePipeline.Get(), s_Data.SceneColor.DescriptorIndex,
-                       s_Data.BloomA.DescriptorIndex,
-                       glm::vec4(bloomEnabled ? effects.BloomStrength : 0.0f,
-                         static_cast<float>(s_Data.Width), static_cast<float>(s_Data.Height),
+    DrawFullscreenPass(s_Data.PostProcessPipeline.Get(), s_Data.SceneResult.DescriptorIndex,
+                       s_Data.WhiteTexture.DescriptorIndex,
+                       glm::vec4(0.0f, static_cast<float>(s_Data.Width),
+                         static_cast<float>(s_Data.Height),
                          effects.PS1Enabled ? 1.0f : 0.0f),
-                       glm::vec4(effects.BloomExposure, effects.PS1VirtualHeight,
-                         effects.PS1ColorLevels, effects.Gamma));
+                       glm::vec4(0.0f, effects.PS1VirtualHeight,
+                         effects.PS1ColorLevels, 0.0f));
     if (renderForEditor)
     {
       TransitionResource(s_Data.PostProcessColor.Resource.Get(),
@@ -2306,6 +2502,10 @@ void DirectX12Renderer::ShutdownSceneRenderer()
   s_Data.FontAtlas = {};
   s_Data.SkyboxTexture = {};
   s_Data.SceneColor = {};
+  s_Data.SceneResult = {};
+  s_Data.GPosition = {};
+  s_Data.GNormal = {};
+  s_Data.GAlbedoSpec = {};
   s_Data.BloomA = {};
   s_Data.BloomB = {};
   s_Data.PostProcessColor = {};
@@ -2315,6 +2515,7 @@ void DirectX12Renderer::ShutdownSceneRenderer()
   s_Data.SkyboxVertexBuffer.Reset();
   s_Data.SceneRootSignature.Reset();
   s_Data.ScenePipeline.Reset();
+  s_Data.LightingPipeline.Reset();
   s_Data.ShadowRootSignature.Reset();
   s_Data.ShadowPipeline.Reset();
   s_Data.PointShadowRootSignature.Reset();
@@ -2331,6 +2532,7 @@ void DirectX12Renderer::ShutdownSceneRenderer()
   s_Data.BloomExtractPipeline.Reset();
   s_Data.BloomBlurPipeline.Reset();
   s_Data.CompositePipeline.Reset();
+  s_Data.PostProcessPipeline.Reset();
   s_Data.UIRootSignature.Reset();
   s_Data.UIPipeline.Reset();
   s_Data.SceneUIPipeline.Reset();
@@ -2382,26 +2584,19 @@ bool DirectX12Renderer::UploadModel(const std::shared_ptr<Model>& model)
       gpuMesh.DiffuseDescriptorIndex = s_Data.WhiteTexture.DescriptorIndex;
       gpuMesh.NormalDescriptorIndex = s_Data.WhiteTexture.DescriptorIndex;
       gpuMesh.SpecularDescriptorIndex = s_Data.WhiteTexture.DescriptorIndex;
-      for (const auto& texture : mesh.m_Textures)
+      if (mesh.m_DiffuseTexture)
+        gpuMesh.DiffuseDescriptorIndex = GetOrCreateModelTexture(mesh.m_DiffuseTexture);
+      if (mesh.m_NormalTexture)
       {
-        if (!texture) continue;
-        const std::string& type = texture->GetType();
-        const uint32_t descriptor = GetOrCreateModelTexture(texture);
-        if (type.find("normal") != std::string::npos)
-        {
-          gpuMesh.NormalDescriptorIndex = descriptor;
-          gpuMesh.HasNormalMap = true;
-        }
-        else if (type.find("specular") != std::string::npos)
-        {
-          gpuMesh.SpecularDescriptorIndex = descriptor;
-          gpuMesh.HasSpecularMap = true;
-        }
-        else if (type.find("diffuse") != std::string::npos ||
-                 gpuMesh.DiffuseDescriptorIndex == s_Data.WhiteTexture.DescriptorIndex)
-        {
-          gpuMesh.DiffuseDescriptorIndex = descriptor;
-        }
+        gpuMesh.NormalDescriptorIndex = GetOrCreateModelTexture(mesh.m_NormalTexture);
+        gpuMesh.HasNormalMap =
+          gpuMesh.NormalDescriptorIndex != s_Data.WhiteTexture.DescriptorIndex;
+      }
+      if (mesh.m_SpecularTexture)
+      {
+        gpuMesh.SpecularDescriptorIndex = GetOrCreateModelTexture(mesh.m_SpecularTexture);
+        gpuMesh.HasSpecularMap =
+          gpuMesh.SpecularDescriptorIndex != s_Data.WhiteTexture.DescriptorIndex;
       }
       s_Data.Meshes[&mesh] = std::move(gpuMesh);
     }
@@ -2662,12 +2857,15 @@ void DirectX12Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& sc
     }
     DrawShadowMap(effects);
     DrawPointShadowMaps(effects);
-    BeginSceneColorPass();
+    BeginGeometryPass();
     DrawModels(effects);
+    EndGeometryPass();
+    DrawLightingPass(effects);
+    CompositeLighting(effects);
     DrawSkybox();
-    ParticleRenderer::UpdateAndRender(dt);
     if (RenderBackend::DebugSettings().Physics) DrawPhysicsDebug();
     DrawDebugVisualizations();
+    ParticleRenderer::UpdateAndRender(dt);
     s_Data.UIToSceneColor = true;
     DrawDebug2D();
     s_Data.UIToSceneColor = false;
@@ -2760,7 +2958,7 @@ void DirectX12Renderer::DrawPhysicsDebug()
 {
   if (!s_Data.FrameStarted || !s_Data.PhysicsDebugPipeline) return;
 
-  const D3D12_CPU_DESCRIPTOR_HANDLE rtv = GetRTVHandle(SceneRTVIndex);
+  const D3D12_CPU_DESCRIPTOR_HANDLE rtv = GetRTVHandle(SceneResultRTVIndex);
   const D3D12_CPU_DESCRIPTOR_HANDLE dsv = GetDSVHandle(0);
   s_Data.CommandList->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
   s_Data.CommandList->RSSetViewports(1, &s_Data.Viewport);
@@ -2837,7 +3035,7 @@ void DirectX12Renderer::EndScene()
     s_Data.CommandList->SetDescriptorHeaps(1, heaps);
     if (s_Data.UIToSceneColor)
     {
-      const D3D12_CPU_DESCRIPTOR_HANDLE sceneRTV = GetRTVHandle(SceneRTVIndex);
+      const D3D12_CPU_DESCRIPTOR_HANDLE sceneRTV = GetRTVHandle(SceneResultRTVIndex);
       const D3D12_CPU_DESCRIPTOR_HANDLE dsv = GetDSVHandle(0);
       s_Data.CommandList->OMSetRenderTargets(1, &sceneRTV, FALSE, &dsv);
     }

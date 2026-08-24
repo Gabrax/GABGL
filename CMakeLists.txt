@@ -38,6 +38,33 @@ project(gl_engine)
 
 option(GABGL_ENABLE_DX12 "Build the optional DirectX 12 backend" ${WIN32})
 
+# Slang is the single source-language compiler for both OpenGL and DirectX 12.
+# The Vulkan SDK ships a complete Slang SDK; standalone Slang installations are
+# also supported through CMAKE_PREFIX_PATH or SLANG_ROOT.
+find_package(slang CONFIG QUIET)
+if(TARGET slang::slang)
+  set(GABGL_SLANG_TARGET slang::slang)
+else()
+  find_path(GABGL_SLANG_INCLUDE_DIR
+    NAMES slang.h
+    HINTS "$ENV{VULKAN_SDK}/Include/slang" "$ENV{SLANG_ROOT}/include"
+    PATH_SUFFIXES slang include/slang include
+  )
+  find_library(GABGL_SLANG_LIBRARY
+    NAMES slang-compiler slang
+    HINTS "$ENV{VULKAN_SDK}/Lib" "$ENV{SLANG_ROOT}/lib"
+  )
+  if(NOT GABGL_SLANG_INCLUDE_DIR OR NOT GABGL_SLANG_LIBRARY)
+    message(FATAL_ERROR "Slang SDK not found. Install Slang or a Vulkan SDK containing Slang, then set VULKAN_SDK or SLANG_ROOT.")
+  endif()
+  add_library(gabgl_slang UNKNOWN IMPORTED)
+  set_target_properties(gabgl_slang PROPERTIES
+    IMPORTED_LOCATION "${GABGL_SLANG_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES "${GABGL_SLANG_INCLUDE_DIR}"
+  )
+  set(GABGL_SLANG_TARGET gabgl_slang)
+endif()
+
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries only" FORCE)
 # Assimp 
 FetchContent_Declare(
@@ -134,7 +161,20 @@ set(IMGUI_INI_FILE "${CMAKE_BINARY_DIR}/imgui.ini")
 set(RES_FOLDER "${CMAKE_BINARY_DIR}/../res")
 file(MAKE_DIRECTORY ${RES_FOLDER})
 
-target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image imgui assimp meshoptimizer JSONparser PhysX SndFile::sndfile OpenAL::OpenAL freetype)
+target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image imgui assimp meshoptimizer JSONparser PhysX SndFile::sndfile OpenAL::OpenAL freetype ${GABGL_SLANG_TARGET})
+
+if(WIN32 AND NOT TARGET slang::slang)
+  find_file(GABGL_SLANG_DLL
+    NAMES slang-compiler.dll slang.dll
+    HINTS "$ENV{VULKAN_SDK}/Bin" "$ENV{SLANG_ROOT}/bin"
+  )
+  if(GABGL_SLANG_DLL)
+    add_custom_command(TARGET "${CMAKE_PROJECT_NAME}" POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${GABGL_SLANG_DLL}" "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>"
+    )
+  endif()
+endif()
 
 if(GABGL_ENABLE_DX12)
   if(NOT WIN32)
@@ -142,7 +182,7 @@ if(GABGL_ENABLE_DX12)
   endif()
 
   target_compile_definitions("${CMAKE_PROJECT_NAME}" PRIVATE GABGL_ENABLE_DX12=1)
-  target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE d3d12 dxgi dxguid d3dcompiler)
+  target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE d3d12 dxgi dxguid)
 endif()
 
 include(CTest)
@@ -153,4 +193,11 @@ if(BUILD_TESTING)
   )
   target_include_directories(inventory_manager_tests PRIVATE src/Backend)
   add_test(NAME inventory_manager COMMAND inventory_manager_tests)
+
+  add_executable(dialogue_manager_tests
+    tests/DialogueManagerTests.cpp
+    src/Backend/DialogueManager.cpp
+  )
+  target_include_directories(dialogue_manager_tests PRIVATE src/Backend)
+  add_test(NAME dialogue_manager COMMAND dialogue_manager_tests)
 endif()

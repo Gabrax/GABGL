@@ -4,6 +4,7 @@
 #include "RenderSystem.h"
 #include "AudioManager.h"
 #include "Camera.h"
+#include "DialogueManager.h"
 #include "InventoryManager.h"
 #include "Logger.h"
 #include "ParticleRenderer.h"
@@ -247,7 +248,17 @@ void Scene::SpawnEntities()
       entity.name = ordinal == 0 ? baseName : baseName + " #" + std::to_string(ordinal + 1);
       entity.itemName = transformDesc.value("item_name", e.value("item_name", baseName));
       entity.pickable = transformDesc.value("pickable", e.value("pickable", false));
-      entity.interactable = entity.pickable || transformDesc.value("interactable", e.value("interactable", false));
+      const json* dialogue = nullptr;
+      if (transformDesc.contains("dialogue")) dialogue = &transformDesc["dialogue"];
+      else if (e.contains("dialogue")) dialogue = &e["dialogue"];
+      if (dialogue && dialogue->is_array())
+      {
+        for (const auto& line : *dialogue)
+          if (line.is_string() && !line.get_ref<const std::string&>().empty())
+            entity.dialogue.push_back(line.get<std::string>());
+      }
+      entity.interactable = entity.pickable || !entity.dialogue.empty() ||
+        transformDesc.value("interactable", e.value("interactable", false));
       entity.player = transformDesc.value("player", e.value("player", false));
       entity.interactionRange = std::max(0.1f, transformDesc.value("interaction_range", e.value("interaction_range", 4.0f)));
       entity.labelHeight = transformDesc.value("label_height", e.value("label_height", 1.5f));
@@ -522,7 +533,11 @@ void Scene::UpdateInteractions()
 
   const std::string& displayName = focused->itemName.empty() ? focused->name : focused->itemName;
   GABGL_INFO("Interacted with '{}'", displayName);
-  if (!focused->pickable) return;
+  if (!focused->pickable)
+  {
+    if (!focused->dialogue.empty()) DialogueManager::Start(displayName, focused->dialogue);
+    return;
+  }
 
   auto& inventory = InventoryManager::GetInstance();
   if (!inventory.AddItem(MakeInventoryItem(*focused)))
@@ -587,6 +602,7 @@ bool Scene::SaveToJSON(const std::string& path) const
     if (entity.interactable) serialized["interactable"] = true;
     if (entity.pickable) serialized["pickable"] = true;
     if (entity.player) serialized["player"] = true;
+    if (!entity.dialogue.empty()) serialized["dialogue"] = entity.dialogue;
     if (entity.interactable)
     {
       serialized["item_name"] = entity.itemName;
@@ -801,6 +817,7 @@ void SceneManager::BeginLoadingScene(const std::string& name)
 {
   if (name.empty()) return;
 
+  DialogueManager::Close();
   RenderSystem::ResetModelDrawCommands();
   ModelManager::Reset();
   RenderBackend::ClearLights();
@@ -819,6 +836,7 @@ void SceneManager::BeginLoadingScene(const std::string& name)
 
 void SceneManager::Shutdown()
 {
+  DialogueManager::Close();
   s_Loading = false;
   s_TransitionState = TransitionState::None;
   s_RequestedScene.clear();

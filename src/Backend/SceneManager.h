@@ -18,6 +18,7 @@ struct SceneEntity
   std::string model;
   std::string type = "static";
   std::string itemName;
+  std::vector<std::string> dialogue;
   Transform transform;
   uint32_t instanceIndex = 0;
   bool interactable = false;

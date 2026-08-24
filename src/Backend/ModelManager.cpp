@@ -105,6 +105,8 @@ struct ModelsData
   std::shared_ptr<StorageBuffer> m_VisibleInstanceTransformsSSBO;
 
   GLuint sharedVBO, sharedEBO, sharedVAO;
+  GLuint fallbackTexture = 0;
+  GLuint64 fallbackTextureHandle = 0;
 
   std::vector<Vertex> allVertices;
   std::vector<uint32_t> allIndices;
@@ -130,6 +132,21 @@ static void RefreshInstanceTransforms()
 void ModelManager::Init()
 {
   if (RenderBackend::Capabilities().NativeModelResources) return;
+
+  if (s_Data.fallbackTexture == 0)
+  {
+    constexpr std::array<uint8_t, 4> whitePixel = {255, 255, 255, 255};
+    glCreateTextures(GL_TEXTURE_2D, 1, &s_Data.fallbackTexture);
+    glTextureStorage2D(s_Data.fallbackTexture, 1, GL_RGBA8, 1, 1);
+    glTextureSubImage2D(s_Data.fallbackTexture, 0, 0, 0, 1, 1,
+                        GL_RGBA, GL_UNSIGNED_BYTE, whitePixel.data());
+    glTextureParameteri(s_Data.fallbackTexture, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTextureParameteri(s_Data.fallbackTexture, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(s_Data.fallbackTexture, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTextureParameteri(s_Data.fallbackTexture, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    s_Data.fallbackTextureHandle = glGetTextureHandleARB(s_Data.fallbackTexture);
+    glMakeTextureHandleResidentARB(s_Data.fallbackTextureHandle);
+  }
 
   if (s_Data.sharedVBO == 0)
     glCreateBuffers(1, &s_Data.sharedVBO);
@@ -241,31 +258,11 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
       const void* srcData;
       GLsizei dataSize = 0;
 
-      if (texture->IsUnCompressed())
-      {
-        if (auto* embeddedTex = texture->GetEmbeddedTexture(); embeddedTex && embeddedTex->pcData)
-        {
-          width = embeddedTex->mWidth;
-          height = embeddedTex->mHeight;
-          format = GL_RGBA;
-          dataSize = width * height * 4;
-          srcData = embeddedTex->pcData;
-        }
-        else
-          srcData = nullptr;
-      }
-      else
-      {
-        width = texture->GetWidth();
-        height = texture->GetHeight();
-        format = texture->GetDataFormat();
-        if (format != GL_RGB && format != GL_RGBA)
-          format = GL_RGBA;
-
-        int bytesPerPixel = (format == GL_RGBA) ? 4 : 3;
-        dataSize = width * height * bytesPerPixel;
-        srcData = texture->GetRawData();
-      }
+      width = texture->GetWidth();
+      height = texture->GetHeight();
+      format = GL_RGBA;
+      dataSize = width * height * 4;
+      srcData = texture->GetRawData();
 
       if (srcData && width > 0 && height > 0)
       {
@@ -290,7 +287,9 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
         glCreateTextures(GL_TEXTURE_2D, 1, &id);
         texture->SetRendererID(id);
 
-        glTextureStorage2D(id, 1, GL_RGBA8, width, height);
+        const GLsizei mipLevels = 1 + static_cast<GLsizei>(
+          std::floor(std::log2(static_cast<double>(std::max(width, height)))));
+        glTextureStorage2D(id, mipLevels, GL_RGBA8, width, height);
         pbo->Bind();
         glTextureSubImage2D(id, 0, 0, 0, width, height, format, GL_UNSIGNED_BYTE, nullptr);
         pbo->Unbind();
@@ -304,7 +303,9 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
         sharedTextureHandle = glGetTextureHandleARB(id);
         glMakeTextureHandleResidentARB(sharedTextureHandle);
 
-        firstMesh.m_TexturesBindlessHandles.push_back(sharedTextureHandle);
+        // The shader material layout is always diffuse/normal/specular.
+        // Missing channels still need valid handles even when their flags are off.
+        firstMesh.m_TexturesBindlessHandles.assign(3, sharedTextureHandle);
 
         currentPBO = (currentPBO + 1) % NUM_BUFFERS;
       }
@@ -316,7 +317,7 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
       auto& mesh = model->GetMeshes()[i];
       mesh.m_TexturesBindlessHandles.clear();
       if (sharedTextureHandle != 0)
-        mesh.m_TexturesBindlessHandles.push_back(sharedTextureHandle);
+        mesh.m_TexturesBindlessHandles.assign(3, sharedTextureHandle);
     }
   }
   else
@@ -325,6 +326,7 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
     for (auto& mesh : model->GetMeshes())
     {
       mesh.m_TexturesBindlessHandles.clear();
+      std::unordered_map<const Texture*, GLuint64> uploadedHandles;
 
       for (auto& texture : mesh.m_Textures)
       {
@@ -336,30 +338,11 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
         const void* srcData;
         GLsizei dataSize;
 
-        if (texture->IsUnCompressed())
-        {
-            auto* embeddedTex = texture->GetEmbeddedTexture();
-            if (!embeddedTex || !embeddedTex->pcData)
-                continue;
-
-            width = embeddedTex->mWidth;
-            height = embeddedTex->mHeight;
-            format = GL_RGBA;
-            dataSize = width * height * 4;
-            srcData = embeddedTex->pcData;
-        }
-        else
-        {
-            width = texture->GetWidth();
-            height = texture->GetHeight();
-            format = texture->GetDataFormat();
-            if (format != GL_RGB && format != GL_RGBA)
-                format = GL_RGBA;
-
-            int bytesPerPixel = (format == GL_RGBA) ? 4 : 3;
-            dataSize = width * height * bytesPerPixel;
-            srcData = texture->GetRawData();
-        }
+        width = texture->GetWidth();
+        height = texture->GetHeight();
+        format = GL_RGBA;
+        dataSize = width * height * 4;
+        srcData = texture->GetRawData();
 
         if (!srcData || width <= 0 || height <= 0)
             continue;
@@ -386,7 +369,9 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
         glCreateTextures(GL_TEXTURE_2D, 1, &id);
         texture->SetRendererID(id);
 
-        glTextureStorage2D(id, 1, GL_RGBA8, width, height);
+        const GLsizei mipLevels = 1 + static_cast<GLsizei>(
+          std::floor(std::log2(static_cast<double>(std::max(width, height)))));
+        glTextureStorage2D(id, mipLevels, GL_RGBA8, width, height);
         pbo->Bind();
         glTextureSubImage2D(id, 0, 0, 0, width, height, format, GL_UNSIGNED_BYTE, nullptr);
         pbo->Unbind();
@@ -400,11 +385,37 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
         GLuint64 handle = glGetTextureHandleARB(id);
         glMakeTextureHandleResidentARB(handle);
 
-        mesh.m_TexturesBindlessHandles.push_back(handle);
+        uploadedHandles[texture.get()] = handle;
 
         currentPBO = (currentPBO + 1) % NUM_BUFFERS;
       }
+
+      if (!uploadedHandles.empty())
+      {
+        const GLuint64 fallback = s_Data.fallbackTextureHandle;
+        const auto materialHandle = [&](const std::shared_ptr<Texture>& texture)
+        {
+          if (texture)
+            if (const auto found = uploadedHandles.find(texture.get()); found != uploadedHandles.end())
+              return found->second;
+          return fallback;
+        };
+        mesh.m_TexturesBindlessHandles = {
+          materialHandle(mesh.m_DiffuseTexture),
+          materialHandle(mesh.m_NormalTexture),
+          materialHandle(mesh.m_SpecularTexture)
+        };
+      }
     }
+  }
+
+  // Every shader-visible material occupies exactly three consecutive entries:
+  // diffuse, normal, specular. Never let a missing map consume zero entries or
+  // borrow a handle from the next mesh.
+  for (auto& mesh : model->GetMeshes())
+  {
+    if (mesh.m_TexturesBindlessHandles.size() != 3)
+      mesh.m_TexturesBindlessHandles.assign(3, s_Data.fallbackTextureHandle);
   }
 
   std::string name = std::filesystem::path(path).stem().string();
@@ -679,6 +690,9 @@ static void ReleaseModelResources()
 {
   std::unordered_set<GLuint64> residentHandles;
 
+  if (s_Data.fallbackTextureHandle != 0)
+    residentHandles.insert(s_Data.fallbackTextureHandle);
+
   for (const auto &model: s_Data.m_Models | std::views::values)
   {
     if (model->m_ActorController)
@@ -731,10 +745,13 @@ static void ReleaseModelResources()
     if (s_Data.sharedVBO) glDeleteBuffers(1, &s_Data.sharedVBO);
     if (s_Data.sharedEBO) glDeleteBuffers(1, &s_Data.sharedEBO);
     if (s_Data.sharedVAO) glDeleteVertexArrays(1, &s_Data.sharedVAO);
+    if (s_Data.fallbackTexture) glDeleteTextures(1, &s_Data.fallbackTexture);
   }
   s_Data.sharedVBO = 0;
   s_Data.sharedEBO = 0;
   s_Data.sharedVAO = 0;
+  s_Data.fallbackTexture = 0;
+  s_Data.fallbackTextureHandle = 0;
 }
 
 void ModelManager::Reset()
@@ -1262,17 +1279,15 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
   }
 
   std::vector<std::shared_ptr<Texture>> textures;
-  bool hasNormalMap = false;
-  bool hasSpecular = false;
 
   if (mesh->mMaterialIndex >= 0)
   {
     aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
 
     loadMaterialTextures(material, aiTextureType_DIFFUSE, "texture_diffuse", textures);
-    hasNormalMap |= loadMaterialTextures(material, aiTextureType_NORMALS, "texture_normal", textures);
-    hasNormalMap |= loadMaterialTextures(material, aiTextureType_HEIGHT, "texture_normal", textures); // OBJ fallback
-    hasSpecular |= loadMaterialTextures(material, aiTextureType_SPECULAR, "texture_specular", textures);
+    loadMaterialTextures(material, aiTextureType_NORMALS, "texture_normal", textures);
+    loadMaterialTextures(material, aiTextureType_HEIGHT, "texture_normal", textures); // OBJ fallback
+    loadMaterialTextures(material, aiTextureType_SPECULAR, "texture_specular", textures);
 
     // loadMaterialTextures(material, aiTextureType_BASE_COLOR, "texture_albedo", textures);
   }
@@ -1281,8 +1296,24 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
   OptimizeMesh(vertices, indices);
 
   Mesh result(vertices, indices, textures);
-  result.hasNormalMap = hasNormalMap;
-  result.hasSpecularMap = hasSpecular;
+  for (const auto& texture : textures)
+  {
+    if (!texture) continue;
+    const std::string& textureType = texture->GetType();
+    if (!result.m_NormalTexture && textureType.find("normal") != std::string::npos)
+      result.m_NormalTexture = texture;
+    else if (!result.m_SpecularTexture && textureType.find("specular") != std::string::npos)
+      result.m_SpecularTexture = texture;
+    else if (!result.m_DiffuseTexture &&
+             (textureType.find("diffuse") != std::string::npos ||
+              textureType.find("albedo") != std::string::npos ||
+              textureType.find("base_color") != std::string::npos))
+      result.m_DiffuseTexture = texture;
+  }
+  if (!result.m_DiffuseTexture && !textures.empty())
+    result.m_DiffuseTexture = textures.front();
+  result.hasNormalMap = result.m_NormalTexture && result.m_NormalTexture->IsLoaded();
+  result.hasSpecularMap = result.m_SpecularTexture && result.m_SpecularTexture->IsLoaded();
 
   return result;
 }
@@ -1295,10 +1326,18 @@ bool Model::loadMaterialTextures(aiMaterial* mat, aiTextureType type, const std:
       aiString str;
       mat->GetTexture(type, i, &str);
       std::string texturePath = str.C_Str();
+      // A single image can legitimately be referenced by multiple material
+      // channels. Texture::m_Type describes the channel, so sharing one
+      // Texture object between diffuse/normal/specular would make the last
+      // channel win and bind the wrong DX12 descriptor.
+      const std::string cacheKey = typeName + '\n' + texturePath;
 
-      if (m_TexturesLoaded.contains(texturePath)) {
-          textures.emplace_back(m_TexturesLoaded[texturePath]);
-          loadedAny = true;
+      if (m_TexturesLoaded.contains(cacheKey)) {
+          const auto& cachedTexture = m_TexturesLoaded[cacheKey];
+          if (cachedTexture && cachedTexture->IsLoaded()) {
+              textures.emplace_back(cachedTexture);
+              loadedAny = true;
+          }
           continue;
       }
 
@@ -1312,10 +1351,10 @@ bool Model::loadMaterialTextures(aiMaterial* mat, aiTextureType type, const std:
           texture = Texture::Create(texturePath, m_Directory);
       }
 
-      if (texture) {
+      if (texture && texture->IsLoaded()) {
           texture->SetType(typeName);
           textures.emplace_back(texture);
-          m_TexturesLoaded[texturePath] = texture;
+          m_TexturesLoaded[cacheKey] = texture;
           loadedAny = true;
       }
   }

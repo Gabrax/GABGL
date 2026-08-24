@@ -175,8 +175,16 @@
           "type": "controller"
         },
         {
+          "dialogue": [
+            "Stay back... I can still control it.",
+            "There are supplies inside the house, but the noise draws them closer.",
+            "Save your ammunition. You will need it before dawn."
+          ],
+          "interactable": true,
+          "interaction_range": 4.0,
+          "label_height": 2.4,
           "model": "zombie",
-          "name": "zombie",
+          "name": "Infected Stranger",
           "position": [
             14.600000381469727,
             0.3600076138973236,

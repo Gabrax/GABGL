@@ -109,6 +109,9 @@ struct Mesh
   std::vector<Vertex> m_Vertices;
   std::vector<GLuint> m_Indices;
   std::vector<std::shared_ptr<Texture>> m_Textures;
+  std::shared_ptr<Texture> m_DiffuseTexture;
+  std::shared_ptr<Texture> m_NormalTexture;
+  std::shared_ptr<Texture> m_SpecularTexture;
   std::vector<GLuint64> m_TexturesBindlessHandles;
 
   GLuint VAO, VBO, EBO;

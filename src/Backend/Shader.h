@@ -47,8 +47,8 @@ struct Shader
   
   static void Create(std::shared_ptr<Shader>& shader, const char* fullshader);
   static void Create(std::shared_ptr<Shader>& shader, const char* vertexPath, const char* fragmentPath, const char* geometryPath = nullptr);
-  static Bytecode CompileHLSL(const std::filesystem::path& path, std::string_view entryPoint,
-                              std::string_view target);
+  static Bytecode CompileSlang(const std::filesystem::path& path, std::string_view entryPoint,
+                               std::string_view target);
 
 private:
 

@@ -33,6 +33,7 @@ https://github.com/user-attachments/assets/dfeda195-f8d6-4073-aff7-d7bfe55fce39
 <a href="https://github.com/freetype/freetype">freetype</a> •
 <a href="https://github.com/assimp/assimp">assimp</a> •
 <a href="https://github.com/zeux/meshoptimizer">meshoptimizer</a> •
+<a href="https://github.com/shader-slang/slang">Slang</a> •
 <a href="https://github.com/nlohmann/json">nlohmann_json</a> •
 <a href="https://github.com/syoyo/tinyexr">tinyEXR</a> •
 <a href="https://github.com/NVIDIA-Omniverse/PhysX">PhysX</a>
@@ -41,6 +42,18 @@ https://github.com/user-attachments/assets/dfeda195-f8d6-4073-aff7-d7bfe55fce39
 </div>
 
 ## Graphics backends
+
+Shaders for both graphics backends are authored as `.slang` files and compiled
+at runtime with Slang, which keeps shader hot reload available. Install a Slang
+SDK (the Vulkan SDK includes one) and expose it through `VULKAN_SDK`,
+`SLANG_ROOT`, or `CMAKE_PREFIX_PATH` before configuring the project.
+
+The shared shaders live directly in `res/shaders`. Files used by both renderers
+contain `#api OPENGL` and `#api DX12` sections; the runtime selects the matching
+section before asking Slang to compile it. This keeps a single shader path for
+scene rendering, shadows, skyboxes, particles, debug drawing, UI, and
+post-processing while still allowing the two render pipelines to use different
+resource layouts and entry points.
 
 OpenGL remains the default game renderer. On Windows, the optional DirectX 12
 path can be enabled at configure time and selected without changing the saved
