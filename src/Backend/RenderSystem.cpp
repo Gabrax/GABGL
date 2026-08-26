@@ -3,6 +3,7 @@
 #include "OpenGLRenderer.h"
 #include "Camera.h"
 #include "FontManager.h"
+#include "ParticleRenderer.h"
 #include "RenderBackend.h"
 #include "SceneManager.h"
 #include "Window.h"
@@ -82,8 +83,19 @@ namespace
   }
 }
 
-void RenderSystem::Initialize() { OpenGLRenderer::Init(); }
-void RenderSystem::Shutdown() { OpenGLRenderer::Shutdown(); }
+void RenderSystem::Initialize()
+{
+  OpenGLRenderer::Init();
+  FontManager::Init();
+  ParticleRenderer::Init();
+}
+
+void RenderSystem::Shutdown()
+{
+  ParticleRenderer::Shutdown();
+  FontManager::Shutdown();
+  OpenGLRenderer::Shutdown();
+}
 
 void RenderSystem::DrawScene(DeltaTime& dt, const std::function<void()>& sceneLogic,
                              bool advanceSimulation)

@@ -8,6 +8,7 @@
 #include <chrono>
 #include <ctime>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 struct Shader
@@ -51,8 +52,10 @@ struct Shader
                                std::string_view target);
 
 private:
+  int GetUniformLocation(const std::string& name) const;
 
   uint32_t m_ID = 0;
   std::time_t m_lastTimeModified = 0;
   bool m_firstTimeCompile = true;
+  mutable std::unordered_map<std::string, int> m_UniformLocations;
 };

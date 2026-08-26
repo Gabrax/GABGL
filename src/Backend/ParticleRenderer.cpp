@@ -3,15 +3,11 @@
 #include "Camera.h"
 #include "RenderBackend.h"
 #include "RandomGen.hpp"
-#include "Shader.h"
 
 #include <algorithm>
 #include <cmath>
-#include <cstddef>
-#include <memory>
 #include <vector>
 
-#include <glad/glad.h>
 #include <glm/ext/scalar_constants.hpp>
 #include <glm/glm.hpp>
 
@@ -44,11 +40,6 @@ namespace
   {
     static constexpr size_t MaxParticles = 512;
     static constexpr size_t MaxImpactMarks = 128;
-
-    GLuint VertexArray = 0;
-    GLuint QuadVertexBuffer = 0;
-    GLuint InstanceBuffer = 0;
-    std::shared_ptr<Shader> ParticleShader;
 
     Particle Prototype;
     std::vector<Particle> Pool;
@@ -92,101 +83,13 @@ namespace
     if (s_Data.Instances.empty())
       return;
 
-    if (RenderBackend::Get().DrawParticles(s_Data.Instances)) return;
-
-    glNamedBufferSubData(
-      s_Data.InstanceBuffer,
-      0,
-      static_cast<GLsizeiptr>(s_Data.Instances.size() * sizeof(ParticleRenderInstance)),
-      s_Data.Instances.data());
-
-    glEnable(GL_DEPTH_TEST);
-    glDepthMask(GL_FALSE);
-    glDisable(GL_CULL_FACE);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    s_Data.ParticleShader->Bind();
-
-    glBindVertexArray(s_Data.VertexArray);
-    glDrawArraysInstanced(
-      GL_TRIANGLE_STRIP,
-      0,
-      4,
-      static_cast<GLsizei>(s_Data.Instances.size()));
-    glBindVertexArray(0);
-
-    s_Data.ParticleShader->UnBind();
-
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDisable(GL_BLEND);
-    glEnable(GL_CULL_FACE);
-    glDepthMask(GL_TRUE);
+    RenderBackend::Get().DrawParticles(s_Data.Instances);
   }
 }
 
 void ParticleRenderer::Init()
 {
   RandomGen::Init();
-  if (!RenderBackend::Capabilities().NativeParticleRenderer)
-  {
-    Shader::Create(s_Data.ParticleShader, "../res/shaders/particle.slang");
-
-    constexpr glm::vec2 quadVertices[4] = {
-      {-0.5f, -0.5f},
-      { 0.5f, -0.5f},
-      {-0.5f,  0.5f},
-      { 0.5f,  0.5f}
-    };
-
-    glCreateVertexArrays(1, &s_Data.VertexArray);
-    glCreateBuffers(1, &s_Data.QuadVertexBuffer);
-    glCreateBuffers(1, &s_Data.InstanceBuffer);
-
-  glNamedBufferData(s_Data.QuadVertexBuffer, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
-  glNamedBufferData(
-    s_Data.InstanceBuffer,
-    static_cast<GLsizeiptr>(
-      (ParticleRendererData::MaxParticles + ParticleRendererData::MaxImpactMarks) * sizeof(ParticleRenderInstance)),
-    nullptr,
-    GL_DYNAMIC_DRAW);
-
-  glVertexArrayVertexBuffer(s_Data.VertexArray, 0, s_Data.QuadVertexBuffer, 0, sizeof(glm::vec2));
-  glEnableVertexArrayAttrib(s_Data.VertexArray, 0);
-  glVertexArrayAttribFormat(s_Data.VertexArray, 0, 2, GL_FLOAT, GL_FALSE, 0);
-  glVertexArrayAttribBinding(s_Data.VertexArray, 0, 0);
-
-  glVertexArrayVertexBuffer(s_Data.VertexArray, 1, s_Data.InstanceBuffer, 0, sizeof(ParticleRenderInstance));
-  glVertexArrayBindingDivisor(s_Data.VertexArray, 1, 1);
-
-  glEnableVertexArrayAttrib(s_Data.VertexArray, 1);
-  glVertexArrayAttribFormat(
-    s_Data.VertexArray, 1, 4, GL_FLOAT, GL_FALSE, static_cast<GLuint>(offsetof(ParticleRenderInstance, PositionAndSize)));
-  glVertexArrayAttribBinding(s_Data.VertexArray, 1, 1);
-
-  glEnableVertexArrayAttrib(s_Data.VertexArray, 2);
-  glVertexArrayAttribFormat(
-    s_Data.VertexArray, 2, 4, GL_FLOAT, GL_FALSE, static_cast<GLuint>(offsetof(ParticleRenderInstance, Color)));
-  glVertexArrayAttribBinding(s_Data.VertexArray, 2, 1);
-
-  glEnableVertexArrayAttrib(s_Data.VertexArray, 3);
-  glVertexArrayAttribFormat(
-    s_Data.VertexArray, 3, 1, GL_FLOAT, GL_FALSE, static_cast<GLuint>(offsetof(ParticleRenderInstance, Rotation)));
-  glVertexArrayAttribBinding(s_Data.VertexArray, 3, 1);
-
-  glEnableVertexArrayAttrib(s_Data.VertexArray, 4);
-  glVertexArrayAttribFormat(
-    s_Data.VertexArray, 4, 4, GL_FLOAT, GL_FALSE,
-    static_cast<GLuint>(offsetof(ParticleRenderInstance, RightAndStyle)));
-  glVertexArrayAttribBinding(s_Data.VertexArray, 4, 1);
-
-  glEnableVertexArrayAttrib(s_Data.VertexArray, 5);
-  glVertexArrayAttribFormat(
-    s_Data.VertexArray, 5, 4, GL_FLOAT, GL_FALSE,
-    static_cast<GLuint>(offsetof(ParticleRenderInstance, Up)));
-    glVertexArrayAttribBinding(s_Data.VertexArray, 5, 1);
-  }
-
   s_Data.Pool.resize(ParticleRendererData::MaxParticles);
   s_Data.Instances.reserve(
     ParticleRendererData::MaxParticles + ParticleRendererData::MaxImpactMarks);
@@ -205,16 +108,6 @@ void ParticleRenderer::Init()
 
 void ParticleRenderer::Shutdown()
 {
-  if (!RenderBackend::Capabilities().NativeParticleRenderer)
-  {
-    glDeleteBuffers(1, &s_Data.InstanceBuffer);
-    glDeleteBuffers(1, &s_Data.QuadVertexBuffer);
-    glDeleteVertexArrays(1, &s_Data.VertexArray);
-  }
-  s_Data.InstanceBuffer = 0;
-  s_Data.QuadVertexBuffer = 0;
-  s_Data.VertexArray = 0;
-  s_Data.ParticleShader.reset();
   s_Data.Pool.clear();
   s_Data.Instances.clear();
   s_Data.ImpactMarks.clear();

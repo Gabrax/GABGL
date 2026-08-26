@@ -11,6 +11,7 @@
 #include "RenderCommon.h"
 
 struct DeltaTime;
+struct Font;
 struct Model;
 struct ParticleRenderInstance;
 struct Texture;
@@ -44,6 +45,8 @@ struct DirectX12Renderer
                         bool advanceSimulation, bool renderForEditor,
                         const RenderEffectSettings& effects);
   static void DrawParticles(const std::vector<ParticleRenderInstance>& instances);
+  static uint64_t CreateFontAtlas(const uint8_t* pixels, uint32_t width, uint32_t height);
+  static void DestroyFontAtlas(uint64_t handle);
   static void BeginDebugLines();
   static void DrawDebugLine(const glm::vec3& start, const glm::vec3& end,
                             const glm::vec4& color);
@@ -53,6 +56,6 @@ struct DirectX12Renderer
   static void BeginScene();
   static void EndScene();
   static void DrawQuad(const glm::mat4& transform, const glm::vec4& color);
-  static void DrawText(const std::string& text, const glm::vec2& position,
+  static void DrawText(const Font* font, const std::string& text, const glm::vec2& position,
                        float size, const glm::vec4& color);
 };

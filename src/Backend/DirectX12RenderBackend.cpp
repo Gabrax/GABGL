@@ -64,6 +64,15 @@ namespace
       DirectX12Renderer::DrawParticles(instances);
       return true;
     }
+    uint64_t CreateFontAtlas(const uint8_t* pixels, uint32_t width,
+                             uint32_t height) override
+    {
+      return DirectX12Renderer::CreateFontAtlas(pixels, width, height);
+    }
+    void DestroyFontAtlas(uint64_t handle) override
+    {
+      DirectX12Renderer::DestroyFontAtlas(handle);
+    }
     bool BeginUI() override { DirectX12Renderer::BeginScene(); return true; }
     void PrepareScreenUI(const glm::vec4& clearColor, bool clear) override
     {
@@ -75,10 +84,10 @@ namespace
       DirectX12Renderer::DrawQuad(transform, color);
       return true;
     }
-    bool DrawText(const Font*, const std::string& text, const glm::vec2& position,
+    bool DrawText(const Font* font, const std::string& text, const glm::vec2& position,
                   float size, const glm::vec4& color) override
     {
-      DirectX12Renderer::DrawText(text, position, size, color);
+      DirectX12Renderer::DrawText(font, text, position, size, color);
       return true;
     }
     bool BeginDebugLines() override { DirectX12Renderer::BeginDebugLines(); return true; }

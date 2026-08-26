@@ -246,7 +246,6 @@ GLuint CompileOpenGLStage(const std::string& source,
   // exposes their equivalent core names instead.
   ReplaceIdentifier(glsl, "gl_InstanceIndex", "gl_InstanceID");
   ReplaceIdentifier(glsl, "gl_VertexIndex", "gl_VertexID");
-
   const char* code = glsl.c_str();
   const GLuint shader = glCreateShader(shaderType);
   glShaderSource(shader, 1, &code, nullptr);
@@ -309,6 +308,7 @@ Shader::~Shader()
 
 void Shader::Load(const char* fullshader)
 {
+  m_UniformLocations.clear();
   const std::filesystem::path path(fullshader);
   const std::string fileContent = SelectApiSection(ReadTextFile(path), "OPENGL", path);
 
@@ -381,6 +381,7 @@ void Shader::Load(const char* fullshader)
 
 void Shader::Load(const char* vertexPath, const char* fragmentPath, const char* geometryPath)
 {
+  m_UniformLocations.clear();
   const GLuint vertex = CompileOpenGLStage(
     SelectApiSection(ReadTextFile(vertexPath), "OPENGL", vertexPath),
     vertexPath, GL_VERTEX_SHADER, SLANG_STAGE_VERTEX);
@@ -428,53 +429,65 @@ bool Shader::CheckIfModified(std::shared_ptr<Shader>& shader, const char* fullsh
 
   return (cftime != shader->m_lastTimeModified) ? true : false;
 }
+
+int Shader::GetUniformLocation(const std::string& name) const
+{
+  if (const auto found = m_UniformLocations.find(name);
+      found != m_UniformLocations.end())
+    return found->second;
+
+  const GLint location = glGetUniformLocation(m_ID, name.c_str());
+  m_UniformLocations.emplace(name, location);
+  return location;
+}
+
 void Shader::SetBool(const std::string& name, bool value) const
 {
-  glUniform1i(glGetUniformLocation(this->m_ID, name.c_str()), (int)value);
+  glUniform1i(GetUniformLocation(name), static_cast<int>(value));
 }
 void Shader::SetInt(const std::string& name, int value) const
 {
-  glUniform1i(glGetUniformLocation(this->m_ID, name.c_str()), value);
+  glUniform1i(GetUniformLocation(name), value);
 }
 void Shader::SetFloat(const std::string& name, float value) const
 {
-  glUniform1f(glGetUniformLocation(this->m_ID, name.c_str()), value);
+  glUniform1f(GetUniformLocation(name), value);
 }
 void Shader::SetVec2(const std::string& name, const glm::vec2& value) const
 {
-  glUniform2fv(glGetUniformLocation(this->m_ID, name.c_str()), 1, &value[0]);
+  glUniform2fv(GetUniformLocation(name), 1, &value[0]);
 }
 void Shader::SetVec2(const std::string& name, float x, float y) const
 {
-  glUniform2f(glGetUniformLocation(this->m_ID, name.c_str()), x, y);
+  glUniform2f(GetUniformLocation(name), x, y);
 }
 void Shader::SetVec3(const std::string& name, const glm::vec3& value) const
 {
-  glUniform3fv(glGetUniformLocation(this->m_ID, name.c_str()), 1, &value[0]);
+  glUniform3fv(GetUniformLocation(name), 1, &value[0]);
 }
 void Shader::SetVec3(const std::string& name, float x, float y, float z) const
 {
-  glUniform3f(glGetUniformLocation(this->m_ID, name.c_str()), x, y, z);
+  glUniform3f(GetUniformLocation(name), x, y, z);
 }
 void Shader::SetVec4(const std::string& name, const glm::vec4& value) const
 {
-  glUniform4fv(glGetUniformLocation(this->m_ID, name.c_str()), 1, &value[0]);
+  glUniform4fv(GetUniformLocation(name), 1, &value[0]);
 }
 void Shader::SetVec4(const std::string& name, float x, float y, float z, float w) const
 {
-  glUniform4f(glGetUniformLocation(this->m_ID, name.c_str()), x, y, z, w);
+  glUniform4f(GetUniformLocation(name), x, y, z, w);
 }
 void Shader::SetMat2(const std::string& name, const glm::mat2& mat) const
 {
-  glUniformMatrix2fv(glGetUniformLocation(this->m_ID, name.c_str()), 1, GL_FALSE, &mat[0][0]);
+  glUniformMatrix2fv(GetUniformLocation(name), 1, GL_FALSE, &mat[0][0]);
 }
 void Shader::SetMat3(const std::string& name, const glm::mat3& mat) const
 {
-  glUniformMatrix3fv(glGetUniformLocation(this->m_ID, name.c_str()), 1, GL_FALSE, &mat[0][0]);
+  glUniformMatrix3fv(GetUniformLocation(name), 1, GL_FALSE, &mat[0][0]);
 }
 void Shader::SetMat4(const std::string& name, const glm::mat4& mat) const
 {
-  glUniformMatrix4fv(glGetUniformLocation(this->m_ID, name.c_str()), 1, GL_FALSE, &mat[0][0]);
+  glUniformMatrix4fv(GetUniformLocation(name), 1, GL_FALSE, &mat[0][0]);
 }
 
 void Shader::Create(std::shared_ptr<Shader>& shader, const char* fullshader)

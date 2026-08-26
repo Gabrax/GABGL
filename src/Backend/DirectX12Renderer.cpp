@@ -5,6 +5,7 @@
 #include "AudioManager.h"
 #include "Camera.h"
 #include "DeltaTime.hpp"
+#include "FontManager.h"
 #include "Logger.h"
 #include "ModelManager.h"
 #include "ParticleRenderer.h"
@@ -29,9 +30,6 @@
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 
-#include <ft2build.h>
-#include FT_FREETYPE_H
-
 #include <imgui.h>
 #include "backends/imgui_impl_dx12.h"
 
@@ -40,7 +38,6 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <filesystem>
 #include <limits>
 #include <sstream>
 #include <stdexcept>
@@ -63,8 +60,6 @@ namespace
   constexpr float PointShadowRadius = 20.0f;
   constexpr uint64_t ConstantBufferBytes = 64ull * 1024ull * 1024ull;
   constexpr uint64_t UIVertexBufferBytes = 8ull * 1024ull * 1024ull;
-  constexpr uint32_t FontAtlasWidth = 1024;
-  constexpr uint32_t FontAtlasHeight = 512;
   constexpr uint32_t SceneRTVIndex = FrameCount;
   constexpr uint32_t BloomARTVIndex = FrameCount + 1;
   constexpr uint32_t BloomBRTVIndex = FrameCount + 2;
@@ -85,13 +80,11 @@ namespace
     glm::vec2 UV;
   };
 
-  struct Glyph
+  struct UIBatch
   {
-    glm::vec2 UVTopLeft{};
-    glm::vec2 UVBottomRight{};
-    glm::ivec2 Size{};
-    glm::ivec2 Bearing{};
-    uint32_t Advance = 0;
+    uint32_t DescriptorIndex = 0;
+    uint32_t FirstVertex = 0;
+    uint32_t VertexCount = 0;
   };
 
   struct GPUTexture
@@ -230,7 +223,6 @@ namespace
     std::array<FrameUploadData, FrameCount> FrameUploads;
 
     GPUTexture WhiteTexture;
-    GPUTexture FontAtlas;
     GPUTexture SkyboxTexture;
     GPUTexture SceneColor;
     GPUTexture SceneResult;
@@ -246,13 +238,12 @@ namespace
     ComPtr<ID3D12Resource> SkyboxVertexBuffer;
     D3D12_VERTEX_BUFFER_VIEW SkyboxVertexView{};
     glm::mat4 LightViewProjection{1.0f};
-    std::array<Glyph, 128> Glyphs{};
-    float FontAscender = 48.0f;
-    float FontDescender = 0.0f;
+    std::unordered_map<uint64_t, GPUTexture> FontAtlases;
     std::unordered_map<const Texture*, GPUTexture> Textures;
     std::unordered_map<const Mesh*, GPUMesh> Meshes;
     std::vector<ComPtr<ID3D12Resource>> RetiredResources;
     std::vector<UIVertex> PendingUIVertices;
+    std::vector<UIBatch> PendingUIBatches;
     std::vector<DebugLineVertex> PendingDebugLines;
     std::vector<uint32_t> PointShadowLightIndices;
     std::vector<RenderModelPreview> ModelPreviews;
@@ -905,7 +896,8 @@ namespace
                                            glm::vec3(250.0f, 42.0f, 1.0f));
     DirectX12Renderer::BeginScene();
     DirectX12Renderer::DrawQuad(transform, glm::vec4(0.02f, 0.04f, 0.07f, 0.78f));
-    DirectX12Renderer::DrawText("2D DEBUG RENDER", glm::vec2(141.0f, 37.0f), 0.28f,
+    DirectX12Renderer::DrawText(FontManager::GetFont("dpcomic"), "2D DEBUG RENDER",
+                                glm::vec2(141.0f, 37.0f), 0.28f,
                                 glm::vec4(0.45f, 0.92f, 1.0f, 1.0f));
     DirectX12Renderer::EndScene();
   }
@@ -1604,67 +1596,6 @@ namespace
     return descriptorIndex;
   }
 
-  void CreateFontAtlas()
-  {
-    std::vector<uint8_t> atlas(static_cast<size_t>(FontAtlasWidth) * FontAtlasHeight, 0);
-    atlas[0] = 255;
-
-    FT_Library library = nullptr;
-    if (FT_Init_FreeType(&library) != 0)
-      throw std::runtime_error("Could not initialize FreeType for DX12");
-
-    std::filesystem::path fontPath = "../res/fonts/dpcomic.ttf";
-    if (!std::filesystem::exists(fontPath)) fontPath = "res/fonts/dpcomic.ttf";
-    FT_Face face = nullptr;
-    if (FT_New_Face(library, fontPath.string().c_str(), 0, &face) != 0)
-    {
-      FT_Done_FreeType(library);
-      throw std::runtime_error("Could not load DX12 font atlas source");
-    }
-    FT_Set_Pixel_Sizes(face, 0, 48);
-    s_Data.FontAscender = static_cast<float>(face->size->metrics.ascender) / 64.0f;
-    s_Data.FontDescender = static_cast<float>(-face->size->metrics.descender) / 64.0f;
-
-    uint32_t x = 2;
-    uint32_t y = 2;
-    uint32_t rowHeight = 0;
-    for (uint32_t character = 32; character < 127; ++character)
-    {
-      if (FT_Load_Char(face, character, FT_LOAD_RENDER) != 0) continue;
-      const FT_Bitmap& bitmap = face->glyph->bitmap;
-      if (x + bitmap.width + 2 >= FontAtlasWidth)
-      {
-        x = 2;
-        y += rowHeight + 2;
-        rowHeight = 0;
-      }
-      if (y + bitmap.rows + 2 >= FontAtlasHeight) break;
-
-      for (uint32_t row = 0; row < bitmap.rows; ++row)
-      {
-        std::memcpy(atlas.data() + static_cast<size_t>(y + row) * FontAtlasWidth + x,
-                    bitmap.buffer + static_cast<size_t>(row) * std::abs(bitmap.pitch),
-                    bitmap.width);
-      }
-
-      Glyph& glyph = s_Data.Glyphs[character];
-      glyph.UVTopLeft = {static_cast<float>(x) / FontAtlasWidth,
-                         static_cast<float>(y) / FontAtlasHeight};
-      glyph.UVBottomRight = {static_cast<float>(x + bitmap.width) / FontAtlasWidth,
-                             static_cast<float>(y + bitmap.rows) / FontAtlasHeight};
-      glyph.Size = {static_cast<int>(bitmap.width), static_cast<int>(bitmap.rows)};
-      glyph.Bearing = {face->glyph->bitmap_left, face->glyph->bitmap_top};
-      glyph.Advance = static_cast<uint32_t>(face->glyph->advance.x);
-      x += bitmap.width + 2;
-      rowHeight = std::max(rowHeight, bitmap.rows);
-    }
-
-    FT_Done_Face(face);
-    FT_Done_FreeType(library);
-    s_Data.FontAtlas = UploadTextureBytes(
-      atlas.data(), FontAtlasWidth, FontAtlasHeight, DXGI_FORMAT_R8_UNORM, 1);
-  }
-
   template <typename T>
   D3D12_GPU_VIRTUAL_ADDRESS UploadConstants(const T& constants)
   {
@@ -2246,10 +2177,26 @@ namespace
     s_Data.CommandList->OMSetRenderTargets(1, &backBuffer, FALSE, &dsv);
   }
 
+  void AppendUIBatch(uint32_t descriptorIndex, uint32_t firstVertex, uint32_t vertexCount)
+  {
+    if (!s_Data.PendingUIBatches.empty() &&
+        s_Data.PendingUIBatches.back().DescriptorIndex == descriptorIndex &&
+        s_Data.PendingUIBatches.back().FirstVertex +
+          s_Data.PendingUIBatches.back().VertexCount == firstVertex)
+    {
+      s_Data.PendingUIBatches.back().VertexCount += vertexCount;
+    }
+    else
+    {
+      s_Data.PendingUIBatches.push_back({descriptorIndex, firstVertex, vertexCount});
+    }
+  }
+
   void AppendUIQuad(const glm::vec2& bottomLeft, const glm::vec2& topRight,
                     const glm::vec4& color, const glm::vec2& uvTopLeft,
-                    const glm::vec2& uvBottomRight)
+                    const glm::vec2& uvBottomRight, uint32_t descriptorIndex)
   {
+    const uint32_t firstVertex = static_cast<uint32_t>(s_Data.PendingUIVertices.size());
     const UIVertex bottomLeftVertex{bottomLeft, color, {uvTopLeft.x, uvBottomRight.y}};
     const UIVertex bottomRightVertex{{topRight.x, bottomLeft.y}, color, uvBottomRight};
     const UIVertex topRightVertex{topRight, color, {uvBottomRight.x, uvTopLeft.y}};
@@ -2258,6 +2205,7 @@ namespace
       bottomLeftVertex, bottomRightVertex, topRightVertex,
       topRightVertex, topLeftVertex, bottomLeftVertex
     });
+    AppendUIBatch(descriptorIndex, firstVertex, 6);
   }
 
   void RetireSceneResources()
@@ -2468,11 +2416,11 @@ bool DirectX12Renderer::InitSceneRenderer()
     CreateUIPipeline();
     constexpr std::array<uint8_t, 4> whitePixel = {255, 255, 255, 255};
     s_Data.WhiteTexture = UploadTextureBytes(whitePixel.data(), 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, 4);
-    CreateFontAtlas();
     CreatePostProcessResources(s_Data.Width, s_Data.Height);
     CreateShadowMap(RenderBackend::GetEffectSettings().DirectionalShadowResolution());
     CreatePointShadowMap(RenderBackend::GetEffectSettings().PointShadowResolution());
     s_Data.PendingUIVertices.reserve(32768);
+    s_Data.PendingUIBatches.reserve(64);
     s_Data.PendingDebugLines.reserve(8192);
     s_Data.SceneRendererInitialized = true;
     GABGL_INFO("DirectX 12 scene renderer initialized");
@@ -2499,7 +2447,7 @@ void DirectX12Renderer::ShutdownSceneRenderer()
   }
   s_Data.RetiredResources.clear();
   s_Data.WhiteTexture = {};
-  s_Data.FontAtlas = {};
+  s_Data.FontAtlases.clear();
   s_Data.SkyboxTexture = {};
   s_Data.SceneColor = {};
   s_Data.SceneResult = {};
@@ -2538,6 +2486,7 @@ void DirectX12Renderer::ShutdownSceneRenderer()
   s_Data.SceneUIPipeline.Reset();
   s_Data.SRVHeap.Reset();
   s_Data.PendingUIVertices.clear();
+  s_Data.PendingUIBatches.clear();
   s_Data.PendingDebugLines.clear();
   s_Data.PointShadowLightIndices.clear();
   s_Data.ModelPreviews.clear();
@@ -2770,6 +2719,7 @@ bool DirectX12Renderer::BeginFrame()
     frame.ConstantsOffset = 0;
     frame.UIVerticesOffset = 0;
     s_Data.PendingUIVertices.clear();
+    s_Data.PendingUIBatches.clear();
     s_Data.FrameStarted = true;
     return true;
   }
@@ -2919,6 +2869,34 @@ void DirectX12Renderer::DrawParticles(const std::vector<ParticleRenderInstance>&
   s_Data.CommandList->DrawInstanced(static_cast<UINT>(vertices.size()), 1, 0, 0);
 }
 
+uint64_t DirectX12Renderer::CreateFontAtlas(
+  const uint8_t* pixels, uint32_t width, uint32_t height)
+{
+  if (!s_Data.SceneRendererInitialized || !pixels || width == 0 || height == 0)
+    return 0;
+  try
+  {
+    GPUTexture atlas = UploadTextureBytes(
+      pixels, width, height, DXGI_FORMAT_R8_UNORM, 1);
+    const uint64_t handle = atlas.DescriptorIndex;
+    s_Data.FontAtlases.emplace(handle, std::move(atlas));
+    return handle;
+  }
+  catch (const std::exception& error)
+  {
+    GABGL_ERROR("DX12 font atlas upload failed: {}", error.what());
+    return 0;
+  }
+}
+
+void DirectX12Renderer::DestroyFontAtlas(uint64_t handle)
+{
+  const auto atlas = s_Data.FontAtlases.find(handle);
+  if (atlas == s_Data.FontAtlases.end()) return;
+  try { WaitForGPU(); } catch (...) {}
+  s_Data.FontAtlases.erase(atlas);
+}
+
 void DirectX12Renderer::BeginDebugLines()
 {
   s_Data.PendingDebugLines.clear();
@@ -2993,6 +2971,7 @@ void DirectX12Renderer::DrawPhysicsDebug()
 void DirectX12Renderer::BeginScene()
 {
   s_Data.PendingUIVertices.clear();
+  s_Data.PendingUIBatches.clear();
 }
 
 void DirectX12Renderer::PrepareScreenUI(const glm::vec4& clearColor, bool clear)
@@ -3045,17 +3024,22 @@ void DirectX12Renderer::EndScene()
     const std::array<float, 2> screenSize = {
       static_cast<float>(s_Data.Width), static_cast<float>(s_Data.Height)};
     s_Data.CommandList->SetGraphicsRoot32BitConstants(0, 2, screenSize.data(), 0);
-    s_Data.CommandList->SetGraphicsRootDescriptorTable(
-      1, GetSRVGPUHandle(s_Data.FontAtlas.DescriptorIndex));
     s_Data.CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     s_Data.CommandList->IASetVertexBuffers(0, 1, &view);
-    s_Data.CommandList->DrawInstanced(
-      static_cast<UINT>(s_Data.PendingUIVertices.size()), 1, 0, 0);
+    for (const UIBatch& batch : s_Data.PendingUIBatches)
+    {
+      s_Data.CommandList->SetGraphicsRootDescriptorTable(
+        1, GetSRVGPUHandle(batch.DescriptorIndex));
+      s_Data.CommandList->DrawInstanced(
+        batch.VertexCount, 1, batch.FirstVertex, 0);
+    }
     s_Data.PendingUIVertices.clear();
+    s_Data.PendingUIBatches.clear();
   }
   catch (const std::exception& error)
   {
     s_Data.PendingUIVertices.clear();
+    s_Data.PendingUIBatches.clear();
     GABGL_ERROR("DirectX 12 UI rendering failed: {}", error.what());
   }
 }
@@ -3068,7 +3052,8 @@ void DirectX12Renderer::DrawQuad(const glm::mat4& transform, const glm::vec4& co
   std::array<glm::vec2, 4> positions{};
   for (size_t i = 0; i < corners.size(); ++i)
     positions[i] = glm::vec2(transform * corners[i]);
-  const glm::vec2 whiteUV(0.5f / FontAtlasWidth, 0.5f / FontAtlasHeight);
+  const uint32_t firstVertex = static_cast<uint32_t>(s_Data.PendingUIVertices.size());
+  constexpr glm::vec2 whiteUV(0.5f);
   const UIVertex vertices[] = {
     {positions[0], color, whiteUV}, {positions[1], color, whiteUV},
     {positions[2], color, whiteUV}, {positions[2], color, whiteUV},
@@ -3076,30 +3061,38 @@ void DirectX12Renderer::DrawQuad(const glm::mat4& transform, const glm::vec4& co
   };
   s_Data.PendingUIVertices.insert(s_Data.PendingUIVertices.end(),
                                   std::begin(vertices), std::end(vertices));
+  AppendUIBatch(s_Data.WhiteTexture.DescriptorIndex, firstVertex, 6);
 }
 
-void DirectX12Renderer::DrawText(const std::string& text, const glm::vec2& position,
+void DirectX12Renderer::DrawText(const Font* font, const std::string& text,
+                                 const glm::vec2& position,
                                  float size, const glm::vec4& color)
 {
-  if (text.empty()) return;
+  if (!font || font->m_AtlasHandle == 0 || font->m_Characters.empty() || text.empty())
+    return;
+  const auto atlas = s_Data.FontAtlases.find(font->m_AtlasHandle);
+  if (atlas == s_Data.FontAtlases.end()) return;
   float textWidth = 0.0f;
   for (const unsigned char character : text)
-    if (character < s_Data.Glyphs.size())
-      textWidth += static_cast<float>(s_Data.Glyphs[character].Advance >> 6) * size;
+    if (const auto glyph = font->m_Characters.find(static_cast<char>(character));
+        glyph != font->m_Characters.end())
+      textWidth += static_cast<float>(glyph->second.Advance >> 6) * size;
 
-  const float baselineY = (s_Data.FontDescender - s_Data.FontAscender) * size * 0.5f;
+  const float baselineY = (font->m_Descender - font->m_Ascender) * size * 0.5f;
   float cursorX = -textWidth * 0.5f;
   for (const unsigned char character : text)
   {
-    if (character >= s_Data.Glyphs.size()) continue;
-    const Glyph& glyph = s_Data.Glyphs[character];
+    const auto glyphIt = font->m_Characters.find(static_cast<char>(character));
+    if (glyphIt == font->m_Characters.end()) continue;
+    const Character& glyph = glyphIt->second;
     const float x = position.x + cursorX + glyph.Bearing.x * size;
     const float y = position.y + baselineY + (glyph.Bearing.y - glyph.Size.y) * size;
     const float width = glyph.Size.x * size;
     const float height = glyph.Size.y * size;
     if (width > 0.0f && height > 0.0f)
       AppendUIQuad({x, y}, {x + width, y + height}, color,
-                   glyph.UVTopLeft, glyph.UVBottomRight);
+                   glyph.UVTopLeft, glyph.UVBottomRight,
+                   atlas->second.DescriptorIndex);
     cursorX += static_cast<float>(glyph.Advance >> 6) * size;
   }
 }
@@ -3131,6 +3124,8 @@ uint64_t DirectX12Renderer::GetEditorTextureID() { return 0; }
 void DirectX12Renderer::DrawScene(DeltaTime&, const std::function<void()>&, bool, bool,
                                   const RenderEffectSettings&) {}
 void DirectX12Renderer::DrawParticles(const std::vector<ParticleRenderInstance>&) {}
+uint64_t DirectX12Renderer::CreateFontAtlas(const uint8_t*, uint32_t, uint32_t) { return 0; }
+void DirectX12Renderer::DestroyFontAtlas(uint64_t) {}
 void DirectX12Renderer::BeginDebugLines() {}
 void DirectX12Renderer::DrawDebugLine(const glm::vec3&, const glm::vec3&, const glm::vec4&) {}
 void DirectX12Renderer::EndDebugLines() {}
@@ -3139,6 +3134,7 @@ void DirectX12Renderer::PrepareScreenUI(const glm::vec4&, bool) {}
 void DirectX12Renderer::BeginScene() {}
 void DirectX12Renderer::EndScene() {}
 void DirectX12Renderer::DrawQuad(const glm::mat4&, const glm::vec4&) {}
-void DirectX12Renderer::DrawText(const std::string&, const glm::vec2&, float, const glm::vec4&) {}
+void DirectX12Renderer::DrawText(const Font*, const std::string&, const glm::vec2&, float,
+                                 const glm::vec4&) {}
 
 #endif

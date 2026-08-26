@@ -76,7 +76,6 @@ int main(int argc, char** argv)
   }
 
   AudioManager::Init();
-  if (RenderBackend::Capabilities().OpenGLContext) FontManager::Init();
   PhysX::Init();
   RenderSystem::Initialize();
   ModelManager::Init();
@@ -118,7 +117,6 @@ int main(int argc, char** argv)
   ModelManager::Shutdown();
   RenderBackend::ClearLights();
   RenderSystem::Shutdown();
-  if (RenderBackend::Capabilities().OpenGLContext) FontManager::Shutdown();
   PhysX::Shutdown();
   RenderBackend::Get().ShutdownDevice();
   Window::Terminate();

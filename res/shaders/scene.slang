@@ -31,7 +31,6 @@ out VS_OUT
   vec3 FragPos;
   vec3 Normal;
   vec2 TexCoords;
-  vec3 TBN_FragPos;
   mat3 TBN;
   flat uint DrawID;
 } vs_out;
@@ -41,6 +40,7 @@ const int MAX_BONE_INFLUENCE = 4;
 layout(std430, binding = 9) buffer FinalBoneMatrices  { mat4 boneMatrices[];    };
 layout(std430, binding = 10) buffer ModelIsAnimated   { int modelIsAnimated[];  };
 layout(std430, binding = 13) readonly buffer InstanceTransforms { mat4 instanceTransforms[]; };
+layout(std430, binding = 14) readonly buffer DrawRemap { uint compactDrawToOriginal[]; };
 
 #define GABGL_MATRIX4 mat4
 #define GABGL_INT4 ivec4
@@ -53,10 +53,12 @@ uniform float u_PS1VirtualHeight;
 uniform bool u_PreviewMode;
 uniform int u_PreviewDrawID;
 uniform mat4 u_PreviewModel;
+uniform bool u_GPUDriven;
 
 void main()
 {
-  uint drawID = u_PreviewMode ? uint(u_PreviewDrawID) : uint(gl_DrawID);
+  uint drawID = u_PreviewMode ? uint(u_PreviewDrawID)
+    : (u_GPUDriven ? compactDrawToOriginal[gl_DrawID] : uint(gl_DrawID));
   vs_out.DrawID = drawID;
   int transformIndex = meshToTransform[drawID];
   bool isAnimated = !u_PreviewMode && (modelIsAnimated[transformIndex] == 1);
@@ -69,7 +71,14 @@ void main()
   mat4 localToWorld = modelMat * skinMatrix;
   vec4 worldPos = localToWorld * vec4(aPos, 1.0);
   mat3 linearTransform = mat3(localToWorld);
-  mat3 normalTransform = transpose(inverse(linearTransform));
+  // The cofactor matrix is proportional to inverse-transpose but avoids a
+  // full matrix inverse for every vertex. Preserve orientation for mirrored
+  // transforms; normalization removes the remaining determinant magnitude.
+  mat3 normalTransform = mat3(
+    cross(linearTransform[1], linearTransform[2]),
+    cross(linearTransform[2], linearTransform[0]),
+    cross(linearTransform[0], linearTransform[1]));
+  normalTransform *= determinant(linearTransform) < 0.0 ? -1.0 : 1.0;
 
   vec3 N = normalize(normalTransform * aNormal);
   vec3 transformedTangent = linearTransform * tangent;
@@ -82,7 +91,6 @@ void main()
   vs_out.FragPos = worldPos.xyz;
   vs_out.Normal = N;
   vs_out.TBN = mat3(T, B, N);
-  vs_out.TBN_FragPos = transpose(vs_out.TBN) * vs_out.FragPos;
   vs_out.TexCoords = aTexCoords;
 
   vec4 clipPosition = ViewProjection * worldPos;
@@ -135,7 +143,6 @@ in VS_OUT
   vec3 FragPos;
   vec3 Normal;
   vec2 TexCoords;
-  vec3 TBN_FragPos;
   mat3 TBN;
   flat uint DrawID;
 } fs_in;
@@ -148,8 +155,9 @@ void main()
   material.normalMap = meshTextures[texRange.x + 1];
   material.specular = meshTextures[texRange.x + 2];
   material.shininess = 32.0;
-  
-  gPosition = vec4(fs_in.FragPos, u_PreviewMode ? max(u_PreviewBrightness, 1.0) : 1.0);
+
+  gPosition = vec4(fs_in.FragPos,
+    u_PreviewMode ? max(u_PreviewBrightness, 1.0) : 1.0);
 
   vec3 normal;
   if (normalMapFlags[fs_in.DrawID] == 1)

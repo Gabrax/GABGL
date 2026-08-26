@@ -12,9 +12,12 @@
 #include "RenderBackend.h"
 #include "RenderSystem.h"
 #include "Timer.hpp"
+#include <array>
+#include <cstring>
 #include <cmath>
 #include <limits>
 #include <ranges>
+#include <stdexcept>
 #include <unordered_set>
 
 static glm::mat4 AssimpMatToGLMMat(const aiMatrix4x4& from)
@@ -104,6 +107,13 @@ struct ModelsData
   std::shared_ptr<StorageBuffer> m_InstanceTransformsSSBO;
   std::shared_ptr<StorageBuffer> m_VisibleInstanceTransformsSSBO;
 
+  GLuint m_BoneMatrixRingBuffer = 0;
+  glm::mat4* m_BoneMatrixMapped = nullptr;
+  std::vector<glm::mat4> m_BoneMatricesCPU;
+  size_t m_BoneMatrixSegmentStride = 0;
+  uint32_t m_BoneMatrixRingIndex = 0;
+  std::array<GLsync, 3> m_BoneMatrixFences{};
+
   GLuint sharedVBO, sharedEBO, sharedVAO;
   GLuint fallbackTexture = 0;
   GLuint64 fallbackTextureHandle = 0;
@@ -112,6 +122,83 @@ struct ModelsData
   std::vector<uint32_t> allIndices;
 
 } s_Data; 
+
+static size_t AlignBoneBufferOffset(size_t value, size_t alignment)
+{
+  return (value + alignment - 1) / alignment * alignment;
+}
+
+static void WaitForBoneFence(GLsync& fence)
+{
+  if (!fence) return;
+  GLenum result = glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 0);
+  while (result == GL_TIMEOUT_EXPIRED)
+    result = glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 1'000'000);
+  glDeleteSync(fence);
+  fence = nullptr;
+}
+
+static void DestroyBoneMatrixRing()
+{
+  for (GLsync& fence : s_Data.m_BoneMatrixFences)
+    WaitForBoneFence(fence);
+  if (s_Data.m_BoneMatrixMapped && s_Data.m_BoneMatrixRingBuffer)
+    glUnmapNamedBuffer(s_Data.m_BoneMatrixRingBuffer);
+  if (s_Data.m_BoneMatrixRingBuffer)
+    glDeleteBuffers(1, &s_Data.m_BoneMatrixRingBuffer);
+  s_Data.m_BoneMatrixRingBuffer = 0;
+  s_Data.m_BoneMatrixMapped = nullptr;
+  s_Data.m_BoneMatricesCPU.clear();
+  s_Data.m_BoneMatrixSegmentStride = 0;
+  s_Data.m_BoneMatrixRingIndex = 0;
+}
+
+static void CreateBoneMatrixRing(std::vector<glm::mat4> matrices)
+{
+  DestroyBoneMatrixRing();
+  if (matrices.empty()) matrices.emplace_back(1.0f);
+  s_Data.m_BoneMatricesCPU = std::move(matrices);
+  GLint alignment = 256;
+  glGetIntegerv(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, &alignment);
+  const size_t dataBytes = s_Data.m_BoneMatricesCPU.size() * sizeof(glm::mat4);
+  s_Data.m_BoneMatrixSegmentStride = AlignBoneBufferOffset(
+    dataBytes, static_cast<size_t>(std::max(alignment, 1)));
+  const size_t totalBytes = s_Data.m_BoneMatrixSegmentStride *
+    s_Data.m_BoneMatrixFences.size();
+  constexpr GLbitfield flags =
+    GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
+  glCreateBuffers(1, &s_Data.m_BoneMatrixRingBuffer);
+  glNamedBufferStorage(s_Data.m_BoneMatrixRingBuffer,
+    static_cast<GLsizeiptr>(totalBytes), nullptr, flags);
+  s_Data.m_BoneMatrixMapped = static_cast<glm::mat4*>(glMapNamedBufferRange(
+    s_Data.m_BoneMatrixRingBuffer, 0, static_cast<GLsizeiptr>(totalBytes), flags));
+  if (!s_Data.m_BoneMatrixMapped)
+    throw std::runtime_error("Failed to persistently map bone-matrix ring");
+  for (size_t frame = 0; frame < s_Data.m_BoneMatrixFences.size(); ++frame)
+    std::memcpy(reinterpret_cast<uint8_t*>(s_Data.m_BoneMatrixMapped) +
+      frame * s_Data.m_BoneMatrixSegmentStride,
+      s_Data.m_BoneMatricesCPU.data(), dataBytes);
+  glMemoryBarrier(GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
+  glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 9, s_Data.m_BoneMatrixRingBuffer,
+    0, static_cast<GLsizeiptr>(dataBytes));
+}
+
+static void UploadBoneMatrixFrame()
+{
+  if (!s_Data.m_BoneMatrixRingBuffer || !s_Data.m_BoneMatrixMapped ||
+      s_Data.m_BoneMatricesCPU.empty())
+    return;
+  s_Data.m_BoneMatrixRingIndex = (s_Data.m_BoneMatrixRingIndex + 1u) %
+    static_cast<uint32_t>(s_Data.m_BoneMatrixFences.size());
+  WaitForBoneFence(s_Data.m_BoneMatrixFences[s_Data.m_BoneMatrixRingIndex]);
+  const size_t dataBytes = s_Data.m_BoneMatricesCPU.size() * sizeof(glm::mat4);
+  const size_t offset = s_Data.m_BoneMatrixRingIndex * s_Data.m_BoneMatrixSegmentStride;
+  std::memcpy(reinterpret_cast<uint8_t*>(s_Data.m_BoneMatrixMapped) + offset,
+    s_Data.m_BoneMatricesCPU.data(), dataBytes);
+  glMemoryBarrier(GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
+  glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 9, s_Data.m_BoneMatrixRingBuffer,
+    static_cast<GLintptr>(offset), static_cast<GLsizeiptr>(dataBytes));
+}
 
 static void RefreshInstanceTransforms()
 {
@@ -742,6 +829,7 @@ static void ReleaseModelResources()
 
   if (!RenderBackend::Capabilities().NativeModelResources)
   {
+    DestroyBoneMatrixRing();
     if (s_Data.sharedVBO) glDeleteBuffers(1, &s_Data.sharedVBO);
     if (s_Data.sharedEBO) glDeleteBuffers(1, &s_Data.sharedEBO);
     if (s_Data.sharedVAO) glDeleteVertexArrays(1, &s_Data.sharedVAO);
@@ -782,8 +870,10 @@ void ModelManager::UpdateTransforms(const DeltaTime& dt)
         const size_t matrixCount = std::min(transforms.size(), static_cast<size_t>(MAX_BONES));
         const size_t size = matrixCount * sizeof(glm::mat4);
 
-        if (size > 0 && s_Data.m_FinalBoneMatricesSSBO)
-          s_Data.m_FinalBoneMatricesSSBO->SetSubData(offset, size, transforms.data());
+        if (size > 0 && offset + size <=
+            s_Data.m_BoneMatricesCPU.size() * sizeof(glm::mat4))
+          std::memcpy(reinterpret_cast<uint8_t*>(s_Data.m_BoneMatricesCPU.data()) + offset,
+            transforms.data(), size);
       }
       else
       {
@@ -822,6 +912,15 @@ void ModelManager::UpdateTransforms(const DeltaTime& dt)
       }
     }
   }
+  UploadBoneMatrixFrame();
+}
+
+void ModelManager::EndGPUFrame()
+{
+  if (!s_Data.m_BoneMatrixRingBuffer) return;
+  GLsync& fence = s_Data.m_BoneMatrixFences[s_Data.m_BoneMatrixRingIndex];
+  if (fence) glDeleteSync(fence);
+  fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 }
 
 void ModelManager::SetRender(const std::string& name, bool render)
@@ -846,6 +945,12 @@ GLsizei ModelManager::GetModelsQuantity()
 GLuint ModelManager::GetModelsVAO()
 {
   return s_Data.sharedVAO;
+}
+
+GLuint ModelManager::GetAllInstanceTransformsBuffer()
+{
+  return s_Data.m_InstanceTransformsSSBO
+    ? s_Data.m_InstanceTransformsSSBO->GetID() : 0;
 }
 
 void ModelManager::UploadVisibleInstanceTransforms(const std::vector<glm::mat4>& transforms)
@@ -943,8 +1048,7 @@ void ModelManager::UploadToGPU()
   
   std::vector identityBones(s_Data.m_Models.size() * MAX_BONES, glm::mat4(1.0f));
 
-  s_Data.m_FinalBoneMatricesSSBO = StorageBuffer::Create(identityBones.size() * sizeof(glm::mat4), 9);
-  s_Data.m_FinalBoneMatricesSSBO->SetData(identityBones.size() * sizeof(glm::mat4), identityBones.data());
+  CreateBoneMatrixRing(std::move(identityBones));
 
   std::vector<int> isAnimatedFlags;
 

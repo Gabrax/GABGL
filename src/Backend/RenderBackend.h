@@ -48,6 +48,9 @@ public:
   virtual void FinalizeModelUpload() = 0;
   virtual void ResetModelDrawCommands() = 0;
   virtual bool DrawParticles(const std::vector<ParticleRenderInstance>& instances) = 0;
+  virtual uint64_t CreateFontAtlas(const uint8_t* pixels, uint32_t width,
+                                   uint32_t height) = 0;
+  virtual void DestroyFontAtlas(uint64_t handle) = 0;
 
   virtual bool BeginUI() = 0;
   virtual void PrepareScreenUI(const glm::vec4& clearColor, bool clear) = 0;

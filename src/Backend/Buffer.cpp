@@ -654,7 +654,7 @@ void GeometryBuffer::Invalidate()
   glTextureParameteri(m_DepthAttachment, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   glNamedFramebufferTexture(m_FBO, GL_DEPTH_ATTACHMENT, m_DepthAttachment, 0);
 
-  GLenum attachments[3] = {GL_COLOR_ATTACHMENT0,GL_COLOR_ATTACHMENT1,GL_COLOR_ATTACHMENT2};
+  GLenum attachments[3] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2};
   glNamedFramebufferDrawBuffers(m_FBO, 3, attachments);
 
   if (glCheckNamedFramebufferStatus(m_FBO, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) GABGL_ERROR("GeometryBuffer Error: Framebuffer is not complete!");
@@ -676,6 +676,11 @@ void GeometryBuffer::UnBind() const
 void GeometryBuffer::BindPositionTextureForReading(GLenum textureUnit)
 {
   glBindTextureUnit(textureUnit - GL_TEXTURE0, m_PositionAttachment);
+}
+
+void GeometryBuffer::BindDepthTextureForReading(GLenum textureUnit)
+{
+  glBindTextureUnit(textureUnit - GL_TEXTURE0, m_DepthAttachment);
 }
 
 void GeometryBuffer::BindNormalTextureForReading(GLenum textureUnit)
@@ -775,8 +780,13 @@ BloomBuffer::BloomBuffer(const std::shared_ptr<Shader>& downsampleShader, const 
   mSrcViewportSizeFloat = glm::vec2((float)windowWidth, (float)windowHeight);
 
   // Mip chain creation
-  glm::vec2 mipSize((float)windowWidth, (float)windowHeight);
-  glm::ivec2 mipIntSize((int)windowWidth, (int)windowHeight);
+  // Bloom does not need a full-resolution intermediate. Starting at half
+  // resolution removes the most expensive downsample target and is the usual
+  // basis for a bloom pyramid.
+  glm::vec2 mipSize = glm::max(glm::vec2(windowWidth, windowHeight) * 0.5f,
+                               glm::vec2(1.0f));
+  glm::ivec2 mipIntSize = glm::max(glm::ivec2(windowWidth, windowHeight) / 2,
+                                   glm::ivec2(1));
 
   for (GLuint i = 0; i < mipChainLength; i++)
   {
@@ -880,8 +890,10 @@ void BloomBuffer::Resize(int newWidth, int newHeight)
   }
   mMipChain.clear();
 
-  glm::vec2 mipSize = glm::vec2((float)newWidth, (float)newHeight);
-  glm::ivec2 mipIntSize = glm::ivec2(newWidth, newHeight);
+  glm::vec2 mipSize = glm::max(glm::vec2(newWidth, newHeight) * 0.5f,
+                               glm::vec2(1.0f));
+  glm::ivec2 mipIntSize = glm::max(glm::ivec2(newWidth, newHeight) / 2,
+                                   glm::ivec2(1));
 
   for (GLuint i = 0; i < mipChainLength; i++)
   {
@@ -1106,7 +1118,10 @@ OmniDirectShadowBuffer::OmniDirectShadowBuffer(uint32_t shadowWidth, uint32_t sh
   m_testFB = FrameBuffer::Create(mipFBOspec);
 
   glCreateTextures(GL_TEXTURE_CUBE_MAP_ARRAY, 1, &m_depthCubemapArray);
-  glTextureStorage3D(m_depthCubemapArray, 1, GL_R16F, shadowWidth, shadowHeight, 6 * 20);
+  // Store linear light distance with the same precision as the DX12 path.
+  // R16F quantization is visible at the 20-unit far plane and can make the
+  // comparison alternate as animated surfaces move by sub-texel amounts.
+  glTextureStorage3D(m_depthCubemapArray, 1, GL_R32F, shadowWidth, shadowHeight, 6 * 20);
 
   glTextureParameteri(m_depthCubemapArray, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTextureParameteri(m_depthCubemapArray, GL_TEXTURE_MAG_FILTER, GL_LINEAR);

@@ -70,12 +70,16 @@ void Profiler::BeginFrame()
 
   s_CurrentFrame = (s_CurrentFrame + 1) % GABGL_QUERY_LATENCY;
   s_QueryIndex = 0;
-
-  ResolveFrame((s_CurrentFrame + 1) % GABGL_QUERY_LATENCY);
+  // Resolve the slot before reusing its query IDs. If the GPU is more than
+  // three frames behind, ResolveFrame leaves the slot occupied and profiling
+  // is skipped for this frame instead of stalling the render thread.
+  ResolveFrame(s_CurrentFrame);
 }
 
 GLuint Profiler::AcquireQuery()
 {
+  if (!s_FrameQueries[s_CurrentFrame].empty())
+      return 0;
   if (s_QueryIndex >= GABGL_MAX_QUERIES_PER_FRAME)
       return 0;
 
@@ -97,6 +101,14 @@ const std::vector<ProfileResult>& Profiler::GetResults()
 void Profiler::ResolveFrame(uint32_t frameIndex)
 {
   auto& frameQueries = s_FrameQueries[frameIndex];
+
+  for (const auto& query : frameQueries)
+  {
+    GLint available = GL_FALSE;
+    glGetQueryObjectiv(query.QueryID, GL_QUERY_RESULT_AVAILABLE, &available);
+    if (available != GL_TRUE)
+      return;
+  }
 
   for (auto& q : frameQueries)
   {

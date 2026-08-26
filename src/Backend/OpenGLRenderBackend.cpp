@@ -19,6 +19,7 @@ namespace
     [[nodiscard]] const RenderBackendCapabilities& GetCapabilities() const override
     {
       static constexpr RenderBackendCapabilities capabilities{
+        .NativeParticleRenderer = true,
         .OpenGLContext = true,
         .FramebufferOriginBottomLeft = true,
         .PointLightShadows = true,
@@ -74,7 +75,38 @@ namespace
     }
     void FinalizeModelUpload() override { OpenGLRenderer::InitDrawCommandBuffer(); }
     void ResetModelDrawCommands() override { OpenGLRenderer::ResetModelDrawCommands(); }
-    bool DrawParticles(const std::vector<ParticleRenderInstance>&) override { return false; }
+    bool DrawParticles(const std::vector<ParticleRenderInstance>& instances) override
+    {
+      OpenGLRenderer::DrawParticles(instances);
+      return true;
+    }
+    uint64_t CreateFontAtlas(const uint8_t* pixels, uint32_t width,
+                             uint32_t height) override
+    {
+      if (!pixels || width == 0 || height == 0) return 0;
+      GLuint texture = 0;
+      glCreateTextures(GL_TEXTURE_2D, 1, &texture);
+      glTextureStorage2D(texture, 1, GL_R8, static_cast<GLsizei>(width),
+                         static_cast<GLsizei>(height));
+      GLint unpackAlignment = 4;
+      glGetIntegerv(GL_UNPACK_ALIGNMENT, &unpackAlignment);
+      glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+      glTextureSubImage2D(texture, 0, 0, 0, static_cast<GLsizei>(width),
+                          static_cast<GLsizei>(height), GL_RED, GL_UNSIGNED_BYTE, pixels);
+      glPixelStorei(GL_UNPACK_ALIGNMENT, unpackAlignment);
+      glTextureParameteri(texture, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+      glTextureParameteri(texture, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+      glTextureParameteri(texture, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTextureParameteri(texture, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+      constexpr GLint swizzle[] = {GL_ONE, GL_ONE, GL_ONE, GL_RED};
+      glTextureParameteriv(texture, GL_TEXTURE_SWIZZLE_RGBA, swizzle);
+      return texture;
+    }
+    void DestroyFontAtlas(uint64_t handle) override
+    {
+      const GLuint texture = static_cast<GLuint>(handle);
+      if (texture != 0) glDeleteTextures(1, &texture);
+    }
     void PrepareScreenUI(const glm::vec4& clearColor, bool clear) override
     {
       OpenGLRenderer::PrepareScreenUI(clearColor, clear);

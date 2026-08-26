@@ -1,63 +1,64 @@
 #type VERTEX
 #version 460 core
-layout (location = 0) in vec3 aPos;
-layout (location = 1) in vec3 Normal;   
-layout (location = 2) in vec2 TexCoord; 
-layout (location = 3) in vec3 tangent;
-layout (location = 4) in vec3 bitangent;
-layout (location = 5) in ivec4 boneIds; 
-layout (location = 6) in vec4 weights;
+
+layout(location = 0) in vec3 aPos;
+layout(location = 5) in ivec4 boneIds;
+layout(location = 6) in vec4 weights;
 
 layout(std140, binding = 0) uniform Camera
 {
   mat4 ViewProjection;
-	mat4 OrtoProjection;
-	mat4 NonRotViewProjection;
+  mat4 OrtoProjection;
+  mat4 NonRotViewProjection;
   vec3 CameraPos;
 };
-
-layout(std430, binding = 5) buffer ModelTransforms { mat4 transforms[]; };
-layout(std430, binding = 6) buffer MeshToTransformMap { int meshToTransform[]; };
-
-const int MAX_BONES = 100;
-const int MAX_BONE_INFLUENCE = 4;
-layout(std430, binding = 9) buffer FinalBoneMatrices { mat4 boneMatrices[]; };
-layout(std430, binding = 10) buffer ModelIsAnimated  { int modelIsAnimated[]; };
+layout(std140, binding = 1) uniform Resolution { vec2 resolution; };
+layout(std430, binding = 6) readonly buffer MeshToTransformMap { int meshToTransform[]; };
+layout(std430, binding = 9) readonly buffer FinalBoneMatrices { mat4 boneMatrices[]; };
+layout(std430, binding = 10) readonly buffer ModelIsAnimated { int modelIsAnimated[]; };
 layout(std430, binding = 13) readonly buffer InstanceTransforms { mat4 instanceTransforms[]; };
+layout(std430, binding = 14) readonly buffer DrawRemap { uint compactDrawToOriginal[]; };
+
+#define GABGL_MATRIX4 mat4
+#define GABGL_INT4 ivec4
+#define GABGL_FLOAT4 vec4
+#define GABGL_BONE_MATRIX(index) boneMatrices[index]
+#include "common/skinning.slang"
+
+uniform bool u_PS1Enabled;
+uniform float u_PS1VirtualHeight;
 
 void main()
 {
-  int transformIndex = meshToTransform[gl_DrawID];
-  bool isAnimated = (modelIsAnimated[transformIndex] == 1);
-  mat4 modelMat = instanceTransforms[gl_BaseInstance + gl_InstanceID];
+  uint originalDrawID = compactDrawToOriginal[gl_DrawID];
+  int transformIndex = meshToTransform[originalDrawID];
+  mat4 modelMatrix = instanceTransforms[gl_BaseInstance + gl_InstanceID];
+  mat4 skinMatrix = GabglSkinMatrix(
+    boneIds, weights, transformIndex * 100,
+    modelIsAnimated[transformIndex] == 1);
+  // Keep the position path identical to scene.slang. The prepass depth is
+  // reused with GL_LEQUAL, so even a different matrix-association chosen by
+  // the compiler can otherwise create moving holes on animated geometry.
+  mat4 localToWorld = modelMatrix * skinMatrix;
+  vec4 worldPos = localToWorld * vec4(aPos, 1.0);
+  vec4 clipPosition = ViewProjection * worldPos;
 
-  if (isAnimated)
+  if (u_PS1Enabled)
   {
-    int boneBaseIndex = transformIndex * MAX_BONES;
-    vec4 totalPosition = vec4(0.0f);
-    float totalWeight = 0.0f;
-    for (int i = 0; i < MAX_BONE_INFLUENCE; i++)
-    {
-      if (boneIds[i] < 0 || boneIds[i] >= MAX_BONES || weights[i] <= 0.0)
-        continue;
-      vec4 localPosition = boneMatrices[boneBaseIndex + boneIds[i]] * vec4(aPos, 1.0f);
-      totalPosition += localPosition * weights[i];
-      totalWeight += weights[i];
-    }
-    totalPosition = totalWeight > 0.00001 ? totalPosition / totalWeight : vec4(aPos, 1.0);
-
-    gl_Position = ViewProjection * modelMat * totalPosition;
+    vec2 outputResolution = max(resolution, vec2(1.0));
+    float virtualHeight = max(u_PS1VirtualHeight, 1.0);
+    vec2 snapResolution = vec2(
+      max(floor(virtualHeight * outputResolution.x / outputResolution.y + 0.5), 1.0),
+      virtualHeight);
+    float safeW = abs(clipPosition.w) > 0.00001 ? clipPosition.w : 0.00001;
+    vec2 ndc = clipPosition.xy / safeW;
+    vec2 snappedNdc =
+      (floor((ndc * 0.5 + 0.5) * snapResolution + 0.5) / snapResolution) * 2.0 - 1.0;
+    clipPosition.xy = snappedNdc * clipPosition.w;
   }
-  else
-  {
-    gl_Position = ViewProjection * modelMat * vec4(aPos, 1.0f);
-  }
+  gl_Position = clipPosition;
 }
 
 #type FRAGMENT
-#version 330 core
-
-void main()
-{
-
-}
+#version 460 core
+void main() {}

@@ -84,6 +84,14 @@ struct DrawElementsIndirectCommand
 	GLint baseVertex;    // Base vertex for this draw
 	GLuint baseInstance;  // You can use this to index per-object data
 };
+static_assert(sizeof(DrawElementsIndirectCommand) == sizeof(uint32_t) * 5);
+
+struct alignas(16) DrawCullData
+{
+  glm::vec4 LocalSphere{0.0f};
+  glm::uvec4 Metadata{0u};
+};
+static_assert(sizeof(DrawCullData) == 32);
 
 struct Debug2DCommand
 {
@@ -173,6 +181,10 @@ struct OpenGLRendererData
 		std::shared_ptr<Shader> OmniDirectShadowShader;
 		std::shared_ptr<Shader> DirectShadowShader;
 		std::shared_ptr<Shader> PhysicsDebugShader;
+		std::shared_ptr<Shader> ParticleShader;
+		std::shared_ptr<Shader> GPUCullShader;
+		std::shared_ptr<Shader> HiZBuildShader;
+		std::shared_ptr<Shader> ZPrepassShader;
 	} s_Shaders;
 
   CameraData m_CameraBuffer;
@@ -204,15 +216,43 @@ struct OpenGLRendererData
   uint32_t m_cmdBufer = 0;
   uint32_t m_CulledCmdBuffer = 0;
   size_t m_cmdBufferSize = 0;
+  GLuint m_GPUVisibleTransforms = 0;
+  GLuint m_GPUDrawRemap = 0;
+  GLuint m_GPUDrawCount = 0;
+  GLuint m_CullDataRingBuffer = 0;
+  uint8_t* m_CullDataMapped = nullptr;
+  size_t m_CullDataSegmentStride = 0;
+  size_t m_CullDataCapacity = 0;
+  size_t m_CullDataCurrentOffset = 0;
+  bool m_CullDataPrepared = false;
+  uint32_t m_CullRingIndex = 2;
+  std::array<GLsync, 3> m_CullRingFences{};
+  size_t m_GPUVisibleTransformCapacity = 0;
+  size_t m_GPUCommandCapacity = 0;
+  size_t m_CurrentVisibleTransformCapacity = 0;
+  GLuint m_HiZTexture = 0;
+  uint32_t m_HiZWidth = 0;
+  uint32_t m_HiZHeight = 0;
+  uint32_t m_HiZMipCount = 0;
+  bool m_GPUDrivenSupported = false;
+  uint32_t m_GPUCullLocalSizeX = 1;
+  uint32_t m_HiZLocalSizeX = 1;
+  uint32_t m_HiZLocalSizeY = 1;
+  bool m_HiZValid = false;
   GLuint m_FullscreenQuadVAO = 0;
   GLuint m_FullscreenQuadVBO = 0;
   GLuint m_FramebufferQuadVAO = 0;
   GLuint m_FramebufferQuadVBO = 0;
   GLuint m_SkyboxVAO = 0;
   GLuint m_SkyboxVBO = 0;
+  GLuint m_ParticleVAO = 0;
+  GLuint m_ParticleQuadVBO = 0;
+  GLuint m_ParticleInstanceBuffer = 0;
   std::vector<Debug2DCommand> m_Debug2DCommands;
   uint32_t m_AppliedShadowQuality = std::numeric_limits<uint32_t>::max();
   int m_PointShadowMask = 0;
+  static constexpr bool DirectionalShadowsEnabled = true;
+  static constexpr bool HiZOcclusionEnabled = true;
   static constexpr uint32_t MaxShadowedPointLights = 4;
   static constexpr uint32_t MaxOmniShadowLayers = 20;
   static constexpr float PointShadowRadius = 20.0f;
@@ -222,6 +262,12 @@ struct OpenGLRendererData
   bool Is3D = false;
 
 } s_Data;
+
+static void DestroyGPUDrivenResources();
+static void BuildHiZPyramid();
+static void DispatchGPUCull(const glm::mat4& viewProjection, bool useHiZ);
+static void DrawCompactedCommands();
+static bool PrepareGPUCullData();
 
 static bool HasLight(const LightType type)
 {
@@ -318,24 +364,6 @@ static void DrawWireCapsule(const glm::vec3& center, float radius, float height,
         color);
     }
   }
-}
-
-static bool SphereIntersectsFrustum(const glm::mat4& viewProjection, const glm::vec3& center, float radius)
-{
-  return RenderFrustum(viewProjection).IntersectsSphere(center, radius);
-}
-
-static bool CubemapFaceCanContainVisibleReceiver(const glm::vec3& lightPosition,
-  const glm::vec3& cameraPosition, const glm::vec3& faceDirection, float radius)
-{
-  const glm::vec3 toCamera = cameraPosition - lightPosition;
-  const float cameraDistance = glm::length(toCamera);
-  if (cameraDistance <= radius) return true;
-
-  constexpr float CubemapFaceHalfDiagonal = 0.9553166f; // acos(1 / sqrt(3))
-  const float receiverCone = std::asin(glm::clamp(radius / cameraDistance, 0.0f, 1.0f));
-  const float maxAngle = std::min(glm::pi<float>(), CubemapFaceHalfDiagonal + receiverCone);
-  return glm::dot(glm::normalize(toCamera), glm::normalize(faceDirection)) >= std::cos(maxAngle);
 }
 
 static bool WorldToScreen(const glm::vec3& worldPosition, glm::vec2& screenPosition)
@@ -450,6 +478,13 @@ void OpenGLRenderer::LoadShaders()
 	Shader::Create(s_Data.s_Shaders.OmniDirectShadowShader, "../res/shaders/point_shadow.slang");
 	Shader::Create(s_Data.s_Shaders.DirectShadowShader, "../res/shaders/shadow.slang");
 	Shader::Create(s_Data.s_Shaders.PhysicsDebugShader, "../res/shaders/physics_debug.slang");
+	Shader::Create(s_Data.s_Shaders.ParticleShader, "../res/shaders/particle.slang");
+	if (s_Data.m_GPUDrivenSupported)
+	{
+		Shader::Create(s_Data.s_Shaders.GPUCullShader, "../res/shaders/gpu_cull.slang");
+		Shader::Create(s_Data.s_Shaders.HiZBuildShader, "../res/shaders/hiz_build.slang");
+		Shader::Create(s_Data.s_Shaders.ZPrepassShader, "../res/shaders/geometry_z_prepass.slang");
+	}
 }
 
 void OpenGLRenderer::SetLights(const std::vector<RenderLight>& lights)
@@ -470,7 +505,6 @@ void OpenGLRenderer::SetLights(const std::vector<RenderLight>& lights)
   s_Data.m_LightCountBuffer->SetData(sizeof(count), &count);
   if (lights.empty())
   {
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
     return;
   }
 
@@ -489,7 +523,6 @@ void OpenGLRenderer::SetLights(const std::vector<RenderLight>& lights)
   s_Data.m_LightDirectionBuffer->SetData(directions.size() * sizeof(glm::vec4), directions.data());
   s_Data.m_LightColorBuffer->SetData(colors.size() * sizeof(glm::vec4), colors.data());
   s_Data.m_LightTypeBuffer->SetData(types.size() * sizeof(uint32_t), types.data());
-  glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
 void OpenGLRenderer::Init()
@@ -502,14 +535,13 @@ void OpenGLRenderer::Init()
     Camera::SetMode(CameraMode::PLAYER);
     Window::SetCursorVisible(false);
     RenderBackend::Get().InitializeSceneRenderer();
-    ParticleRenderer::Init();
     s_Data.m_SceneState = OpenGLRendererData::SceneState::Play;
 
     InitializeEditorUI();
     return;
   }
 
-#ifdef DEBUG
+#ifndef NDEBUG
 	glEnable(GL_DEBUG_OUTPUT);
 	glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
 	glDebugMessageCallback(MessageCallback, nullptr);
@@ -585,12 +617,58 @@ void OpenGLRenderer::Init()
 	std::vector<uint32_t> indices;
 	indices.reserve(s_Data.MaxIndices);
 
+	s_Data.m_GPUDrivenSupported = GLAD_GL_VERSION_4_6 &&
+		glDispatchCompute != nullptr && glMultiDrawElementsIndirectCount != nullptr;
 	LoadShaders();
+	if (s_Data.m_GPUDrivenSupported)
+	{
+		GLint localSize[3] = {1, 1, 1};
+		glGetProgramiv(s_Data.s_Shaders.GPUCullShader->GetID(),
+			GL_COMPUTE_WORK_GROUP_SIZE, localSize);
+		s_Data.m_GPUCullLocalSizeX = static_cast<uint32_t>(std::max(localSize[0], 1));
+		glGetProgramiv(s_Data.s_Shaders.HiZBuildShader->GetID(),
+			GL_COMPUTE_WORK_GROUP_SIZE, localSize);
+		s_Data.m_HiZLocalSizeX = static_cast<uint32_t>(std::max(localSize[0], 1));
+		s_Data.m_HiZLocalSizeY = static_cast<uint32_t>(std::max(localSize[1], 1));
+	}
+
+	constexpr glm::vec2 particleQuadVertices[4] = {
+		{-0.5f, -0.5f}, {0.5f, -0.5f}, {-0.5f, 0.5f}, {0.5f, 0.5f}};
+	glCreateVertexArrays(1, &s_Data.m_ParticleVAO);
+	glCreateBuffers(1, &s_Data.m_ParticleQuadVBO);
+	glCreateBuffers(1, &s_Data.m_ParticleInstanceBuffer);
+	glNamedBufferData(s_Data.m_ParticleQuadVBO, sizeof(particleQuadVertices),
+		particleQuadVertices, GL_STATIC_DRAW);
+	glNamedBufferData(s_Data.m_ParticleInstanceBuffer,
+		static_cast<GLsizeiptr>(640 * sizeof(ParticleRenderInstance)), nullptr, GL_DYNAMIC_DRAW);
+	glVertexArrayVertexBuffer(s_Data.m_ParticleVAO, 0, s_Data.m_ParticleQuadVBO, 0,
+		sizeof(glm::vec2));
+	glEnableVertexArrayAttrib(s_Data.m_ParticleVAO, 0);
+	glVertexArrayAttribFormat(s_Data.m_ParticleVAO, 0, 2, GL_FLOAT, GL_FALSE, 0);
+	glVertexArrayAttribBinding(s_Data.m_ParticleVAO, 0, 0);
+	glVertexArrayVertexBuffer(s_Data.m_ParticleVAO, 1, s_Data.m_ParticleInstanceBuffer, 0,
+		sizeof(ParticleRenderInstance));
+	glVertexArrayBindingDivisor(s_Data.m_ParticleVAO, 1, 1);
+	const std::array<GLint, 5> particleComponents = {4, 4, 1, 4, 4};
+	const std::array<GLuint, 5> particleOffsets = {
+		static_cast<GLuint>(offsetof(ParticleRenderInstance, PositionAndSize)),
+		static_cast<GLuint>(offsetof(ParticleRenderInstance, Color)),
+		static_cast<GLuint>(offsetof(ParticleRenderInstance, Rotation)),
+		static_cast<GLuint>(offsetof(ParticleRenderInstance, RightAndStyle)),
+		static_cast<GLuint>(offsetof(ParticleRenderInstance, Up))};
+	for (GLuint attribute = 0; attribute < particleComponents.size(); ++attribute)
+	{
+		const GLuint location = attribute + 1;
+		glEnableVertexArrayAttrib(s_Data.m_ParticleVAO, location);
+		glVertexArrayAttribFormat(s_Data.m_ParticleVAO, location,
+			particleComponents[attribute], GL_FLOAT, GL_FALSE, particleOffsets[attribute]);
+		glVertexArrayAttribBinding(s_Data.m_ParticleVAO, location, 1);
+	}
 
 	glm::vec2 resolution = { Window::GetWidth(), Window::GetHeight() };
 
 	FramebufferSpecification fbSpec;
-	fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::DEPTH24STENCIL8 };
+	fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER };
 	fbSpec.Width = resolution.x;
 	fbSpec.Height = resolution.y;
 	s_Data.m_ResultBuffer = FrameBuffer::Create(fbSpec);
@@ -603,8 +681,11 @@ void OpenGLRenderer::Init()
 	s_Data.m_PostProcessBuffer = FrameBuffer::Create(postProcessSpec);
 
 	s_Data.m_GeometryBuffer = GeometryBuffer::Create(resolution.x, resolution.y);
+	// Forward rendering consumes the same depth produced by the geometry pass.
+	// Sharing the attachment avoids a full-resolution depth blit every frame.
+	s_Data.m_ResultBuffer->AttachExternalDepthTexture(
+		s_Data.m_GeometryBuffer->GetDepthAttachmentRendererID());
 	s_Data.m_BloomBuffer = BloomBuffer::Create(s_Data.s_Shaders.DownSampleShader, s_Data.s_Shaders.UpSampleShader, s_Data.s_Shaders.BloomResultShader);
-	ParticleRenderer::Init();
 	ApplyGraphicsSettings();
 
 	s_Data.m_CameraUniformBuffer = UniformBuffer::Create(sizeof(CameraData), 0);
@@ -637,13 +718,12 @@ void OpenGLRenderer::Shutdown()
   if (RenderBackend::Capabilities().NativeSceneRenderer)
   {
     ShutdownEditorUI();
-    ParticleRenderer::Shutdown();
     RenderBackend::Get().ShutdownSceneRenderer();
     return;
   }
 
 	Profiler::Shutdown();
-	ParticleRenderer::Shutdown();
+	DestroyGPUDrivenResources();
 	ResetModelDrawCommands();
 
 	ShutdownEditorUI();
@@ -661,9 +741,13 @@ void OpenGLRenderer::Shutdown()
 	if (s_Data.m_FramebufferQuadVAO) glDeleteVertexArrays(1, &s_Data.m_FramebufferQuadVAO);
 	if (s_Data.m_SkyboxVBO) glDeleteBuffers(1, &s_Data.m_SkyboxVBO);
 	if (s_Data.m_SkyboxVAO) glDeleteVertexArrays(1, &s_Data.m_SkyboxVAO);
+	if (s_Data.m_ParticleInstanceBuffer) glDeleteBuffers(1, &s_Data.m_ParticleInstanceBuffer);
+	if (s_Data.m_ParticleQuadVBO) glDeleteBuffers(1, &s_Data.m_ParticleQuadVBO);
+	if (s_Data.m_ParticleVAO) glDeleteVertexArrays(1, &s_Data.m_ParticleVAO);
 	s_Data.m_FullscreenQuadVAO = s_Data.m_FullscreenQuadVBO = 0;
 	s_Data.m_FramebufferQuadVAO = s_Data.m_FramebufferQuadVBO = 0;
 	s_Data.m_SkyboxVAO = s_Data.m_SkyboxVBO = 0;
+	s_Data.m_ParticleVAO = s_Data.m_ParticleQuadVBO = s_Data.m_ParticleInstanceBuffer = 0;
 
 	s_Data.m_ResultBuffer.reset();
 	s_Data.m_PostProcessBuffer.reset();
@@ -720,7 +804,10 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
     AudioManager::UpdateAllMusic();
   }
   ModelManager::BindAllInstanceTransforms();
-  if(shadowsEnabled && HasLight(LightType::DIRECT))
+  s_Data.m_CullDataPrepared = false;
+  const bool shadowGPUCull = PrepareGPUCullData();
+  if(OpenGLRendererData::DirectionalShadowsEnabled &&
+      shadowsEnabled && HasLight(LightType::DIRECT))
   {
     GABGL_PROFILE_SCOPE("DIRECT SHADOW PASS");
 
@@ -729,85 +816,108 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
   	glClearColor(max, max, max, max);
     glClear(GL_DEPTH_BUFFER_BIT);
 
-    s_Data.s_Shaders.DirectShadowShader->Bind();
     const glm::vec3 shadowFocus = Camera::GetPosition() + Camera::GetForwardDirection() * 45.0f;
     s_Data.m_DirectShadowBuffer->UpdateShadowView(GetDirectionalLightDirection(), shadowFocus);
-    s_Data.s_Shaders.DirectShadowShader->SetMat4("u_LightSpaceMatrix", s_Data.m_DirectShadowBuffer->GetShadowViewProj());
+    const glm::mat4 lightViewProjection = s_Data.m_DirectShadowBuffer->GetShadowViewProj();
+    if (shadowGPUCull)
+      DispatchGPUCull(lightViewProjection, false);
+    s_Data.s_Shaders.DirectShadowShader->Bind();
+    s_Data.s_Shaders.DirectShadowShader->SetMat4("u_LightSpaceMatrix", lightViewProjection);
+    s_Data.s_Shaders.DirectShadowShader->SetBool("u_GPUDriven", shadowGPUCull);
     glEnable(GL_POLYGON_OFFSET_FILL);
     glPolygonOffset(2.0f, 4.0f);
     glBindVertexArray(ModelManager::GetModelsVAO());
-    glBindBuffer(GL_DRAW_INDIRECT_BUFFER,s_Data.m_cmdBufer);
-    glMultiDrawElementsIndirect(GL_TRIANGLES,GL_UNSIGNED_INT,NULL,s_Data.m_DrawCommands.size(),0);
-    glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
+    if (shadowGPUCull)
+      DrawCompactedCommands();
+    else
+    {
+      glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s_Data.m_cmdBufer);
+      glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, nullptr,
+        static_cast<GLsizei>(s_Data.m_DrawCommands.size()), 0);
+      glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+    }
     glBindVertexArray(0);
     glDisable(GL_POLYGON_OFFSET_FILL);
 
     s_Data.s_Shaders.DirectShadowShader->UnBind();
     s_Data.m_DirectShadowBuffer->UnBind();
   }
-  if(shadowsEnabled && HasLight(LightType::POINT))
+  if (shadowsEnabled && HasLight(LightType::POINT))
   {
     GABGL_PROFILE_SCOPE("OMNI SHADOW PASS");
 
     struct ShadowCandidate
     {
-      float distanceSquared;
-      uint32_t lightIndex;
+      float DistanceSquared;
+      uint32_t LightIndex;
     };
 
     const auto pointLights = GetPointLightPositions();
     std::vector<ShadowCandidate> candidates;
-    candidates.reserve(std::min(pointLights.size(), static_cast<size_t>(OpenGLRendererData::MaxOmniShadowLayers)));
-
+    candidates.reserve(std::min(pointLights.size(),
+      static_cast<size_t>(OpenGLRendererData::MaxOmniShadowLayers)));
     const glm::vec3 cameraPosition = Camera::GetPosition();
-    const glm::mat4 viewProjection = Camera::GetViewProjection();
-    const size_t supportedLightCount = std::min(pointLights.size(), static_cast<size_t>(OpenGLRendererData::MaxOmniShadowLayers));
-    for (size_t i = 0; i < supportedLightCount; ++i)
+    const RenderFrustum cameraFrustum(Camera::GetViewProjection());
+    const size_t supportedLightCount = std::min(pointLights.size(),
+      static_cast<size_t>(OpenGLRendererData::MaxOmniShadowLayers));
+    for (size_t lightIndex = 0; lightIndex < supportedLightCount; ++lightIndex)
     {
-      if (!SphereIntersectsFrustum(viewProjection, pointLights[i], OpenGLRendererData::PointShadowRadius))
+      if (!cameraFrustum.IntersectsSphere(
+            pointLights[lightIndex], OpenGLRendererData::PointShadowRadius))
         continue;
-
-      const glm::vec3 toLight = pointLights[i] - cameraPosition;
-      candidates.push_back({glm::dot(toLight, toLight), static_cast<uint32_t>(i)});
+      const glm::vec3 toLight = pointLights[lightIndex] - cameraPosition;
+      candidates.push_back({glm::dot(toLight, toLight),
+        static_cast<uint32_t>(lightIndex)});
     }
-
-    std::ranges::sort(candidates, [](const ShadowCandidate& lhs, const ShadowCandidate& rhs)
+    std::ranges::sort(candidates, [](const ShadowCandidate& lhs,
+                                    const ShadowCandidate& rhs)
     {
-	    return lhs.distanceSquared < rhs.distanceSquared;
+      return lhs.DistanceSquared < rhs.DistanceSquared;
     });
     if (candidates.size() > OpenGLRendererData::MaxShadowedPointLights)
       candidates.resize(OpenGLRendererData::MaxShadowedPointLights);
 
     s_Data.m_PointShadowMask = 0;
     s_Data.m_OmniDirectShadowBuffer->Bind();
-    s_Data.s_Shaders.OmniDirectShadowShader->Bind();
     glBindVertexArray(ModelManager::GetModelsVAO());
-    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s_Data.m_cmdBufer);
-
     const auto& directions = s_Data.m_OmniDirectShadowBuffer->GetFaceDirections();
-    for (const auto&[distanceSquared, lightIndex] : candidates)
+    for (const ShadowCandidate& candidate : candidates)
     {
+      const uint32_t lightIndex = candidate.LightIndex;
       const glm::vec3& light = pointLights[lightIndex];
       s_Data.m_PointShadowMask |= 1 << lightIndex;
-      s_Data.s_Shaders.OmniDirectShadowShader->SetVec3("gLightWorldPos",light);
-
       for (size_t face = 0; face < directions.size(); ++face)
       {
-        if (!CubemapFaceCanContainVisibleReceiver(light, cameraPosition, directions[face].Target,
-            OpenGLRendererData::PointShadowRadius))
-          continue;
-
         s_Data.m_OmniDirectShadowBuffer->BindCubemapFaceForWriting(lightIndex, face);
-        glClearColor(20.0f, 20.0f, 20.0f, 20.0f);
+        glClearColor(OpenGLRendererData::PointShadowRadius,
+          OpenGLRendererData::PointShadowRadius,
+          OpenGLRendererData::PointShadowRadius,
+          OpenGLRendererData::PointShadowRadius);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        glm::mat4 view = glm::lookAt(light,light + directions[face].Target,directions[face].Up);
-        s_Data.s_Shaders.OmniDirectShadowShader->SetMat4("u_LightViewProjection", s_Data.m_OmniDirectShadowBuffer->GetShadowProj() * view);
-
-        glMultiDrawElementsIndirect(GL_TRIANGLES,GL_UNSIGNED_INT,NULL,s_Data.m_DrawCommands.size(),0);
+        const glm::mat4 view = glm::lookAt(light,
+          light + directions[face].Target, directions[face].Up);
+        const glm::mat4 lightViewProjection =
+          s_Data.m_OmniDirectShadowBuffer->GetShadowProj() * view;
+        if (shadowGPUCull)
+          DispatchGPUCull(lightViewProjection, false);
+        s_Data.s_Shaders.OmniDirectShadowShader->Bind();
+        s_Data.s_Shaders.OmniDirectShadowShader->SetBool(
+          "u_GPUDriven", shadowGPUCull);
+        s_Data.s_Shaders.OmniDirectShadowShader->SetVec3(
+          "gLightWorldPos", light);
+        s_Data.s_Shaders.OmniDirectShadowShader->SetMat4(
+          "u_LightViewProjection", lightViewProjection);
+        if (shadowGPUCull)
+          DrawCompactedCommands();
+        else
+        {
+          glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s_Data.m_cmdBufer);
+          glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, nullptr,
+            static_cast<GLsizei>(s_Data.m_DrawCommands.size()), 0);
+          glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+        }
       }
     }
-    glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
     glBindVertexArray(0);
     s_Data.s_Shaders.OmniDirectShadowShader->UnBind();
     s_Data.m_OmniDirectShadowBuffer->UnBind();
@@ -818,26 +928,66 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
   }
 
   UpdateModelFrustumCulling();
+  BeginScene();
+
+  const bool useDepthPrepass = s_Data.m_GPUDrivenSupported &&
+    OpenGLRendererData::HiZOcclusionEnabled && !s_Data.m_DrawCommands.empty();
+  if (useDepthPrepass)
+  {
+    GABGL_PROFILE_SCOPE("GPU DEPTH PREPASS + HIZ");
+    s_Data.m_GeometryBuffer->Bind();
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+    glDepthMask(GL_TRUE);
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    glEnable(GL_POLYGON_OFFSET_FILL);
+    glPolygonOffset(0.0f, 1.0f);
+    glClear(GL_DEPTH_BUFFER_BIT);
+    s_Data.s_Shaders.ZPrepassShader->Bind();
+    s_Data.s_Shaders.ZPrepassShader->SetBool("u_PS1Enabled", effects.PS1Enabled);
+    s_Data.s_Shaders.ZPrepassShader->SetFloat("u_PS1VirtualHeight", effects.PS1VirtualHeight);
+    glBindVertexArray(ModelManager::GetModelsVAO());
+    DrawCompactedCommands();
+    glBindVertexArray(0);
+    s_Data.s_Shaders.ZPrepassShader->UnBind();
+    glDisable(GL_POLYGON_OFFSET_FILL);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    s_Data.m_GeometryBuffer->UnBind();
+
+    glMemoryBarrier(GL_FRAMEBUFFER_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT |
+                    GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+    BuildHiZPyramid();
+    DispatchGPUCull(Camera::GetViewProjection(), true);
+  }
+
   {
     GABGL_PROFILE_SCOPE("GEOMETRY PASS");
 
     s_Data.m_GeometryBuffer->Bind();
 
-    glDepthFunc(GL_LESS);
-    glDepthMask(GL_TRUE);
+	glDepthFunc(useDepthPrepass ? GL_LEQUAL : GL_LESS);
+	glDepthMask(useDepthPrepass ? GL_FALSE : GL_TRUE);
   	glClearColor(0, 0, 0, 0);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClear(useDepthPrepass ? GL_COLOR_BUFFER_BIT
+	                        : GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     s_Data.s_Shaders.GeometryShader->Bind();
     s_Data.s_Shaders.GeometryShader->SetFloat("u_PS1VirtualHeight", effects.PS1VirtualHeight);
     s_Data.s_Shaders.GeometryShader->SetBool("u_PS1Enabled", effects.PS1Enabled);
     s_Data.s_Shaders.GeometryShader->SetBool("u_PreviewMode", false);
-    BeginScene();
+    s_Data.s_Shaders.GeometryShader->SetBool("u_GPUDriven", s_Data.m_GPUDrivenSupported);
     glBindVertexArray(ModelManager::GetModelsVAO());
-    ModelManager::BindVisibleInstanceTransforms();
-    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s_Data.m_CulledCmdBuffer);
-    glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, NULL, s_Data.m_CulledDrawCommands.size(), 0);
-    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+    if (s_Data.m_GPUDrivenSupported)
+      DrawCompactedCommands();
+    else
+    {
+      ModelManager::BindVisibleInstanceTransforms();
+      glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s_Data.m_CulledCmdBuffer);
+      glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, NULL,
+        s_Data.m_CulledDrawCommands.size(), 0);
+      glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+    }
+    glDepthMask(GL_TRUE);
 
     if (!s_Data.m_ModelPreviews.empty())
     {
@@ -872,8 +1022,15 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
     s_Data.s_Shaders.GeometryShader->UnBind();
 
     s_Data.m_GeometryBuffer->UnBind();
-    s_Data.m_GeometryBuffer->BlitDepthTo(s_Data.m_ResultBuffer);
+    if (s_Data.m_GPUDrivenSupported)
+    {
+      GLsync& fence = s_Data.m_CullRingFences[s_Data.m_CullRingIndex];
+      if (fence) glDeleteSync(fence);
+      fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    }
+    ModelManager::EndGPUFrame();
   }
+
   {
     GABGL_PROFILE_SCOPE("LIGHT PASS");
 
@@ -896,7 +1053,10 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
     s_Data.s_Shaders.LightShader->SetInt("u_DirectShadow", 4);
     s_Data.s_Shaders.LightShader->SetInt("u_OffsetTexture", 5);
     s_Data.s_Shaders.LightShader->SetInt("u_OmniShadow", 6);
-    s_Data.s_Shaders.LightShader->SetInt("u_ShadowsEnabled", shadowsEnabled ? 1 : 0);
+    s_Data.s_Shaders.LightShader->SetBool(
+      "u_DirectShadowsEnabled",
+      shadowsEnabled && OpenGLRendererData::DirectionalShadowsEnabled);
+    s_Data.s_Shaders.LightShader->SetBool("u_PointShadowsEnabled", shadowsEnabled);
     s_Data.s_Shaders.LightShader->SetInt("u_PointShadowMask", s_Data.m_PointShadowMask);
     s_Data.s_Shaders.LightShader->SetMat4("u_DirectShadowViewProj", s_Data.m_DirectShadowBuffer->GetShadowViewProj());
 
@@ -936,26 +1096,22 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
   {
     GABGL_PROFILE_SCOPE("SCENE RESULT PASS");
 
-    s_Data.m_PostProcessBuffer->Bind();
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_BLEND);
-    DrawFramebuffer(s_Data.m_ResultBuffer->GetColorAttachmentRendererID(), true);
-    s_Data.m_PostProcessBuffer->UnBind();
-
-    const uint32_t finalTexture = s_Data.m_PostProcessBuffer->GetColorAttachmentRendererID();
-
-    switch (s_Data.m_SceneState)
+    if (s_Data.m_SceneState == OpenGLRendererData::SceneState::Edit)
     {
-     case OpenGLRendererData::SceneState::Edit:
-     {
-       DrawEditorFrameBuffer(finalTexture);
-       break;
-     }
-     case OpenGLRendererData::SceneState::Play:
-     {
-       DrawFramebuffer(finalTexture, false);
-       break;
-     }
+      s_Data.m_PostProcessBuffer->Bind();
+      DrawFramebuffer(s_Data.m_ResultBuffer->GetColorAttachmentRendererID(), true);
+      s_Data.m_PostProcessBuffer->UnBind();
+      DrawEditorFrameBuffer(s_Data.m_PostProcessBuffer->GetColorAttachmentRendererID());
+    }
+    else
+    {
+      // The game view does not need an intermediate texture for ImGui. Apply
+      // the postprocess directly to the swapchain framebuffer.
+      glBindFramebuffer(GL_FRAMEBUFFER, 0);
+      glViewport(0, 0, Window::GetWidth(), Window::GetHeight());
+      DrawFramebuffer(s_Data.m_ResultBuffer->GetColorAttachmentRendererID(), true);
     }
   }
   {
@@ -1091,6 +1247,8 @@ void OpenGLRenderer::SetFullscreen(const std::string& sound, bool windowed)
   s_Data.m_BloomBuffer->Resize(width, height);
   s_Data.m_ResultBuffer->Resize(width, height);
   s_Data.m_PostProcessBuffer->Resize(width, height);
+  s_Data.m_ResultBuffer->AttachExternalDepthTexture(
+    s_Data.m_GeometryBuffer->GetDepthAttachmentRendererID());
   Camera::SetViewportSize(width, height);
   AudioManager::PlaySound(sound);
 }
@@ -1116,6 +1274,8 @@ void OpenGLRenderer::ApplyDisplaySettings()
   s_Data.m_ResultBuffer->Resize(width, height);
   s_Data.m_PostProcessBuffer->Resize(width, height);
   s_Data.m_BloomBuffer->Resize(width, height);
+  s_Data.m_ResultBuffer->AttachExternalDepthTexture(
+    s_Data.m_GeometryBuffer->GetDepthAttachmentRendererID());
   Camera::SetViewportSize(width, height);
 }
 
@@ -1137,17 +1297,18 @@ void OpenGLRenderer::ApplyGraphicsSettings()
 
   if (quality == GraphicsQuality::Medium)
   {
-    filterSize = 4.0f;
+    filterSize = 3.0f;
     randomRadius = 2.0f;
   }
   else if (quality == GraphicsQuality::High)
   {
-    filterSize = 8.0f;
-    randomRadius = 3.0f;
+    filterSize = 4.0f;
+    randomRadius = 2.5f;
   }
   s_Data.m_DirectShadowBuffer = DirectShadowBuffer::Create(
     directResolution, directResolution, 16.0f, filterSize, randomRadius);
-  s_Data.m_OmniDirectShadowBuffer = OmniDirectShadowBuffer::Create(omniResolution, omniResolution);
+  s_Data.m_OmniDirectShadowBuffer = OmniDirectShadowBuffer::Create(
+    omniResolution, omniResolution);
   s_Data.m_AppliedShadowQuality = qualityValue;
 }
 
@@ -2016,6 +2177,31 @@ void OpenGLRenderer::DrawText(const Font* font, const std::string& text, const g
   Set3D(false);
 }
 
+void OpenGLRenderer::DrawParticles(const std::vector<ParticleRenderInstance>& instances)
+{
+  if (instances.empty() || !s_Data.m_ParticleVAO ||
+      !s_Data.m_ParticleInstanceBuffer || !s_Data.s_Shaders.ParticleShader)
+    return;
+
+  glNamedBufferSubData(s_Data.m_ParticleInstanceBuffer, 0,
+    static_cast<GLsizeiptr>(instances.size() * sizeof(ParticleRenderInstance)),
+    instances.data());
+  glEnable(GL_DEPTH_TEST);
+  glDepthMask(GL_FALSE);
+  glDisable(GL_CULL_FACE);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  s_Data.s_Shaders.ParticleShader->Bind();
+  glBindVertexArray(s_Data.m_ParticleVAO);
+  glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4,
+    static_cast<GLsizei>(instances.size()));
+  glBindVertexArray(0);
+  s_Data.s_Shaders.ParticleShader->UnBind();
+  glDisable(GL_BLEND);
+  glEnable(GL_CULL_FACE);
+  glDepthMask(GL_TRUE);
+}
+
 void OpenGLRenderer::DrawText(const Font* font, const std::string& text, const glm::vec2& position, float size, const glm::vec4& color)
 {
   DrawText(font, text, glm::vec3(position, 0.0f), glm::vec3(0.0f), size, color, -1);
@@ -2023,7 +2209,7 @@ void OpenGLRenderer::DrawText(const Font* font, const std::string& text, const g
 
 void OpenGLRenderer::DrawText(const Font* font, const std::string& text, const glm::vec3& position, const glm::vec3& rotation, float size, const glm::vec4& color, int entityID)
 {
-  if (!font || font->m_Characters.empty() || text.empty())
+  if (!font || font->m_AtlasHandle == 0 || font->m_Characters.empty() || text.empty())
   {
       GABGL_ERROR("Font is nullptr, empty, or text is empty");
       return;
@@ -2058,7 +2244,10 @@ void OpenGLRenderer::DrawText(const Font* font, const std::string& text, const g
     auto it = font->m_Characters.find(c);
     if (it == font->m_Characters.end()) continue;
 
-    const auto&[TextureID, Size, Bearing, Advance] = it->second;
+    const Character& glyph = it->second;
+    const auto& Size = glyph.Size;
+    const auto& Bearing = glyph.Bearing;
+    const uint32_t Advance = glyph.Advance;
 
     if (s_Data.QuadIndexCount >= OpenGLRendererData::MaxIndices)
         NextBatch();
@@ -2076,7 +2265,8 @@ void OpenGLRenderer::DrawText(const Font* font, const std::string& text, const g
     float textureIndex = 0.0f;
     for (uint32_t slot = 1; slot < s_Data.TextureSlotIndex; ++slot)
     {
-      if (s_Data.TextureSlots[slot] && s_Data.TextureSlots[slot]->GetRendererID() == TextureID)
+      if (s_Data.TextureSlots[slot] &&
+          s_Data.TextureSlots[slot]->GetRendererID() == font->m_AtlasHandle)
       {
         textureIndex = static_cast<float>(slot);
         break;
@@ -2088,13 +2278,19 @@ void OpenGLRenderer::DrawText(const Font* font, const std::string& text, const g
         NextBatch();
 
       textureIndex = static_cast<float>(s_Data.TextureSlotIndex);
-      s_Data.TextureSlots[s_Data.TextureSlotIndex++] = Texture::WrapExisting(TextureID);
+      s_Data.TextureSlots[s_Data.TextureSlotIndex++] = Texture::WrapExisting(
+        static_cast<uint32_t>(font->m_AtlasHandle));
     }
 
+    const glm::vec2 glyphTexCoords[4] = {
+      {glyph.UVTopLeft.x, glyph.UVBottomRight.y},
+      glyph.UVBottomRight,
+      {glyph.UVBottomRight.x, glyph.UVTopLeft.y},
+      glyph.UVTopLeft};
     for (int i = 0; i < 4; i++) {
         s_Data.QuadVertexBufferPtr->Position = transform * glm::vec4(OpenGLRendererData::quadPositions[i], 1.0f);
         s_Data.QuadVertexBufferPtr->Color = color;
-        s_Data.QuadVertexBufferPtr->TexCoord = OpenGLRendererData::tex3DCoords[i];
+        s_Data.QuadVertexBufferPtr->TexCoord = glyphTexCoords[i];
         s_Data.QuadVertexBufferPtr->TexIndex = textureIndex;
         s_Data.QuadVertexBufferPtr->TilingFactor = 1.0f;
         s_Data.QuadVertexBufferPtr->EntityID = entityID;
@@ -2135,6 +2331,12 @@ void OpenGLRenderer::RebuildDrawCommandsForModel(const std::shared_ptr<Model>& m
 
 void OpenGLRenderer::UpdateModelFrustumCulling()
 {
+  if (PrepareGPUCullData())
+  {
+    DispatchGPUCull(Camera::GetViewProjection(), false);
+    return;
+  }
+
   if (s_Data.m_DrawCommands.empty() || s_Data.m_CulledCmdBuffer == 0)
   {
     RenderBackend::SetStatistics({});
@@ -2184,6 +2386,258 @@ void OpenGLRenderer::UpdateModelFrustumCulling()
     static_cast<GLsizeiptr>(s_Data.m_CulledDrawCommands.size() * sizeof(DrawElementsIndirectCommand)),
     s_Data.m_CulledDrawCommands.data());
   RenderBackend::SetStatistics(statistics);
+}
+
+static void WaitForCullFence(GLsync& fence)
+{
+  if (!fence) return;
+  GLenum result = glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 0);
+  while (result == GL_TIMEOUT_EXPIRED)
+    result = glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 1'000'000);
+  glDeleteSync(fence);
+  fence = nullptr;
+}
+
+static void DestroyGPUDrivenResources()
+{
+  for (GLsync& fence : s_Data.m_CullRingFences)
+    WaitForCullFence(fence);
+  if (s_Data.m_CullDataMapped && s_Data.m_CullDataRingBuffer)
+    glUnmapNamedBuffer(s_Data.m_CullDataRingBuffer);
+  const std::array<GLuint, 4> buffers = {
+    s_Data.m_GPUVisibleTransforms, s_Data.m_GPUDrawRemap,
+    s_Data.m_GPUDrawCount, s_Data.m_CullDataRingBuffer};
+  glDeleteBuffers(static_cast<GLsizei>(buffers.size()), buffers.data());
+  if (s_Data.m_HiZTexture) glDeleteTextures(1, &s_Data.m_HiZTexture);
+  s_Data.m_GPUVisibleTransforms = 0;
+  s_Data.m_GPUDrawRemap = 0;
+  s_Data.m_GPUDrawCount = 0;
+  s_Data.m_CullDataRingBuffer = 0;
+  s_Data.m_CullDataMapped = nullptr;
+  s_Data.m_CullDataSegmentStride = 0;
+  s_Data.m_CullDataCapacity = 0;
+  s_Data.m_CullDataCurrentOffset = 0;
+  s_Data.m_CullDataPrepared = false;
+  s_Data.m_GPUVisibleTransformCapacity = 0;
+  s_Data.m_GPUCommandCapacity = 0;
+  s_Data.m_HiZTexture = 0;
+  s_Data.m_HiZWidth = s_Data.m_HiZHeight = s_Data.m_HiZMipCount = 0;
+  s_Data.m_HiZValid = false;
+}
+
+static size_t AlignBufferOffset(size_t value, size_t alignment)
+{
+  return (value + alignment - 1) / alignment * alignment;
+}
+
+static void EnsureCullDataRing(size_t requiredBytes)
+{
+  requiredBytes = std::max(requiredBytes, sizeof(DrawCullData));
+  if (s_Data.m_CullDataRingBuffer && requiredBytes <= s_Data.m_CullDataCapacity)
+    return;
+
+  for (GLsync& fence : s_Data.m_CullRingFences)
+    WaitForCullFence(fence);
+  if (s_Data.m_CullDataMapped && s_Data.m_CullDataRingBuffer)
+    glUnmapNamedBuffer(s_Data.m_CullDataRingBuffer);
+  if (s_Data.m_CullDataRingBuffer)
+    glDeleteBuffers(1, &s_Data.m_CullDataRingBuffer);
+
+  GLint alignment = 256;
+  glGetIntegerv(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, &alignment);
+  s_Data.m_CullDataCapacity = std::max(requiredBytes, s_Data.m_CullDataCapacity * 2);
+  s_Data.m_CullDataSegmentStride = AlignBufferOffset(
+    s_Data.m_CullDataCapacity, static_cast<size_t>(std::max(alignment, 1)));
+  const size_t totalBytes = s_Data.m_CullDataSegmentStride * s_Data.m_CullRingFences.size();
+  constexpr GLbitfield storageFlags =
+    GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
+  glCreateBuffers(1, &s_Data.m_CullDataRingBuffer);
+  glNamedBufferStorage(s_Data.m_CullDataRingBuffer,
+    static_cast<GLsizeiptr>(totalBytes), nullptr, storageFlags);
+  s_Data.m_CullDataMapped = static_cast<uint8_t*>(glMapNamedBufferRange(
+    s_Data.m_CullDataRingBuffer, 0, static_cast<GLsizeiptr>(totalBytes), storageFlags));
+  if (!s_Data.m_CullDataMapped)
+    throw std::runtime_error("Failed to persistently map OpenGL cull-data ring");
+}
+
+static void EnsureGPUCullOutputBuffers(size_t transformCount, size_t commandCount)
+{
+  const size_t requiredTransforms = std::max<size_t>(transformCount, 1);
+  const size_t requiredCommands = std::max<size_t>(commandCount, 1);
+  if (s_Data.m_GPUVisibleTransforms && s_Data.m_GPUDrawRemap && s_Data.m_GPUDrawCount &&
+      requiredTransforms <= s_Data.m_GPUVisibleTransformCapacity &&
+      requiredCommands <= s_Data.m_GPUCommandCapacity)
+    return;
+
+  glFinish();
+  if (s_Data.m_GPUVisibleTransforms) glDeleteBuffers(1, &s_Data.m_GPUVisibleTransforms);
+  if (s_Data.m_GPUDrawRemap) glDeleteBuffers(1, &s_Data.m_GPUDrawRemap);
+  if (s_Data.m_GPUDrawCount) glDeleteBuffers(1, &s_Data.m_GPUDrawCount);
+  s_Data.m_GPUVisibleTransformCapacity = std::max(
+    requiredTransforms, s_Data.m_GPUVisibleTransformCapacity * 2);
+  s_Data.m_GPUCommandCapacity = std::max(
+    requiredCommands, s_Data.m_GPUCommandCapacity * 2);
+
+  glCreateBuffers(1, &s_Data.m_GPUVisibleTransforms);
+  glNamedBufferStorage(s_Data.m_GPUVisibleTransforms,
+    static_cast<GLsizeiptr>(s_Data.m_GPUVisibleTransformCapacity * sizeof(glm::mat4)),
+    nullptr, 0);
+  glCreateBuffers(1, &s_Data.m_GPUDrawRemap);
+  glNamedBufferStorage(s_Data.m_GPUDrawRemap,
+    static_cast<GLsizeiptr>(s_Data.m_GPUCommandCapacity * sizeof(uint32_t)), nullptr, 0);
+  glCreateBuffers(1, &s_Data.m_GPUDrawCount);
+  const uint32_t zero = 0;
+  glNamedBufferStorage(s_Data.m_GPUDrawCount, sizeof(uint32_t), &zero,
+    GL_DYNAMIC_STORAGE_BIT);
+}
+
+static void EnsureHiZTexture(uint32_t width, uint32_t height)
+{
+  width = std::max(width, 1u);
+  height = std::max(height, 1u);
+  if (s_Data.m_HiZTexture && width == s_Data.m_HiZWidth && height == s_Data.m_HiZHeight)
+    return;
+  if (s_Data.m_HiZTexture) glDeleteTextures(1, &s_Data.m_HiZTexture);
+  s_Data.m_HiZWidth = width;
+  s_Data.m_HiZHeight = height;
+  s_Data.m_HiZMipCount = 1u + static_cast<uint32_t>(std::floor(
+    std::log2(static_cast<float>(std::max(width, height)))));
+  glCreateTextures(GL_TEXTURE_2D, 1, &s_Data.m_HiZTexture);
+  glTextureStorage2D(s_Data.m_HiZTexture, static_cast<GLsizei>(s_Data.m_HiZMipCount),
+    GL_R32F, static_cast<GLsizei>(width), static_cast<GLsizei>(height));
+  glTextureParameteri(s_Data.m_HiZTexture, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+  glTextureParameteri(s_Data.m_HiZTexture, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTextureParameteri(s_Data.m_HiZTexture, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTextureParameteri(s_Data.m_HiZTexture, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  s_Data.m_HiZValid = false;
+}
+
+static void BuildHiZPyramid()
+{
+  if (!s_Data.m_GPUDrivenSupported || !s_Data.s_Shaders.HiZBuildShader ||
+      !s_Data.m_GeometryBuffer)
+    return;
+  EnsureHiZTexture(Window::GetWidth(), Window::GetHeight());
+  auto& shader = s_Data.s_Shaders.HiZBuildShader;
+  shader->Bind();
+  shader->SetInt("u_Source", 15);
+  for (uint32_t mip = 0; mip < s_Data.m_HiZMipCount; ++mip)
+  {
+    const uint32_t width = std::max(s_Data.m_HiZWidth >> mip, 1u);
+    const uint32_t height = std::max(s_Data.m_HiZHeight >> mip, 1u);
+    glBindTextureUnit(15, mip == 0
+      ? s_Data.m_GeometryBuffer->GetDepthAttachmentRendererID()
+      : s_Data.m_HiZTexture);
+    glBindImageTexture(0, s_Data.m_HiZTexture, static_cast<GLint>(mip), GL_FALSE, 0,
+      GL_WRITE_ONLY, GL_R32F);
+    shader->SetBool("u_CopyDepth", mip == 0);
+    shader->SetInt("u_SourceMip", mip == 0 ? 0 : static_cast<int>(mip - 1));
+    shader->SetVec2("u_DestinationSize", static_cast<float>(width), static_cast<float>(height));
+    glDispatchCompute(
+      (width + s_Data.m_HiZLocalSizeX - 1u) / s_Data.m_HiZLocalSizeX,
+      (height + s_Data.m_HiZLocalSizeY - 1u) / s_Data.m_HiZLocalSizeY, 1);
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+  }
+  shader->UnBind();
+  s_Data.m_HiZValid = true;
+}
+
+static void DispatchGPUCull(const glm::mat4& viewProjection, bool useHiZ)
+{
+  const size_t drawCount = s_Data.m_DrawCommands.size();
+  if (!s_Data.m_GPUDrivenSupported || drawCount == 0 ||
+      !s_Data.s_Shaders.GPUCullShader)
+    return;
+  const uint32_t zero = 0;
+  glClearNamedBufferData(s_Data.m_GPUDrawCount, GL_R32UI,
+    GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 14, s_Data.m_cmdBufer);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 16,
+    ModelManager::GetAllInstanceTransformsBuffer());
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 17, s_Data.m_GPUVisibleTransforms);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 18, s_Data.m_CulledCmdBuffer);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 19, s_Data.m_GPUDrawRemap);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 20, s_Data.m_GPUDrawCount);
+  glBindTextureUnit(15, s_Data.m_HiZTexture);
+  auto& shader = s_Data.s_Shaders.GPUCullShader;
+  shader->Bind();
+  shader->SetMat4("u_ViewProjection", viewProjection);
+  shader->SetBool("u_UseHiZ", useHiZ && s_Data.m_HiZValid);
+  shader->SetInt("u_HiZMaxMip", static_cast<int>(
+    s_Data.m_HiZMipCount > 0 ? s_Data.m_HiZMipCount - 1 : 0));
+  shader->SetVec2("u_HiZResolution",
+    static_cast<float>(s_Data.m_HiZWidth), static_cast<float>(s_Data.m_HiZHeight));
+  shader->SetInt("u_HiZTexture", 15);
+  glMemoryBarrier(GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
+  glDispatchCompute(static_cast<GLuint>(
+    (drawCount + s_Data.m_GPUCullLocalSizeX - 1u) / s_Data.m_GPUCullLocalSizeX), 1, 1);
+  glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+  shader->UnBind();
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 13, s_Data.m_GPUVisibleTransforms);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 14, s_Data.m_GPUDrawRemap);
+}
+
+static void DrawCompactedCommands()
+{
+  glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s_Data.m_CulledCmdBuffer);
+  glBindBuffer(GL_PARAMETER_BUFFER, s_Data.m_GPUDrawCount);
+  glMultiDrawElementsIndirectCount(GL_TRIANGLES, GL_UNSIGNED_INT, nullptr, 0,
+    static_cast<GLsizei>(s_Data.m_DrawCommands.size()), 0);
+  glBindBuffer(GL_PARAMETER_BUFFER, 0);
+  glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+}
+
+static bool PrepareGPUCullData()
+{
+  if (!s_Data.m_GPUDrivenSupported || s_Data.m_DrawCommands.empty())
+    return false;
+  if (s_Data.m_CullDataPrepared)
+    return true;
+  std::vector<DrawCullData> cullData(s_Data.m_DrawCommands.size());
+  size_t visibleTransformCapacity = 0;
+  for (size_t draw = 0; draw < s_Data.m_DrawCommands.size(); ++draw)
+  {
+    cullData[draw].Metadata.x = static_cast<uint32_t>(visibleTransformCapacity);
+    cullData[draw].Metadata.y = static_cast<uint32_t>(draw);
+    visibleTransformCapacity += s_Data.m_DrawCommands[draw].instanceCount;
+  }
+
+  RenderStatistics statistics;
+  for (const std::string& modelName : ModelManager::GetModelNames())
+  {
+    const auto model = ModelManager::GetModel(modelName);
+    const auto commandIndices = s_Data.m_ModelDrawCommandIndices.find(modelName);
+    if (!model || commandIndices == s_Data.m_ModelDrawCommandIndices.end()) continue;
+    if (model->m_IsRendered)
+      statistics.RenderableInstances += static_cast<uint32_t>(model->m_InstanceTransforms.size());
+    const bool allowHiZ = !model->IsAnimated() &&
+      model->GetPhysXMeshType() != MeshType::CONTROLLER;
+    for (const size_t commandIndex : commandIndices->second)
+    {
+      if (commandIndex >= cullData.size()) continue;
+      cullData[commandIndex].LocalSphere = glm::vec4(
+        model->GetBoundsCenter(), model->GetBoundsRadius());
+      cullData[commandIndex].Metadata.z = allowHiZ ? 1u : 0u;
+    }
+  }
+  statistics.VisibleInstances = statistics.RenderableInstances;
+  RenderBackend::SetStatistics(statistics);
+
+  s_Data.m_CurrentVisibleTransformCapacity = visibleTransformCapacity;
+  EnsureGPUCullOutputBuffers(visibleTransformCapacity, cullData.size());
+  const size_t bytes = cullData.size() * sizeof(DrawCullData);
+  EnsureCullDataRing(bytes);
+  s_Data.m_CullRingIndex = (s_Data.m_CullRingIndex + 1u) %
+    static_cast<uint32_t>(s_Data.m_CullRingFences.size());
+  WaitForCullFence(s_Data.m_CullRingFences[s_Data.m_CullRingIndex]);
+  s_Data.m_CullDataCurrentOffset =
+    s_Data.m_CullRingIndex * s_Data.m_CullDataSegmentStride;
+  std::memcpy(s_Data.m_CullDataMapped + s_Data.m_CullDataCurrentOffset,
+    cullData.data(), bytes);
+  glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 15, s_Data.m_CullDataRingBuffer,
+    static_cast<GLintptr>(s_Data.m_CullDataCurrentOffset), static_cast<GLsizeiptr>(bytes));
+  s_Data.m_CullDataPrepared = true;
+  return true;
 }
 
 void OpenGLRenderer::UpdateDrawCommandInstances(const std::shared_ptr<Model>& model)

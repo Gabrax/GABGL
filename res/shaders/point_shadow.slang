@@ -20,6 +20,9 @@ const int MAX_BONE_INFLUENCE = 4;
 layout(std430, binding = 9) buffer FinalBoneMatrices { mat4 boneMatrices[]; };
 layout(std430, binding = 10) buffer ModelIsAnimated  { int modelIsAnimated[]; };
 layout(std430, binding = 13) readonly buffer InstanceTransforms { mat4 instanceTransforms[]; };
+layout(std430, binding = 14) readonly buffer DrawRemap { uint compactDrawToOriginal[]; };
+
+uniform bool u_GPUDriven;
 
 #define GABGL_MATRIX4 mat4
 #define GABGL_INT4 ivec4
@@ -31,7 +34,8 @@ out vec3 WorldPos;
 
 void main()
 {
-  int transformIndex = meshToTransform[gl_DrawID];
+  uint drawID = u_GPUDriven ? compactDrawToOriginal[gl_DrawID] : uint(gl_DrawID);
+  int transformIndex = meshToTransform[drawID];
   bool isAnimated = (modelIsAnimated[transformIndex] == 1);
   mat4 modelMat = instanceTransforms[gl_BaseInstance + gl_InstanceID];
 

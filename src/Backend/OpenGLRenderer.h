@@ -8,6 +8,8 @@
 #include "ModelManager.h"
 #include "RenderCommon.h"
 
+struct ParticleRenderInstance;
+
 struct OpenGLRenderer
 {
 	static void Init();
@@ -41,6 +43,7 @@ struct OpenGLRenderer
 	static void DrawText(const Font* font, const std::string& text, const glm::vec3& position, const glm::vec3& rotation, float size, const glm::vec4& color = glm::vec4(1.0f));
 	static void DrawText(const Font* font, const std::string& text, const glm::vec2& position, float size, const glm::vec4& color = glm::vec4(1.0f));
 	static void DrawText(const Font* font, const std::string& text, const glm::vec3& position, const glm::vec3& rotation, float size, const glm::vec4& color, int entityID = -1);
+	static void DrawParticles(const std::vector<ParticleRenderInstance>& instances);
 
 	// Screen-space (orthographic, pixel-coordinate) commands are consumed once per frame.
 	// Quad position and text position are their visual centers.

@@ -53,7 +53,8 @@ layout(std430, binding = 3) buffer LightColors       { vec4 colors[];    };
 layout(std430, binding = 4) buffer LightTypes        { int lightTypes[]; };
 
 uniform mat4 u_DirectShadowViewProj;
-uniform bool u_ShadowsEnabled;
+uniform bool u_DirectShadowsEnabled;
+uniform bool u_PointShadowsEnabled;
 uniform int u_PointShadowMask;
 
 const float gamma = 1.2;
@@ -77,12 +78,8 @@ vec3 toneMappingACES(vec3 color) {
 }
 
 float calculateDirectShadow(vec4 fragPosLightSpace, vec3 lightDir, vec3 normal) {
-  if (!u_ShadowsEnabled || fragPosLightSpace.w <= 0.0)
+  if (!u_DirectShadowsEnabled || fragPosLightSpace.w <= 0.0)
     return 1.0;
-
-  ivec3 OffsetCoord;
-  vec2 f = mod(gl_FragCoord.xy, offsetSize_filterSize.xx);
-  OffsetCoord.yz = ivec2(f);
 
   vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
   vec3 shadowCoords = projCoords * 0.5 + 0.5;
@@ -93,6 +90,13 @@ float calculateDirectShadow(vec4 fragPosLightSpace, vec3 lightDir, vec3 normal) 
   float texelSizeX = 1.0 / windowSize.x;
   float texelSizeY = 1.0 / windowSize.y;
   vec2 texelSize = vec2(texelSizeX, texelSizeY);
+
+  // Anchor the Poisson pattern to the shadow map rather than to screen
+  // pixels. gl_FragCoord changes whenever the camera moves and made a fixed
+  // world-space point select a different kernel every frame.
+  ivec2 patternSize = max(ivec2(offsetSize_filterSize.xx), ivec2(1));
+  ivec2 shadowTexel = ivec2(floor(shadowCoords.xy * windowSize));
+  ivec3 OffsetCoord = ivec3(0, shadowTexel % patternSize);
 
   float diffuseFactor = max(dot(normalize(normal), normalize(lightDir)), 0.0);
   float bias = max(0.0015 * (1.0 - diffuseFactor), 0.00015);
@@ -118,7 +122,8 @@ float calculateDirectShadow(vec4 fragPosLightSpace, vec3 lightDir, vec3 normal) 
 }
 
 float calculatePointShadow(vec3 fragPos, vec3 lightPos, vec3 normal, int lightIndex) {
-  if (!u_ShadowsEnabled || lightIndex >= 20 || (u_PointShadowMask & (1 << lightIndex)) == 0)
+  if (!u_PointShadowsEnabled || lightIndex >= 20 ||
+      (u_PointShadowMask & (1 << lightIndex)) == 0)
     return 1.0;
 
   vec3 fragToLight = fragPos - lightPos;
@@ -127,10 +132,24 @@ float calculatePointShadow(vec3 fragPos, vec3 lightPos, vec3 normal, int lightIn
     return 1.0;
   vec3 direction = normalize(fragToLight);
 
-  float closestDepth = texture(u_OmniShadow, vec4(direction, float(lightIndex))).r;
   float bias = max(0.03 * (1.0 - dot(normalize(normal), -direction)), 0.003);
-
-  return (currentDepth - bias > closestDepth) ? 0.15 : 1.0;
+  float shadowResolution = float(textureSize(u_OmniShadow, 0).x);
+  float filterRadius = (2.0 / max(shadowResolution, 1.0)) *
+    (1.0 + 2.0 * currentDepth / 20.0);
+  // A tetrahedral kernel covers the cubemap direction with half the texture
+  // fetches of the previous eight-corner kernel.
+  const vec3 sampleOffsets[4] = vec3[4](
+    vec3( 1.0,  1.0,  1.0), vec3(-1.0, -1.0,  1.0),
+    vec3(-1.0,  1.0, -1.0), vec3( 1.0, -1.0, -1.0));
+  float occludedSamples = 0.0;
+  for (int sampleIndex = 0; sampleIndex < 4; ++sampleIndex)
+  {
+    float closestDepth = texture(u_OmniShadow,
+      vec4(direction + sampleOffsets[sampleIndex] * filterRadius,
+           float(lightIndex))).r;
+    occludedSamples += currentDepth - bias > closestDepth ? 1.0 : 0.0;
+  }
+  return mix(1.0, 0.15, occludedSamples * 0.25);
 }
 
 vec3 calculateDirectionalLight(vec3 lightDir, vec3 normal, vec3 viewDir, vec3 surfaceColor, vec4 fragPosLightSpace, vec3 ambientCol, vec3 specularCol, vec3 lightColor, float shininess) {
@@ -161,6 +180,12 @@ vec3 calculateSpotlight(vec3 lightPos, vec3 lightDir, vec3 fragPos, vec3 normal,
 void main()
 {
   vec4 PositionData = texture(gPosition, TexCoords);
+  if (PositionData.a <= 0.0)
+  {
+    FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+    BrightColor = vec4(0.0);
+    return;
+  }
   vec3 FragPos = PositionData.rgb;
   vec3 Normal = normalize(texture(gNormal, TexCoords).rgb);
   vec4 AlbedoSpec = texture(gAlbedoSpec, TexCoords);

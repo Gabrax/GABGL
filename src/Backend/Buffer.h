@@ -186,6 +186,7 @@ struct StorageBuffer
   void CleanUp();
   void* MapBuffer();
   void UnmapBuffer();
+  GLuint GetID() const { return m_RendererID; }
   inline static std::shared_ptr<StorageBuffer> Create(uint32_t size, uint32_t binding) { return std::make_shared<StorageBuffer>(size, binding); }
 private:
   uint32_t m_RendererID = 0;
@@ -307,9 +308,11 @@ struct GeometryBuffer
   void Resize(uint32_t width, uint32_t height);
 
   void BindPositionTextureForReading(GLenum textureUnit);
+  void BindDepthTextureForReading(GLenum textureUnit);
   void BindNormalTextureForReading(GLenum textureUnit);
   void BindAlbedoTextureForReading(GLenum textureUnit);
   void BlitDepthTo(const std::shared_ptr<FrameBuffer>& dst);
+  GLuint GetDepthAttachmentRendererID() const { return m_DepthAttachment; }
 
   static std::shared_ptr<GeometryBuffer> Create(uint32_t width, uint32_t height);
 

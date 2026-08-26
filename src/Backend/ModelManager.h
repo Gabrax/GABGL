@@ -260,9 +260,11 @@ struct ModelManager
   static std::vector<glm::mat4> GetTransforms();
   static GLsizei GetModelsQuantity();
   static GLuint GetModelsVAO();
+  static GLuint GetAllInstanceTransformsBuffer();
   static void UploadVisibleInstanceTransforms(const std::vector<glm::mat4>& transforms);
   static void BindAllInstanceTransforms();
   static void BindVisibleInstanceTransforms();
+  static void EndGPUFrame();
   static void SetRender(const std::string& name ,bool render);
   static void SetInitialModelTransform(const std::string& name, const glm::mat4& transform);
   static uint32_t AddModelInstance(const std::string& name, const glm::mat4& transform);
