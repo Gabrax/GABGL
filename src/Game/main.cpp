@@ -1,13 +1,14 @@
-#include "backend/ModelManager.h"
-#include "backend/Logger.h"
-#include "backend/AudioManager.h"
-#include "backend/PhysX.h"
-#include "backend/FontManager.h"
-#include "backend/Settings.h"
-#include "backend/SceneManager.h"
-#include "backend/Window.h"
-#include "backend/RenderBackend.h"
-#include "backend/RenderSystem.h"
+#include "GameBootstrap.h"
+
+#include "AudioManager.h"
+#include "Logger.h"
+#include "ModelManager.h"
+#include "PhysX.h"
+#include "RenderBackend.h"
+#include "RenderSystem.h"
+#include "SceneManager.h"
+#include "Settings.h"
+#include "Window.h"
 
 #include <thread>
 #include <chrono>
@@ -79,6 +80,12 @@ int main(int argc, char** argv)
   PhysX::Init();
   RenderSystem::Initialize();
   ModelManager::Init();
+  Game::Register();
+
+  Window::SetEventCallback([](Event& event)
+  {
+    if (auto* scene = SceneManager::GetActiveScene()) scene->OnEvent(event);
+  });
 
   AudioManager::SetMusicVolume(Settings::GetMusicVolume());
   AudioManager::SetSFXVolume(Settings::GetSFXVolume());

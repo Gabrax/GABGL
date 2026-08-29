@@ -185,6 +185,7 @@ struct OpenGLRendererData
 		std::shared_ptr<Shader> GPUCullShader;
 		std::shared_ptr<Shader> HiZBuildShader;
 		std::shared_ptr<Shader> ZPrepassShader;
+		std::shared_ptr<Shader> TiledLightCullShader;
 	} s_Shaders;
 
   CameraData m_CameraBuffer;
@@ -195,7 +196,29 @@ struct OpenGLRendererData
   std::shared_ptr<StorageBuffer> m_LightCountBuffer;
   std::shared_ptr<StorageBuffer> m_LightColorBuffer;
   std::shared_ptr<StorageBuffer> m_LightTypeBuffer;
+  std::shared_ptr<StorageBuffer> m_PointShadowSlotBuffer;
   uint32_t m_LightCapacity = 32;
+
+  GLuint m_TileLightGridBuffer = 0;
+  GLuint m_TileLightIndexBuffer = 0;
+  size_t m_TileBufferCapacity = 0;
+  bool m_TiledLightingSupported = false;
+  uint32_t m_TileDebugTileCount = 0;
+  uint32_t m_TileDebugActiveTileCount = 0;
+  uint32_t m_TileDebugMinLights = 0;
+  uint32_t m_TileDebugMaxLights = 0;
+  float m_TileDebugAverageLights = 0.0f;
+
+  struct PointShadowCacheEntry
+  {
+    bool Valid = false;
+    uint32_t LightIndex = std::numeric_limits<uint32_t>::max();
+    glm::vec3 LightPosition{0.0f};
+    uint64_t CasterHash = 0;
+  };
+  std::array<PointShadowCacheEntry, 4> m_PointShadowCache{};
+  uint32_t m_PointShadowFacesRendered = 0;
+  uint32_t m_PointShadowFacesCached = 0;
 
   std::unordered_map<std::string, std::shared_ptr<Texture>> skyboxes;
 
@@ -250,11 +273,11 @@ struct OpenGLRendererData
   GLuint m_ParticleInstanceBuffer = 0;
   std::vector<Debug2DCommand> m_Debug2DCommands;
   uint32_t m_AppliedShadowQuality = std::numeric_limits<uint32_t>::max();
-  int m_PointShadowMask = 0;
   static constexpr bool DirectionalShadowsEnabled = true;
   static constexpr bool HiZOcclusionEnabled = true;
   static constexpr uint32_t MaxShadowedPointLights = 4;
-  static constexpr uint32_t MaxOmniShadowLayers = 20;
+  static constexpr uint32_t TileSize = 16;
+  static constexpr uint32_t MaxLightsPerTile = 128;
   static constexpr float PointShadowRadius = 20.0f;
 
 	enum class SceneState { Edit = 0, Play = 1 } m_SceneState;
@@ -268,6 +291,56 @@ static void BuildHiZPyramid();
 static void DispatchGPUCull(const glm::mat4& viewProjection, bool useHiZ);
 static void DrawCompactedCommands();
 static bool PrepareGPUCullData();
+static bool DispatchTiledLightCulling();
+static void UploadPointShadowSlots(const std::vector<int32_t>& slots);
+static void UpdateShadowFaceCulling(const glm::mat4& viewProjection);
+
+struct PointShadowCasterState
+{
+  uint64_t Hash = 1469598103934665603ull;
+  bool HasAnimatedCaster = false;
+};
+
+static void HashShadowBytes(uint64_t& hash, const void* data, size_t size)
+{
+  constexpr uint64_t prime = 1099511628211ull;
+  const auto* bytes = static_cast<const uint8_t*>(data);
+  for (size_t index = 0; index < size; ++index)
+  {
+    hash ^= bytes[index];
+    hash *= prime;
+  }
+}
+
+static PointShadowCasterState GetPointShadowCasterState(const glm::vec3& lightPosition)
+{
+  PointShadowCasterState state;
+  for (const std::string& modelName : ModelManager::GetModelNames())
+  {
+    const auto model = ModelManager::GetModel(modelName);
+    if (!model || !model->m_IsRendered) continue;
+
+    bool modelAdded = false;
+    for (const glm::mat4& transform : model->m_InstanceTransforms)
+    {
+      const WorldBoundingSphere sphere = CalculateWorldBoundingSphere(*model, transform);
+      const float range = OpenGLRendererData::PointShadowRadius + sphere.radius;
+      const glm::vec3 offset = sphere.center - lightPosition;
+      if (glm::dot(offset, offset) > range * range) continue;
+
+      if (!modelAdded)
+      {
+        HashShadowBytes(state.Hash, modelName.data(), modelName.size());
+        const float boundsRadius = model->GetBoundsRadius();
+        HashShadowBytes(state.Hash, &boundsRadius, sizeof(boundsRadius));
+        modelAdded = true;
+      }
+      HashShadowBytes(state.Hash, glm::value_ptr(transform), sizeof(glm::mat4));
+      state.HasAnimatedCaster |= model->IsAnimated();
+    }
+  }
+  return state;
+}
 
 static bool HasLight(const LightType type)
 {
@@ -285,15 +358,6 @@ static glm::vec3 GetDirectionalLightDirection()
     return candidate.Type == LightType::DIRECT;
   });
   return light == lights.end() ? glm::vec3(-1.0f, -2.0f, -1.0f) : light->Direction;
-}
-
-static std::vector<glm::vec3> GetPointLightPositions()
-{
-  std::vector<glm::vec3> positions;
-  positions.reserve(RenderBackend::Lights().size());
-  for (const RenderLight& light : RenderBackend::Lights())
-    if (light.Type == LightType::POINT) positions.push_back(light.Position);
-  return positions;
 }
 
 static void DrawWireSphere(const glm::vec3& center, float radius, const glm::vec4& color, int segments = 24)
@@ -485,6 +549,9 @@ void OpenGLRenderer::LoadShaders()
 		Shader::Create(s_Data.s_Shaders.HiZBuildShader, "../res/shaders/hiz_build.slang");
 		Shader::Create(s_Data.s_Shaders.ZPrepassShader, "../res/shaders/geometry_z_prepass.slang");
 	}
+	if (s_Data.m_TiledLightingSupported)
+		Shader::Create(s_Data.s_Shaders.TiledLightCullShader,
+			"../res/shaders/tiled_light_cull.slang");
 }
 
 void OpenGLRenderer::SetLights(const std::vector<RenderLight>& lights)
@@ -499,6 +566,8 @@ void OpenGLRenderer::SetLights(const std::vector<RenderLight>& lights)
     s_Data.m_LightCountBuffer = StorageBuffer::Create(sizeof(uint32_t), 2);
     s_Data.m_LightColorBuffer = StorageBuffer::Create(sizeof(glm::vec4) * s_Data.m_LightCapacity, 3);
     s_Data.m_LightTypeBuffer = StorageBuffer::Create(sizeof(uint32_t) * s_Data.m_LightCapacity, 4);
+    s_Data.m_PointShadowSlotBuffer = StorageBuffer::Create(
+      sizeof(int32_t) * s_Data.m_LightCapacity, 23);
   }
 
   const uint32_t count = static_cast<uint32_t>(lights.size());
@@ -523,6 +592,7 @@ void OpenGLRenderer::SetLights(const std::vector<RenderLight>& lights)
   s_Data.m_LightDirectionBuffer->SetData(directions.size() * sizeof(glm::vec4), directions.data());
   s_Data.m_LightColorBuffer->SetData(colors.size() * sizeof(glm::vec4), colors.data());
   s_Data.m_LightTypeBuffer->SetData(types.size() * sizeof(uint32_t), types.data());
+  UploadPointShadowSlots(std::vector<int32_t>(count, -1));
 }
 
 void OpenGLRenderer::Init()
@@ -617,8 +687,9 @@ void OpenGLRenderer::Init()
 	std::vector<uint32_t> indices;
 	indices.reserve(s_Data.MaxIndices);
 
-	s_Data.m_GPUDrivenSupported = GLAD_GL_VERSION_4_6 &&
+  s_Data.m_GPUDrivenSupported = GLAD_GL_VERSION_4_6 &&
 		glDispatchCompute != nullptr && glMultiDrawElementsIndirectCount != nullptr;
+	s_Data.m_TiledLightingSupported = GLAD_GL_VERSION_4_6 && glDispatchCompute != nullptr;
 	LoadShaders();
 	if (s_Data.m_GPUDrivenSupported)
 	{
@@ -700,6 +771,8 @@ void OpenGLRenderer::Init()
 	s_Data.m_LightCountBuffer = StorageBuffer::Create(sizeof(uint32_t), 2);
 	s_Data.m_LightColorBuffer = StorageBuffer::Create(sizeof(glm::vec4) * s_Data.m_LightCapacity, 3);
 	s_Data.m_LightTypeBuffer = StorageBuffer::Create(sizeof(uint32_t) * s_Data.m_LightCapacity, 4);
+	s_Data.m_PointShadowSlotBuffer = StorageBuffer::Create(
+		sizeof(int32_t) * s_Data.m_LightCapacity, 23);
 	SetLights(RenderBackend::Lights());
 
 	s_Data.m_SceneState = OpenGLRendererData::SceneState::Play;
@@ -744,10 +817,14 @@ void OpenGLRenderer::Shutdown()
 	if (s_Data.m_ParticleInstanceBuffer) glDeleteBuffers(1, &s_Data.m_ParticleInstanceBuffer);
 	if (s_Data.m_ParticleQuadVBO) glDeleteBuffers(1, &s_Data.m_ParticleQuadVBO);
 	if (s_Data.m_ParticleVAO) glDeleteVertexArrays(1, &s_Data.m_ParticleVAO);
+	if (s_Data.m_TileLightGridBuffer) glDeleteBuffers(1, &s_Data.m_TileLightGridBuffer);
+	if (s_Data.m_TileLightIndexBuffer) glDeleteBuffers(1, &s_Data.m_TileLightIndexBuffer);
 	s_Data.m_FullscreenQuadVAO = s_Data.m_FullscreenQuadVBO = 0;
 	s_Data.m_FramebufferQuadVAO = s_Data.m_FramebufferQuadVBO = 0;
 	s_Data.m_SkyboxVAO = s_Data.m_SkyboxVBO = 0;
 	s_Data.m_ParticleVAO = s_Data.m_ParticleQuadVBO = s_Data.m_ParticleInstanceBuffer = 0;
+	s_Data.m_TileLightGridBuffer = s_Data.m_TileLightIndexBuffer = 0;
+	s_Data.m_TileBufferCapacity = 0;
 
 	s_Data.m_ResultBuffer.reset();
 	s_Data.m_PostProcessBuffer.reset();
@@ -762,6 +839,7 @@ void OpenGLRenderer::Shutdown()
 	s_Data.m_LightCountBuffer.reset();
 	s_Data.m_LightColorBuffer.reset();
 	s_Data.m_LightTypeBuffer.reset();
+	s_Data.m_PointShadowSlotBuffer.reset();
 	s_Data.QuadVertexArray.reset();
 	s_Data.QuadVertexBuffer.reset();
 	s_Data.LineVertexArray.reset();
@@ -846,26 +924,27 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
   {
     GABGL_PROFILE_SCOPE("OMNI SHADOW PASS");
 
+    s_Data.m_PointShadowFacesRendered = 0;
+    s_Data.m_PointShadowFacesCached = 0;
+
     struct ShadowCandidate
     {
       float DistanceSquared;
       uint32_t LightIndex;
     };
 
-    const auto pointLights = GetPointLightPositions();
+    const auto& lights = RenderBackend::Lights();
     std::vector<ShadowCandidate> candidates;
-    candidates.reserve(std::min(pointLights.size(),
-      static_cast<size_t>(OpenGLRendererData::MaxOmniShadowLayers)));
+    candidates.reserve(lights.size());
     const glm::vec3 cameraPosition = Camera::GetPosition();
     const RenderFrustum cameraFrustum(Camera::GetViewProjection());
-    const size_t supportedLightCount = std::min(pointLights.size(),
-      static_cast<size_t>(OpenGLRendererData::MaxOmniShadowLayers));
-    for (size_t lightIndex = 0; lightIndex < supportedLightCount; ++lightIndex)
+    for (size_t lightIndex = 0; lightIndex < lights.size(); ++lightIndex)
     {
+      if (lights[lightIndex].Type != LightType::POINT) continue;
       if (!cameraFrustum.IntersectsSphere(
-            pointLights[lightIndex], OpenGLRendererData::PointShadowRadius))
+            lights[lightIndex].Position, OpenGLRendererData::PointShadowRadius))
         continue;
-      const glm::vec3 toLight = pointLights[lightIndex] - cameraPosition;
+      const glm::vec3 toLight = lights[lightIndex].Position - cameraPosition;
       candidates.push_back({glm::dot(toLight, toLight),
         static_cast<uint32_t>(lightIndex)});
     }
@@ -877,18 +956,61 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
     if (candidates.size() > OpenGLRendererData::MaxShadowedPointLights)
       candidates.resize(OpenGLRendererData::MaxShadowedPointLights);
 
-    s_Data.m_PointShadowMask = 0;
+    std::vector<int32_t> pointShadowSlots(lights.size(), -1);
+    std::vector<size_t> candidateSlots(candidates.size(),
+      s_Data.m_PointShadowCache.size());
+    std::array<bool, OpenGLRendererData::MaxShadowedPointLights> usedSlots{};
+    for (size_t candidateIndex = 0; candidateIndex < candidates.size(); ++candidateIndex)
+    {
+      for (size_t slot = 0; slot < s_Data.m_PointShadowCache.size(); ++slot)
+      {
+        const auto& cache = s_Data.m_PointShadowCache[slot];
+        if (!usedSlots[slot] && cache.Valid &&
+            cache.LightIndex == candidates[candidateIndex].LightIndex)
+        {
+          candidateSlots[candidateIndex] = slot;
+          usedSlots[slot] = true;
+          break;
+        }
+      }
+    }
+    for (size_t candidateIndex = 0; candidateIndex < candidates.size(); ++candidateIndex)
+    {
+      if (candidateSlots[candidateIndex] < s_Data.m_PointShadowCache.size()) continue;
+      const auto freeSlot = std::ranges::find(usedSlots, false);
+      GABGL_ASSERT(freeSlot != usedSlots.end(), "No free point-shadow cache slot");
+      const size_t slot = static_cast<size_t>(std::distance(usedSlots.begin(), freeSlot));
+      candidateSlots[candidateIndex] = slot;
+      usedSlots[slot] = true;
+    }
+
     s_Data.m_OmniDirectShadowBuffer->Bind();
     glBindVertexArray(ModelManager::GetModelsVAO());
     const auto& directions = s_Data.m_OmniDirectShadowBuffer->GetFaceDirections();
-    for (const ShadowCandidate& candidate : candidates)
+    for (size_t candidateIndex = 0; candidateIndex < candidates.size(); ++candidateIndex)
     {
+      const ShadowCandidate& candidate = candidates[candidateIndex];
+      const size_t shadowSlot = candidateSlots[candidateIndex];
       const uint32_t lightIndex = candidate.LightIndex;
-      const glm::vec3& light = pointLights[lightIndex];
-      s_Data.m_PointShadowMask |= 1 << lightIndex;
+      const glm::vec3& light = lights[lightIndex].Position;
+      pointShadowSlots[lightIndex] = static_cast<int32_t>(shadowSlot);
+      const PointShadowCasterState casterState = GetPointShadowCasterState(light);
+      auto& cache = s_Data.m_PointShadowCache[shadowSlot];
+      const glm::vec3 lightDelta = cache.LightPosition - light;
+      const bool lightMoved = glm::dot(lightDelta, lightDelta) > 0.000001f;
+      const bool renderShadow = !cache.Valid || cache.LightIndex != lightIndex ||
+        lightMoved || cache.CasterHash != casterState.Hash ||
+        casterState.HasAnimatedCaster;
+      if (!renderShadow)
+      {
+        s_Data.m_PointShadowFacesCached += static_cast<uint32_t>(directions.size());
+        continue;
+      }
+
       for (size_t face = 0; face < directions.size(); ++face)
       {
-        s_Data.m_OmniDirectShadowBuffer->BindCubemapFaceForWriting(lightIndex, face);
+        s_Data.m_OmniDirectShadowBuffer->BindCubemapFaceForWriting(
+          static_cast<uint32_t>(shadowSlot), static_cast<uint32_t>(face));
         glClearColor(OpenGLRendererData::PointShadowRadius,
           OpenGLRendererData::PointShadowRadius,
           OpenGLRendererData::PointShadowRadius,
@@ -900,6 +1022,8 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
           s_Data.m_OmniDirectShadowBuffer->GetShadowProj() * view;
         if (shadowGPUCull)
           DispatchGPUCull(lightViewProjection, false);
+        else
+          UpdateShadowFaceCulling(lightViewProjection);
         s_Data.s_Shaders.OmniDirectShadowShader->Bind();
         s_Data.s_Shaders.OmniDirectShadowShader->SetBool(
           "u_GPUDriven", shadowGPUCull);
@@ -911,20 +1035,31 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
           DrawCompactedCommands();
         else
         {
-          glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s_Data.m_cmdBufer);
+          ModelManager::BindVisibleInstanceTransforms();
+          glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s_Data.m_CulledCmdBuffer);
           glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, nullptr,
-            static_cast<GLsizei>(s_Data.m_DrawCommands.size()), 0);
+            static_cast<GLsizei>(s_Data.m_CulledDrawCommands.size()), 0);
           glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
         }
+        ++s_Data.m_PointShadowFacesRendered;
       }
+      cache.Valid = true;
+      cache.LightIndex = lightIndex;
+      cache.LightPosition = light;
+      cache.CasterHash = casterState.Hash;
     }
+    for (size_t shadowSlot = 0; shadowSlot < s_Data.m_PointShadowCache.size(); ++shadowSlot)
+      if (!usedSlots[shadowSlot]) s_Data.m_PointShadowCache[shadowSlot].Valid = false;
     glBindVertexArray(0);
     s_Data.s_Shaders.OmniDirectShadowShader->UnBind();
     s_Data.m_OmniDirectShadowBuffer->UnBind();
+    UploadPointShadowSlots(pointShadowSlots);
   }
   else
   {
-    s_Data.m_PointShadowMask = 0;
+    s_Data.m_PointShadowFacesRendered = 0;
+    s_Data.m_PointShadowFacesCached = 0;
+    UploadPointShadowSlots(std::vector<int32_t>(RenderBackend::Lights().size(), -1));
   }
 
   UpdateModelFrustumCulling();
@@ -1030,6 +1165,11 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
     }
     ModelManager::EndGPUFrame();
   }
+  bool tiledLighting = false;
+  {
+    GABGL_PROFILE_SCOPE("TILED LIGHT CULL");
+    tiledLighting = DispatchTiledLightCulling();
+  }
 
   {
     GABGL_PROFILE_SCOPE("LIGHT PASS");
@@ -1057,7 +1197,9 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
       "u_DirectShadowsEnabled",
       shadowsEnabled && OpenGLRendererData::DirectionalShadowsEnabled);
     s_Data.s_Shaders.LightShader->SetBool("u_PointShadowsEnabled", shadowsEnabled);
-    s_Data.s_Shaders.LightShader->SetInt("u_PointShadowMask", s_Data.m_PointShadowMask);
+    s_Data.s_Shaders.LightShader->SetBool("u_TiledLightingEnabled", tiledLighting);
+    s_Data.s_Shaders.LightShader->SetInt("u_TiledDebugMode",
+      tiledLighting ? static_cast<int>(RenderBackend::DebugSettings().TiledLightingMode) : 0);
     s_Data.s_Shaders.LightShader->SetMat4("u_DirectShadowViewProj", s_Data.m_DirectShadowBuffer->GetShadowViewProj());
 
     DrawFullscreenQuad();
@@ -1308,7 +1450,8 @@ void OpenGLRenderer::ApplyGraphicsSettings()
   s_Data.m_DirectShadowBuffer = DirectShadowBuffer::Create(
     directResolution, directResolution, 16.0f, filterSize, randomRadius);
   s_Data.m_OmniDirectShadowBuffer = OmniDirectShadowBuffer::Create(
-    omniResolution, omniResolution);
+    omniResolution, omniResolution, OpenGLRendererData::MaxShadowedPointLights);
+  s_Data.m_PointShadowCache = {};
   s_Data.m_AppliedShadowQuality = qualityValue;
 }
 
@@ -2388,6 +2531,144 @@ void OpenGLRenderer::UpdateModelFrustumCulling()
   RenderBackend::SetStatistics(statistics);
 }
 
+static void UpdateShadowFaceCulling(const glm::mat4& viewProjection)
+{
+  if (s_Data.m_DrawCommands.empty() || s_Data.m_CulledCmdBuffer == 0) return;
+
+  const RenderFrustum frustum(viewProjection);
+  auto& visibleTransforms = s_Data.m_VisibleInstanceTransforms;
+  visibleTransforms.clear();
+  s_Data.m_CulledDrawCommands = s_Data.m_DrawCommands;
+
+  for (const std::string& modelName : ModelManager::GetModelNames())
+  {
+    const auto model = ModelManager::GetModel(modelName);
+    const auto commandIndices = s_Data.m_ModelDrawCommandIndices.find(modelName);
+    if (!model || commandIndices == s_Data.m_ModelDrawCommandIndices.end()) continue;
+
+    const auto visibleBase = static_cast<GLuint>(visibleTransforms.size());
+    GLuint visibleCount = 0;
+    if (model->m_IsRendered)
+    {
+      for (const glm::mat4& transform : model->m_InstanceTransforms)
+      {
+        const WorldBoundingSphere sphere = CalculateWorldBoundingSphere(*model, transform);
+        if (!frustum.IntersectsSphere(sphere.center, sphere.radius)) continue;
+        visibleTransforms.push_back(transform);
+        ++visibleCount;
+      }
+    }
+
+    for (const size_t commandIndex : commandIndices->second)
+    {
+      auto& command = s_Data.m_CulledDrawCommands[commandIndex];
+      command.instanceCount = visibleCount;
+      command.baseInstance = visibleBase;
+    }
+  }
+
+  ModelManager::UploadVisibleInstanceTransforms(visibleTransforms);
+  glNamedBufferSubData(s_Data.m_CulledCmdBuffer, 0,
+    static_cast<GLsizeiptr>(s_Data.m_CulledDrawCommands.size() *
+      sizeof(DrawElementsIndirectCommand)), s_Data.m_CulledDrawCommands.data());
+}
+
+static void UploadPointShadowSlots(const std::vector<int32_t>& slots)
+{
+  if (!s_Data.m_PointShadowSlotBuffer || slots.empty()) return;
+  s_Data.m_PointShadowSlotBuffer->SetData(
+    slots.size() * sizeof(int32_t), slots.data());
+}
+
+static void EnsureTiledLightBuffers(uint32_t tileCount)
+{
+  const size_t requiredTiles = std::max<size_t>(tileCount, 1);
+  if (s_Data.m_TileLightGridBuffer && s_Data.m_TileLightIndexBuffer &&
+      requiredTiles <= s_Data.m_TileBufferCapacity)
+    return;
+
+  if (s_Data.m_TileLightGridBuffer)
+    glDeleteBuffers(1, &s_Data.m_TileLightGridBuffer);
+  if (s_Data.m_TileLightIndexBuffer)
+    glDeleteBuffers(1, &s_Data.m_TileLightIndexBuffer);
+
+  s_Data.m_TileBufferCapacity = std::max(
+    requiredTiles, s_Data.m_TileBufferCapacity * 2);
+  glCreateBuffers(1, &s_Data.m_TileLightGridBuffer);
+  glNamedBufferData(s_Data.m_TileLightGridBuffer,
+    static_cast<GLsizeiptr>(s_Data.m_TileBufferCapacity * sizeof(glm::uvec2)),
+    nullptr, GL_DYNAMIC_DRAW);
+  glCreateBuffers(1, &s_Data.m_TileLightIndexBuffer);
+  glNamedBufferData(s_Data.m_TileLightIndexBuffer,
+    static_cast<GLsizeiptr>(s_Data.m_TileBufferCapacity *
+      OpenGLRendererData::MaxLightsPerTile * sizeof(uint32_t)),
+    nullptr, GL_DYNAMIC_DRAW);
+}
+
+static bool DispatchTiledLightCulling()
+{
+  if (!s_Data.m_TiledLightingSupported ||
+      !s_Data.s_Shaders.TiledLightCullShader ||
+      !s_Data.m_GeometryBuffer || RenderBackend::Lights().empty())
+  {
+    s_Data.m_TileDebugTileCount = 0;
+    s_Data.m_TileDebugActiveTileCount = 0;
+    s_Data.m_TileDebugMinLights = 0;
+    s_Data.m_TileDebugMaxLights = 0;
+    s_Data.m_TileDebugAverageLights = 0.0f;
+    return false;
+  }
+
+  const uint32_t width = std::max(Window::GetWidth(), 1u);
+  const uint32_t height = std::max(Window::GetHeight(), 1u);
+  const uint32_t tileCountX =
+    (width + OpenGLRendererData::TileSize - 1u) / OpenGLRendererData::TileSize;
+  const uint32_t tileCountY =
+    (height + OpenGLRendererData::TileSize - 1u) / OpenGLRendererData::TileSize;
+  EnsureTiledLightBuffers(tileCountX * tileCountY);
+
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 21, s_Data.m_TileLightGridBuffer);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 22, s_Data.m_TileLightIndexBuffer);
+  s_Data.m_GeometryBuffer->BindPositionTextureForReading(GL_TEXTURE1);
+  glMemoryBarrier(GL_FRAMEBUFFER_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+
+  const auto& shader = s_Data.s_Shaders.TiledLightCullShader;
+  shader->Bind();
+  shader->SetInt("gPosition", 1);
+  shader->SetInt("u_TileCountX", static_cast<int>(tileCountX));
+  glDispatchCompute(tileCountX, tileCountY, 1);
+  glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+  shader->UnBind();
+
+  if (RenderBackend::DebugSettings().TiledLightingMode != 0)
+  {
+    const uint32_t tileCount = tileCountX * tileCountY;
+    std::vector<glm::uvec2> grid(tileCount);
+    glGetNamedBufferSubData(s_Data.m_TileLightGridBuffer, 0,
+      static_cast<GLsizeiptr>(grid.size() * sizeof(glm::uvec2)), grid.data());
+    uint64_t lightSum = 0;
+    uint32_t activeTiles = 0;
+    uint32_t minimumLights = std::numeric_limits<uint32_t>::max();
+    uint32_t maximumLights = 0;
+    for (const glm::uvec2& entry : grid)
+    {
+      if (entry.y == 0) continue;
+      ++activeTiles;
+      lightSum += entry.y;
+      minimumLights = std::min(minimumLights, entry.y);
+      maximumLights = std::max(maximumLights, entry.y);
+    }
+    s_Data.m_TileDebugTileCount = tileCount;
+    s_Data.m_TileDebugActiveTileCount = activeTiles;
+    s_Data.m_TileDebugMinLights = activeTiles > 0 ? minimumLights : 0;
+    s_Data.m_TileDebugMaxLights = maximumLights;
+    s_Data.m_TileDebugAverageLights = activeTiles > 0
+      ? static_cast<float>(lightSum) / static_cast<float>(activeTiles)
+      : 0.0f;
+  }
+  return true;
+}
+
 static void WaitForCullFence(GLsync& fence)
 {
   if (!fence) return;
@@ -2712,6 +2993,7 @@ void OpenGLRenderer::ResetModelDrawCommands()
   s_Data.m_ModelDrawCommandIndices.clear();
   s_Data.m_DrawIndexOffset = 0;
   s_Data.m_DrawVertexOffset = 0;
+  s_Data.m_PointShadowCache = {};
   RenderBackend::SetStatistics({});
 }
 
@@ -3033,9 +3315,29 @@ void OpenGLRenderer::DrawEditorFrameBuffer(uint64_t framebufferTexture)
 	ImGui::Checkbox("Culling Bounds", &debug.CullingBounds);
 	ImGui::SameLine();
 	ImGui::Checkbox("2D Debug", &debug.Debug2D);
+	ImGui::Checkbox("G-Buffer", &debug.GBuffer);
+	ImGui::SameLine();
+	static const char* tiledDebugModes[] = { "Tiles: Off", "Tiles: Overlay", "Tiles: Heatmap" };
+	int tiledDebugMode = static_cast<int>(debug.TiledLightingMode);
+	ImGui::SetNextItemWidth(145.0f);
+	if (ImGui::Combo("##TiledDebug", &tiledDebugMode, tiledDebugModes,
+		IM_ARRAYSIZE(tiledDebugModes)))
+		debug.TiledLightingMode = static_cast<uint32_t>(tiledDebugMode);
+	if (ImGui::IsItemHovered())
+		ImGui::SetTooltip("Shows 16x16 tiles colored by the number of affecting lights");
 	const RenderStatistics& statistics = RenderBackend::Statistics();
 	ImGui::TextDisabled("Frustum culling: %u / %u model instances visible",
 		statistics.VisibleInstances, statistics.RenderableInstances);
+	ImGui::TextDisabled("Point-shadow faces: %u rendered, %u cached",
+		s_Data.m_PointShadowFacesRendered, s_Data.m_PointShadowFacesCached);
+	if (debug.TiledLightingMode != 0 && capabilities.OpenGLContext)
+	{
+		ImGui::TextDisabled("Tiled grid: %u / %u active, lights min %u max %u avg %.2f",
+			s_Data.m_TileDebugActiveTileCount, s_Data.m_TileDebugTileCount,
+			s_Data.m_TileDebugMinLights, s_Data.m_TileDebugMaxLights,
+			s_Data.m_TileDebugAverageLights);
+		ImGui::TextDisabled("Heatmap scale: black 0, blue low, green medium, red all lights");
+	}
 
 	if (SceneEntity* entity = SceneManager::FindEntity(s_Data.m_SelectedEntityID))
 	{
@@ -3134,6 +3436,43 @@ void OpenGLRenderer::DrawEditorFrameBuffer(uint64_t framebufferTexture)
   }
 
 	ImGui::End();
+
+	if (debug.GBuffer)
+	{
+		if (!capabilities.OpenGLContext || !s_Data.m_GeometryBuffer)
+		{
+			ImGui::Begin("G-Buffer", &debug.GBuffer);
+			ImGui::TextDisabled("G-buffer preview is available in the OpenGL renderer.");
+			ImGui::End();
+		}
+		else
+		{
+			ImGui::Begin("G-Buffer", &debug.GBuffer);
+			ImGui::TextDisabled("Position.rgb = world position, .a = material brightness");
+			ImGui::TextDisabled("Normal.rgb = world normal, Albedo.a = specular");
+			const float width = std::max(ImGui::GetContentRegionAvail().x, 160.0f);
+			const float aspect = std::max(static_cast<float>(Window::GetWidth()), 1.0f) /
+				std::max(static_cast<float>(Window::GetHeight()), 1.0f);
+			const ImVec2 previewSize(width, width / aspect);
+			const ImVec2 previewUV0{0.0f, 1.0f};
+			const ImVec2 previewUV1{1.0f, 0.0f};
+			auto drawAttachment = [&](const char* label, GLuint texture)
+			{
+				ImGui::SeparatorText(label);
+				ImGui::Image(reinterpret_cast<ImTextureID>(static_cast<uintptr_t>(texture)),
+					previewSize, previewUV0, previewUV1);
+			};
+			drawAttachment("Position + brightness",
+				s_Data.m_GeometryBuffer->GetPositionAttachmentRendererID());
+			drawAttachment("Normal",
+				s_Data.m_GeometryBuffer->GetNormalAttachmentRendererID());
+			drawAttachment("Albedo + specular",
+				s_Data.m_GeometryBuffer->GetAlbedoSpecAttachmentRendererID());
+			drawAttachment("Depth",
+				s_Data.m_GeometryBuffer->GetDepthAttachmentRendererID());
+			ImGui::End();
+		}
+	}
 
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
 	ImGui::Begin("Viewport", nullptr, NULL);

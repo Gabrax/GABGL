@@ -10,7 +10,6 @@
 #include "../input/KeyEvent.h"
 #include "Logger.h"
 #include <stb_image.h>
-#include "SceneManager.h"
 #include "Settings.h"
 
 GLFWwindow* m_Window;
@@ -104,38 +103,35 @@ void Window::Init(const std::string& windowTitle, uint32_t windowWidth, uint32_t
 		  data.Height = height;
 
 		  WindowResizeEvent event(width, height);
-		  data.EventCallback(event);
+		  Window::OnEvent(event);
 	  });
 
   glfwSetWindowCloseCallback(m_Window, [](GLFWwindow* window)
 	  {
-		  WindowSpecificData& data = *static_cast<WindowSpecificData*>(glfwGetWindowUserPointer(window));
 		  WindowCloseEvent event;
-		  data.EventCallback(event);
+		  Window::OnEvent(event);
 	  });
 
   glfwSetKeyCallback(m_Window, [](GLFWwindow* window, int key, int scancode, int action, int mods)
 	  {
-		  WindowSpecificData& data = *static_cast<WindowSpecificData*>(glfwGetWindowUserPointer(window));
-
 		  switch (action)
 		  {
 			  case GLFW_PRESS:
 			  {
 				  KeyPressedEvent event(key, 0);
-				  data.EventCallback(event);
+				  Window::OnEvent(event);
 				  break;
 			  }
 			  case GLFW_RELEASE:
 			  {
 				  KeyReleasedEvent event(key);
-				  data.EventCallback(event);
+				  Window::OnEvent(event);
 				  break;
 			  }
 			  case GLFW_REPEAT:
 			  {
 				  KeyPressedEvent event(key, true);
-				  data.EventCallback(event);
+				  Window::OnEvent(event);
 				  break;
 			  }
 		  }
@@ -143,28 +139,24 @@ void Window::Init(const std::string& windowTitle, uint32_t windowWidth, uint32_t
 
   glfwSetCharCallback(m_Window, [](GLFWwindow* window, unsigned int keycode)
 	  {
-		  WindowSpecificData& data = *static_cast<WindowSpecificData*>(glfwGetWindowUserPointer(window));
-
 		  KeyTypedEvent event(keycode);
-		  data.EventCallback(event);
+		  Window::OnEvent(event);
 	  });
 
   glfwSetMouseButtonCallback(m_Window, [](GLFWwindow* window, int button, int action, int mods)
 	  {
-		  WindowSpecificData& data = *static_cast<WindowSpecificData*>(glfwGetWindowUserPointer(window));
-
 		  switch (action)
 		  {
 			  case GLFW_PRESS:
 			  {
 				  MouseButtonPressedEvent event(button);
-				  data.EventCallback(event);
+				  Window::OnEvent(event);
 				  break;
 			  }
 			  case GLFW_RELEASE:
 			  {
 				  MouseButtonReleasedEvent event(button);
-				  data.EventCallback(event);
+				  Window::OnEvent(event);
 				  break;
 			  }
 		  }
@@ -172,24 +164,20 @@ void Window::Init(const std::string& windowTitle, uint32_t windowWidth, uint32_t
 
   glfwSetScrollCallback(m_Window, [](GLFWwindow* window, double xOffset, double yOffset)
 	  {
-		  WindowSpecificData& data = *static_cast<WindowSpecificData*>(glfwGetWindowUserPointer(window));
-
 		  MouseScrolledEvent event(static_cast<float>(xOffset), static_cast<float>(yOffset));
-		  data.EventCallback(event);
+		  Window::OnEvent(event);
 	  });
 
   glfwSetCursorPosCallback(m_Window, [](GLFWwindow* window, double xPos, double yPos)
 	  {
-		  WindowSpecificData& data = *static_cast<WindowSpecificData*>(glfwGetWindowUserPointer(window));
-
 		  MouseMovedEvent event(static_cast<float>(xPos), static_cast<float>(yPos));
-		  data.EventCallback(event);
+		  Window::OnEvent(event);
 	  });
 
   if (m_Data.API == GraphicsAPI::OpenGL)
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
-  SetEventCallback([](Event& e) { Window::OnEvent(e); });
+  SetEventCallback({});
 }
 
 void Window::Terminate()
@@ -354,7 +342,7 @@ void Window::OnEvent(Event& e)
 
   if (!e.Handled)
   {
-    if (auto* scene = SceneManager::GetActiveScene()) scene->OnEvent(e);
+    if (m_Data.EventCallback) m_Data.EventCallback(e);
   }
 }
 

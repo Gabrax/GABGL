@@ -312,6 +312,9 @@ struct GeometryBuffer
   void BindNormalTextureForReading(GLenum textureUnit);
   void BindAlbedoTextureForReading(GLenum textureUnit);
   void BlitDepthTo(const std::shared_ptr<FrameBuffer>& dst);
+  GLuint GetPositionAttachmentRendererID() const { return m_PositionAttachment; }
+  GLuint GetNormalAttachmentRendererID() const { return m_NormalAttachment; }
+  GLuint GetAlbedoSpecAttachmentRendererID() const { return m_AlbedoSpecAttachment; }
   GLuint GetDepthAttachmentRendererID() const { return m_DepthAttachment; }
 
   static std::shared_ptr<GeometryBuffer> Create(uint32_t width, uint32_t height);
@@ -408,7 +411,8 @@ struct CubemapDirection
 
 struct OmniDirectShadowBuffer
 {
-  OmniDirectShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeight);
+  OmniDirectShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeight,
+    uint32_t shadowLightCapacity);
   ~OmniDirectShadowBuffer();
 
   void Bind() const;
@@ -420,7 +424,8 @@ struct OmniDirectShadowBuffer
 
   inline std::span<const CubemapDirection, 6> GetFaceDirections() const { return m_Directions; }
 
-	static std::shared_ptr<OmniDirectShadowBuffer> Create(uint32_t shadowWidth, uint32_t shadowHeight);
+	static std::shared_ptr<OmniDirectShadowBuffer> Create(uint32_t shadowWidth,
+    uint32_t shadowHeight, uint32_t shadowLightCapacity);
 
 private:
 
@@ -429,6 +434,7 @@ private:
 
   glm::mat4 m_shadowProj;
   uint32_t m_depthCubemapArray;
+  uint32_t m_ShadowLightCapacity = 0;
 };
 
 struct DrawIndirectBuffer

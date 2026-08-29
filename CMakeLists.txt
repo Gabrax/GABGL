@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.5)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
+project(gabgl LANGUAGES CXX)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -23,8 +25,6 @@ if(MSVC)
         add_link_options(/DEBUG /INCREMENTAL)
     endif()
 
-    target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC _CRT_SECURE_NO_WARNINGS)
-
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     add_compile_options(
         -Wall -Wextra -Wpedantic
@@ -33,8 +33,6 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL 
         -ferror-limit=0
     )
 endif()
-
-project(gl_engine)
 
 option(GABGL_ENABLE_DX12 "Build the optional DirectX 12 backend" ${WIN32})
 
@@ -132,20 +130,47 @@ if(TARGET imguizmo)
   set_target_properties(imguizmo PROPERTIES EXCLUDE_FROM_ALL TRUE)
 endif()
 
-file(GLOB_RECURSE MY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
-
-add_executable("${CMAKE_PROJECT_NAME}")
-
-set_property(TARGET "${CMAKE_PROJECT_NAME}" PROPERTY CXX_STANDARD 20)
-
 file(GLOB IMGUIMO_SRC "${imguizmo_SOURCE_DIR}/ImGuizmo.cpp")
 file(GLOB IMGUIMO_HEADERS "${imguizmo_SOURCE_DIR}/ImGuizmo.h")
 
-target_include_directories("${CMAKE_PROJECT_NAME}" PRIVATE ${imguizmo_SOURCE_DIR})
+file(GLOB_RECURSE GABGL_ENGINE_SOURCES CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/Backend/*.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/Input/*.cpp"
+)
 
-target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC GLFW_INCLUDE_NONE=1)
+# The engine target contains platform, input, rendering, audio, physics and
+# generic scene infrastructure. It has no dependency on src/Game.
+add_library(gabgl_engine STATIC ${GABGL_ENGINE_SOURCES} ${IMGUIMO_SRC})
+set_property(TARGET gabgl_engine PROPERTY CXX_STANDARD 20)
+target_include_directories(gabgl_engine
+  PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Backend"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Input"
+  PRIVATE
+    ${imguizmo_SOURCE_DIR}
+)
+target_compile_definitions(gabgl_engine PUBLIC GLFW_INCLUDE_NONE=1)
+if(MSVC)
+  target_compile_definitions(gabgl_engine PUBLIC _CRT_SECURE_NO_WARNINGS)
+endif()
 
-target_sources("${CMAKE_PROJECT_NAME}" PRIVATE ${MY_SOURCES} ${IMGUIMO_SRC})
+# Gameplay state is independently testable and deliberately does not link the
+# renderer or platform layer.
+add_library(gabgl_gameplay STATIC
+  src/Game/DialogueManager.cpp
+  src/Game/InventoryManager.cpp
+)
+target_include_directories(gabgl_gameplay PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/Game")
+
+# The executable is the composition root: it registers game scenes and
+# interaction callbacks with the reusable engine library.
+add_executable(gabgl_game
+  src/Game/main.cpp
+  src/Game/GameBootstrap.cpp
+)
+set_target_properties(gabgl_game PROPERTIES OUTPUT_NAME gl_engine)
+target_include_directories(gabgl_game PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/Game")
+target_link_libraries(gabgl_game PRIVATE gabgl_engine gabgl_gameplay)
 
 # if(RELEASE)
 #   if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
@@ -161,7 +186,10 @@ set(IMGUI_INI_FILE "${CMAKE_BINARY_DIR}/imgui.ini")
 set(RES_FOLDER "${CMAKE_BINARY_DIR}/../res")
 file(MAKE_DIRECTORY ${RES_FOLDER})
 
-target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw glad stb_image imgui assimp meshoptimizer JSONparser PhysX SndFile::sndfile OpenAL::OpenAL freetype ${GABGL_SLANG_TARGET})
+target_link_libraries(gabgl_engine PUBLIC
+  glm glfw glad stb_image imgui assimp meshoptimizer JSONparser PhysX
+  SndFile::sndfile OpenAL::OpenAL freetype ${GABGL_SLANG_TARGET}
+)
 
 if(WIN32 AND NOT TARGET slang::slang)
   find_file(GABGL_SLANG_DLL
@@ -169,9 +197,9 @@ if(WIN32 AND NOT TARGET slang::slang)
     HINTS "$ENV{VULKAN_SDK}/Bin" "$ENV{SLANG_ROOT}/bin"
   )
   if(GABGL_SLANG_DLL)
-    add_custom_command(TARGET "${CMAKE_PROJECT_NAME}" POST_BUILD
+    add_custom_command(TARGET gabgl_game POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${GABGL_SLANG_DLL}" "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>"
+        "${GABGL_SLANG_DLL}" "$<TARGET_FILE_DIR:gabgl_game>"
     )
   endif()
 endif()
@@ -181,23 +209,21 @@ if(GABGL_ENABLE_DX12)
     message(FATAL_ERROR "GABGL_ENABLE_DX12 is only supported on Windows")
   endif()
 
-  target_compile_definitions("${CMAKE_PROJECT_NAME}" PRIVATE GABGL_ENABLE_DX12=1)
-  target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE d3d12 dxgi dxguid)
+  target_compile_definitions(gabgl_engine PRIVATE GABGL_ENABLE_DX12=1)
+  target_link_libraries(gabgl_engine PRIVATE d3d12 dxgi dxguid)
 endif()
 
 include(CTest)
 if(BUILD_TESTING)
   add_executable(inventory_manager_tests
     tests/InventoryManagerTests.cpp
-    src/Backend/InventoryManager.cpp
   )
-  target_include_directories(inventory_manager_tests PRIVATE src/Backend)
+  target_link_libraries(inventory_manager_tests PRIVATE gabgl_gameplay)
   add_test(NAME inventory_manager COMMAND inventory_manager_tests)
 
   add_executable(dialogue_manager_tests
     tests/DialogueManagerTests.cpp
-    src/Backend/DialogueManager.cpp
   )
-  target_include_directories(dialogue_manager_tests PRIVATE src/Backend)
+  target_link_libraries(dialogue_manager_tests PRIVATE gabgl_gameplay)
   add_test(NAME dialogue_manager COMMAND dialogue_manager_tests)
 endif()

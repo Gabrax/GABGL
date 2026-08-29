@@ -102,6 +102,8 @@ struct RenderDebugSettings
   bool Lights = false;
   bool CullingBounds = false;
   bool Debug2D = false;
+  bool GBuffer = false;
+  uint32_t TiledLightingMode = 0;
 };
 
 struct RenderStatistics

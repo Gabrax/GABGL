@@ -1,6 +1,16 @@
 > [!IMPORTANT]
 > All rights to the assets belong to their respective authors.
 
+## Project structure
+
+The codebase is split into independent CMake targets:
+
+- `gabgl_engine` contains the platform, input, rendering, audio, physics and generic scene infrastructure from `src/Backend` and `src/Input`.
+- `gabgl_gameplay` contains renderer-independent dialogue and inventory state from `src/Game`.
+- `gabgl_game` is the game executable and composition root. It registers `GameScene`, `MenuScene` and gameplay interaction handlers with the engine. Its output remains `gl_engine.exe` for compatibility.
+
+The dependency direction is one-way: the game links the engine, while the engine does not include or link anything from `src/Game`.
+
 <div align="center">
   
 ## Game preview
@@ -84,3 +94,15 @@ Both renderers are selected through the same backend contract. Models, particles
 screen UI, ImGui, debug layers, culling statistics and visual-effect settings are
 submitted without backend-specific branches in scene code, leaving future APIs a
 single interface to implement.
+
+The OpenGL deferred lighting path uses 16x16 tiled light lists. A compute pass
+reduces each G-buffer tile to a conservative world-space volume and assigns only
+the directional, point and spot lights which can affect it. The fullscreen light
+pass consumes those compact lists instead of evaluating every light for every
+pixel. Point-light shadows use four compact cubemap-array slots selected from the
+nearest visible lights; logical light indices are mapped to physical slots each
+frame, so unused lights no longer reserve cubemap layers. Static point-shadow
+maps are cached until the light or a caster inside its range changes, while each
+updated cubemap face receives its own caster-frustum culling pass. The editor's
+Components panel can open a live G-buffer attachment viewer and enable either a
+tiled-light overlay or a full light-density heatmap.

@@ -4,8 +4,6 @@
 #include "RenderSystem.h"
 #include "AudioManager.h"
 #include "Camera.h"
-#include "DialogueManager.h"
-#include "InventoryManager.h"
 #include "Logger.h"
 #include "ParticleRenderer.h"
 #include "RenderBackend.h"
@@ -15,15 +13,17 @@
 #include <filesystem>
 #include <iomanip>
 #include <limits>
+#include <unordered_map>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/quaternion.hpp>
 
-#include "Scenes.hpp"
-
 namespace
 {
   constexpr const char* SceneFilePath = "../res/scenes/scene.json";
+
+  std::unordered_map<std::string, SceneManager::SceneFactory> s_SceneFactories;
+  SceneManager::InteractionHandlers s_InteractionHandlers;
 
   const char* LightTypeName(LightType type)
   {
@@ -49,45 +49,6 @@ namespace
       return false;
     result = glm::vec3(value[0].get<float>(), value[1].get<float>(), value[2].get<float>());
     return true;
-  }
-
-  std::shared_ptr<Item> MakeInventoryItem(const SceneEntity& entity)
-  {
-    auto item = std::make_shared<Item>();
-    item->name = entity.itemName.empty() ? entity.name : entity.itemName;
-    item->modelName = entity.model;
-
-    if (entity.model == "pistol")
-    {
-      item->description = "A RELIABLE SIDEARM. USEFUL AT SHORT RANGE.";
-      item->type = ItemType::Weapon;
-    }
-    else if (entity.model == "shotgun")
-    {
-      item->description = "POWERFUL UP CLOSE, BUT SLOW TO RELOAD.";
-      item->type = ItemType::Weapon;
-    }
-    else if (entity.model == "pistolammo")
-    {
-      item->description = "A BOX OF PISTOL AMMUNITION.";
-      item->type = ItemType::Ammunition;
-    }
-    else if (entity.model == "shotgunammo")
-    {
-      item->description = "A BOX OF SHOTGUN SHELLS.";
-      item->type = ItemType::Ammunition;
-    }
-    else if (entity.model == "aidkit")
-    {
-      item->description = "MEDICAL SUPPLIES FOR TREATING SERIOUS WOUNDS.";
-      item->type = ItemType::Medical;
-    }
-    else
-    {
-      item->description = "A COLLECTED ITEM.";
-    }
-
-    return item;
   }
 
   RenderLight ToRenderLight(const SceneLight& light)
@@ -535,14 +496,14 @@ void Scene::UpdateInteractions()
   GABGL_INFO("Interacted with '{}'", displayName);
   if (!focused->pickable)
   {
-    if (!focused->dialogue.empty()) DialogueManager::Start(displayName, focused->dialogue);
+    if (!focused->dialogue.empty() && s_InteractionHandlers.startDialogue)
+      s_InteractionHandlers.startDialogue(displayName, focused->dialogue);
     return;
   }
 
-  auto& inventory = InventoryManager::GetInstance();
-  if (!inventory.AddItem(MakeInventoryItem(*focused)))
+  if (!s_InteractionHandlers.tryPickUp || !s_InteractionHandlers.tryPickUp(*focused))
   {
-    GABGL_WARN("Could not pick up '{}': inventory is full", displayName);
+    GABGL_WARN("Could not pick up '{}'", displayName);
     return;
   }
 
@@ -550,7 +511,7 @@ void Scene::UpdateInteractions()
   const uint32_t removedInstance = focused->instanceIndex;
   if (!ModelManager::RemoveModelInstance(modelName, removedInstance))
   {
-    inventory.RemoveItem(inventory.GetItemCount() - 1);
+    if (s_InteractionHandlers.rollbackPickUp) s_InteractionHandlers.rollbackPickUp(*focused);
     return;
   }
 
@@ -813,11 +774,22 @@ void SceneManager::LoadScene(const std::string& name)
   BeginLoadingScene(name);
 }
 
+void SceneManager::RegisterScene(const std::string& name, SceneFactory factory)
+{
+  if (name.empty() || !factory) return;
+  s_SceneFactories.insert_or_assign(name, std::move(factory));
+}
+
+void SceneManager::SetInteractionHandlers(InteractionHandlers handlers)
+{
+  s_InteractionHandlers = std::move(handlers);
+}
+
 void SceneManager::BeginLoadingScene(const std::string& name)
 {
   if (name.empty()) return;
 
-  DialogueManager::Close();
+  if (s_InteractionHandlers.reset) s_InteractionHandlers.reset();
   RenderSystem::ResetModelDrawCommands();
   ModelManager::Reset();
   RenderBackend::ClearLights();
@@ -825,9 +797,16 @@ void SceneManager::BeginLoadingScene(const std::string& name)
   AudioManager::StopAllSounds();
   AudioManager::StopAllMusic();
 
-  if(name == "game") s_PendingScene = std::make_unique<GameScene>();
-  else if(name == "menu") s_PendingScene = std::make_unique<MenuScene>();
-  else s_PendingScene = std::make_unique<GenericScene>(name);
+  if (const auto factory = s_SceneFactories.find(name); factory != s_SceneFactories.end())
+    s_PendingScene = factory->second();
+  else
+    s_PendingScene = std::make_unique<GenericScene>(name);
+
+  if (!s_PendingScene)
+  {
+    GABGL_ERROR("Scene factory for '{}' returned no scene", name);
+    return;
+  }
 
   s_PendingScene->StartLoading();
   s_Loading = true;
@@ -836,7 +815,7 @@ void SceneManager::BeginLoadingScene(const std::string& name)
 
 void SceneManager::Shutdown()
 {
-  DialogueManager::Close();
+  if (s_InteractionHandlers.reset) s_InteractionHandlers.reset();
   s_Loading = false;
   s_TransitionState = TransitionState::None;
   s_RequestedScene.clear();

@@ -51,11 +51,27 @@ layout(std430, binding = 1) buffer LightRotations    { vec4 rotations[]; };
 layout(std430, binding = 2) buffer LightsQuantity    { int numLights;    };
 layout(std430, binding = 3) buffer LightColors       { vec4 colors[];    };
 layout(std430, binding = 4) buffer LightTypes        { int lightTypes[]; };
+layout(std430, binding = 21) readonly buffer TileLightGrid
+{
+  uvec2 tileLightGrid[];
+};
+layout(std430, binding = 22) readonly buffer TileLightIndices
+{
+  uint tileLightIndices[];
+};
+layout(std430, binding = 23) readonly buffer PointShadowSlots
+{
+  int pointShadowSlots[];
+};
 
 uniform mat4 u_DirectShadowViewProj;
 uniform bool u_DirectShadowsEnabled;
 uniform bool u_PointShadowsEnabled;
-uniform int u_PointShadowMask;
+uniform bool u_TiledLightingEnabled;
+uniform int u_TiledDebugMode;
+
+const int TILE_SIZE = 16;
+const float LOCAL_LIGHT_RADIUS = 20.0;
 
 const float gamma = 1.2;
 
@@ -121,9 +137,8 @@ float calculateDirectShadow(vec4 fragPosLightSpace, vec3 lightDir, vec3 normal) 
   return sum / float(sampleCount);
 }
 
-float calculatePointShadow(vec3 fragPos, vec3 lightPos, vec3 normal, int lightIndex) {
-  if (!u_PointShadowsEnabled || lightIndex >= 20 ||
-      (u_PointShadowMask & (1 << lightIndex)) == 0)
+float calculatePointShadow(vec3 fragPos, vec3 lightPos, vec3 normal, int shadowSlot) {
+  if (!u_PointShadowsEnabled || shadowSlot < 0)
     return 1.0;
 
   vec3 fragToLight = fragPos - lightPos;
@@ -146,10 +161,24 @@ float calculatePointShadow(vec3 fragPos, vec3 lightPos, vec3 normal, int lightIn
   {
     float closestDepth = texture(u_OmniShadow,
       vec4(direction + sampleOffsets[sampleIndex] * filterRadius,
-           float(lightIndex))).r;
+           float(shadowSlot))).r;
     occludedSamples += currentDepth - bias > closestDepth ? 1.0 : 0.0;
   }
   return mix(1.0, 0.15, occludedSamples * 0.25);
+}
+
+vec3 tileHeatmap(float value)
+{
+  value = clamp(value, 0.0, 1.0);
+  if (value <= 0.0)
+    return vec3(0.01);
+  if (value < 0.25)
+    return mix(vec3(0.02, 0.08, 0.8), vec3(0.0, 0.9, 1.0), value * 4.0);
+  if (value < 0.5)
+    return mix(vec3(0.0, 0.9, 1.0), vec3(0.1, 1.0, 0.1), (value - 0.25) * 4.0);
+  if (value < 0.75)
+    return mix(vec3(0.1, 1.0, 0.1), vec3(1.0, 0.9, 0.0), (value - 0.5) * 4.0);
+  return mix(vec3(1.0, 0.9, 0.0), vec3(1.0, 0.02, 0.0), (value - 0.75) * 4.0);
 }
 
 vec3 calculateDirectionalLight(vec3 lightDir, vec3 normal, vec3 viewDir, vec3 surfaceColor, vec4 fragPosLightSpace, vec3 ambientCol, vec3 specularCol, vec3 lightColor, float shininess) {
@@ -159,11 +188,13 @@ vec3 calculateDirectionalLight(vec3 lightDir, vec3 normal, vec3 viewDir, vec3 su
     viewDir, lightDir, shininess, 1.0, 1.0, shadow);
 }
 
-vec3 calculatePointLight(vec3 lightPos, vec3 fragPos, vec3 normal, vec3 viewDir, vec3 surfaceColor, vec3 ambientCol, vec3 specularCol, int lightIndex, vec3 lightColor, float shininess) {
+vec3 calculatePointLight(vec3 lightPos, vec3 fragPos, vec3 normal, vec3 viewDir, vec3 surfaceColor, vec3 ambientCol, vec3 specularCol, int shadowSlot, vec3 lightColor, float shininess) {
   vec3 lightDir = normalize(lightPos - fragPos);
   float distance = length(lightPos - fragPos);
   float attenuation = GabglDistanceAttenuation(distance);
-  float shadow = calculatePointShadow(fragPos, lightPos, normal, lightIndex);
+  attenuation *= 1.0 - smoothstep(LOCAL_LIGHT_RADIUS * 0.8,
+    LOCAL_LIGHT_RADIUS, distance);
+  float shadow = calculatePointShadow(fragPos, lightPos, normal, shadowSlot);
   return GabglEvaluateLight(lightColor, surfaceColor, specularCol, normal,
     viewDir, lightDir, shininess, attenuation, 1.0, shadow);
 }
@@ -173,6 +204,8 @@ vec3 calculateSpotlight(vec3 lightPos, vec3 lightDir, vec3 fragPos, vec3 normal,
   float intensity = GabglSpotIntensity(lightToFrag, lightDir);
   float distance = length(lightPos - fragPos);
   float attenuation = GabglDistanceAttenuation(distance);
+  attenuation *= 1.0 - smoothstep(LOCAL_LIGHT_RADIUS * 0.8,
+    LOCAL_LIGHT_RADIUS, distance);
   return GabglEvaluateLight(lightColor, surfaceColor, specularCol, normal,
     viewDir, -lightToFrag, shininess, attenuation, intensity, 1.0);
 }
@@ -198,9 +231,20 @@ void main()
 
   vec3 result = vec3(0.0);
 
-  int pointShadowIndex = 0;
-  for (int i = 0; i < numLights; ++i)
+  uvec2 tileEntry = uvec2(0u, uint(numLights));
+  if (u_TiledLightingEnabled)
   {
+    const ivec2 framebufferSize = textureSize(gPosition, 0);
+    const int tileCountX = (framebufferSize.x + TILE_SIZE - 1) / TILE_SIZE;
+    const ivec2 tile = ivec2(gl_FragCoord.xy) / TILE_SIZE;
+    tileEntry = tileLightGrid[tile.y * tileCountX + tile.x];
+  }
+
+  for (uint lightOffset = 0u; lightOffset < tileEntry.y; ++lightOffset)
+  {
+    const int i = u_TiledLightingEnabled
+      ? int(tileLightIndices[tileEntry.x + lightOffset])
+      : int(lightOffset);
     vec3 position = positions[i].xyz;
     vec3 rotation = rotations[i].xyz;
     vec3 lightColor = colors[i].rgb;
@@ -211,14 +255,28 @@ void main()
     if (type == 0) {
       result += calculateDirectionalLight(rotation, Normal, viewDir, Color, fragPosLightSpace, ambient, specularCol, lightColor, shininess);
     } else if (type == 1) {
-      result += calculatePointLight(position, FragPos, Normal, viewDir, Color, ambient, specularCol, pointShadowIndex, lightColor, shininess);
-      pointShadowIndex++;
+      result += calculatePointLight(position, FragPos, Normal, viewDir, Color, ambient,
+        specularCol, pointShadowSlots[i], lightColor, shininess);
     } else if (type == 2) {
       result += calculateSpotlight(position, rotation, FragPos, Normal, viewDir, Color, ambient, specularCol, lightColor, shininess);
     }
   }
 
   result *= max(PositionData.a, 1.0);
+
+  if (u_TiledLightingEnabled && u_TiledDebugMode != 0)
+  {
+    const float density = numLights > 0
+      ? clamp(float(tileEntry.y) / float(numLights), 0.0, 1.0)
+      : 0.0;
+    vec3 debugColor = tileHeatmap(density);
+    const vec2 tilePixel = mod(gl_FragCoord.xy, float(TILE_SIZE));
+    const bool border = tilePixel.x < 1.0 || tilePixel.y < 1.0;
+    if (border) debugColor = vec3(0.02);
+    result = u_TiledDebugMode == 1
+      ? mix(result, debugColor, border ? 0.85 : 0.55)
+      : debugColor;
+  }
 
   float brightness = dot(result, vec3(0.2126, 0.7152, 0.0722));
   BrightColor = brightness > 1.0 ? vec4(result, 1.0) : vec4(0.0, 0.0, 0.0, 1.0);

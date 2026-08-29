@@ -2,6 +2,7 @@
 
 #include "../input/Event.h"
 #include "../input/KeyEvent.h"
+#include <functional>
 #include <future>
 
 #include "ModelManager.h"
@@ -124,6 +125,20 @@ private:
 
 struct SceneManager
 {
+  using SceneFactory = std::function<std::unique_ptr<Scene>()>;
+
+  struct InteractionHandlers
+  {
+    std::function<void(const std::string&, const std::vector<std::string>&)> startDialogue;
+    std::function<bool(const SceneEntity&)> tryPickUp;
+    std::function<void(const SceneEntity&)> rollbackPickUp;
+    std::function<void()> reset;
+  };
+
+  // Game modules provide concrete scenes and gameplay interaction behavior.
+  // The engine owns scene loading, transitions and entity persistence only.
+  static void RegisterScene(const std::string& name, SceneFactory factory);
+  static void SetInteractionHandlers(InteractionHandlers handlers);
   static void LoadScene(const std::string& scene);
   static void Shutdown();
   static void Update(DeltaTime& dt);

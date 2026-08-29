@@ -4,6 +4,7 @@
 
 #include "../input/UserInput.h"
 #include "AudioManager.h"
+#include "Camera.h"
 #include "DialogueManager.h"
 #include "InventoryManager.h"
 #include "RenderSystem.h"

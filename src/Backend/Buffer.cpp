@@ -1107,7 +1107,9 @@ std::shared_ptr<DirectShadowBuffer> DirectShadowBuffer::Create(float shadowWidth
   return std::make_shared<DirectShadowBuffer>(shadowWidth, shadowHeight, offsetSize, filterSize, randomRadius);
 }
 
-OmniDirectShadowBuffer::OmniDirectShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeight) 
+OmniDirectShadowBuffer::OmniDirectShadowBuffer(uint32_t shadowWidth, uint32_t shadowHeight,
+  uint32_t shadowLightCapacity)
+  : m_ShadowLightCapacity(std::max(shadowLightCapacity, 1u))
 {
   m_shadowProj = glm::perspective(glm::radians(90.0f), float(shadowWidth) / float(shadowHeight), 0.1f, 20.0f);
 
@@ -1121,7 +1123,8 @@ OmniDirectShadowBuffer::OmniDirectShadowBuffer(uint32_t shadowWidth, uint32_t sh
   // Store linear light distance with the same precision as the DX12 path.
   // R16F quantization is visible at the 20-unit far plane and can make the
   // comparison alternate as animated surfaces move by sub-texel amounts.
-  glTextureStorage3D(m_depthCubemapArray, 1, GL_R32F, shadowWidth, shadowHeight, 6 * 20);
+  glTextureStorage3D(m_depthCubemapArray, 1, GL_R32F, shadowWidth, shadowHeight,
+    6 * m_ShadowLightCapacity);
 
   glTextureParameteri(m_depthCubemapArray, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTextureParameteri(m_depthCubemapArray, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -1152,6 +1155,7 @@ void OmniDirectShadowBuffer::Bind() const
 
 void OmniDirectShadowBuffer::BindCubemapFaceForWriting(uint32_t cubemapIndex, uint32_t faceIndex)
 {
+  GABGL_ASSERT(cubemapIndex < m_ShadowLightCapacity, "Point-shadow slot exceeds cubemap capacity");
   glNamedFramebufferTextureLayer(m_testFB->GetID(), GL_COLOR_ATTACHMENT0, m_depthCubemapArray, 0, cubemapIndex * 6 + faceIndex);
   glNamedFramebufferDrawBuffer(m_testFB->GetID(), GL_COLOR_ATTACHMENT0);
 }
@@ -1166,9 +1170,11 @@ void OmniDirectShadowBuffer::UnBind() const
   m_testFB->UnBind();
 }
 
-std::shared_ptr<OmniDirectShadowBuffer> OmniDirectShadowBuffer::Create(uint32_t shadowWidth, uint32_t shadowHeight)
+std::shared_ptr<OmniDirectShadowBuffer> OmniDirectShadowBuffer::Create(uint32_t shadowWidth,
+  uint32_t shadowHeight, uint32_t shadowLightCapacity)
 {
-  return std::make_shared<OmniDirectShadowBuffer>(shadowWidth, shadowHeight);
+  return std::make_shared<OmniDirectShadowBuffer>(shadowWidth, shadowHeight,
+    shadowLightCapacity);
 }
 
 void DrawIndirectBuffer::AddData(const std::string& modelName, uint32_t verticesSize, uint32_t indicesSize)
