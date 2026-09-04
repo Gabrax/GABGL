@@ -11,10 +11,10 @@ struct UUID
 {
   UUID() : m_UUID(s_UniformDistribution(s_Engine)){}
 
-  UUID(uint64_t uuid) : m_UUID(uuid){}
+  explicit UUID(const uint64_t uuid) : m_UUID(uuid){}
 	UUID(const UUID&) = default;
 
-	operator uint64_t() const { return m_UUID; }
+  explicit operator uint64_t() const { return m_UUID; }
 private:
 	uint64_t m_UUID;
 };
@@ -26,9 +26,8 @@ namespace std
 	template<>
 	struct hash<UUID>
 	{
-		std::size_t operator()(const UUID& uuid) const
-		{
-			return (uint64_t)uuid;
+		std::size_t operator()(const UUID& uuid) const noexcept {
+			return static_cast<uint64_t>(uuid);
 		}
 	};
 }

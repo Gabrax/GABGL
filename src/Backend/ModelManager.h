@@ -141,7 +141,7 @@ struct Model
   bool IsInAnimation(int index) const;
   void CreatePhysXStaticMesh(std::vector<Vertex>& m_Vertices, std::vector<GLuint>& m_Indices);
   void CreatePhysXDynamicMesh(std::vector<Vertex>& m_Vertices);
-  void CreateCharacterController(const PxVec3& position, float radius, float height, bool slopeLimit);
+  void CreateCharacterController(const PxVec3& footPosition, float radius, float height, bool slopeLimit);
 
   inline std::vector<Mesh>& GetMeshes() { return m_Meshes; }
   inline std::map<std::string,BoneInfo>& GetBoneInfoMap() { return m_BoneInfoMap; }
@@ -156,6 +156,8 @@ struct Model
   inline const PxRigidDynamic* GetDynamicActor() { return m_DynamicMeshActor; }
   inline PxController* GetController() { return m_ActorController; }
   inline Transform& GetControllerTransform() { return m_ControllerTransform; }
+  inline float GetControllerRadius() const { return m_ControllerRadius; }
+  inline float GetControllerHeight() const { return m_ControllerHeight; }
   inline const glm::vec3& GetBoundsCenter() const { return m_BoundsCenter; }
   inline float GetBoundsRadius() const { return m_BoundsRadius * m_CullingBoundsScale; }
   inline float GetCullingBoundsScale() const { return m_CullingBoundsScale; }
@@ -164,9 +166,9 @@ struct Model
   Transform m_ControllerTransform;
   PxVec3 m_ControllerPosition;
   PxVec3 m_ControllerVelocity = PxVec3(0.0f);
-  float m_ControllerRadius; 
-  float m_ControllerHeight; 
-  bool m_ControllerSlopeLimit;
+  float m_ControllerRadius = 1.0f;
+  float m_ControllerHeight = 1.0f;
+  bool m_ControllerSlopeLimit = true;
   bool m_ControllerIsGrounded = false;
   float m_ControllerCurrentYaw = 0.0f;
   glm::vec3 m_ControllerMoveDirection = glm::vec3(0.0f);
@@ -273,6 +275,7 @@ struct ModelManager
   static void SetModelInstanceTransform(const std::string& name, uint32_t instanceIndex, const glm::mat4& transform);
   static void SetInitialControllerTransform(const std::string& name, const Transform& transform, float radius, float height, bool slopeLimit);
   static void SetControllerTransform(const std::string& name, const Transform& transform);
+  static bool SetControllerSize(const std::string& name, float radius, float height);
   static void Reset();
   static void UpdateControllers(const DeltaTime& dt);
   static void UpdateTransforms(const DeltaTime& dt);

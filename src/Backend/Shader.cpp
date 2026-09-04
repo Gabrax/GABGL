@@ -1,7 +1,7 @@
 #include "Shader.h"
-#include "Logger.h"
 #include "Timer.hpp"
 
+#include <gabdebug.h>
 #include <glad/glad.h>
 
 #include <slang-com-ptr.h>
@@ -25,7 +25,7 @@ using Slang::ComPtr;
 void LogSlangDiagnostics(slang::IBlob* diagnostics)
 {
   if (diagnostics && diagnostics->getBufferSize() > 0)
-    GABGL_WARN("{}", static_cast<const char*>(diagnostics->getBufferPointer()));
+    gablog_log(LOG_WARN, __FILE__, __LINE__, "%s", static_cast<const char*>(diagnostics->getBufferPointer()));
 }
 
 slang::IGlobalSession* GetSlangGlobalSession()
@@ -212,9 +212,11 @@ void CheckCompileErrors(GLuint object, std::string_view type, std::string_view g
     glGetShaderiv(object, GL_INFO_LOG_LENGTH, &length);
     std::string log(static_cast<size_t>(std::max(length, 1)), '\0');
     glGetShaderInfoLog(object, length, nullptr, log.data());
-    GABGL_ERROR("OpenGL shader compilation failed for {}: {}", type, log);
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "OpenGL shader compilation failed for %.*s: %s",
+      static_cast<int>(type.size()), type.data(), log.c_str());
     if (!generatedSource.empty())
-      GABGL_ERROR("Generated GLSL source:\n{}", generatedSource);
+      gablog_log(LOG_ERROR, __FILE__, __LINE__, "Generated GLSL source:\n%.*s",
+        static_cast<int>(generatedSource.size()), generatedSource.data());
     throw std::runtime_error("OpenGL shader compilation failed");
   }
 
@@ -224,7 +226,7 @@ void CheckCompileErrors(GLuint object, std::string_view type, std::string_view g
   glGetProgramiv(object, GL_INFO_LOG_LENGTH, &length);
   std::string log(static_cast<size_t>(std::max(length, 1)), '\0');
   glGetProgramInfoLog(object, length, nullptr, log.data());
-  GABGL_ERROR("OpenGL shader linking failed: {}", log);
+  gablog_log(LOG_ERROR, __FILE__, __LINE__, "OpenGL shader linking failed: %s", log.c_str());
   throw std::runtime_error("OpenGL shader linking failed");
 }
 
@@ -290,14 +292,14 @@ Shader::Shader(const char* fullshader)
 {
     Timer timer;
     Load(fullshader);
-    GABGL_WARN("Shader creation took {0} ms", timer.ElapsedMillis());
+    gablog_log(LOG_WARN, __FILE__, __LINE__, "Shader creation took %.3f ms", timer.ElapsedMillis());
 }
 
 Shader::Shader(const char* vertexPath, const char* fragmentPath, const char* geometryPath)
 {
     Timer timer;
     Load(vertexPath, fragmentPath, geometryPath);
-    GABGL_WARN("Shader creation took {0} ms", timer.ElapsedMillis());
+    gablog_log(LOG_WARN, __FILE__, __LINE__, "Shader creation took %.3f ms", timer.ElapsedMillis());
 }
 
 Shader::~Shader()
@@ -372,7 +374,7 @@ void Shader::Load(const char* fullshader)
   if (!isValid) {
       char infoLog[1024];
       glGetProgramInfoLog(this->m_ID, 1024, NULL, infoLog);
-      GABGL_ERROR("ERROR::PROGRAM_VALIDATION_ERROR: ", infoLog);
+      gablog_log(LOG_ERROR, __FILE__, __LINE__, "ERROR::PROGRAM_VALIDATION_ERROR: %s", infoLog);
   }
 
   for (const GLuint stage : compiledStages)
@@ -554,7 +556,8 @@ Shader::Bytecode Shader::CompileSlang(const std::filesystem::path& path, std::st
     SelectApiSection(ReadTextFile(path), "DX12", path),
     path, entryPoint, stage, SLANG_DXBC, std::string(target).c_str(), false);
 #else
-  GABGL_ERROR("Cannot compile Slang shader '{}': DirectX 12 support is not enabled", path.string());
+  gablog_log(LOG_ERROR, __FILE__, __LINE__, "Cannot compile Slang shader '%s': DirectX 12 support is not enabled",
+    path.string().c_str());
   return {};
 #endif
 }

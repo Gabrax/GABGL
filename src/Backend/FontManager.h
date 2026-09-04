@@ -2,7 +2,7 @@
 
 #include <cstdint>
 #include <unordered_map>
-#include "Logger.h"
+#include <gabdebug.h>
 #include "glm/glm.hpp"
 
 struct Character

@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <ranges>
 #include <string>
 #include <vector>
 
@@ -31,7 +32,11 @@ struct FontData
 void FontManager::Init()
 {
   if (s_Data.Initialized) return;
-  GABGL_ASSERT(!FT_Init_FreeType(&s_Data.ft), "Could not init FreeType");
+  if (FT_Init_FreeType(&s_Data.ft))
+  {
+    gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Could not init FreeType");
+    gabdebug_break();
+  }
   s_Data.Initialized = true;
 
   std::filesystem::path defaultFont = "../res/fonts/dpcomic.ttf";
@@ -43,7 +48,7 @@ void FontManager::Init()
 void FontManager::Shutdown()
 {
   if (!s_Data.Initialized) return;
-  for (auto& [name, font] : s_Data.m_Fonts)
+  for (auto &font: s_Data.m_Fonts | std::views::values)
   {
     if (font.m_AtlasHandle != 0)
       RenderBackend::Get().DestroyFontAtlas(font.m_AtlasHandle);
@@ -67,7 +72,7 @@ void FontManager::LoadFont(const char* path)
 
   FT_Face face = nullptr;
   if (FT_New_Face(s_Data.ft, path, 0, &face)) {
-    GABGL_ERROR("Failed to load font: {}", path);
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "Failed to load font: %s", path);
     return;
   }
 
@@ -89,7 +94,7 @@ void FontManager::LoadFont(const char* path)
   for (unsigned char c = 0; c < 128; c++)
   {
     if (FT_Load_Char(face, c, FT_LOAD_RENDER)) {
-      GABGL_ERROR("ERROR::FREETYPE: Failed to load Glyph");
+      gablog_log(LOG_ERROR, __FILE__, __LINE__, "ERROR::FREETYPE: Failed to load Glyph");
       continue;
     }
 
@@ -104,7 +109,7 @@ void FontManager::LoadFont(const char* path)
       }
       if (cursorY + bitmap.rows + GlyphPadding >= FontAtlasHeight)
       {
-        GABGL_ERROR("Font atlas is full while loading: {}", path);
+        gablog_log(LOG_ERROR, __FILE__, __LINE__, "Font atlas is full while loading: %s", path);
         break;
       }
 
@@ -144,7 +149,7 @@ void FontManager::LoadFont(const char* path)
     atlas.data(), FontAtlasWidth, FontAtlasHeight);
   if (font.m_AtlasHandle == 0)
   {
-    GABGL_ERROR("Failed to upload font atlas: {}", path);
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "Failed to upload font atlas: %s", path);
     return;
   }
 
@@ -160,7 +165,7 @@ void FontManager::LoadFont(const char* path)
     s_Data.m_Fonts.emplace(name, std::move(font));
   }
 
-  GABGL_WARN("Font uploading took {0} ms", timer.ElapsedMillis());
+  gablog_log(LOG_WARN, __FILE__, __LINE__, "Font uploading took %.3f ms", timer.ElapsedMillis());
 }
 
 Font* FontManager::GetFont(const char* name)

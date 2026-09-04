@@ -1,7 +1,7 @@
 #include "ModelManager.h"
 #include "Buffer.h"
 #include "Camera.h"
-#include "Logger.h"
+#include <gabdebug.h>
 #include "glad/glad.h"
 #include "meshoptimizer.h"
 #include <filesystem>
@@ -301,7 +301,7 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
       for (auto& texture : mesh.m_Textures)
         if (texture) texture->ClearRawData();
 
-    GABGL_WARN("Model: {0} DX12 upload took {1} ms", name, timer.ElapsedMillis());
+    gablog_log(LOG_WARN, __FILE__, __LINE__, "Model: %s DX12 upload took %.3f ms", name.c_str(), timer.ElapsedMillis());
     return;
   }
 
@@ -366,7 +366,7 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
         }
         else
         {
-          GABGL_ERROR("Failed to map PixelBuffer for texture upload.");
+          gablog_log(LOG_ERROR, __FILE__, __LINE__, "Failed to map PixelBuffer for texture upload.");
           // fallback - don't assign texture
         }
 
@@ -448,7 +448,7 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
         }
         else
         {
-            GABGL_ERROR("Failed to map PixelBuffer for texture upload.");
+            gablog_log(LOG_ERROR, __FILE__, __LINE__, "Failed to map PixelBuffer for texture upload.");
             continue;
         }
 
@@ -526,7 +526,7 @@ void ModelManager::BakeModel(const std::string& path, const std::shared_ptr<Mode
   s_Data.m_Models[name] = model;
   s_Data.m_ModelsNames.emplace_back(name);
 
-  GABGL_WARN("Model: {0} baking took {1} ms", name, timer.ElapsedMillis());
+  gablog_log(LOG_WARN, __FILE__, __LINE__, "Model: %s baking took %.3f ms", name.c_str(), timer.ElapsedMillis());
 }
 
 void ModelManager::SetInitialControllerTransform(const std::string& name, const Transform& transform, float radius, float height, bool slopeLimit)
@@ -534,7 +534,7 @@ void ModelManager::SetInitialControllerTransform(const std::string& name, const 
   auto it = s_Data.m_Models.find(name);
   if (it == s_Data.m_Models.end())
   {
-      GABGL_WARN("Model '{}' not found in ModelManager!", name);
+      gablog_log(LOG_WARN, __FILE__, __LINE__, "Model '%s' not found in ModelManager!", name.c_str());
       return;
   }
 
@@ -542,11 +542,14 @@ void ModelManager::SetInitialControllerTransform(const std::string& name, const 
 
   if(model->GetPhysXMeshType() != MeshType::CONTROLLER)
   {
-    GABGL_ERROR("This function is for Controller model!");
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "This function is for Controller model!");
     return;
   }
 
   model->m_ControllerTransform = transform;
+  model->m_ControllerRadius = radius;
+  model->m_ControllerHeight = height;
+  model->m_ControllerSlopeLimit = slopeLimit;
 
   model->CreateCharacterController(PhysX::GlmVec3ToPxVec3(model->m_ControllerTransform.GetPosition()), radius, height, slopeLimit);
 
@@ -554,7 +557,7 @@ void ModelManager::SetInitialControllerTransform(const std::string& name, const 
   auto vecIt = std::ranges::find(s_Data.m_ModelsNames, name);
   if (vecIt == s_Data.m_ModelsNames.end())
   {
-      GABGL_WARN("Model '{}' not found in name list for SSBO!", name);
+      gablog_log(LOG_WARN, __FILE__, __LINE__, "Model '%s' not found in name list for SSBO!", name.c_str());
       return;
   }
 
@@ -570,7 +573,7 @@ void ModelManager::SetControllerTransform(const std::string& name, const Transfo
   auto it = s_Data.m_Models.find(name);
   if (it == s_Data.m_Models.end() || it->second->GetPhysXMeshType() != MeshType::CONTROLLER)
   {
-    GABGL_WARN("Controller model '{}' not found in ModelManager!", name);
+    gablog_log(LOG_WARN, __FILE__, __LINE__, "Controller model '%s' not found in ModelManager!", name.c_str());
     return;
   }
 
@@ -579,7 +582,7 @@ void ModelManager::SetControllerTransform(const std::string& name, const Transfo
   if (model->m_ActorController)
   {
     const glm::vec3 position = transform.GetPosition();
-    model->m_ActorController->setPosition(PxExtendedVec3(position.x, position.y, position.z));
+    model->m_ActorController->setFootPosition(PxExtendedVec3(position.x, position.y, position.z));
   }
 
   const glm::mat4 matrix = transform.GetTransform();
@@ -591,12 +594,41 @@ void ModelManager::SetControllerTransform(const std::string& name, const Transfo
   SetModelInstanceTransform(name, 0, matrix);
 }
 
+bool ModelManager::SetControllerSize(const std::string& name, float radius, float height)
+{
+  if (!std::isfinite(radius) || !std::isfinite(height) || radius <= 0.0f || height <= 0.0f)
+    return false;
+
+  const auto it = s_Data.m_Models.find(name);
+  if (it == s_Data.m_Models.end() || it->second->GetPhysXMeshType() != MeshType::CONTROLLER)
+  {
+    gablog_log(LOG_WARN, __FILE__, __LINE__, "Controller model '%s' not found in ModelManager!", name.c_str());
+    return false;
+  }
+
+  const auto& model = it->second;
+  PxController* controller = model->m_ActorController;
+  if (!controller || controller->getType() != PxControllerShapeType::eCAPSULE)
+    return false;
+
+  auto* capsule = static_cast<PxCapsuleController*>(controller);
+  const PxExtendedVec3 footPosition = controller->getFootPosition();
+  if (!capsule->setRadius(radius) || !capsule->setHeight(height))
+    return false;
+
+  controller->setStepOffset(std::min(0.3f, height + radius * 2.0f));
+  controller->setFootPosition(footPosition);
+  model->m_ControllerRadius = radius;
+  model->m_ControllerHeight = height;
+  return true;
+}
+
 void ModelManager::SetInitialModelTransform(const std::string& name, const glm::mat4& transform)
 {
   auto it = s_Data.m_Models.find(name);
   if (it == s_Data.m_Models.end())
   {
-      GABGL_WARN("Model '{}' not found in ModelManager!", name);
+      gablog_log(LOG_WARN, __FILE__, __LINE__, "Model '%s' not found in ModelManager!", name.c_str());
       return;
   }
 
@@ -604,7 +636,7 @@ void ModelManager::SetInitialModelTransform(const std::string& name, const glm::
 
   if(model->GetPhysXMeshType() == MeshType::CONTROLLER)
   {
-    GABGL_ERROR("This function is for non Controller model!");
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "This function is for non Controller model!");
     return;
   }
 
@@ -613,7 +645,8 @@ void ModelManager::SetInitialModelTransform(const std::string& name, const glm::
 
   if (auto convexIt = s_Data.m_Models.find(convexName); convexIt != s_Data.m_Models.end())
   {
-    GABGL_WARN("Convex version '{}' found for model '{}'. Applying same transform.", convexName, name);
+    gablog_log(LOG_WARN, __FILE__, __LINE__, "Convex version '%s' found for model '%s'. Applying same transform.",
+      convexName.c_str(), name.c_str());
 
     const auto& convex = convexIt->second;
 
@@ -647,7 +680,7 @@ void ModelManager::SetInitialModelTransform(const std::string& name, const glm::
     }
     else
     {
-      GABGL_WARN("Main model '{}' not found in name list for SSBO!", name);
+      gablog_log(LOG_WARN, __FILE__, __LINE__, "Main model '%s' not found in name list for SSBO!", name.c_str());
     }
   }
   else
@@ -656,7 +689,7 @@ void ModelManager::SetInitialModelTransform(const std::string& name, const glm::
     auto vecIt = std::ranges::find(s_Data.m_ModelsNames, name);
     if (vecIt == s_Data.m_ModelsNames.end())
     {
-      GABGL_WARN("Model '{}' not found in name list for SSBO!", name);
+      gablog_log(LOG_WARN, __FILE__, __LINE__, "Model '%s' not found in name list for SSBO!", name.c_str());
       return;
     }
 
@@ -673,7 +706,7 @@ uint32_t ModelManager::AddModelInstance(const std::string& name, const glm::mat4
   auto it = s_Data.m_Models.find(name);
   if (it == s_Data.m_Models.end())
   {
-    GABGL_WARN("Model '{}' not found in ModelManager!", name);
+    gablog_log(LOG_WARN, __FILE__, __LINE__, "Model '%s' not found in ModelManager!", name.c_str());
     return std::numeric_limits<uint32_t>::max();
   }
 
@@ -733,7 +766,7 @@ void ModelManager::SetModelInstances(const std::string& name, const std::vector<
   auto it = s_Data.m_Models.find(name);
   if (it == s_Data.m_Models.end())
   {
-    GABGL_WARN("Model '{}' not found in ModelManager!", name);
+    gablog_log(LOG_WARN, __FILE__, __LINE__, "Model '%s' not found in ModelManager!", name.c_str());
     return;
   }
 
@@ -751,7 +784,7 @@ void ModelManager::SetModelInstanceTransform(const std::string& name, uint32_t i
   const auto it = s_Data.m_Models.find(name);
   if (it == s_Data.m_Models.end())
   {
-    GABGL_WARN("Model '{}' not found in ModelManager!", name);
+    gablog_log(LOG_WARN, __FILE__, __LINE__, "Model '%s' not found in ModelManager!", name.c_str());
     return;
   }
 
@@ -877,7 +910,7 @@ void ModelManager::UpdateTransforms(const DeltaTime& dt)
       }
       else
       {
-        GABGL_WARN("Animated model '{}' not found in name list for bone SSBO!", key);
+        gablog_log(LOG_WARN, __FILE__, __LINE__, "Animated model '%s' not found in name list for bone SSBO!", key.c_str());
       }
     }
 
@@ -890,7 +923,8 @@ void ModelManager::UpdateTransforms(const DeltaTime& dt)
     auto baseModelIt = s_Data.m_Models.find(baseName);
     if (baseModelIt == s_Data.m_Models.end())
     {
-      GABGL_WARN("Base model '{}' not found for convex '{}'", baseName, convexName);
+      gablog_log(LOG_WARN, __FILE__, __LINE__, "Base model '%s' not found for convex '%s'",
+        baseName.c_str(), convexName.c_str());
       continue;
     }
 
@@ -908,7 +942,7 @@ void ModelManager::UpdateTransforms(const DeltaTime& dt)
       }
       else
       {
-        GABGL_WARN("Base model '{}' not found in name list for SSBO!", baseName);
+        gablog_log(LOG_WARN, __FILE__, __LINE__, "Base model '%s' not found in name list for SSBO!", baseName.c_str());
       }
     }
   }
@@ -928,7 +962,7 @@ void ModelManager::SetRender(const std::string& name, bool render)
   auto it = s_Data.m_Models.find(name);
   if (it == s_Data.m_Models.end())
   {
-    GABGL_WARN("Model '{}' not found in ModelManager!", name);
+    gablog_log(LOG_WARN, __FILE__, __LINE__, "Model '%s' not found in ModelManager!", name.c_str());
     return;
   }
 
@@ -1073,7 +1107,7 @@ void ModelManager::UploadToGPU()
     {
       for(auto& hehe : bruh.m_Textures)
       {
-        GABGL_WARN("TYPE OF TEXTURE: {0}",hehe->GetType());
+        gablog_log(LOG_WARN, __FILE__, __LINE__, "TYPE OF TEXTURE: %s", hehe->GetType().c_str());
       }
     }
   }
@@ -1087,7 +1121,7 @@ void ModelManager::MoveController(const std::string& name, const Movement& movem
   auto it = s_Data.m_Models.find(name);
   if (it == s_Data.m_Models.end())
   {
-    GABGL_ERROR("Model '{}' doesnt exist!", name);
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "Model '%s' doesnt exist!", name.c_str());
     return;
   }
 
@@ -1095,7 +1129,7 @@ void ModelManager::MoveController(const std::string& name, const Movement& movem
 
   if (model->GetPhysXMeshType() != MeshType::CONTROLLER || !model->GetController())
   {
-    GABGL_ERROR("Model '{}' is not a valid PhysX controller!", name);
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "Model '%s' is not a valid PhysX controller!", name.c_str());
     return;
   }
 
@@ -1253,7 +1287,7 @@ Model::Model(const char* path, float optimizerStrength, bool isAnimated, bool is
 
   if (!m_Scene || m_Scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !m_Scene->mRootNode)
   {
-    GABGL_ERROR("[MODEL]: {0}", static_cast<std::string>(importer.GetErrorString()));
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "[MODEL]: %s", importer.GetErrorString());
     return;
   }
   std::string dirStr = std::filesystem::path(path).parent_path().string();
@@ -1326,12 +1360,17 @@ Model::Model(const char* path, float optimizerStrength, bool isAnimated, bool is
 
       animData.bones = m_Bones;
 
-      GABGL_INFO("Model: {},  Animation at index: {}, {}", std::filesystem::path(path).stem().string(), std::to_string(i), animData.name);
+      gablog_log(LOG_INFO, __FILE__, __LINE__, "Model: %s, Animation at index: %u, %s",
+        std::filesystem::path(path).stem().string().c_str(), i, animData.name.c_str());
 
       m_ProcessedAnimations.emplace_back(animData);
     }
 
-    GABGL_ASSERT(!m_ProcessedAnimations.empty(),"[MODEL]: Model doesnt contain animations");
+    if (m_ProcessedAnimations.empty())
+    {
+      gablog_log(LOG_ASSERT, __FILE__, __LINE__, "[MODEL]: Model doesnt contain animations");
+      gabdebug_break();
+    }
 
     SetAnimationbyIndex(0);
 
@@ -1340,7 +1379,7 @@ Model::Model(const char* path, float optimizerStrength, bool isAnimated, bool is
 
   m_TexturesLoaded.clear();
 
-  GABGL_WARN("Model loading took {0} ms", timer.ElapsedMillis());
+  gablog_log(LOG_WARN, __FILE__, __LINE__, "Model loading took %.3f ms", timer.ElapsedMillis());
 }
 
 void Model::processNode(aiNode* node, const aiScene* scene)
@@ -1508,7 +1547,7 @@ void Model::CreatePhysXStaticMesh(std::vector<Vertex>& m_Vertices, std::vector<G
   );
 
   if (!physxMesh) {
-      GABGL_ERROR("Failed to create PhysX triangle mesh");
+      gablog_log(LOG_ERROR, __FILE__, __LINE__, "Failed to create PhysX triangle mesh");
       return;
   }
 
@@ -1538,7 +1577,7 @@ void Model::CreatePhysXStaticMesh(std::vector<Vertex>& m_Vertices, std::vector<G
       m_StaticMeshActor->release();
       m_StaticMeshActor = nullptr;
     }
-    GABGL_ERROR("Failed to create PhysX triangle mesh shape");
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "Failed to create PhysX triangle mesh shape");
     return;
   }
 
@@ -1557,7 +1596,7 @@ void Model::CreatePhysXDynamicMesh(std::vector<Vertex>& m_Vertices)
   PxConvexMesh* convexMesh = PhysX::CreateConvexMesh(static_cast<PxU32>(physxVertices.size()), physxVertices.data());
 
   if (!convexMesh) {
-      GABGL_ERROR("Failed to create PhysX convex mesh");
+      gablog_log(LOG_ERROR, __FILE__, __LINE__, "Failed to create PhysX convex mesh");
       return;
   }
 
@@ -1588,7 +1627,7 @@ void Model::CreatePhysXDynamicMesh(std::vector<Vertex>& m_Vertices)
       m_DynamicMeshActor->release();
       m_DynamicMeshActor = nullptr;
     }
-    GABGL_ERROR("Failed to create PhysX convex mesh shape");
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "Failed to create PhysX convex mesh shape");
     return;
   }
 
@@ -1601,9 +1640,9 @@ void Model::CreatePhysXDynamicMesh(std::vector<Vertex>& m_Vertices)
     scene->addActor(*m_DynamicMeshActor);
 }
 
-void Model::CreateCharacterController(const PxVec3& position, float radius, float height, bool slopeLimit)
+void Model::CreateCharacterController(const PxVec3& footPosition, float radius, float height, bool slopeLimit)
 {
-  m_ActorController = PhysX::CreateCharacterController(position, radius, height, slopeLimit);
+  m_ActorController = PhysX::CreateCharacterController(footPosition, radius, height, slopeLimit);
 }
 
 void Model::ExtractBoneWeightForVertices(std::vector<Vertex>& vertices, aiMesh* mesh)
@@ -1616,8 +1655,8 @@ void Model::ExtractBoneWeightForVertices(std::vector<Vertex>& vertices, aiMesh* 
       {
           if (m_BoneCounter >= MAX_BONES)
           {
-              GABGL_ERROR("Model '{}' exceeds the supported limit of {} deforming bones; ignoring '{}'",
-                m_Name, MAX_BONES, boneName);
+              gablog_log(LOG_ERROR, __FILE__, __LINE__, "Model '%s' exceeds the supported limit of %d deforming bones; ignoring '%s'",
+                m_Name.c_str(), MAX_BONES, boneName.c_str());
               continue;
           }
 
@@ -1747,7 +1786,8 @@ void Model::StartBlendToAnimation(int32_t nextAnimationIndex, float blendDuratio
   if (nextAnimationIndex < 0 ||
       nextAnimationIndex >= static_cast<int32_t>(m_ProcessedAnimations.size()))
   {
-    GABGL_ERROR("Invalid animation index {} for model '{}'", nextAnimationIndex, m_Name);
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "Invalid animation index %d for model '%s'",
+      nextAnimationIndex, m_Name.c_str());
     return;
   }
 
@@ -1788,7 +1828,8 @@ void Model::SetAnimationbyIndex(int animationIndex)
 {
   if (animationIndex < 0 || animationIndex >= static_cast<int>(m_ProcessedAnimations.size()))
   {
-    GABGL_ERROR("Invalid animation index {} for model '{}'", animationIndex, m_Name);
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "Invalid animation index %d for model '%s'",
+      animationIndex, m_Name.c_str());
     return;
   }
 
@@ -1827,7 +1868,7 @@ void Model::SetAnimationByName(const std::string& animationName)
       const int animationIndex = static_cast<int>(std::distance(m_ProcessedAnimations.begin(), it));
       SetAnimationbyIndex(animationIndex); 
   } else {
-      GABGL_ERROR("Animation not found: {}",animationName);
+      gablog_log(LOG_ERROR, __FILE__, __LINE__, "Animation not found: %s", animationName.c_str());
   }
 }
 
@@ -1944,7 +1985,7 @@ void Model::ReadHierarchyData(AssimpNodeData& dest, const aiNode* src)
   {
       if (src->mChildren[i] == nullptr) 
       {
-          GABGL_ERROR("Null child node found at index {}",i);
+          gablog_log(LOG_ERROR, __FILE__, __LINE__, "Null child node found at index %u", i);
           continue;  // Skip if child node is null
       }
 

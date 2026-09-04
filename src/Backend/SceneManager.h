@@ -28,6 +28,8 @@ struct SceneEntity
   bool active = true;
   float interactionRange = 4.0f;
   float labelHeight = 1.5f;
+  float controllerRadius = 1.0f;
+  float controllerHeight = 1.0f;
 };
 
 struct SceneLight
@@ -58,6 +60,7 @@ struct Scene
   uint64_t AddModelEntity(const std::string& modelName);
   bool RemoveEntity(uint64_t entityId);
   bool UpdateEntityTransform(uint64_t entityId, const Transform& transform);
+  bool UpdateControllerSize(uint64_t entityId, float radius, float height);
   uint64_t AddLight(LightType type);
   bool UpdateLight(uint64_t lightId, const std::string& name, const glm::vec3& color,
     const glm::vec3& position, const glm::vec3& rotation);
@@ -154,6 +157,7 @@ struct SceneManager
   static bool ImportExternalModel(const std::string& path, bool animated, float optimizerStrength,
     MeshType meshType, float cullingBoundsScale);
   static bool UpdateEntityTransform(uint64_t entityId, const Transform& transform);
+  static bool UpdateControllerSize(uint64_t entityId, float radius, float height);
   static uint64_t AddLight(LightType type);
   static bool UpdateLight(uint64_t lightId, const std::string& name, const glm::vec3& color,
   const glm::vec3& position, const glm::vec3& rotation);

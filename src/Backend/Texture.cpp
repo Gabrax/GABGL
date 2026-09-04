@@ -1,6 +1,6 @@
 #include "Texture.h"
-#include "Logger.h"
 #include "Timer.hpp"
+#include <gabdebug.h>
 #include <stb_image.h>
 
 namespace Utils {
@@ -13,7 +13,6 @@ namespace Utils {
 			case ImageFormat::RGBA8: return GL_RGBA;
 		}
 
-		/*GABGL_ASSERT(false);*/
 		return 0;
 	}
 
@@ -25,7 +24,6 @@ namespace Utils {
 			case ImageFormat::RGBA8: return GL_RGBA8;
 		}
 
-		/*GABGL_ASSERT(false);*/
 		return 0;
 	}
 
@@ -69,11 +67,11 @@ Texture::Texture(const std::string& path) : m_Path(path)
       m_DataFormat = GL_RGBA;
 
       stbi_image_free(data);
-      GABGL_WARN("Texture loading took {0} ms", timer.ElapsedMillis());
+      gablog_log(LOG_WARN, __FILE__, __LINE__, "Texture loading took %.3f ms", timer.ElapsedMillis());
   }
   else
   {
-    GABGL_ERROR("COUDLNT LOAD TEXTURE!");
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "COUDLNT LOAD TEXTURE!");
   }
 }
 
@@ -100,11 +98,11 @@ Texture::Texture(const std::string& path, const std::string& directory) : m_Path
       m_DataFormat = GL_RGBA;
 
       stbi_image_free(data);
-      GABGL_WARN("Texture loading took {0} ms", timer.ElapsedMillis());
+      gablog_log(LOG_WARN, __FILE__, __LINE__, "Texture loading took %.3f ms", timer.ElapsedMillis());
   }
   else
   {
-    GABGL_ERROR("COUDLNT LOAD TEXTURE!");
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "COUDLNT LOAD TEXTURE!");
   }
 }
 
@@ -136,7 +134,7 @@ Texture::Texture(const aiTexture* paiTexture, const std::string& path) : paiText
     }
     else
     {
-        GABGL_ERROR("Failed to load compressed embedded texture!");
+        gablog_log(LOG_ERROR, __FILE__, __LINE__, "Failed to load compressed embedded texture!");
     }
   }
   else
@@ -163,7 +161,11 @@ Texture::Texture(const std::vector<std::string>& faces)
 {
   Timer timer;
 
-  GABGL_ASSERT(faces.size() == 6, "Cubemap must have exactly 6 faces!");
+  if (faces.size() != 6)
+  {
+    gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Cubemap must have exactly 6 faces!");
+    gabdebug_break();
+  }
 
   for (int i = 0; i < 6; ++i)
   {
@@ -171,7 +173,7 @@ Texture::Texture(const std::vector<std::string>& faces)
       unsigned char* data = stbi_load(faces[i].c_str(), &w, &h, &c, 0);
       if (!data)
       {
-          GABGL_ERROR("Failed to load cubemap face: {}", faces[i]);
+          gablog_log(LOG_ERROR, __FILE__, __LINE__, "Failed to load cubemap face: %s", faces[i].c_str());
           continue;
       }
       if (i == 0)
@@ -183,13 +185,13 @@ Texture::Texture(const std::vector<std::string>& faces)
       else if (w != m_Width || h != m_Height || c != channels)
       {
           stbi_image_free(data);
-          GABGL_ERROR("Cubemap face size or channels mismatch: {}", faces[i]);
+          gablog_log(LOG_ERROR, __FILE__, __LINE__, "Cubemap face size or channels mismatch: %s", faces[i].c_str());
           continue;
       }
 
       pixels[i] = data;
   }
-  GABGL_WARN("Texture loading took {0} ms", timer.ElapsedMillis());
+  gablog_log(LOG_WARN, __FILE__, __LINE__, "Texture loading took %.3f ms", timer.ElapsedMillis());
 }
 
 Texture::~Texture()
@@ -223,7 +225,11 @@ void Texture::FlipImageVertically(unsigned char* data, int width, int height, in
 void Texture::SetData(void* data, uint32_t size) const
 {
 	uint32_t bpp = m_DataFormat == GL_RGBA ? 4 : 3;
-	GABGL_ASSERT(size == m_Width * m_Height * bpp, "Data must be entire texture!");
+	if (size != m_Width * m_Height * bpp)
+	{
+		gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Data must be entire texture!");
+		gabdebug_break();
+	}
 	glTextureSubImage2D(m_RendererID, 0, 0, 0, m_Width, m_Height, m_DataFormat, GL_UNSIGNED_BYTE, data);
 }
 
@@ -236,7 +242,7 @@ std::shared_ptr<Texture> Texture::WrapExisting(uint32_t rendererID)
 {
   if (rendererID == 0)
   {
-      GABGL_ERROR("ID IS NULL");
+      gablog_log(LOG_ERROR, __FILE__, __LINE__, "ID IS NULL");
       return nullptr;
   }
 

@@ -47,6 +47,7 @@ https://github.com/user-attachments/assets/dfeda195-f8d6-4073-aff7-d7bfe55fce39
 <a href="https://github.com/nlohmann/json">nlohmann_json</a> •
 <a href="https://github.com/syoyo/tinyexr">tinyEXR</a> •
 <a href="https://github.com/NVIDIA-Omniverse/PhysX">PhysX</a>
+• <a href="https://github.com/Gabrax/GABDEBUG">GABDEBUG</a>
 </p>
 
 </div>
@@ -106,3 +107,8 @@ maps are cached until the light or a caster inside its range changes, while each
 updated cubemap face receives its own caster-frustum culling pass. The editor's
 Components panel can open a live G-buffer attachment viewer and enable either a
 tiled-light overlay or a full light-density heatmap.
+
+Logging and CPU/OpenGL GPU profiling use GABDEBUG directly at a pinned revision.
+Call sites use its C logging and profiling API without engine-side Logger or
+Profiler wrappers; GABDEBUG owns level filtering, source locations, thread-safe
+output, hierarchical CPU scopes and non-blocking timestamp-query resolution.

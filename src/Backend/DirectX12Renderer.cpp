@@ -6,7 +6,6 @@
 #include "Camera.h"
 #include "DeltaTime.hpp"
 #include "FontManager.h"
-#include "Logger.h"
 #include "ModelManager.h"
 #include "ParticleRenderer.h"
 #include "PhysX.h"
@@ -15,6 +14,8 @@
 #include "Settings.h"
 #include "Texture.h"
 #include "Window.h"
+
+#include <gabdebug.h>
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -683,9 +684,9 @@ namespace
           message->Severity <= D3D12_MESSAGE_SEVERITY_WARNING)
       {
         if (message->Severity <= D3D12_MESSAGE_SEVERITY_ERROR)
-          GABGL_ERROR("D3D12 validation: {}", message->pDescription);
+          gablog_log(LOG_ERROR, __FILE__, __LINE__, "D3D12 validation: %s", message->pDescription);
         else
-          GABGL_WARN("D3D12 validation: {}", message->pDescription);
+          gablog_log(LOG_WARN, __FILE__, __LINE__, "D3D12 validation: %s", message->pDescription);
       }
     }
     s_Data.InfoQueue->ClearStoredMessages();
@@ -706,7 +707,7 @@ namespace
     if (FAILED(result))
     {
       if (errors)
-        GABGL_ERROR("DX12 root signature creation failed: {}",
+        gablog_log(LOG_ERROR, __FILE__, __LINE__, "DX12 root signature creation failed: %s",
                     static_cast<const char*>(errors->GetBufferPointer()));
       ThrowHRESULT(result, "D3D12SerializeRootSignature");
     }
@@ -2232,7 +2233,7 @@ bool DirectX12Renderer::Init(void* nativeWindow, uint32_t width, uint32_t height
   if (s_Data.Initialized) return true;
   if (!nativeWindow || width == 0 || height == 0)
   {
-    GABGL_ERROR("Cannot initialize DirectX 12 without a valid window and dimensions");
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "Cannot initialize DirectX 12 without a valid window and dimensions");
     return false;
   }
 
@@ -2247,7 +2248,7 @@ bool DirectX12Renderer::Init(void* nativeWindow, uint32_t width, uint32_t height
       factoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
     }
     else
-      GABGL_WARN("DirectX 12 debug layer is not available");
+      gablog_log(LOG_WARN, __FILE__, __LINE__, "DirectX 12 debug layer is not available");
 #endif
 
     CheckHRESULT(CreateDXGIFactory2(factoryFlags, IID_PPV_ARGS(&s_Data.Factory)),
@@ -2287,7 +2288,7 @@ bool DirectX12Renderer::Init(void* nativeWindow, uint32_t width, uint32_t height
       CheckHRESULT(D3D12CreateDevice(s_Data.Adapter.Get(), D3D_FEATURE_LEVEL_11_0,
                                      IID_PPV_ARGS(&s_Data.Device)),
                    "D3D12CreateDevice (WARP)");
-      GABGL_WARN("No hardware DX12 adapter found; using WARP software renderer");
+      gablog_log(LOG_WARN, __FILE__, __LINE__, "No hardware DX12 adapter found; using WARP software renderer");
     }
 
 #ifdef DEBUG
@@ -2296,7 +2297,7 @@ bool DirectX12Renderer::Init(void* nativeWindow, uint32_t width, uint32_t height
 
     DXGI_ADAPTER_DESC1 selectedAdapter{};
     s_Data.Adapter->GetDesc1(&selectedAdapter);
-    GABGL_INFO("DirectX 12 adapter: {}", WideToUTF8(selectedAdapter.Description));
+    gablog_log(LOG_INFO, __FILE__, __LINE__, "DirectX 12 adapter: %s", WideToUTF8(selectedAdapter.Description).c_str());
 
     D3D12_COMMAND_QUEUE_DESC queueDesc{};
     queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
@@ -2372,13 +2373,13 @@ bool DirectX12Renderer::Init(void* nativeWindow, uint32_t width, uint32_t height
     s_Data.Width = width;
     s_Data.Height = height;
     s_Data.Initialized = true;
-    GABGL_INFO("DirectX 12 initialized ({}x{}, tearing: {})",
+    gablog_log(LOG_INFO, __FILE__, __LINE__, "DirectX 12 initialized (%ux%u, tearing: %s)",
                width, height, s_Data.TearingSupported ? "supported" : "unavailable");
     return true;
   }
   catch (const std::exception& error)
   {
-    GABGL_ERROR("DirectX 12 initialization failed: {}", error.what());
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "DirectX 12 initialization failed: %s", error.what());
     Shutdown();
     return false;
   }
@@ -2423,12 +2424,12 @@ bool DirectX12Renderer::InitSceneRenderer()
     s_Data.PendingUIBatches.reserve(64);
     s_Data.PendingDebugLines.reserve(8192);
     s_Data.SceneRendererInitialized = true;
-    GABGL_INFO("DirectX 12 scene renderer initialized");
+    gablog_log(LOG_INFO, __FILE__, __LINE__, "DirectX 12 scene renderer initialized");
     return true;
   }
   catch (const std::exception& error)
   {
-    GABGL_ERROR("DirectX 12 scene renderer initialization failed: {}", error.what());
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "DirectX 12 scene renderer initialization failed: %s", error.what());
     return false;
   }
 }
@@ -2553,7 +2554,7 @@ bool DirectX12Renderer::UploadModel(const std::shared_ptr<Model>& model)
   }
   catch (const std::exception& error)
   {
-    GABGL_ERROR("DX12 model upload failed for '{}': {}", model->m_Name, error.what());
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "DX12 model upload failed for '%s': %s", model->m_Name.c_str(), error.what());
     return false;
   }
 }
@@ -2570,7 +2571,7 @@ bool DirectX12Renderer::UploadSkybox(const std::shared_ptr<Texture>& cubemap)
   }
   catch (const std::exception& error)
   {
-    GABGL_ERROR("DX12 skybox upload failed: {}", error.what());
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "DX12 skybox upload failed: %s", error.what());
     return false;
   }
 }
@@ -2591,7 +2592,7 @@ bool DirectX12Renderer::InitImGui()
       GetSRVGPUHandle(s_Data.ImGuiFontDescriptor));
     if (!initialized)
     {
-      GABGL_ERROR("Could not initialize the Dear ImGui DirectX 12 backend");
+      gablog_log(LOG_ERROR, __FILE__, __LINE__, "Could not initialize the Dear ImGui DirectX 12 backend");
       return false;
     }
     s_Data.ImGuiInitialized = true;
@@ -2599,7 +2600,7 @@ bool DirectX12Renderer::InitImGui()
   }
   catch (const std::exception& error)
   {
-    GABGL_ERROR("Dear ImGui DirectX 12 initialization failed: {}", error.what());
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "Dear ImGui DirectX 12 initialization failed: %s", error.what());
     return false;
   }
 }
@@ -2645,7 +2646,7 @@ void DirectX12Renderer::Shutdown()
   }
   catch (const std::exception& error)
   {
-    GABGL_ERROR("DirectX 12 shutdown synchronization failed: {}", error.what());
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "DirectX 12 shutdown synchronization failed: %s", error.what());
   }
   if (s_Data.FenceEvent)
   {
@@ -2682,7 +2683,7 @@ bool DirectX12Renderer::Resize(uint32_t width, uint32_t height)
   }
   catch (const std::exception& error)
   {
-    GABGL_ERROR("DirectX 12 resize failed: {}", error.what());
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "DirectX 12 resize failed: %s", error.what());
     return false;
   }
 }
@@ -2725,7 +2726,7 @@ bool DirectX12Renderer::BeginFrame()
   }
   catch (const std::exception& error)
   {
-    GABGL_ERROR("DirectX 12 frame start failed: {}", error.what());
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "DirectX 12 frame start failed: %s", error.what());
     return false;
   }
 }
@@ -2763,7 +2764,7 @@ bool DirectX12Renderer::EndFrame(bool vSync)
   catch (const std::exception& error)
   {
     s_Data.FrameStarted = false;
-    GABGL_ERROR("DirectX 12 presentation failed: {}", error.what());
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "DirectX 12 presentation failed: %s", error.what());
     return false;
   }
 }
@@ -2823,7 +2824,7 @@ void DirectX12Renderer::DrawScene(DeltaTime& dt, const std::function<void()>& sc
   }
   catch (const std::exception& error)
   {
-    GABGL_ERROR("DirectX 12 scene rendering failed: {}", error.what());
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "DirectX 12 scene rendering failed: %s", error.what());
   }
 }
 
@@ -2884,7 +2885,7 @@ uint64_t DirectX12Renderer::CreateFontAtlas(
   }
   catch (const std::exception& error)
   {
-    GABGL_ERROR("DX12 font atlas upload failed: {}", error.what());
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "DX12 font atlas upload failed: %s", error.what());
     return 0;
   }
 }
@@ -3040,7 +3041,7 @@ void DirectX12Renderer::EndScene()
   {
     s_Data.PendingUIVertices.clear();
     s_Data.PendingUIBatches.clear();
-    GABGL_ERROR("DirectX 12 UI rendering failed: {}", error.what());
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "DirectX 12 UI rendering failed: %s", error.what());
   }
 }
 

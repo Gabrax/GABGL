@@ -8,7 +8,7 @@
 #endif
 #include "../input/EngineEvent.h"
 #include "../input/KeyEvent.h"
-#include "Logger.h"
+#include <gabdebug.h>
 #include <stb_image.h>
 #include "Settings.h"
 
@@ -36,7 +36,7 @@ bool m_closed = false;
 
 static void GLFWErrorCallback(int error, const char* description)
 {
-	GABGL_ERROR("GLFW Error ({0}): {1}", error, description);
+	gablog_log(LOG_ERROR, __FILE__, __LINE__, "GLFW Error (%d): %s", error, description);
 }
 
 void Window::Init(const std::string& windowTitle, uint32_t windowWidth, uint32_t windowHeight,
@@ -47,10 +47,14 @@ void Window::Init(const std::string& windowTitle, uint32_t windowWidth, uint32_t
   m_Data.Height = windowHeight;
   m_Data.API = graphicsAPI;
 
-  GABGL_INFO("Creating window {0} ({1},{2})", m_Data.title, m_Data.Width, m_Data.Height);
+  gablog_log(LOG_INFO, __FILE__, __LINE__, "Creating window %s (%u,%u)", m_Data.title.c_str(), m_Data.Width, m_Data.Height);
 
   int GLFWstatus = glfwInit();
-  GABGL_ASSERT(GLFWstatus, "Failed to init GLFW");
+  if (!GLFWstatus)
+  {
+    gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Failed to init GLFW");
+    gabdebug_break();
+  }
   glfwSetErrorCallback(GLFWErrorCallback);
 
   glfwDefaultWindowHints();
@@ -69,7 +73,11 @@ void Window::Init(const std::string& windowTitle, uint32_t windowWidth, uint32_t
   }
 
   m_Window = glfwCreateWindow((int)m_Data.Width, (int)m_Data.Height, m_Data.title.c_str(), nullptr, nullptr);
-  GABGL_ASSERT(m_Window, "Failed to create GLFW window");
+  if (!m_Window)
+  {
+    gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Failed to create GLFW window");
+    gabdebug_break();
+  }
   m_Monitor = glfwGetPrimaryMonitor();
   m_Mode = glfwGetVideoMode(m_Monitor);
   if (m_Data.API == GraphicsAPI::OpenGL)
@@ -77,14 +85,22 @@ void Window::Init(const std::string& windowTitle, uint32_t windowWidth, uint32_t
     glfwMakeContextCurrent(m_Window);
 
 	  int status = gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
-	  GABGL_ASSERT(status, "Failed to initialize Glad!");
+	  if (!status)
+	  {
+	    gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Failed to initialize Glad!");
+	    gabdebug_break();
+	  }
 
-	  GABGL_INFO("OpenGL Info:");
-	  GABGL_INFO("  Vendor: {}", reinterpret_cast<const char*>(glGetString(GL_VENDOR)));
-	  GABGL_INFO("  Renderer: {}", reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
-	  GABGL_INFO("  Version: {}", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
+	  gablog_log(LOG_INFO, __FILE__, __LINE__, "OpenGL Info:");
+	  gablog_log(LOG_INFO, __FILE__, __LINE__, "  Vendor: %s", reinterpret_cast<const char*>(glGetString(GL_VENDOR)));
+	  gablog_log(LOG_INFO, __FILE__, __LINE__, "  Renderer: %s", reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
+	  gablog_log(LOG_INFO, __FILE__, __LINE__, "  Version: %s", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
 
-	  GABGL_ASSERT(GLVersion.major > 4 || (GLVersion.major == 4 && GLVersion.minor >= 5), "GABGL requires at least OpenGL version 4.5!");
+	  if (GLVersion.major < 4 || (GLVersion.major == 4 && GLVersion.minor < 5))
+	  {
+	    gablog_log(LOG_ASSERT, __FILE__, __LINE__, "GABGL requires at least OpenGL version 4.5!");
+	    gabdebug_break();
+	  }
   }
 
   glfwSetWindowUserPointer(m_Window, &m_Data);

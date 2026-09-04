@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <filesystem>
 #include <mutex>
-#include "../backend/Logger.h"
+#include <gabdebug.h>
 #include "al.h"
 #include <algorithm>
 #include <ranges>
@@ -100,7 +100,7 @@ void AudioManager::Init()
 	if (!name || alcGetError(s_Data.p_ALCDevice) != AL_NO_ERROR)
 		name = alcGetString(s_Data.p_ALCDevice, ALC_DEVICE_SPECIFIER);
 	/*printf("Opened \"%s\"\n", name);*/
-  GABGL_INFO("{}",(const char*)name);
+  gablog_log(LOG_INFO, __FILE__, __LINE__, "%s", static_cast<const char*>(name));
 
   constexpr int SOURCE_POOL_SIZE = 16;
 
@@ -504,7 +504,7 @@ void AudioManager::LoadSound(const char* filename)
       std::lock_guard lock(s_Data.s_AudioMutex);
       s_Data.p_SoundEffectBuffers[name] = buffer;
   }
-  GABGL_WARN("Sound loaded: {0}",name);
+  gablog_log(LOG_WARN, __FILE__, __LINE__, "Sound loaded: %s", name.c_str());
 }
 
 bool AudioManager::UnLoadSound(const std::string& name)
@@ -776,7 +776,7 @@ void AudioManager::LoadMusic(const char* filename)
   if (auto [it, inserted] = s_Data.players.emplace(name, nullptr); inserted)
   {
     it->second = std::make_unique<MusicSource>(filename);
-    GABGL_WARN("Music loaded: {0}",name);
+    gablog_log(LOG_WARN, __FILE__, __LINE__, "Music loaded: %s", name.c_str());
   }
 }
 

@@ -1,5 +1,4 @@
 #include "Buffer.h"
-#include "Logger.h"
 #include "glm/trigonometric.hpp"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp> 
@@ -82,7 +81,8 @@ static GLenum ShaderDataTypeToOpenGLBaseType(ShaderDataType type)
     case ShaderDataType::Bool:     return GL_BOOL;
 	}
 
-	GABGL_ASSERT(false, "Unknown ShaderDataType!");
+	gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Unknown ShaderDataType!");
+	gabdebug_break();
 	return 0;
 }
 
@@ -108,7 +108,11 @@ void VertexArray::Unbind() const
 
 void VertexArray::AddVertexBuffer(const std::shared_ptr<VertexBuffer>& vertexBuffer)
 {
-  GABGL_ASSERT(vertexBuffer->GetLayout().GetElements().size(), "Vertex Buffer has no layout!");
+  if (vertexBuffer->GetLayout().GetElements().empty())
+  {
+    gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Vertex Buffer has no layout!");
+    gabdebug_break();
+  }
 
   const auto& layout = vertexBuffer->GetLayout();
   GLuint vbID = vertexBuffer->GetID();
@@ -169,7 +173,8 @@ void VertexArray::AddVertexBuffer(const std::shared_ptr<VertexBuffer>& vertexBuf
           break;
       }
       default:
-        GABGL_ASSERT(false, "Unknown ShaderDataType!");
+        gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Unknown ShaderDataType!");
+        gabdebug_break();
     }
   }
 
@@ -398,7 +403,8 @@ namespace Utils
 			case FramebufferTextureFormat::R11F_G11F_B10F: return GL_R11F_G11F_B10F;
 			case FramebufferTextureFormat::RED_INTEGER:    return GL_RED_INTEGER;
 		}
-		GABGL_ASSERT(false, "Unknown FramebufferTextureFormat!");
+		gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Unknown FramebufferTextureFormat!");
+		gabdebug_break();
 		return 0;
 	}
 }
@@ -416,7 +422,7 @@ FrameBuffer::FrameBuffer(const FramebufferSpecification& spec)
 
 	Invalidate();
 
-  GABGL_WARN("Framebuffer created");
+  gablog_log(LOG_WARN, __FILE__, __LINE__, "Framebuffer created");
 }
 
 FrameBuffer::~FrameBuffer()
@@ -491,7 +497,11 @@ void FrameBuffer::Invalidate()
 	// Draw buffers
 	if (m_ColorAttachments.size() > 1)
 	{
-		GABGL_ASSERT(m_ColorAttachments.size() <= 4, "");
+		if (m_ColorAttachments.size() > 4)
+		{
+			gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Too many color attachments");
+			gabdebug_break();
+		}
 		GLenum buffers[4] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3 };
 		glNamedFramebufferDrawBuffers(m_RendererID, static_cast<GLsizei>(m_ColorAttachments.size()), buffers);
 	}
@@ -502,7 +512,11 @@ void FrameBuffer::Invalidate()
 		glNamedFramebufferReadBuffer(m_RendererID, GL_NONE);
 	}
 
-	GABGL_ASSERT(glCheckNamedFramebufferStatus(m_RendererID, GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE, "Framebuffer is incomplete!");
+	if (glCheckNamedFramebufferStatus(m_RendererID, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+	{
+		gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Framebuffer is incomplete!");
+		gabdebug_break();
+	}
 }
 void FrameBuffer::Bind()
 {
@@ -519,7 +533,7 @@ void FrameBuffer::Resize(uint32_t width, uint32_t height)
 {
 	if (width == 0 || height == 0 || width > s_MaxFramebufferSize || height > s_MaxFramebufferSize)
 	{
-		GABGL_WARN("Attempted to rezize framebuffer to {0}, {1}", width, height);
+		gablog_log(LOG_WARN, __FILE__, __LINE__, "Attempted to resize framebuffer to %u, %u", width, height);
 		return;
 	}
 	m_Specification.Width = width;
@@ -530,7 +544,11 @@ void FrameBuffer::Resize(uint32_t width, uint32_t height)
 
 int FrameBuffer::ReadPixel(uint32_t attachmentIndex, int x, int y)
 {
-	GABGL_ASSERT(attachmentIndex < m_ColorAttachments.size(),"");
+	if (attachmentIndex >= m_ColorAttachments.size())
+	{
+		gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Invalid color attachment index");
+		gabdebug_break();
+	}
 
 	glReadBuffer(GL_COLOR_ATTACHMENT0 + attachmentIndex);
 	int pixelData;
@@ -540,7 +558,11 @@ int FrameBuffer::ReadPixel(uint32_t attachmentIndex, int x, int y)
 
 void FrameBuffer::ClearAttachment(uint32_t attachmentIndex, int value)
 {
-	GABGL_ASSERT(attachmentIndex < m_ColorAttachments.size(),"");
+	if (attachmentIndex >= m_ColorAttachments.size())
+	{
+		gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Invalid color attachment index");
+		gabdebug_break();
+	}
 
 	auto& spec = m_ColorAttachmentSpecifications[attachmentIndex];
 	glClearTexImage(m_ColorAttachments[attachmentIndex],0,Utils::FBTextureFormatToGL(spec.TextureFormat), GL_INT, &value);
@@ -548,7 +570,11 @@ void FrameBuffer::ClearAttachment(uint32_t attachmentIndex, int value)
 
 void FrameBuffer::AttachExternalColorTexture(GLuint textureID, uint32_t slot)
 {
-	GABGL_ASSERT(slot < m_ColorAttachments.size(), "Invalid attachment slot");
+	if (slot >= m_ColorAttachments.size())
+	{
+		gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Invalid attachment slot");
+		gabdebug_break();
+	}
 	glNamedFramebufferTexture(m_RendererID, GL_COLOR_ATTACHMENT0 + slot, textureID, 0);
 }
 
@@ -560,13 +586,21 @@ void StorageBuffer::Bind() const
 
 void FrameBuffer::SetDrawBuffer(uint32_t attachmentIndex) const
 {
-  GABGL_ASSERT(attachmentIndex < m_ColorAttachments.size(), "Invalid color attachment index");
+  if (attachmentIndex >= m_ColorAttachments.size())
+  {
+    gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Invalid color attachment index");
+    gabdebug_break();
+  }
   glNamedFramebufferDrawBuffer(m_RendererID, GL_COLOR_ATTACHMENT0 + attachmentIndex);
 }
 
 void FrameBuffer::SetDrawBuffers() const
 {
-  GABGL_ASSERT(m_ColorAttachments.size() <= 4, "Too many color attachments");
+  if (m_ColorAttachments.size() > 4)
+  {
+    gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Too many color attachments");
+    gabdebug_break();
+  }
   const GLenum buffers[4] = {
     GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3
   };
@@ -657,7 +691,7 @@ void GeometryBuffer::Invalidate()
   GLenum attachments[3] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2};
   glNamedFramebufferDrawBuffers(m_FBO, 3, attachments);
 
-  if (glCheckNamedFramebufferStatus(m_FBO, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) GABGL_ERROR("GeometryBuffer Error: Framebuffer is not complete!");
+  if (glCheckNamedFramebufferStatus(m_FBO, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) gablog_log(LOG_ERROR, __FILE__, __LINE__, "GeometryBuffer Error: Framebuffer is not complete!");
 
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
@@ -803,7 +837,7 @@ BloomBuffer::BloomBuffer(const std::shared_ptr<Shader>& downsampleShader, const 
     glTextureParameteri(mip.texture, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTextureParameteri(mip.texture, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-    GABGL_INFO("Created bloom mip x: {0}, y: {1}", mipIntSize.x, mipIntSize.y);
+    gablog_log(LOG_INFO, __FILE__, __LINE__, "Created bloom mip x: %d, y: %d", mipIntSize.x, mipIntSize.y);
 
     mMipChain.emplace_back(mip);
 
@@ -910,7 +944,7 @@ void BloomBuffer::Resize(int newWidth, int newHeight)
       glTextureParameteri(mip.texture, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
       glTextureParameteri(mip.texture, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-      GABGL_INFO("Resized bloom mip x: {0}, y: {1}", mipIntSize.x, mipIntSize.y);
+      gablog_log(LOG_INFO, __FILE__, __LINE__, "Resized bloom mip x: %d, y: %d", mipIntSize.x, mipIntSize.y);
       mMipChain.emplace_back(mip);
 
       mipSize *= 0.5f;
@@ -1155,7 +1189,11 @@ void OmniDirectShadowBuffer::Bind() const
 
 void OmniDirectShadowBuffer::BindCubemapFaceForWriting(uint32_t cubemapIndex, uint32_t faceIndex)
 {
-  GABGL_ASSERT(cubemapIndex < m_ShadowLightCapacity, "Point-shadow slot exceeds cubemap capacity");
+  if (cubemapIndex >= m_ShadowLightCapacity)
+  {
+    gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Point-shadow slot exceeds cubemap capacity");
+    gabdebug_break();
+  }
   glNamedFramebufferTextureLayer(m_testFB->GetID(), GL_COLOR_ATTACHMENT0, m_depthCubemapArray, 0, cubemapIndex * 6 + faceIndex);
   glNamedFramebufferDrawBuffer(m_testFB->GetID(), GL_COLOR_ATTACHMENT0);
 }

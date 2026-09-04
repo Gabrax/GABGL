@@ -1,7 +1,6 @@
 #include "GameBootstrap.h"
 
 #include "AudioManager.h"
-#include "Logger.h"
 #include "ModelManager.h"
 #include "PhysX.h"
 #include "RenderBackend.h"
@@ -9,6 +8,8 @@
 #include "SceneManager.h"
 #include "Settings.h"
 #include "Window.h"
+
+#include <gabdebug.h>
 
 #include <thread>
 #include <chrono>
@@ -53,15 +54,16 @@ namespace
 
 int main(int argc, char** argv)
 {
-  Logger::Init();
+  gablog_set_level(LOG_TRACE);
+  gablog_set_color_mode(GAB_COLOR_AUTO);
   Settings::Init();
   const GraphicsAPI graphicsAPI = ParseGraphicsAPI(argc, argv);
   if (!RenderBackend::Select(graphicsAPI))
   {
-    GABGL_ERROR("Unsupported graphics API");
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "Unsupported graphics API");
     return 1;
   }
-  GABGL_INFO("Selected graphics API: {}", GraphicsAPIName(graphicsAPI));
+  gablog_log(LOG_INFO, __FILE__, __LINE__, "Selected graphics API: %s", GraphicsAPIName(graphicsAPI));
 
   const std::string windowTitle = graphicsAPI == GraphicsAPI::OpenGL
     ? "GABGL" : std::string("GABGL - ") + RenderBackend::Get().GetName();
@@ -69,9 +71,9 @@ int main(int argc, char** argv)
   if (!RenderBackend::Get().InitializeDevice(
         Window::GetNativeHandle(), Window::GetWidth(), Window::GetHeight()))
   {
-    GABGL_ERROR("Could not initialize the {} backend", RenderBackend::Get().GetName());
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "Could not initialize the %s backend", RenderBackend::Get().GetName());
     if (graphicsAPI == GraphicsAPI::DirectX12)
-      GABGL_ERROR("Configure with -DGABGL_ENABLE_DX12=ON to include DirectX 12");
+      gablog_log(LOG_ERROR, __FILE__, __LINE__, "Configure with -DGABGL_ENABLE_DX12=ON to include DirectX 12");
     Window::Terminate();
     return 1;
   }

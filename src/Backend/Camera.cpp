@@ -1,6 +1,5 @@
 #include "Camera.h"
 
-#include "../backend/Logger.h"
 #include "../input/UserInput.h"
 #include "../input/KeyEvent.h"
 
@@ -241,7 +240,9 @@ void Camera::OnUpdate(DeltaTime dt)
       UpdateView();
       return;
     }
-    glm::vec3 targetPos = PhysX::PxExtendedVec3toGlmVec3(player->getPosition());
+    // Anchor the camera to the controller's feet so changing capsule dimensions
+    // does not change the camera height relative to the ground.
+    glm::vec3 targetPos = PhysX::PxExtendedVec3toGlmVec3(player->getFootPosition());
 
     glm::vec3 direction;
     direction.x = cos(glm::radians(m_Yaw)) * cos(glm::radians(m_Pitch));

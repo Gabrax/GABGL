@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <fstream>
 #include "json.hpp"
-#include "Logger.h"
+#include <gabdebug.h>
 #include <algorithm>
 
 using json = nlohmann::json;
@@ -137,7 +137,7 @@ void Settings::Load()
   }
   catch (...)
   {
-    GABGL_INFO("Restoring defaults");
+    gablog_log(LOG_INFO, __FILE__, __LINE__, "Restoring defaults");
     SetDefaults();
     Save();
   }
@@ -152,7 +152,7 @@ void Settings::ReloadIfChanged()
 
   if (currentWriteTime != m_LastWriteTime)
   {
-    GABGL_INFO("Settings reloaded");
+    gablog_log(LOG_INFO, __FILE__, __LINE__, "Settings reloaded");
     Load();
   }
 }

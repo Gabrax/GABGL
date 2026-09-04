@@ -1,6 +1,6 @@
 #pragma once
 #include <cstdint>
-#include "Logger.h"
+#include <gabdebug.h>
 #include <string>
 #include <vector>
 #include <glad/glad.h>
@@ -31,7 +31,8 @@ static uint32_t ShaderDataTypeSize(ShaderDataType type)
 		case ShaderDataType::Bool:     return 1;
 	}
 
-	GABGL_ASSERT(false, "Unknown ShaderDataType!");
+	gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Unknown ShaderDataType!");
+	gabdebug_break();
 	return 0;
 }
 
@@ -67,7 +68,8 @@ struct BufferElement
 		case ShaderDataType::Bool:    return 1;
 		}
 
-		GABGL_ASSERT(false, "Unknown ShaderDataType!");
+		gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Unknown ShaderDataType!");
+		gabdebug_break();
 		return 0;
 	}
 };
@@ -280,7 +282,15 @@ struct FrameBuffer
   void AttachExternalColorTexture(GLuint textureID, uint32_t slot = 0);
   void AttachExternalDepthTexture(GLuint textureID);
 
-	inline uint32_t GetColorAttachmentRendererID(uint32_t index = 0) const { GABGL_ASSERT(index < m_ColorAttachments.size(),""); return m_ColorAttachments[index]; }
+	inline uint32_t GetColorAttachmentRendererID(uint32_t index = 0) const
+	{
+		if (index >= m_ColorAttachments.size())
+		{
+			gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Invalid color attachment index");
+			gabdebug_break();
+		}
+		return m_ColorAttachments[index];
+	}
 	inline const FramebufferSpecification& GetSpecification() const { return m_Specification; };
   inline uint32_t GetID() const { return m_RendererID; }
   void BlitColor(const std::shared_ptr<FrameBuffer>& dst);

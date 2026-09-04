@@ -1,7 +1,7 @@
-cmake_minimum_required(VERSION 3.5)
-set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+cmake_minimum_required(VERSION 3.16)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.16)
 
-project(gabgl LANGUAGES CXX)
+project(gabgl LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -14,7 +14,9 @@ set(FETCHCONTENT_UPDATES_DISCONNECTED ON CACHE BOOL "Do not update already popul
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(MSVC)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded") # Or "MultiThreadedDLL" if you prefer /MD
+    # PhysX binaries in vendor/ are built against the dynamic MSVC runtime.
+    # Keep every source dependency (including GABDEBUG's C target) ABI-compatible.
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
 
     if(RELEASE)
         add_compile_options(/MP /O2)
@@ -101,6 +103,16 @@ FetchContent_Declare(
     GIT_TAG 1.23.1 
 )
 
+# GABDEBUG supplies the engine logger and the CPU/OpenGL GPU profiler. Pin the
+# exact revision so diagnostics do not change underneath reproducible builds.
+FetchContent_Declare(
+    gabdebug
+    GIT_REPOSITORY https://github.com/Gabrax/GABDEBUG.git
+    GIT_TAG 7be0eeb3b945423d872dc944e4f0644fd4a688e8
+)
+set(GABDEBUG_BUILD_TESTS OFF CACHE BOOL "Disable dependency tests" FORCE)
+set(GABDEBUG_GPU_API OPENGL CACHE STRING "Use GABDEBUG's OpenGL profiler adapter" FORCE)
+
 set(LIBTYPE STATIC CACHE STRING "Build static OpenAL Soft" FORCE)
 # Freetype
 FetchContent_Declare(
@@ -109,7 +121,13 @@ FetchContent_Declare(
     GIT_TAG VER-2-13-2 
 )
 
-FetchContent_MakeAvailable(assimp meshoptimizer imguizmo libsndfile openal-soft freetype)
+FetchContent_MakeAvailable(assimp meshoptimizer imguizmo libsndfile openal-soft freetype gabdebug)
+
+# Keep GABDEBUG's short LOG_*/PROFILER_* aliases out of engine headers.
+target_compile_definitions(gabdebug PUBLIC
+  GABLOG_UNSTRIP_PREFIX=1
+  GABPROFILER_UNSTRIP_PREFIX=1
+)
 
 add_subdirectory(vendor/glfw-3.3.2)
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
@@ -188,7 +206,7 @@ file(MAKE_DIRECTORY ${RES_FOLDER})
 
 target_link_libraries(gabgl_engine PUBLIC
   glm glfw glad stb_image imgui assimp meshoptimizer JSONparser PhysX
-  SndFile::sndfile OpenAL::OpenAL freetype ${GABGL_SLANG_TARGET}
+  SndFile::sndfile OpenAL::OpenAL freetype gabdebug::gabdebug ${GABGL_SLANG_TARGET}
 )
 
 if(WIN32 AND NOT TARGET slang::slang)

@@ -1,5 +1,5 @@
 #include "PhysX.h"
-#include "Logger.h"
+#include <gabdebug.h>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
 #include <algorithm>
@@ -9,7 +9,7 @@ struct UserErrorCallback : public PxErrorCallback
 {
   virtual void reportError(PxErrorCode::Enum /*code*/, const char* message, const char* file, int line)
   {
-    GABGL_ERROR("file: {0}, line: {1}, message: {2}",file,line,message);
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "file: %s, line: %d, message: %s", file, line, message);
   }
 
 }gErrorCallback;
@@ -40,7 +40,7 @@ enum RaycastGroup { RAYCAST_DISABLED = 0, RAYCAST_ENABLED = 1 };
 void PhysX::Init()
 {
   s_PhysXData.gFoundation = PxCreateFoundation(PX_PHYSICS_VERSION, s_PhysXData.gAllocator, gErrorCallback);
-  if (!s_PhysXData.gFoundation) GABGL_ERROR("PxCreateFoundation init failed!");
+  if (!s_PhysXData.gFoundation) gablog_log(LOG_ERROR, __FILE__, __LINE__, "PxCreateFoundation init failed!");
 
   s_PhysXData.gPvd = PxCreatePvd(*s_PhysXData.gFoundation);
   s_PhysXData.gPvdTransport = PxDefaultPvdSocketTransportCreate(PVD_HOST, 5425, 10);
@@ -48,7 +48,7 @@ void PhysX::Init()
     s_PhysXData.gPvd->connect(*s_PhysXData.gPvdTransport, PxPvdInstrumentationFlag::eALL);
 
   s_PhysXData.gPhysics = PxCreatePhysics(PX_PHYSICS_VERSION, *s_PhysXData.gFoundation, PxTolerancesScale(), true, s_PhysXData.gPvd);
-  if (!s_PhysXData.gPhysics) GABGL_ERROR("PxCreatePhysics init failed!");
+  if (!s_PhysXData.gPhysics) gablog_log(LOG_ERROR, __FILE__, __LINE__, "PxCreatePhysics init failed!");
 
   PxSceneDesc sceneDesc(s_PhysXData.gPhysics->getTolerancesScale());
   sceneDesc.gravity = PxVec3(0.0f, -9.81f, 0.0f);
@@ -68,7 +68,7 @@ void PhysX::Init()
 
   s_PhysXData.controllerManager = PxCreateControllerManager(*s_PhysXData.gScene);
 
-  GABGL_WARN("PhysX init success!");
+  gablog_log(LOG_WARN, __FILE__, __LINE__, "PhysX init success!");
 }
 
 void PhysX::Shutdown()
@@ -240,29 +240,30 @@ PxConvexMesh* PhysX::CreateConvexMesh(PxU32 numVertices, const PxVec3* vertices)
   return convexMesh;
 }
 
-PxController* PhysX::CreateCharacterController(const PxVec3& position, float radius, float height, bool slopeLimit)
+PxController* PhysX::CreateCharacterController(const PxVec3& footPosition, float radius, float height, bool slopeLimit)
 {
   PxCapsuleControllerDesc desc;
   desc.radius = radius;
   desc.height = height;
-  desc.position = PxExtendedVec3(position.x, position.y, position.z);
+  desc.upDirection = PxVec3(0.0f, 1.0f, 0.0f);
+  const PxVec3 centerPosition = footPosition + desc.upDirection * (radius + height * 0.5f);
+  desc.position = PxExtendedVec3(centerPosition.x, centerPosition.y, centerPosition.z);
   desc.material = s_PhysXData.gMaterial;
-  desc.stepOffset = 0.3f; // how high it can "step"
+  desc.stepOffset = std::min(0.3f, height + radius * 2.0f); // how high it can "step"
   desc.contactOffset = 0.05f; // tolerance buffer
   desc.slopeLimit = slopeLimit ? cosf(PxPi / 4.0f) : 0.0f; // 45° max slope
-  desc.upDirection = PxVec3(0.0f, 1.0f, 0.0f);
   desc.climbingMode = PxCapsuleClimbingMode::eCONSTRAINED;
 
   if (!desc.isValid())
   {
-      GABGL_ERROR("CharacterController description is invalid.");
+      gablog_log(LOG_ERROR, __FILE__, __LINE__, "CharacterController description is invalid.");
       return nullptr;
   }
 
   PxController* controller = s_PhysXData.controllerManager->createController(desc);
   if (!controller)
   {
-      GABGL_ERROR("Failed to create character controller.");
+      gablog_log(LOG_ERROR, __FILE__, __LINE__, "Failed to create character controller.");
       return nullptr;
   }
 

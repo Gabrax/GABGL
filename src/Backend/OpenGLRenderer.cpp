@@ -1,6 +1,5 @@
 #include "OpenGLRenderer.h"
 
-#include "Logger.h"
 #include "Buffer.h"
 #include "Camera.h"
 #include "ModelManager.h"
@@ -22,6 +21,8 @@
 #include "backends/imgui_impl_opengl3.h"
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
+#include <gabdebug.h>
+#include <gabdebug_gpu_opengl.h>
 //#include "ImGuizmo.h"
 #include "glm/ext/scalar_constants.hpp"
 #include "glm/trigonometric.hpp"
@@ -29,7 +30,6 @@
 #include <glm/fwd.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
-#include "Profiler.h"
 #include "SceneManager.h"
 #include "Settings.h"
 #include "Timer.hpp"
@@ -40,13 +40,29 @@ void MessageCallback(unsigned source,unsigned type,unsigned id,unsigned severity
 {
 	switch (severity)
 	{
-		case GL_DEBUG_SEVERITY_HIGH:         GABGL_CRITICAL("{}",message); return;
-		case GL_DEBUG_SEVERITY_MEDIUM:       GABGL_ERROR("{}",message); return;
-		case GL_DEBUG_SEVERITY_LOW:          GABGL_WARN("{}",message); return;
-		case GL_DEBUG_SEVERITY_NOTIFICATION: GABGL_TRACE("{}", message); return;
+		case GL_DEBUG_SEVERITY_HIGH:         gablog_log(LOG_ERROR, __FILE__, __LINE__, "%s", message); return;
+		case GL_DEBUG_SEVERITY_MEDIUM:       gablog_log(LOG_ERROR, __FILE__, __LINE__, "%s", message); return;
+		case GL_DEBUG_SEVERITY_LOW:          gablog_log(LOG_WARN, __FILE__, __LINE__, "%s", message); return;
+		case GL_DEBUG_SEVERITY_NOTIFICATION: gablog_log(LOG_TRACE, __FILE__, __LINE__, "%s", message); return;
 	}
 
-	GABGL_ASSERT(false, "Unknown severity level!");
+	gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Unknown severity level!");
+	gabdebug_break();
+}
+
+static void DrawProfilerTree(const GABProfileNode* node, const uint32_t depth = 0)
+{
+  for (const GABProfileNode* current = node; current; current = current->nextSibling)
+  {
+    const bool gpuBound = current->gpuTime > current->cpuTime;
+    const ImVec4 color = gpuBound
+      ? ImVec4(1.0f, 0.4f, 0.4f, 1.0f)
+      : ImVec4(0.4f, 1.0f, 0.4f, 1.0f);
+    ImGui::TextColored(color, "%*s%s: CPU %.3f ms | GPU %.3f ms",
+      static_cast<int>(depth * 2), "", current->name,
+      current->cpuTime, current->gpuTime);
+    DrawProfilerTree(current->firstChild, depth + 1);
+  }
 }
 
 struct QuadVertex
@@ -517,7 +533,7 @@ static void InitializeEditorUI()
 		ImGui_ImplGlfw_InitForOther(window, true);
 
 	if (!RenderBackend::Get().InitializeImGuiRenderer())
-		GABGL_ERROR("Could not initialize ImGui for the {} backend", RenderBackend::Get().GetName());
+		gablog_log(LOG_ERROR, __FILE__, __LINE__, "Could not initialize ImGui for the %s backend", RenderBackend::Get().GetName());
 }
 
 static void ShutdownEditorUI()
@@ -783,7 +799,20 @@ void OpenGLRenderer::Init()
 	SetLineWidth(4.0f);
 	//s_Data.m_GizmoType = ImGuizmo::OPERATION::TRANSLATE;
 
-	Profiler::Init();
+	GABOpenGLConfig profilerConfig{};
+	profilerConfig.gl.genQueries = reinterpret_cast<GABGLGenQueriesFn>(glGenQueries);
+	profilerConfig.gl.deleteQueries = reinterpret_cast<GABGLDeleteQueriesFn>(glDeleteQueries);
+	profilerConfig.gl.queryCounter = reinterpret_cast<GABGLQueryCounterFn>(glQueryCounter);
+	profilerConfig.gl.getQueryObjectiv =
+		reinterpret_cast<GABGLGetQueryObjectivFn>(glGetQueryObjectiv);
+	profilerConfig.gl.getQueryObjectui64v =
+		reinterpret_cast<GABGLGetQueryObjectui64vFn>(glGetQueryObjectui64v);
+	profilerConfig.frameLatency = 3;
+	profilerConfig.maxThreads = 1;
+	profilerConfig.maxScopes = 256;
+	profilerConfig.maxOccurrences = 4;
+	if (!gab_gpu_opengl_install(&profilerConfig))
+		gablog_log(LOG_WARN, __FILE__, __LINE__, "GABDEBUG OpenGL GPU profiler could not be installed; CPU profiling remains active");
 }
 
 void OpenGLRenderer::Shutdown()
@@ -795,7 +824,9 @@ void OpenGLRenderer::Shutdown()
     return;
   }
 
-	Profiler::Shutdown();
+	gabprofiler_end_frame();
+	gabprofiler_unregister_thread();
+	gabprofiler_shutdown_gpu_backend();
 	DestroyGPUDrivenResources();
 	ResetModelDrawCommands();
 
@@ -855,7 +886,6 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
   const RenderEffectSettings effects = RenderBackend::GetEffectSettings();
   const bool renderForEditor = s_Data.m_SceneState == OpenGLRendererData::SceneState::Edit;
 
-  GABGL_RESOLVE_GPU_QUERIES();
   ApplyGraphicsSettings();
 
   const bool shadowsEnabled = effects.ShadowQuality != GraphicsQuality::Off;
@@ -869,9 +899,13 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
 
   if (advanceSimulation) scene_logic();
 
+  // The editor reads the completed tree above; beginning the new frame here
+  // lets GABDEBUG recycle its nodes only after that direct read is finished.
+  gabprofiler_begin_frame();
+
   if (advanceSimulation)
   {
-    GABGL_PROFILE_SCOPE("MISC UPDATE PASS");
+    GABProfilerScope profileScope = gabprofiler_begin("MISC UPDATE PASS");
 
     ModelManager::UpdateControllers(dt);
     PhysX::Simulate(dt);
@@ -880,6 +914,7 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
     AudioManager::SetListenerLocation(Camera::GetPosition());
     AudioManager::SetListenerOrientation(Camera::GetForwardDirection(), Camera::GetUpDirection());
     AudioManager::UpdateAllMusic();
+    gabprofiler_end(&profileScope);
   }
   ModelManager::BindAllInstanceTransforms();
   s_Data.m_CullDataPrepared = false;
@@ -887,7 +922,7 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
   if(OpenGLRendererData::DirectionalShadowsEnabled &&
       shadowsEnabled && HasLight(LightType::DIRECT))
   {
-    GABGL_PROFILE_SCOPE("DIRECT SHADOW PASS");
+    GABProfilerScope profileScope = gabprofiler_begin("DIRECT SHADOW PASS");
 
     s_Data.m_DirectShadowBuffer->Bind();
     float max = std::numeric_limits<float>::max();
@@ -919,10 +954,11 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
 
     s_Data.s_Shaders.DirectShadowShader->UnBind();
     s_Data.m_DirectShadowBuffer->UnBind();
+    gabprofiler_end(&profileScope);
   }
   if (shadowsEnabled && HasLight(LightType::POINT))
   {
-    GABGL_PROFILE_SCOPE("OMNI SHADOW PASS");
+    GABProfilerScope profileScope = gabprofiler_begin("OMNI SHADOW PASS");
 
     s_Data.m_PointShadowFacesRendered = 0;
     s_Data.m_PointShadowFacesCached = 0;
@@ -978,7 +1014,11 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
     {
       if (candidateSlots[candidateIndex] < s_Data.m_PointShadowCache.size()) continue;
       const auto freeSlot = std::ranges::find(usedSlots, false);
-      GABGL_ASSERT(freeSlot != usedSlots.end(), "No free point-shadow cache slot");
+      if (freeSlot == usedSlots.end())
+      {
+        gablog_log(LOG_ASSERT, __FILE__, __LINE__, "No free point-shadow cache slot");
+        gabdebug_break();
+      }
       const size_t slot = static_cast<size_t>(std::distance(usedSlots.begin(), freeSlot));
       candidateSlots[candidateIndex] = slot;
       usedSlots[slot] = true;
@@ -1054,6 +1094,7 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
     s_Data.s_Shaders.OmniDirectShadowShader->UnBind();
     s_Data.m_OmniDirectShadowBuffer->UnBind();
     UploadPointShadowSlots(pointShadowSlots);
+    gabprofiler_end(&profileScope);
   }
   else
   {
@@ -1069,7 +1110,7 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
     OpenGLRendererData::HiZOcclusionEnabled && !s_Data.m_DrawCommands.empty();
   if (useDepthPrepass)
   {
-    GABGL_PROFILE_SCOPE("GPU DEPTH PREPASS + HIZ");
+    GABProfilerScope profileScope = gabprofiler_begin("GPU DEPTH PREPASS + HIZ");
     s_Data.m_GeometryBuffer->Bind();
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
@@ -1093,10 +1134,11 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
                     GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
     BuildHiZPyramid();
     DispatchGPUCull(Camera::GetViewProjection(), true);
+    gabprofiler_end(&profileScope);
   }
 
   {
-    GABGL_PROFILE_SCOPE("GEOMETRY PASS");
+    GABProfilerScope profileScope = gabprofiler_begin("GEOMETRY PASS");
 
     s_Data.m_GeometryBuffer->Bind();
 
@@ -1164,15 +1206,17 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
       fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
     }
     ModelManager::EndGPUFrame();
+    gabprofiler_end(&profileScope);
   }
   bool tiledLighting = false;
   {
-    GABGL_PROFILE_SCOPE("TILED LIGHT CULL");
+    GABProfilerScope profileScope = gabprofiler_begin("TILED LIGHT CULL");
     tiledLighting = DispatchTiledLightCulling();
+    gabprofiler_end(&profileScope);
   }
 
   {
-    GABGL_PROFILE_SCOPE("LIGHT PASS");
+    GABProfilerScope profileScope = gabprofiler_begin("LIGHT PASS");
 
     s_Data.m_BloomBuffer->Bind();
 	glDisable(GL_DEPTH_TEST);
@@ -1206,9 +1250,10 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
 
     s_Data.s_Shaders.LightShader->UnBind();
     s_Data.m_BloomBuffer->UnBind();
+    gabprofiler_end(&profileScope);
   }
   {
-    GABGL_PROFILE_SCOPE("BLOOM PASS");
+    GABProfilerScope profileScope = gabprofiler_begin("BLOOM PASS");
 
     if (effects.BloomQuality != GraphicsQuality::Off)
     {
@@ -1219,9 +1264,10 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
     s_Data.m_BloomBuffer->CompositeTo(s_Data.m_ResultBuffer,
       effects.BloomQuality != GraphicsQuality::Off,
       effects.BloomExposure, effects.BloomStrength, effects.Gamma);
+    gabprofiler_end(&profileScope);
   }
   {
-    GABGL_PROFILE_SCOPE("FORWARD PASS");
+    GABProfilerScope profileScope = gabprofiler_begin("FORWARD PASS");
 
     s_Data.m_ResultBuffer->Bind();
     s_Data.m_ResultBuffer->SetDrawBuffer(0);
@@ -1234,9 +1280,10 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
 
     s_Data.m_ResultBuffer->SetDrawBuffers();
     s_Data.m_ResultBuffer->UnBind();
+    gabprofiler_end(&profileScope);
   }
   {
-    GABGL_PROFILE_SCOPE("SCENE RESULT PASS");
+    GABProfilerScope profileScope = gabprofiler_begin("SCENE RESULT PASS");
 
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_BLEND);
@@ -1255,9 +1302,10 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
       glViewport(0, 0, Window::GetWidth(), Window::GetHeight());
       DrawFramebuffer(s_Data.m_ResultBuffer->GetColorAttachmentRendererID(), true);
     }
+    gabprofiler_end(&profileScope);
   }
   {
-    GABGL_PROFILE_SCOPE("UI PASS");
+    GABProfilerScope profileScope = gabprofiler_begin("UI PASS");
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, Window::GetWidth(), Window::GetHeight());
@@ -1274,7 +1322,9 @@ void OpenGLRenderer::DrawScene(DeltaTime& dt, const std::function<void()>& scene
         glm::vec2(100.0f, 50.0f) * uiScale, 0.5f * uiScale, glm::vec4(1.0f));
       EndScene();
     }
+    gabprofiler_end(&profileScope);
   }
+  gabprofiler_end_frame();
 }
 
 bool OpenGLRenderer::IsRenderingEditor()
@@ -2215,7 +2265,11 @@ void OpenGLRenderer::BakeSkyboxTextures(const std::string& name, const std::shar
 
   GLuint rendererID = 0;
   glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &rendererID);
-  GABGL_ASSERT(rendererID != 0, "Failed to create cube map texture!");
+  if (rendererID == 0)
+  {
+    gablog_log(LOG_ASSERT, __FILE__, __LINE__, "Failed to create cube map texture!");
+    gabdebug_break();
+  }
 
   cubemap->SetRendererID(rendererID);
 
@@ -2250,7 +2304,7 @@ void OpenGLRenderer::BakeSkyboxTextures(const std::string& name, const std::shar
 
   s_Data.skyboxes[name] = cubemap;
 
-  GABGL_WARN("Skybox uploading took {0} ms", timer.ElapsedMillis());
+  gablog_log(LOG_WARN, __FILE__, __LINE__, "Skybox uploading took %.3f ms", timer.ElapsedMillis());
 }
 
 void OpenGLRenderer::DrawSkybox(const std::string& name)
@@ -2301,7 +2355,7 @@ void OpenGLRenderer::DrawSkybox(const std::string& name)
   }
   else
   {
-    GABGL_ERROR("Skybox texture not found: {}",name);
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "Skybox texture not found: %s", name.c_str());
     return;
   }
 
@@ -2354,7 +2408,7 @@ void OpenGLRenderer::DrawText(const Font* font, const std::string& text, const g
 {
   if (!font || font->m_AtlasHandle == 0 || font->m_Characters.empty() || text.empty())
   {
-      GABGL_ERROR("Font is nullptr, empty, or text is empty");
+      gablog_log(LOG_ERROR, __FILE__, __LINE__, "Font is nullptr, empty, or text is empty");
       return;
   }
 
@@ -3367,7 +3421,18 @@ void OpenGLRenderer::DrawEditorFrameBuffer(uint64_t framebufferTexture)
 			if (ImGui::SmallButton("Reset Bounds")) model->SetCullingBoundsScale(1.0f);
 		}
 
-		if (entity->type == "controller") ImGui::Checkbox("Player", &entity->player);
+		if (entity->type == "controller")
+		{
+			float controllerRadius = entity->controllerRadius;
+			float controllerHeight = entity->controllerHeight;
+			bool controllerSizeChanged = false;
+			controllerSizeChanged |= ImGui::DragFloat("Controller Radius", &controllerRadius, 0.02f, 0.01f, 100.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+			controllerSizeChanged |= ImGui::DragFloat("Controller Height", &controllerHeight, 0.02f, 0.01f, 100.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+			if (controllerSizeChanged)
+				SceneManager::UpdateControllerSize(entity->id, controllerRadius, controllerHeight);
+			ImGui::TextDisabled("Total capsule height: %.2f", controllerHeight + controllerRadius * 2.0f);
+			ImGui::Checkbox("Player", &entity->player);
+		}
 		else
 		{
 			ImGui::Checkbox("Interactable", &entity->interactable);
@@ -3420,20 +3485,7 @@ void OpenGLRenderer::DrawEditorFrameBuffer(uint64_t framebufferTexture)
 		}
 	}
 
-  for (const auto& result : Profiler::GetResults())
-  {
-    bool gpuBound = result.GPUTime > result.CPUTime;
-
-    ImVec4 color = gpuBound
-        ? ImVec4(1, 0.4f, 0.4f, 1)  // red
-        : ImVec4(0.4f, 1, 0.4f, 1); // green
-
-    ImGui::TextColored(color,
-        "%s: CPU %.3f ms | GPU %.3f ms",
-        result.Name,
-        result.CPUTime,
-        result.GPUTime);
-  }
+  DrawProfilerTree(gabprofiler_get_root());
 
 	ImGui::End();
 

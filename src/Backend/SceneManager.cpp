@@ -4,7 +4,7 @@
 #include "RenderSystem.h"
 #include "AudioManager.h"
 #include "Camera.h"
-#include "Logger.h"
+#include <gabdebug.h>
 #include "ParticleRenderer.h"
 #include "RenderBackend.h"
 #include "../Input/UserInput.h"
@@ -167,7 +167,8 @@ void Scene::SpawnEntities()
 
       if (position.size() != 3 || rotation.size() != 3 || scale.size() != 3)
       {
-        GABGL_WARN("Invalid transform for model '{}': position, rotation and scale must contain 3 values", modelName);
+        gablog_log(LOG_WARN, __FILE__, __LINE__, "Invalid transform for model '%s': position, rotation and scale must contain 3 values",
+          modelName.c_str());
         return;
       }
 
@@ -178,7 +179,9 @@ void Scene::SpawnEntities()
 
       if (type == "controller")
       {
-        ModelManager::SetInitialControllerTransform(modelName, transform, 1.0f, 1.0f, true);
+        const float radius = std::max(0.01f, transformDesc.value("controller_radius", e.value("controller_radius", 1.0f)));
+        const float height = std::max(0.01f, transformDesc.value("controller_height", e.value("controller_height", 1.0f)));
+        ModelManager::SetInitialControllerTransform(modelName, transform, radius, height, true);
       }
       else
       {
@@ -204,6 +207,11 @@ void Scene::SpawnEntities()
       entity.instanceIndex = type == "controller"
         ? 0
         : static_cast<uint32_t>(model->m_InstanceTransforms.size() - 1);
+      if (type == "controller")
+      {
+        entity.controllerRadius = model->GetControllerRadius();
+        entity.controllerHeight = model->GetControllerHeight();
+      }
 
       const std::string baseName = transformDesc.value("name", e.value("name", modelName));
       entity.name = ordinal == 0 ? baseName : baseName + " #" + std::to_string(ordinal + 1);
@@ -255,7 +263,8 @@ void Scene::SpawnLights()
     if (light.type == LightType::DIRECT &&
         std::ranges::any_of(m_EditorLights, [](const SceneLight& existing) { return existing.type == LightType::DIRECT; }))
     {
-      GABGL_WARN("Scene '{}' contains more than one directional light; ignoring the duplicate", m_Name);
+      gablog_log(LOG_WARN, __FILE__, __LINE__, "Scene '%s' contains more than one directional light; ignoring the duplicate",
+        m_Name.c_str());
       continue;
     }
 
@@ -264,17 +273,17 @@ void Scene::SpawnLights()
       : glm::vec3(0.0f, -1.0f, 0.0f);
     light.rotation = defaultRotation;
     if (description.contains("color") && !ReadVec3(description["color"], light.color))
-      GABGL_WARN("Invalid color for a light in scene '{}'; using white", m_Name);
+      gablog_log(LOG_WARN, __FILE__, __LINE__, "Invalid color for a light in scene '%s'; using white", m_Name.c_str());
     if (description.contains("position") && !ReadVec3(description["position"], light.position))
-      GABGL_WARN("Invalid position for a light in scene '{}'; using origin", m_Name);
+      gablog_log(LOG_WARN, __FILE__, __LINE__, "Invalid position for a light in scene '%s'; using origin", m_Name.c_str());
     if (description.contains("rotation") && !ReadVec3(description["rotation"], light.rotation))
-      GABGL_WARN("Invalid rotation for a light in scene '{}'; using the default", m_Name);
+      gablog_log(LOG_WARN, __FILE__, __LINE__, "Invalid rotation for a light in scene '%s'; using the default", m_Name.c_str());
 
     light.id = m_NextLightId++;
     light.name = description.value("name", std::string(LightTypeName(light.type)) + " light " + std::to_string(light.id));
     if (!RenderBackend::AddLight(ToRenderLight(light)))
     {
-      GABGL_WARN("Renderer rejected light '{}'", light.name);
+      gablog_log(LOG_WARN, __FILE__, __LINE__, "Renderer rejected light '%s'", light.name.c_str());
       continue;
     }
     m_EditorLights.push_back(std::move(light));
@@ -432,6 +441,20 @@ bool Scene::UpdateEntityTransform(uint64_t entityId, const Transform& transform)
   return true;
 }
 
+bool Scene::UpdateControllerSize(uint64_t entityId, float radius, float height)
+{
+  SceneEntity* entity = FindEntity(entityId);
+  if (!entity || entity->type != "controller") return false;
+
+  radius = std::max(0.01f, radius);
+  height = std::max(0.01f, height);
+  if (!ModelManager::SetControllerSize(entity->model, radius, height)) return false;
+
+  entity->controllerRadius = radius;
+  entity->controllerHeight = height;
+  return true;
+}
+
 void Scene::SyncEditorEntityTransforms()
 {
   for (auto& entity : m_EditorEntities)
@@ -493,7 +516,7 @@ void Scene::UpdateInteractions()
   if (!focused || !interactPressed) return;
 
   const std::string& displayName = focused->itemName.empty() ? focused->name : focused->itemName;
-  GABGL_INFO("Interacted with '{}'", displayName);
+  gablog_log(LOG_INFO, __FILE__, __LINE__, "Interacted with '%s'", displayName.c_str());
   if (!focused->pickable)
   {
     if (!focused->dialogue.empty() && s_InteractionHandlers.startDialogue)
@@ -503,7 +526,7 @@ void Scene::UpdateInteractions()
 
   if (!s_InteractionHandlers.tryPickUp || !s_InteractionHandlers.tryPickUp(*focused))
   {
-    GABGL_WARN("Could not pick up '{}'", displayName);
+    gablog_log(LOG_WARN, __FILE__, __LINE__, "Could not pick up '%s'", displayName.c_str());
     return;
   }
 
@@ -522,7 +545,7 @@ void Scene::UpdateInteractions()
     if (entity.active && entity.model == modelName && entity.instanceIndex > removedInstance)
       --entity.instanceIndex;
   }
-  GABGL_INFO("Picked up '{}'", displayName);
+  gablog_log(LOG_INFO, __FILE__, __LINE__, "Picked up '%s'", displayName.c_str());
 }
 
 bool Scene::SaveToJSON(const std::string& path) const
@@ -530,7 +553,7 @@ bool Scene::SaveToJSON(const std::string& path) const
   std::ifstream input(path);
   if (!input)
   {
-    GABGL_ERROR("Could not open scene file for reading: {}", path);
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "Could not open scene file for reading: %s", path.c_str());
     return false;
   }
 
@@ -541,7 +564,7 @@ bool Scene::SaveToJSON(const std::string& path) const
   }
   catch (const json::exception& exception)
   {
-    GABGL_ERROR("Could not parse scene file '{}': {}", path, exception.what());
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "Could not parse scene file '%s': %s", path.c_str(), exception.what());
     return false;
   }
 
@@ -560,6 +583,11 @@ bool Scene::SaveToJSON(const std::string& path) const
       {"scale", {scale.x, scale.y, scale.z}}
     };
     if (entity.type != "static") serialized["type"] = entity.type;
+    if (entity.type == "controller")
+    {
+      serialized["controller_radius"] = entity.controllerRadius;
+      serialized["controller_height"] = entity.controllerHeight;
+    }
     if (entity.interactable) serialized["interactable"] = true;
     if (entity.pickable) serialized["pickable"] = true;
     if (entity.player) serialized["player"] = true;
@@ -606,7 +634,7 @@ bool Scene::SaveToJSON(const std::string& path) const
   std::ofstream output(path, std::ios::trunc);
   if (!output)
   {
-    GABGL_ERROR("Could not open scene file for writing: {}", path);
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "Could not open scene file for writing: %s", path.c_str());
     return false;
   }
   output << std::setw(2) << data << '\n';
@@ -804,7 +832,7 @@ void SceneManager::BeginLoadingScene(const std::string& name)
 
   if (!s_PendingScene)
   {
-    GABGL_ERROR("Scene factory for '{}' returned no scene", name);
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "Scene factory for '%s' returned no scene", name.c_str());
     return;
   }
 
@@ -962,7 +990,7 @@ bool SceneManager::ImportExternalModel(const std::string& path, bool animated, f
   const std::filesystem::path modelPath(path);
   if (!std::filesystem::is_regular_file(modelPath))
   {
-    GABGL_ERROR("External model does not exist: {}", path);
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "External model does not exist: %s", path.c_str());
     return false;
   }
 
@@ -979,7 +1007,7 @@ bool SceneManager::ImportExternalModel(const std::string& path, bool animated, f
   }
   catch (const json::exception& exception)
   {
-    GABGL_ERROR("Could not parse scene file '{}': {}", SceneFilePath, exception.what());
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "Could not parse scene file '%s': %s", SceneFilePath, exception.what());
     return false;
   }
 
@@ -997,7 +1025,8 @@ bool SceneManager::ImportExternalModel(const std::string& path, bool animated, f
   if (containsModelName(scene.value("static_models", json::array())) ||
       containsModelName(scene.value("animated_models", json::array())))
   {
-    GABGL_ERROR("A model named '{}' is already registered in scene '{}'", modelName, s_ActiveScene->GetName());
+    gablog_log(LOG_ERROR, __FILE__, __LINE__, "A model named '%s' is already registered in scene '%s'",
+      modelName.c_str(), s_ActiveScene->GetName().c_str());
     return false;
   }
 
@@ -1042,6 +1071,11 @@ bool SceneManager::ImportExternalModel(const std::string& path, bool animated, f
 bool SceneManager::UpdateEntityTransform(uint64_t entityId, const Transform& transform)
 {
   return s_ActiveScene && s_ActiveScene->UpdateEntityTransform(entityId, transform);
+}
+
+bool SceneManager::UpdateControllerSize(uint64_t entityId, float radius, float height)
+{
+  return s_ActiveScene && s_ActiveScene->UpdateControllerSize(entityId, radius, height);
 }
 
 uint64_t SceneManager::AddLight(LightType type)
