@@ -99,6 +99,7 @@ struct GameScene : Scene
         else if (advance) DialogueManager::Advance();
       }
 
+      DialogueManager::Update(m_PauseFrameDelta);
       m_DialogueReveal = std::min(1.0f, m_DialogueReveal + m_PauseFrameDelta / 0.18f);
       DeltaTime frozenTime(0.0f);
       RenderSystem::DrawScene(frozenTime, []() {}, false);
@@ -217,6 +218,7 @@ private:
     const Font* font = FontManager::GetFont("dpcomic");
     const size_t maxCharacters = static_cast<size_t>(std::clamp(panelWidth / (12.0f * uiScale), 32.0f, 92.0f));
     const auto lines = WrapDialogue(DialogueManager::GetCurrentLine(), maxCharacters);
+    size_t visibleBytes = DialogueManager::GetVisibleLine().size();
 
     RenderSystem::BeginUI();
     RenderSystem::DrawQuad(glm::vec2(screenWidth * 0.5f, screenHeight * 0.5f),
@@ -233,12 +235,21 @@ private:
     const float firstLineY = panelCenter.y + 8.0f * uiScale +
       static_cast<float>(lines.size() - 1) * lineSpacing * 0.5f;
     for (size_t index = 0; index < lines.size(); ++index)
-      RenderSystem::DrawText(font, lines[index],
-        glm::vec2(panelCenter.x, firstLineY - static_cast<float>(index) * lineSpacing),
-        0.38f * uiScale, glm::vec4(0.9f, 0.94f, 1.0f, reveal));
+    {
+      const size_t lineBytes = std::min(visibleBytes, lines[index].size());
+      if (lineBytes > 0)
+        RenderSystem::DrawText(font, lines[index].substr(0, lineBytes),
+          glm::vec2(panelCenter.x, firstLineY - static_cast<float>(index) * lineSpacing),
+          0.38f * uiScale, glm::vec4(0.9f, 0.94f, 1.0f, reveal));
+      visibleBytes -= lineBytes;
+      if (visibleBytes > 0 && index + 1 < lines.size()) --visibleBytes;
+    }
 
     const bool lastLine = DialogueManager::GetLineIndex() + 1 >= DialogueManager::GetLineCount();
-    RenderSystem::DrawText(font, lastLine ? "E / ENTER / A: CLOSE" : "E / ENTER / A: NEXT",
+    const char* dialogueAction = !DialogueManager::IsCurrentLineFullyVisible()
+      ? "E / ENTER / A: SKIP"
+      : lastLine ? "E / ENTER / A: CLOSE" : "E / ENTER / A: NEXT";
+    RenderSystem::DrawText(font, dialogueAction,
       glm::vec2(panelCenter.x, panelCenter.y - panelHeight * 0.36f), 0.27f * uiScale,
       glm::vec4(0.6f, 0.7f, 0.82f, reveal));
     RenderSystem::DrawText(font,
